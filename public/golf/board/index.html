@@ -89,6 +89,11 @@ footer .run span { display: inline-block; padding-left: 100%; animation: tick 40
 .take h2 { font-size: 13vw; font-weight: 800; line-height: .85; margin: 1vw 0; color: var(--flag); }
 .take p { font-size: 3vw; font-weight: 700; margin: 0; }
 .take small { display: block; font-size: 1.6vw; color: var(--dim); margin-top: 1vw; }
+.take.replay { background: #000; place-items: stretch; }
+.take.replay video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+.take.replay .rtag { position: absolute; left: 2.4vw; top: 2.4vw; background: var(--flag); color: var(--on-flag); font: 700 1.5vw var(--f-mono); letter-spacing: .2em; padding: .4vw 1vw; border-radius: .3vw; }
+.take.replay .rlabel { position: absolute; left: 2.4vw; bottom: 2.4vw; right: 2.4vw; text-align: left; font: 800 3.4vw var(--f-display); text-transform: uppercase; color: #fff; text-shadow: 0 .2vw 1vw rgba(0,0,0,.8); }
+.take.replay .bug { position: absolute; right: 2.4vw; top: 2.4vw; }
 .take.msg h2 { font-size: 6vw; color: var(--txt); text-transform: none; }
 .empty { display: grid; place-items: center; height: 100%; text-align: center; color: var(--dim); font-size: 1.8vw; }
 /* sponsor spots */
@@ -125,6 +130,7 @@ header .tsp b { color: var(--txt); font-weight: 600; }
 <script type="module">
 import { leaderboard, holeStats, fmtPar, contestLeader, fmtDist, skins, FORMATS } from '/golf/core.js';
 import { live, esc, post } from '/golf/client.js';
+import { attach, detach, playReplay } from '/golf/replay.js';
 
 // ?screen=grill (a screen from the Manager, with its own playlist)
 // ?show=leaderboard,par3,contests,skins,sponsors,fund  ?hole=7 (one par 3 only, e.g. a TV at that tee)  ?flight=A  ?mode=gross
@@ -273,8 +279,7 @@ function draw(s) {
 function startVideo(root) {
   for (const v of root.querySelectorAll('video[data-hls]')) {
     const src = v.dataset.hls;
-    if (v.canPlayType('application/vnd.apple.mpegurl')) v.src = src;
-    else if (window.Hls && Hls.isSupported()) { const h = new Hls({ liveSyncDurationCount: 2 }); h.loadSource(src); h.attachMedia(v); v._hls = h; }
+    attach(v, src, { live: true });
   }
 }
 
@@ -292,7 +297,7 @@ function show(next) {
   el.classList.add('on');
   curEl = el;
   el.dataset.sig = sig(slides[next]);
-  if (old) { old.classList.remove('on'); setTimeout(() => { old.querySelectorAll('video').forEach((v) => v._hls && v._hls.destroy()); old.remove(); }, 700); }
+  if (old) { old.classList.remove('on'); setTimeout(() => { old.querySelectorAll('video').forEach(detach); old.remove(); }, 700); }
   stage.querySelector('.empty')?.remove();
   idx = next;
 }
@@ -323,9 +328,10 @@ function refresh() {
 }
 
 function takeover(html, cls, ms) {
-  const t = $('take'); t.className = `take ${cls || ''}`; t.innerHTML = html; t.hidden = false;
-  clearTimeout(takeover.t); takeover.t = setTimeout(() => (t.hidden = true), ms);
+  const t = $('take'); t.querySelectorAll('video').forEach(detach); t.className = `take ${cls || ''}`; t.innerHTML = html; t.hidden = false;
+  clearTimeout(takeover.t); takeover.t = setTimeout(endTake, ms);
 }
+function endTake() { const t = $('take'); clearTimeout(takeover.t); t.querySelectorAll('video').forEach(detach); t.hidden = true; t.innerHTML = ''; }
 
 function onState(s) {
   const first = !S;
@@ -356,7 +362,7 @@ function onState(s) {
   const tk = s.live?.take;
   if (seenTake === null) seenTake = tk?.at || 0;
   if (tk && tk.at > seenTake) { seenTake = tk.at; showTake(tk); }
-  if (!tk && !$('take').hidden && $('take').dataset.from === 'live') $('take').hidden = true;
+  if (!tk && !$('take').hidden && $('take').dataset.from === 'live') endTake();
   // title sponsor in the header
   const ts = spot('title')[0], tspEl = $('tsp');
   tspEl.hidden = !ts; tspEl.innerHTML = ts ? `PRESENTED BY ${spName(ts)}` : '';
@@ -369,6 +375,15 @@ function showTake(tk) {
   const sp = (S.sponsors || []).find((x) => x.id === tk.sponsor);
   const spHtml = (x, label) => x ? `<div class="tsponsor">${label}${spName(x)}</div>` : '';
   let html = '';
+  if (tk.kind === 'replay') {
+    const r = (S.replays || []).find((x) => x.id === tk.replay); if (!r || (lockHole && lockHole !== r.hole)) return;
+    const cs = spot('cam', r.hole)[0];
+    takeover(`<video muted playsinline autoplay></video><div class="rtag">REPLAY · HOLE ${r.hole}</div>${r.label ? `<div class="rlabel">${esc(r.label)}</div>` : ''}${cs ? `<span class="bug">CAM BY ${cs.logo ? `<img src="${esc(cs.logo)}" alt="${esc(cs.name)}">` : esc(cs.name).toUpperCase()}</span>` : ''}`, 'replay', (tk.secs || 30) * 1000);
+    $('take').dataset.from = 'live';
+    if (cs) seen(cs.id);
+    playReplay($('take').querySelector('video'), r, S.cams[r.hole], endTake).then((res) => { if (!res.ok) endTake(); });
+    return;
+  }
   if (tk.kind === 'ace') {
     const a = (S.aces || []).slice(-1)[0], aceSp = sp || spot('ace', a?.hole)[0] || spot('ace')[0];
     html = `<div>${a ? `<div class="k">HOLE ${a.hole}</div>` : ''}<h2>Hole in one!</h2>${a ? `<p>${esc(a.name)}</p><small>${esc(a.team)}</small>` : (tk.text ? `<p>${esc(tk.text)}</p>` : '')}${spHtml(aceSp, 'Ace presented by')}</div>`;

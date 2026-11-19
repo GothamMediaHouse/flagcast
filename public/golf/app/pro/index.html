@@ -170,13 +170,28 @@ function screensTab() {
     return `<div class="box screen"><div class="top"><b><span class="dot ${on ? 'on' : ''}"></span>${esc(d.name)}</b><button class="btn" data-screen="${d.id}" data-k="" ${f ? '' : 'disabled'}>Back to playlist</button></div><small class="help">${f ? 'Showing one page' : `Playing its list${d.playlist.length ? ` (${d.playlist.length} pages)` : ''}`}${on ? '' : ' · not connected'}</small><div class="chips">${chips}</div></div>`;
   }).join('');
   const sps = S.sponsors || [], take = S.live?.take;
-  return `<h2>Take over every screen</h2>
+  return `${replayBox()}<h2 style="margin-top:26px">Take over every screen</h2>
   <div class="box"><div class="row"><input id="takeText" maxlength="140" placeholder="Announcement (for example: Awards in 10 minutes)"></div>
   <div class="row" style="margin-top:8px"><button class="btn dark" data-take="msg">Announcement</button><button class="btn primary" data-take="ace">Hole in one!</button></div>
   ${sps.length ? `<div class="row" style="margin-top:8px"><select id="takeSp">${sps.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select><button class="btn" data-take="sponsor">Sponsor moment</button></div>` : ''}
   <div class="row" style="margin-top:8px"><label class="help" style="display:flex;gap:6px;align-items:center">Seconds <input id="takeSecs" type="number" min="5" max="120" value="25" style="width:80px"></label><button class="btn danger" data-take="clear">Clear and go back to playlists</button></div>
   ${take ? `<p class="help">Last take-over: ${esc(take.kind)}${take.text ? ` · ${esc(take.text)}` : ''}</p>` : ''}</div>
   <h3>Screens</h3><div class="list">${scr || '<p class="help">No screens yet. Add them in the Manager.</p>'}</div>`;
+}
+
+// REPLAYS: save the last shot on a par 3 camera (or paste a clip link); the pro can put one on every screen
+function replayBox() {
+  const holes = S.course.holes, p3 = holes.filter((h) => h.par === 3), cams = S.cams || {}, pro = me.role === 'pro';
+  const opts = [...p3, ...holes.filter((h) => h.par !== 3)].map((h) => `<option value="${h.n}">Hole ${h.n}${h.par === 3 ? ' · par 3' : ''}${cams[h.n] ? ' · camera' : ''}</option>`).join('');
+  const list = (S.replays || []).slice(0, 12).map((r) => `<div class="team" style="grid-template-columns:1fr auto auto"><div><b>${esc(r.label || 'Replay')}</b><small>Hole ${r.hole} · ${new Date(r.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${r.url ? ' · clip' : ''}${r.by ? ` · ${esc(r.by)}` : ''}</small></div>${pro ? `<button class="btn dark" data-rshow="${r.id}">On screens</button><button class="btn danger" data-rdel="${r.id}">Remove</button>` : '<span></span><span></span>'}</div>`).join('');
+  return `<h2>Replays</h2>
+  <div class="box"><p class="help" style="margin-top:0">Right after a great shot, tap Save replay. Players can watch it on their phones${pro ? ', and you can put it on every screen' : ''}. It replays the hole’s camera from ${25} seconds back, or paste a clip link instead.</p>
+  <div class="row"><select id="rHole">${opts}</select></div>
+  <div class="row" style="margin-top:8px"><input id="rLabel" maxlength="80" placeholder="Who and what (e.g. Dana Ruiz, 3 feet!)"></div>
+  <div class="row" style="margin-top:8px"><input id="rUrl" type="url" placeholder="Clip link, optional (.mp4 or .m3u8)"></div>
+  ${pro ? '<label class="help" style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="rScreens" style="width:auto"> Show it on every screen now</label>' : ''}
+  <div class="row" style="margin-top:8px"><button class="btn primary" id="rSave">Save replay</button></div></div>
+  ${list ? `<div class="list">${list}</div>` : ''}`;
 }
 
 // CONTESTS: closest to the pin and long drive results
@@ -190,13 +205,21 @@ function contestsTab() {
     <div class="log">${lead.slice(0, 5).map((e, i) => `<div>${i + 1}. ${esc(e.name)} · ${fmtDist(c, e.dist)}</div>`).join('') || 'No one yet.'}</div>
     <div class="row" style="margin-top:10px"><input list="names" data-cname="${c.id}" placeholder="Player"><input type="number" step="${c.kind === 'ld' ? 1 : 0.1}" min="0" data-cdist="${c.id}" placeholder="${c.kind === 'ld' ? 'Yards' : 'Feet (6.5 = 6 ft 6 in)'}" inputmode="decimal"><button class="btn dark" data-ctp="${c.id}">Post</button></div></div>`;
   }).join('') || '<p class="help">No contests set up.</p>'}</div>
-  ${me.role !== 'pro' ? '<div class="row" style="margin-top:22px"><button class="btn" id="signOut">Sign out</button></div>' : ''}`;
+  ${me.role !== 'pro' ? `<div style="margin-top:26px">${replayBox()}</div><div class="row" style="margin-top:22px"><button class="btn" id="signOut">Sign out</button></div>` : ''}`;
 }
 
 $('main').addEventListener('change', (e) => { if (e.target.id === 'fixTeam') { fixTeam = e.target.value; render(); } });
 $('main').addEventListener('click', async (e) => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.id === 'signOut') return signOut();
+  if (b.id === 'rSave') {
+    const url = $('rUrl').value.trim();
+    op({ op: 'replay', hole: Number($('rHole').value), label: $('rLabel').value.trim(), url, screens: !!$('rScreens')?.checked }, $('rScreens')?.checked ? 'Replay on the screens' : 'Replay saved')
+      .then(() => { $('rLabel').value = ''; $('rUrl').value = ''; }).catch(() => {});
+    return;
+  }
+  if (b.dataset.rshow) { op({ op: 'take', kind: 'replay', replay: b.dataset.rshow }, 'Replay on the screens').catch(() => {}); return; }
+  if (b.dataset.rdel) { if (confirm('Remove this replay?')) op({ op: 'replay', remove: b.dataset.rdel }, 'Removed').catch(() => {}); return; }
   if (b.dataset.nudge) {
     const t = S.teams.find((x) => x.id === b.dataset.nudge);
     const text = prompt(`Message to ${t.name || 'this cart'}:`, 'Please keep up the pace of play. Thank you!');

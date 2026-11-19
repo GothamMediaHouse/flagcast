@@ -47,6 +47,14 @@ main { max-width: 720px; margin: 0 auto; padding: 14px max(16px, env(safe-area-i
 .p3 .cam video, .p3 .cam iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 .p3 .cam .none { position: absolute; inset: 0; display: grid; place-items: center; color: #a9bdb0; font-size: .9rem; background: linear-gradient(180deg, #1d4a35, #123628); }
 .p3 .cam .tag { position: absolute; left: 8px; top: 8px; background: #c8312b; color: #fff; font-family: var(--f-mono); font-size: .62rem; letter-spacing: .1em; padding: 2px 6px; border-radius: 2px; z-index: 2; }
+.p3 .cam .tag.rp { background: var(--flag); color: var(--on-flag); }
+.p3 .cam .camctl { position: absolute; right: 8px; top: 8px; display: flex; gap: 6px; z-index: 2; }
+.p3 .cam .camctl button { background: rgba(0,0,0,.6); color: #fff; border: 1px solid rgba(255,255,255,.3); border-radius: 6px; padding: 4px 9px; font: 600 .75rem var(--f-body); }
+.p3 .cam .camctl button.on { background: #c8312b; border-color: #c8312b; }
+.p3 .cam .rmsg { position: absolute; left: 8px; right: 8px; bottom: 8px; background: rgba(0,0,0,.7); color: #fff; padding: 6px 10px; border-radius: 6px; font-size: .85rem; z-index: 2; }
+.p3 .reps { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 10px; }
+.p3 .reps button { border: 1.5px solid var(--line); background: var(--paper); border-radius: 999px; padding: 5px 12px; font-size: .85rem; font-weight: 600; }
+.p3 .reps button small { color: var(--muted); font-weight: 500; margin-left: 4px; }
 .p3 .body { padding: 14px; }
 .p3 h2 { font-size: 1.8rem; }
 .p3 .facts { font-family: var(--f-mono); font-size: .8rem; color: var(--muted); margin-top: 4px; }
@@ -76,6 +84,7 @@ main { max-width: 720px; margin: 0 auto; padding: 14px max(16px, env(safe-area-i
 import { leaderboard, fmtPar, holeStats, contestLeader, fmtDist, skins, mark, FORMATS } from '/golf/core.js';
 import { live, esc } from '/golf/client.js';
 import { appBar, remember } from '/golf/appbar.js';
+import { attach, detach, playReplay, rewind, goLive, replayTime } from '/golf/replay.js';
 appBar('live');
 
 let S = null, view = location.hash.startsWith('#hole-') ? 'p3' : 'lb', flight = '', openRow = null;
@@ -83,7 +92,7 @@ const $ = (id) => document.getElementById(id);
 
 function camHtml(url, n) {
   if (!url) return `<div class="none">No camera on this hole</div>`;
-  if (/\.m3u8(\?|$)/.test(url)) return `<video muted playsinline autoplay controls data-hls="${esc(url)}"></video><span class="tag">LIVE</span>`;
+  if (/\.m3u8(\?|$)/.test(url)) return `<video muted playsinline autoplay controls data-hls="${esc(url)}"></video><span class="tag" data-tag>LIVE</span><div class="camctl"><button data-rw="${n}" aria-label="Back 30 seconds">⟲ 30s</button><button data-golive="${n}" class="on">Live</button></div>`;
   return `<iframe src="${esc(url)}" allow="autoplay; fullscreen" allowfullscreen title="Hole ${n} camera"></iframe><span class="tag">LIVE</span>`;
 }
 
@@ -121,11 +130,31 @@ function p3View() {
   return holes.map((h) => {
     const st = holeStats(S, S.scores, h.n), sp = S.sponsors.find((s) => s.holes.includes(h.n));
     return `<article class="p3" id="hole-${h.n}"><div class="cam">${camHtml(S.cams[h.n], h.n)}</div><div class="body">
-      <h2>Hole ${h.n}</h2><div class="facts">Par 3${h.yds ? ` · ${h.yds} yds` : ''} · SI ${h.hcp}${st.avg ? ` · avg ${st.avg.toFixed(2)}` : ''}${sp ? ` · presented by ${esc(sp.name)}` : ''}</div>
+      ${repsHtml(h.n)}<h2>Hole ${h.n}</h2><div class="facts">Par 3${h.yds ? ` · ${h.yds} yds` : ''} · SI ${h.hcp}${st.avg ? ` · avg ${st.avg.toFixed(2)}` : ''}${sp ? ` · presented by ${esc(sp.name)}` : ''}</div>
       ${st.aces.length ? `<p style="margin:10px 0 0;font-weight:600" class="under">Hole in one: ${st.aces.map((a) => esc(a.name)).join(', ')}</p>` : ''}
       <div class="stats"><div><b>${st.aces.length}</b><span>Aces</span></div><div><b>${st.birdie + st.eagle - st.aces.length}</b><span>Birdies</span></div><div><b>${st.par0}</b><span>Pars</span></div><div><b>${st.bogey + st.worse}</b><span>Over</span></div></div>
       ${S.contests.filter((c) => c.hole === h.n).map(contestBox).join('')}</div></article>`;
   }).join('');
+}
+
+// replays of this hole, newest first
+function repsHtml(n) {
+  const list = (S.replays || []).filter((r) => r.hole === n).slice(0, 6);
+  return list.length ? `<div class="reps">${list.map((r) => `<button data-rep="${esc(r.id)}">▶ ${esc(r.label || 'Replay')}<small>${replayTime(r)}</small></button>`).join('')}</div>` : '';
+}
+function startVideos(root) { for (const v of root.querySelectorAll('video[data-hls]')) attach(v, v.dataset.hls, { live: true }); }
+function backToLive(n) {
+  const cam = document.querySelector(`#hole-${n} .cam`); if (!cam) return;
+  cam.querySelectorAll('video').forEach(detach);
+  cam.innerHTML = camHtml(S.cams[n], n); startVideos(cam);
+}
+async function openReplay(id) {
+  const r = (S.replays || []).find((x) => x.id === id); if (!r) return;
+  const cam = document.querySelector(`#hole-${r.hole} .cam`); if (!cam) return;
+  cam.querySelectorAll('video').forEach(detach);
+  cam.innerHTML = `<video muted playsinline autoplay controls></video><span class="tag rp">REPLAY</span><div class="camctl"><button data-golive="${r.hole}">Back to live</button></div>${r.label ? `<div class="rmsg">${esc(r.label)}</div>` : ''}`;
+  const res = await playReplay(cam.querySelector('video'), r, S.cams[r.hole], () => backToLive(r.hole));
+  if (!res.ok) { const m = cam.querySelector('.rmsg') || cam.appendChild(Object.assign(document.createElement('div'), { className: 'rmsg' })); m.textContent = res.reason; }
 }
 
 function ctView() { return S.contests.length ? S.contests.map(contestBox).join('') : `<div class="empty">No contests in this tournament.</div>`; }
@@ -147,18 +176,18 @@ function render(keepVideo) {
     return;
   }
   const main = $('main');
-  main.querySelectorAll('video').forEach((v) => v._hls && v._hls.destroy());
+  main.querySelectorAll('video').forEach(detach);
   main.innerHTML = view === 'p3' ? p3View() : view === 'ct' ? ctView() : view === 'sk' ? skView() : lbView();
-  for (const v of main.querySelectorAll('video[data-hls]')) {
-    if (v.canPlayType('application/vnd.apple.mpegurl')) v.src = v.dataset.hls;
-    else if (window.Hls && Hls.isSupported()) { const h = new Hls(); h.loadSource(v.dataset.hls); h.attachMedia(v); v._hls = h; }
-  }
+  startVideos(main);
   if (view === 'p3' && location.hash.startsWith('#hole-') && !render.jumped) { render.jumped = true; document.querySelector(location.hash)?.scrollIntoView(); }
 }
 
 document.addEventListener('click', (e) => {
   const tb = e.target.closest('#tabs button'); if (tb) { view = tb.dataset.v; render(); scrollTo(0, 0); return; }
   const fb = e.target.closest('[data-fl]'); if (fb) { flight = fb.dataset.fl; render(); return; }
+  const rp = e.target.closest('[data-rep]'); if (rp) { openReplay(rp.dataset.rep); return; }
+  const rw = e.target.closest('[data-rw]'); if (rw) { const v = rw.closest('.cam').querySelector('video'); if (v && !rewind(v, 30)) rw.textContent = 'Live only'; rw.nextElementSibling?.classList.remove('on'); return; }
+  const gl = e.target.closest('[data-golive]'); if (gl) { const cam = gl.closest('.cam'); if (cam.querySelector('[data-tag]')) { const v = cam.querySelector('video'); if (v) goLive(v); gl.classList.add('on'); } else backToLive(Number(gl.dataset.golive)); return; }
   const r = e.target.closest('tr.r'); if (r) { openRow = openRow === r.dataset.k ? null : r.dataset.k; render(); }
 });
 
