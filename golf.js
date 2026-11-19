@@ -9,11 +9,13 @@
 //   POST /golf/api/<id>/score              { code, team, list: [{ p, h, v, at }] }   p = player id or 'T'
 //   POST /golf/api/<id>/desk               { key, op, … }   the tournament desk (see desk() below)
 //   POST /golf/api/<id>/pro                { pin, op, … }   a golf pro or marshal with a PIN from the Manager (see pro() below)
+//   POST /golf/api/<id>/where              { code, team, at: [lat, lng], acc, hole }   a group's spot, from a scorecard with GPS on
 //   POST /golf/api/<id>/hit                { list: [{ s: sponsorId, k: 'view'|'tap'|'secs', n }] }   sponsor counts for the report
 //
-// Pages: /g/<id> live page · /g/<id>/board screens · /g/<id>/desk#<key> desk · /g/<id>/s/<code> cart · /g/<id>/cards QR cards
+// Pages: /g/<id> live page · /g/<id>/board screens · /g/<id>/desk#<key> desk · /g/<id>/map#<key> course map · /g/<id>/s/<code> cart · /g/<id>/cards QR cards
 import { DurableObject } from 'cloudflare:workers';
 import { defaultHoles } from './public/golf/core.js';
+import { trackingOn } from './public/golf/gps.js';
 import { clubs } from './clubs.js';
 
 const ID = /^[a-z0-9]{8}$/;
@@ -34,7 +36,7 @@ const preflight = (request) => new Response(null, { status: 204, headers: {
   'Access-Control-Allow-Origin': APP_ORIGINS.has(request.headers.get('Origin')) ? request.headers.get('Origin') : 'null',
   'Access-Control-Allow-Methods': 'GET, POST', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400', Vary: 'Origin' } });
 
-const PAGES = { '': '/golf/live/', board: '/golf/board/', desk: '/golf/desk/', cards: '/golf/cards/' };
+const PAGES = { '': '/golf/live/', board: '/golf/board/', desk: '/golf/desk/', cards: '/golf/cards/', map: '/golf/map/' };
 
 export async function golf(request, env) {
   const url = new URL(request.url);
@@ -43,11 +45,11 @@ export async function golf(request, env) {
   // making a tournament and the club accounts go through the club directory (clubs.js)
   if (url.pathname === '/golf/api/new') return cors(request, await clubs(request, env, 'new'));
   if ((m = url.pathname.match(/^\/golf\/api\/club\/(start|verify|me|request|invite|uninvite|hide|signout|admin)$/))) return cors(request, await clubs(request, env, m[1]));
-  if ((m = url.pathname.match(/^\/golf\/api\/([a-z0-9]{8})\/(state|ws|cart|score|desk|pro|hit)$/))) {
+  if ((m = url.pathname.match(/^\/golf\/api\/([a-z0-9]{8})\/(state|ws|cart|score|desk|pro|hit|where)$/))) {
     const stub = env.GOLF.get(env.GOLF.idFromName(m[1]));
     return cors(request, await stub.fetch(request));
   }
-  if ((m = url.pathname.match(/^\/g\/([a-z0-9]{8})(?:\/(board|desk|cards|s\/[A-HJ-NP-Z2-9]{6}))?\/?$/)) && request.method === 'GET') {
+  if ((m = url.pathname.match(/^\/g\/([a-z0-9]{8})(?:\/(board|desk|cards|map|s\/[A-HJ-NP-Z2-9]{6}))?\/?$/)) && request.method === 'GET') {
     const page = m[2]?.startsWith('s/') ? '/golf/score/' : PAGES[m[2] || ''];
     const r = await env.ASSETS.fetch(new Request(new URL(page, url), request));
     const h = new Headers(r.headers); h.set('Cache-Control', 'no-cache'); h.set('X-Robots-Tag', 'noindex'); h.set('Referrer-Policy', 'no-referrer');
@@ -64,12 +66,29 @@ export const SPOTS = ['title', 'leaderboard', 'hole', 'cam', 'contest', 'turn', 
 // (cam = one hole's camera, full frame)
 export const PAGE_KINDS = ['lb', 'p3', 'cam', 'contests', 'skins', 'fund', 'sponsors', 'sponsor', 'schedule'];
 // changes made on the day (desk or a pro's PIN); marshals only post contest results
-const DAY_OPS = new Set(['fix', 'ctp', 'contest', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay', 'scene']);
+const DAY_OPS = new Set(['fix', 'ctp', 'contest', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay', 'scene', 'map', 'groups']);
 // marshals post contest results and replays of shots at their hole
 const MARSHAL_OPS = new Set(['ctp', 'replay']);
 // a replay with no clip link replays the hole's live camera from this many seconds before it was marked
 export const REPLAY_BACK = 25;
 const num = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+
+// the course map for hole GPS: per hole the tee, the front, middle and back of the green, and hazards
+// (p = where you reach it, c = what carries it). Points are [lat, lng]. Shared by every tournament at the club.
+const pt = (a) => (Array.isArray(a) && a.length === 2 && Math.abs(a[0]) <= 90 && Math.abs(a[1]) <= 180 && Number.isFinite(+a[0]) && Number.isFinite(+a[1])
+  ? [Math.round(+a[0] * 1e6) / 1e6, Math.round(+a[1] * 1e6) / 1e6] : null);
+export const HAZARDS = ['bunker', 'water', 'trees', 'layup', 'other'];
+export function cleanMap(m) {
+  const holes = {};
+  for (let n = 1; n <= 18; n++) {
+    const h = m?.holes?.[n] || m?.holes?.[String(n)]; if (!h) continue;
+    const o = { tee: pt(h.tee), f: pt(h.f), m: pt(h.m), b: pt(h.b),
+      hz: (Array.isArray(h.hz) ? h.hz : []).slice(0, 12).map((z) => ({ id: clip(z.id, 8) || rand(5, 'abcdefghijkmnpqrstuvwxyz23456789'),
+        k: HAZARDS.includes(z.k) ? z.k : 'other', n: clip(z.n, 40), p: pt(z.p), c: pt(z.c) })).filter((z) => z.p) };
+    if (o.tee || o.f || o.m || o.b || o.hz.length) holes[n] = o;
+  }
+  return { holes };
+}
 
 // the setup as the desk sends it, tidied so nothing odd gets stored
 function cleanSetup(s, old) {
@@ -176,6 +195,7 @@ export class GolfEvent extends DurableObject {
       const s = cleanSetup({ name: b.name || 'Golf tournament', club: b.club || '', format: { type: 'bestball', count: 1, allowance: 85 }, flights: ['A', 'B'],
         screens: { seconds: 12, rows: 10 } }, { course: { holes: defaultHoles() }, teams: [] });
       this.ev = { ...s, id: url.searchParams.get('id'), key: rand(24, 'abcdefghijkmnpqrstuvwxyz23456789'), locked: false, aces: [], created: Date.now(), v: 1 };
+      if (b.map) this.ev.map = { ...cleanMap(b.map), at: Date.now(), by: 'Club course map' }; // the club's course, mapped at an earlier tournament
       await this.ctx.storage.put('event', this.ev);
       return json({ id: this.ev.id, key: this.ev.key });
     }
@@ -208,6 +228,7 @@ export class GolfEvent extends DurableObject {
     }
     if (op === 'pro') return this.pro(b);
     if (op === 'hit') return this.hit(b);
+    if (op === 'where') return this.where(b);
     return json({ error: 'Not found' }, 404);
   }
 
@@ -286,6 +307,14 @@ export class GolfEvent extends DurableObject {
     const ev = this.ev, now = Date.now();
     ev.live = ev.live || { force: {}, take: null };
     if (b.op === 'stats') return json({ stats: await this.getStats(), log: ev.log || [] });
+    if (b.op === 'groups') {
+      if (!trackingOn(ev)) {
+        if (Object.keys(await this.spots()).length) { this.wh = {}; await this.ctx.storage.delete('where'); } // the day is over: wipe them
+        return json({ now, on: false, date: ev.date, locked: !!ev.locked, groups: [] });
+      }
+      const wh = await this.spots();
+      return json({ now, on: true, groups: ev.teams.filter((t) => wh[t.id]).map((t) => ({ team: t.id, name: t.name || t.players.map((p) => p.name.split(' ').slice(-1)[0]).join(' / '), start: t.start, ...wh[t.id] })) });
+    }
     if (b.op === 'fix') {
       const team = ev.teams.find((t) => t.id === b.team); if (!team) return json({ error: 'No such team' }, 404);
       const sc = await this.scores(), h = Number(b.h);
@@ -352,11 +381,35 @@ export class GolfEvent extends DurableObject {
         ev.replays = [r, ...(ev.replays || [])].slice(0, 60);
         if (b.screens) ev.live.take = { kind: 'replay', replay: r.id, text: r.label, at: now, secs: num(b.secs, 8, 120, url ? 30 : r.back + 5) };
       }
-    } else if (b.op === 'lock') ev.locked = !!b.locked;
+    } else if (b.op === 'map') { // hole GPS: the whole course map, from the map page (desk link or a pro walking the course)
+      ev.map = { ...cleanMap(b.map), at: now, by: clip(by, 40) };
+      // the club keeps it, so its next tournament starts mapped
+      if (this.env.CLUBS) this.ctx.waitUntil(this.env.CLUBS.get(this.env.CLUBS.idFromName('directory')).fetch(new Request('https://clubs/course', { method: 'POST', body: JSON.stringify({ id: ev.id, key: ev.key, map: ev.map }) })).catch(() => {}));
+    } else if (b.op === 'lock') {
+      ev.locked = !!b.locked;
+      if (ev.locked) { this.wh = {}; await this.ctx.storage.delete('where'); } // results are final: group spots are wiped
+    }
     else if (b.op === 'fund') ev.fund.raised = num(b.raised, 0, 1e9, ev.fund.raised);
     else return json({ error: 'Unknown change' }, 400);
     await this.ctx.storage.put('event', ev);
     await this.broadcast();
+    return json({ ok: true });
+  }
+
+  // where each group is on the course: scorecards with GPS on send their spot. Only the desk, pros and Admin see it.
+  async spots() {
+    if (!this.wh) this.wh = (await this.ctx.storage.get('where')) || {};
+    return this.wh;
+  }
+  async where(b) {
+    const ev = this.ev, team = ev.teams.find((t) => t.id === b.team);
+    if (!team || team.code !== String(b.code || '').toUpperCase()) return json({ error: 'Not your scorecard' }, 403);
+    const at = Array.isArray(b.at) && b.at.length === 2 ? b.at.map(Number) : null;
+    if (!at || !at.every(Number.isFinite) || Math.abs(at[0]) > 90 || Math.abs(at[1]) > 180) return json({ error: 'Bad spot' }, 400);
+    if (!trackingOn(ev)) return json({ error: 'Group tracking is only on during the tournament.', off: true }, 409);
+    const wh = await this.spots(), now = Date.now();
+    wh[team.id] = { at: at.map((x) => Math.round(x * 1e6) / 1e6), acc: num(b.acc, 0, 9999, 0), hole: num(b.hole, 0, 18, 0), t: now };
+    if (!this.whSaved || now - this.whSaved > 60000) { this.whSaved = now; await this.ctx.storage.put('where', wh); }
     return json({ ok: true });
   }
 

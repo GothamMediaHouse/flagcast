@@ -113,6 +113,8 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
 <div class="nudge" id="nudge" role="alertdialog" aria-labelledby="nudgeH" hidden><div><span class="label">From the pro shop</span><h2 id="nudgeH">A note for your cart</h2><p id="nudgeText"></p><button class="btn primary" onclick="this.closest('.nudge').hidden=true">OK</button></div></div>
 <script type="module">
 import { phoneBanner } from '/golf/phonecast.js';
+import { gpsCard } from '/golf/gpscard.js';
+import { onGps, yds, trackingOn } from '/golf/gps.js';
 import { leaderboard, teamCard, strokesOn, playing, fmtPar, mark, contestLeader, fmtDist, sideGames } from '/golf/core.js';
 import { eventId, post, live, esc } from '/golf/client.js';
 import { appBar, remember } from '/golf/appbar.js';
@@ -200,6 +202,16 @@ function nudges() {
   if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
 }
 
+// hole GPS: yardages and the course view, when the course is mapped
+const gps = gpsCard({ onHole: (d) => { const t = team(); if (!t) return; const ord = order(t), i = ord.indexOf(hole); hole = ord[Math.max(0, Math.min(17, i + d))]; render(); } });
+// with GPS on, the desk sees where this group is (every 30 s, or sooner after a walk)
+let sent = null;
+onGps((f) => {
+  if (!f.at || !teamId || !trackingOn(S)) return; // only while the tournament is on
+  if (sent && Date.now() - sent.t < 30000 && yds(sent.at, f.at) < 25) return;
+  sent = { t: Date.now(), at: f.at };
+  post('where', { code, team: teamId, at: f.at, acc: f.acc, hole }).catch(() => {});
+});
 const sideOK = () => S && S.sideGames !== false && S.format.type !== 'scramble';
 function render() {
   if (!S) return;
@@ -228,6 +240,7 @@ function render() {
   const lb = leaderboard(S, sc).find((l) => l.teamId === t.id);
   $('main').innerHTML = `
     <div class="holehead"><h2>Hole ${hole}</h2><div class="facts"><b>Par ${H.par}</b><br>${H.yds ? `${H.yds} yds · ` : ''}SI ${H.hcp}</div></div>
+    <div id="gpsSlot"></div>
     ${sponsor ? spHtml(sponsor, 'Presented by') : ''}
     ${turn ? `<div class="note"><b>At the turn</b><br>${spHtml(turn, '')}</div>` : ''}
     ${contests.map((c) => { const top = contestLeader(c)[0]; return `<div class="note"><b>${c.kind === 'ld' ? 'Long drive' : 'Closest to the pin'}</b>${c.sponsor ? ` · ${esc(c.sponsor)}` : ''}<br>${top ? `Leader: ${esc(top.name)}, ${fmtDist(c, top.dist)}.` : 'No one on the board yet.'} A marshal measures at the green.</div>`; }).join('')}
@@ -251,6 +264,7 @@ function render() {
       <tr><th>Par</th>${holes.map((h) => `<th>${h.par}</th>`).join('')}<th>${holes.reduce((a, h) => a + h.par, 0)}</th></tr></thead>
       <tbody>${ps.map((p) => { const arr = mine[p.id] || []; const tot = arr.reduce((a, v) => a + (v > 0 ? v : 0), 0);
         return `<tr><td>${esc(p.name.split(' ')[0] || p.name)}</td>${holes.map((h, i) => { const v = arr[i]; return `<td>${v == null ? '' : v === 0 ? 'PU' : `<span class="sc ${mark(v, h.par)}">${v}</span>`}</td>`; }).join('')}<td>${tot || ''}</td></tr>`; }).join('')}</tbody></table></div>`;
+  gps.update(S, hole); gps.mount($('gpsSlot'));
   $('bar').hidden = false;
   const ord = order(t), i = ord.indexOf(hole);
   $('prev').disabled = i === 0;

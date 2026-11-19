@@ -70,7 +70,7 @@ export class FlagcastClubs extends DurableObject {
       CREATE TABLE IF NOT EXISTS payments (id TEXT PRIMARY KEY, club TEXT, amount REAL, credits INTEGER, what TEXT, note TEXT, at INTEGER);
       CREATE TABLE IF NOT EXISTS log (n INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, who TEXT, club TEXT, what TEXT);`);
     // columns added after the first release
-    for (const q of ['ALTER TABLE clubs ADD COLUMN notes TEXT', 'ALTER TABLE events ADD COLUMN archived INTEGER DEFAULT 0']) { try { this.sql.exec(q); } catch {} }
+    for (const q of ['ALTER TABLE clubs ADD COLUMN notes TEXT', 'ALTER TABLE events ADD COLUMN archived INTEGER DEFAULT 0', 'ALTER TABLE clubs ADD COLUMN course TEXT']) { try { this.sql.exec(q); } catch {} }
   }
   note(who, club, what) {
     this.sql.exec('INSERT INTO log (at, who, club, what) VALUES (?, ?, ?, ?)', Date.now(), who || '', club || '', String(what).slice(0, 200));
@@ -101,8 +101,18 @@ export class FlagcastClubs extends DurableObject {
   }
   fail(msg, status = 400) { throw Object.assign(new Error(msg), { status }); }
 
+  // the club's course map (hole GPS) for a new tournament
+  courseOf(club) { try { return club?.course ? JSON.parse(club.course) : null; } catch { return null; } }
+
   async route(op, b, local) {
     const env = this.env, now = Date.now();
+    if (op === 'course') { // only from a tournament (GolfEvent) after its map was saved: the club keeps the latest one
+      const e = this.one('SELECT * FROM events WHERE id = ?', clip(b.id, 8));
+      if (!e || !b.key || !same(b.key, e.key)) this.fail('Not found', 404);
+      const s = JSON.stringify(b.map || {}); if (s.length > 200000) this.fail('Too big');
+      this.sql.exec('UPDATE clubs SET course = ? WHERE id = ?', s, e.club);
+      return json({ ok: true });
+    }
     if (op === 'start') {
       const email = clip(b.email, 254).toLowerCase();
       if (!EMAIL.test(email)) this.fail('Type a full email address.');
@@ -184,7 +194,7 @@ export class FlagcastClubs extends DurableObject {
         // local dev: anyone can make one
       } else this.fail('Sign in with your club’s account to make a tournament.', 401);
       const id = rand(8, 'abcdefghijkmnpqrstuvwxyz23456789');
-      const r = await env.GOLF.get(env.GOLF.idFromName(id)).fetch(new Request(`https://golf/init?id=${id}`, { method: 'POST', body: JSON.stringify({ name, club: club?.name || '' }) }));
+      const r = await env.GOLF.get(env.GOLF.idFromName(id)).fetch(new Request(`https://golf/init?id=${id}`, { method: 'POST', body: JSON.stringify({ name, club: club?.name || '', map: this.courseOf(club) }) }));
       const j = await r.json();
       if (!r.ok) return json(j, r.status);
       if (club) {
@@ -243,7 +253,7 @@ export class FlagcastClubs extends DurableObject {
       if (b.op === 'event') {
         need();
         const id = rand(8, 'abcdefghijkmnpqrstuvwxyz23456789'), name = clip(b.name, 80);
-        const r = await env.GOLF.get(env.GOLF.idFromName(id)).fetch(new Request(`https://golf/init?id=${id}`, { method: 'POST', body: JSON.stringify({ name, club: c.name }) }));
+        const r = await env.GOLF.get(env.GOLF.idFromName(id)).fetch(new Request(`https://golf/init?id=${id}`, { method: 'POST', body: JSON.stringify({ name, club: c.name, map: this.courseOf(c) }) }));
         const j = await r.json(); if (!r.ok) return json(j, r.status);
         this.sql.exec('INSERT INTO events (id, club, key, name, created) VALUES (?, ?, ?, ?, ?)', id, cid, j.key, name || 'New tournament', now);
         made = j;
