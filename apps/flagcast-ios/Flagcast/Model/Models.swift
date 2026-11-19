@@ -1,0 +1,248 @@
+import Foundation
+
+// The tournament as the server sends it (GET /golf/api/<id>/state and the WebSocket's { t: 'state', s }).
+// golf.js cleanSetup() is the source of truth for these shapes. Decoding is lenient: a missing or odd value
+// falls back to the same default the server would use, so one bad field never hides a whole scorecard.
+
+extension KeyedDecodingContainer {
+    func num(_ k: Key) -> Double? {
+        if let d = try? decodeIfPresent(Double.self, forKey: k) { return d }
+        if let s = try? decodeIfPresent(String.self, forKey: k) { return Double(s) }
+        return nil
+    }
+    func int(_ k: Key, _ d: Int) -> Int { num(k).map { Int($0.rounded()) } ?? d }
+    func dbl(_ k: Key, _ d: Double) -> Double { num(k) ?? d }
+    func str(_ k: Key, _ d: String = "") -> String { (try? decodeIfPresent(String.self, forKey: k)) ?? d }
+    func bool(_ k: Key, _ d: Bool) -> Bool { (try? decodeIfPresent(Bool.self, forKey: k)) ?? d }
+    func list<T: Decodable>(_ k: Key) -> [T] {
+        guard let arr = try? decodeIfPresent([Lenient<T>].self, forKey: k) else { return [] }
+        return arr.compactMap(\.value)
+    }
+}
+
+/// Decodes one array element, or nil when that element is broken (the rest of the array still decodes).
+struct Lenient<T: Decodable>: Decodable {
+    let value: T?
+    init(from decoder: Decoder) throws { value = try? T(from: decoder) }
+}
+
+struct Hole: Codable, Hashable {
+    var n: Int, par: Int, yds: Int, hcp: Int
+    init(n: Int, par: Int, yds: Int = 0, hcp: Int) { self.n = n; self.par = par; self.yds = yds; self.hcp = hcp }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        n = c.int(.n, 1); par = c.int(.par, 4); yds = c.int(.yds, 0); hcp = c.int(.hcp, n)
+    }
+}
+
+struct Player: Codable, Hashable, Identifiable {
+    var id: String, name: String, hcp: Double, guest: Bool
+    init(id: String, name: String, hcp: Double = 0, guest: Bool = false) { self.id = id; self.name = name; self.hcp = hcp; self.guest = guest }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        id = c.str(.id); name = c.str(.name); hcp = c.dbl(.hcp, 0); guest = c.bool(.guest, false)
+    }
+}
+
+struct Team: Codable, Hashable, Identifiable {
+    var id: String, name: String, flight: String, start: Int, hcp: Double, cart: String, players: [Player]
+    init(id: String, name: String = "", flight: String = "", start: Int = 1, hcp: Double = 0, cart: String = "", players: [Player] = []) {
+        self.id = id; self.name = name; self.flight = flight; self.start = start; self.hcp = hcp; self.cart = cart; self.players = players
+    }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        id = c.str(.id); name = c.str(.name); flight = c.str(.flight); start = c.int(.start, 1); hcp = c.dbl(.hcp, 0)
+        cart = c.str(.cart); players = c.list(.players)
+    }
+    /// The team's name, or its players' names when it has none.
+    var displayName: String { name.isEmpty ? players.map(\.name).joined(separator: " / ") : name }
+}
+
+struct Format: Codable, Hashable {
+    var type: String, count: Int, allowance: Double, show: String
+    init(type: String = "bestball", count: Int = 1, allowance: Double = 100, show: String = "net") {
+        self.type = type; self.count = count; self.allowance = allowance; self.show = show
+    }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        type = c.str(.type, "bestball"); count = c.int(.count, 1); allowance = c.dbl(.allowance, 100); show = c.str(.show, "net")
+    }
+    var isScramble: Bool { type == "scramble" }
+    var isStableford: Bool { type == "stableford" }
+    var name: String { ["bestball": "Best ball", "stroke": "Stroke play", "scramble": "Scramble", "stableford": "Stableford"][type] ?? "Best ball" }
+}
+
+struct Course: Codable, Hashable {
+    var name: String, holes: [Hole]
+    init(name: String = "", holes: [Hole] = Core.defaultHoles()) { self.name = name; self.holes = holes }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        name = c.str(.name)
+        let h: [Hole] = c.list(.holes)
+        holes = h.count == 18 ? h : Core.defaultHoles()
+    }
+}
+
+struct Screens: Codable, Hashable {
+    var title: String = "", ticker: String = "", seconds: Int = 12, skins: Bool = false, rows: Int = 10
+    init() {}
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        title = c.str(.title); ticker = c.str(.ticker); seconds = c.int(.seconds, 12); skins = c.bool(.skins, false); rows = c.int(.rows, 10)
+    }
+}
+
+struct Sponsor: Codable, Hashable, Identifiable {
+    var id: String, name: String, line: String, spot: String, holes: [Int], logo: String, url: String, offer: String
+    init(id: String, name: String, line: String = "", spot: String = "slide", holes: [Int] = [], logo: String = "", url: String = "", offer: String = "") {
+        self.id = id; self.name = name; self.line = line; self.spot = spot; self.holes = holes; self.logo = logo; self.url = url; self.offer = offer
+    }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        id = c.str(.id); name = c.str(.name); line = c.str(.line); spot = c.str(.spot, "slide")
+        holes = ((try? c.decodeIfPresent([Double].self, forKey: .holes)) ?? []).map { Int($0) }
+        logo = c.str(.logo); url = c.str(.url); offer = c.str(.offer)
+    }
+}
+
+struct ContestEntry: Codable, Hashable { var name: String, dist: Double }
+struct Contest: Codable, Hashable, Identifiable {
+    var id: String, kind: String, hole: Int, label: String, sponsor: String, entries: [ContestEntry]
+    init(id: String, kind: String = "ctp", hole: Int, label: String = "", sponsor: String = "", entries: [ContestEntry] = []) {
+        self.id = id; self.kind = kind; self.hole = hole; self.label = label; self.sponsor = sponsor; self.entries = entries
+    }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        id = c.str(.id); kind = c.str(.kind, "ctp"); hole = c.int(.hole, 1); label = c.str(.label); sponsor = c.str(.sponsor)
+        entries = c.list(.entries)
+    }
+    var isLongDrive: Bool { kind == "ld" }
+    var title: String { label.isEmpty ? (isLongDrive ? "Long drive" : "Closest to the pin") : label }
+}
+
+struct PageRef: Codable, Hashable { var k: String; var fl: String = ""; var hole: Int = 0; var sponsor: String = ""; var secs: Int = 12
+    init(k: String, fl: String = "", hole: Int = 0, sponsor: String = "") { self.k = k; self.fl = fl; self.hole = hole; self.sponsor = sponsor }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        k = c.str(.k); fl = c.str(.fl); hole = c.int(.hole, 0); sponsor = c.str(.sponsor); secs = c.int(.secs, 12)
+    }
+}
+struct Display: Codable, Hashable, Identifiable {
+    var id: String, name: String, playlist: [PageRef]
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        id = c.str(.id); name = c.str(.name); playlist = c.list(.playlist)
+    }
+}
+
+struct Fund: Codable, Hashable {
+    var on = false, label = "", goal: Double = 0, raised: Double = 0, give = ""
+    init() {}
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        on = c.bool(.on, false); label = c.str(.label); goal = c.dbl(.goal, 0); raised = c.dbl(.raised, 0); give = c.str(.give)
+    }
+}
+
+struct Flash: Codable, Hashable { var text: String; var at: Double }
+struct News: Codable, Hashable { var text: String; var at: Double; var by: String? }
+struct Nudge: Codable, Hashable { var team: String; var text: String; var at: Double }
+struct Ace: Codable, Hashable { var hole: Int; var name: String; var team: String; var at: Double }
+struct Take: Codable, Hashable { var kind: String; var text: String?; var sponsor: String?; var at: Double; var secs: Double? }
+struct LiveScreens: Codable, Hashable {
+    var force: [String: PageRef] = [:], take: Take?
+    init() {}
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        force = (try? c.decodeIfPresent([String: PageRef].self, forKey: .force)) ?? [:]
+        take = try? c.decodeIfPresent(Take.self, forKey: .take)
+    }
+}
+struct ScheduleItem: Codable, Hashable { var time: String; var what: String }
+
+/// A par 3 replay: a clip link to play from the start, or (url empty) a mark on the hole's live HLS camera,
+/// played back from `back` seconds before `at` (ms) using the stream's own clock.
+struct Replay: Codable, Hashable, Identifiable {
+    var id: String, hole: Int, label: String, url: String, at: Double, back: Double, by: String
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        id = c.str(.id); hole = c.int(.hole, 1); label = c.str(.label); url = c.str(.url)
+        at = c.dbl(.at, 0); back = c.dbl(.back, 25); by = c.str(.by)
+    }
+    var isClip: Bool { !url.isEmpty }
+}
+
+/// scores[teamId][playerId or "T"] = 18 values: nil = not yet, 0 = picked up, else strokes
+typealias Scores = [String: [String: [Int?]]]
+
+struct EventState: Codable, Hashable {
+    var id = "", name = "", club = "", date = ""
+    var course = Course()
+    var format = Format()
+    var sideGames = true
+    var flights: [String] = []
+    var teams: [Team] = []
+    var screens = Screens()
+    var cams: [Int: String] = [:]
+    var sponsors: [Sponsor] = []
+    var schedule: [ScheduleItem] = []
+    var displays: [Display] = []
+    var fund = Fund()
+    var contests: [Contest] = []
+    var locked = false
+    var aces: [Ace] = []
+    var flash: Flash?
+    var news: [News] = []
+    var nudges: [Nudge] = []
+    var live = LiveScreens()
+    var replays: [Replay] = []
+    var scores: Scores = [:]
+    var online: [String: Int] = [:]
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, club, date, course, format, sideGames, flights, teams, screens, cams, sponsors, schedule, displays, fund, contests
+        case locked, aces, flash, news, nudges, live, replays, scores, online
+    }
+    init() {}
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        id = c.str(.id); name = c.str(.name); club = c.str(.club); date = c.str(.date)
+        course = (try? c.decodeIfPresent(Course.self, forKey: .course)) ?? Course()
+        format = (try? c.decodeIfPresent(Format.self, forKey: .format)) ?? Format()
+        sideGames = c.bool(.sideGames, true)
+        flights = (try? c.decodeIfPresent([String].self, forKey: .flights)) ?? []
+        teams = c.list(.teams)
+        screens = (try? c.decodeIfPresent(Screens.self, forKey: .screens)) ?? Screens()
+        let rawCams = (try? c.decodeIfPresent([String: String].self, forKey: .cams)) ?? [:]
+        cams = Dictionary(uniqueKeysWithValues: rawCams.compactMap { k, v in Int(k).map { ($0, v) } })
+        sponsors = c.list(.sponsors); schedule = c.list(.schedule); displays = c.list(.displays)
+        fund = (try? c.decodeIfPresent(Fund.self, forKey: .fund)) ?? Fund()
+        contests = c.list(.contests)
+        locked = c.bool(.locked, false)
+        aces = c.list(.aces)
+        flash = try? c.decodeIfPresent(Flash.self, forKey: .flash)
+        news = c.list(.news); nudges = c.list(.nudges)
+        live = (try? c.decodeIfPresent(LiveScreens.self, forKey: .live)) ?? LiveScreens()
+        replays = c.list(.replays)
+        scores = (try? c.decodeIfPresent(Scores.self, forKey: .scores)) ?? [:]
+        online = (try? c.decodeIfPresent([String: Int].self, forKey: .online)) ?? [:]
+    }
+    func encode(to e: Encoder) throws {
+        var c = e.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id); try c.encode(name, forKey: .name); try c.encode(club, forKey: .club); try c.encode(date, forKey: .date)
+        try c.encode(course, forKey: .course); try c.encode(format, forKey: .format); try c.encode(sideGames, forKey: .sideGames)
+        try c.encode(flights, forKey: .flights); try c.encode(teams, forKey: .teams); try c.encode(screens, forKey: .screens)
+        try c.encode(Dictionary(uniqueKeysWithValues: cams.map { (String($0.key), $0.value) }), forKey: .cams)
+        try c.encode(sponsors, forKey: .sponsors); try c.encode(schedule, forKey: .schedule); try c.encode(displays, forKey: .displays)
+        try c.encode(fund, forKey: .fund); try c.encode(contests, forKey: .contests); try c.encode(locked, forKey: .locked)
+        try c.encode(aces, forKey: .aces); try c.encodeIfPresent(flash, forKey: .flash); try c.encode(news, forKey: .news)
+        try c.encode(nudges, forKey: .nudges); try c.encode(live, forKey: .live); try c.encode(replays, forKey: .replays); try c.encode(scores, forKey: .scores); try c.encode(online, forKey: .online)
+    }
+
+    /// The name shown at the top of pages: the screens title when the desk set one.
+    var title: String { screens.title.isEmpty ? (name.isEmpty ? "Tournament" : name) : screens.title }
+    func team(_ id: String?) -> Team? { teams.first { $0.id == id } }
+    /// Whose scores a team enters: its players, or the whole team as "T" in a scramble.
+    func scorers(_ t: Team) -> [Player] { format.isScramble ? [Player(id: "T", name: t.name.isEmpty ? "Team" : t.name, hcp: t.hcp)] : t.players }
+    var sideGamesAllowed: Bool { sideGames && !format.isScramble }
+}
