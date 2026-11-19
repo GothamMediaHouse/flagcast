@@ -102,7 +102,7 @@ function tile(z, x, y, redraw) {
 
 export function holeView(canvas) {
   const ctx = canvas.getContext('2d');
-  let H = null, ME = null, tap = null, view = null, raf = 0; const flatCanvas = document.createElement('canvas');
+  let H = null, ME = null, tap = null, view = null, raf = 0, credit = false; const flatCanvas = document.createElement('canvas');
   const redraw = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; paint(); }); };
 
   function layout() {
@@ -227,7 +227,7 @@ export function holeView(canvas) {
       }
     }
     ctx.font = '10px system-ui, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillStyle = 'rgba(255,255,255,.7)';
-    ctx.fillText(TILE_CREDIT, v.w - 6, v.hgt - 4);
+    ctx.fillText(credit ? `${TILE_CREDIT} · Course data © OpenStreetMap` : TILE_CREDIT, v.w - 6, v.hgt - 4);
   }
 
   const onTap = (e) => {
@@ -241,7 +241,7 @@ export function holeView(canvas) {
   canvas.addEventListener('click', onTap);
   const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(redraw) : null; ro && ro.observe(canvas);
   return {
-    draw(h, me) { if (h !== H) tap = null; H = h; ME = me || null; paint(); },
+    draw(h, me, osm) { if (h !== H) tap = null; H = h; ME = me || null; credit = !!osm; paint(); },
     clearTap() { tap = null; paint(); },
     destroy() { canvas.removeEventListener('click', onTap); ro && ro.disconnect(); cancelAnimationFrame(raf); },
   };

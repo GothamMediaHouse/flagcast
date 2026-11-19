@@ -73,6 +73,7 @@ body.groups .strip { display: none; }
 .gpin.old { background: #8a948d; }
 .leaflet-tooltip.gtip { background: rgba(10,24,16,.85); color: #fff; border: 0; font: 600 11px var(--f-body); padding: 2px 6px; box-shadow: none; }
 .leaflet-tooltip.gtip::before { display: none; }
+.auto { margin-top: 16px; padding: 12px; border: 1.5px solid var(--flag); border-radius: 10px; background: var(--card); }
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--green); color: var(--on-green); padding: 10px 16px; border-radius: 10px; z-index: 1000; font-size: .9rem; box-shadow: 0 8px 24px rgba(0,0,0,.3); }
 </style>
 </head>
@@ -89,6 +90,7 @@ body.groups .strip { display: none; }
 <script type="module">
 import { eventId, api, post, esc } from '/golf/client.js';
 import { TILES, TILE_CREDIT, yds, middle, HZ_LABEL } from '/golf/gps.js';
+import { fetchGolf, buildMap, OSM_CREDIT } from '/golf/osm.js';
 
 const $ = (id) => document.getElementById(id);
 const id = eventId();
@@ -158,7 +160,17 @@ function place(p) {
 }
 
 // ---- the panel ----
+let autoNote = '';
 function drawPanel() {
+  const anyMapped = Object.values(MAP.holes).some((x) => middle(x));
+  const findBox = `<details ${Object.values(MAP.holes).some((x) => middle(x)) ? '' : 'open'}><summary>Find the course</summary>
+      <form class="find" id="find"><input id="q" placeholder="Course name and town"><button class="btn">Find</button></form>
+      <div class="row"><button class="btn" data-me>Go to my location</button></div>
+      <p class="help">Or paste a spot from Google Maps (right-click → the numbers), like 40.7128, -74.0060.</p>
+      <div class="err" id="ferr" hidden></div></details>`;
+  const autoBox = `<div class="auto"><b>Map it automatically</b><p class="help" style="margin:4px 0 8px">Find the course on the map first, then Flagcast fills in every hole it can from OpenStreetMap’s golf data: tees, greens, bunkers and water. Check each hole afterwards and drag anything that’s off.</p>
+      <div class="row" style="margin-top:0"><button class="btn primary" data-auto="fill">Fill in the holes</button>${Object.values(MAP.holes).some((x) => middle(x)) ? '<button class="btn" data-auto="all">Redo every hole</button>' : ''}</div>
+      <div class="help" id="autoMsg">${autoNote}</div></div>`;
   const h = H(), g = middle(h), card = S?.course?.holes?.[hole - 1];
   const len = h.tee && g ? Math.round(yds(h.tee, g)) : null;
   const depth = h.f && h.b ? Math.round(yds(h.f, h.b)) : null;
@@ -166,7 +178,8 @@ function drawPanel() {
     : !tool ? 'This hole is mapped. Drag any point to move it, or pick one above to place it again.'
     : `Tap the map to set the <b>${toolName()}</b>${tool === 'tee' ? '' : ' of the green'}. Drag any point to move it.`;
   $('panel').innerHTML = `
-    <h2>Hole ${hole}</h2>
+    ${anyMapped ? '' : findBox + autoBox}
+    <h2 style="margin-top:${anyMapped ? 0 : 16}px">Hole ${hole}</h2>
     <div class="label">${card ? `Par ${card.par}${card.yds ? ` · ${card.yds} yds on the card` : ''}` : ''}</div>
     <div class="tools" style="margin-top:10px">${TOOLS.map(([k, l]) => `<button data-tool="${k}" aria-pressed="${!pendingHz && tool === k}" class="${h[k] ? 'set' : ''}">${l}</button>`).join('')}</div>
     <div class="hint">${hint}</div>
@@ -180,11 +193,8 @@ function drawPanel() {
       <div class="r help" style="margin:0">${h.tee ? `${Math.round(yds(h.tee, z.p))} to reach${z.c ? ` · ${Math.round(yds(h.tee, z.c))} to carry` : ''} from the tee` : ''}<span style="flex:1"></span>
       ${z.c ? '' : `<button class="lk" data-hzc="${i}">Add carry</button>`}<button class="lk danger" data-hzx="${i}">Remove</button></div></div>`).join('')}
     <div class="row">${Object.entries(HZ_LABEL).map(([k, l]) => `<button class="btn" data-addhz="${k}">+ ${l}</button>`).join('')}</div>
-    <details ${Object.values(MAP.holes).some((x) => middle(x)) ? '' : 'open'}><summary>Find the course</summary>
-      <form class="find" id="find"><input id="q" placeholder="Course name and town"><button class="btn">Find</button></form>
-      <div class="row"><button class="btn" data-me>Go to my location</button></div>
-      <p class="help">Or paste a spot from Google Maps (right-click → the numbers), like 40.7128, -74.0060.</p>
-      <div class="err" id="ferr" hidden></div></details>
+    ${anyMapped ? findBox : ''}
+    ${anyMapped ? autoBox : ''}
     <p class="help" style="margin-top:16px">Saves as you go. Your club keeps this map, so its next tournament starts with it.</p>`;
 }
 
@@ -192,6 +202,7 @@ $('panel').addEventListener('click', async (e) => {
   const b = e.target.closest('button'); if (!b) return;
   const h = H();
   if (b.dataset.tool) { tool = b.dataset.tool; pendingHz = null; drawPanel(); return; }
+  if (b.dataset.auto) { autoMap(b.dataset.auto === 'all', b); return; }
   if (b.hasAttribute('data-here')) {
     if (!navigator.geolocation) return toast('This device can’t share its location.');
     b.disabled = true; b.textContent = 'Finding you…';
@@ -255,6 +266,33 @@ function pick(n) {
   if (middle(h) || h.tee) fit();
 }
 
+// ---- map it automatically from OpenStreetMap ----
+async function autoMap(all, btn) {
+  const bd = map.getBounds(), wide = yds([bd.getSouth(), bd.getWest()], [bd.getNorth(), bd.getEast()]);
+  if (map.getZoom() < 13 || wide > 9000) return toast('Find the course first, so the whole course fills the map, then try again.');
+  if (all && btn.dataset.sure !== '1') { btn.dataset.sure = '1'; btn.textContent = 'Redo every hole? Tap again'; setTimeout(() => { btn.dataset.sure = ''; btn.textContent = 'Redo every hole'; }, 4000); return; }
+  btn.disabled = true; const was = btn.textContent; btn.textContent = 'Looking…';
+  try {
+    const pad = 0.004, c = map.getCenter();
+    const els = await fetchGolf([bd.getSouth() - pad, bd.getWest() - pad, bd.getNorth() + pad, bd.getEast() + pad]);
+    const got = buildMap(els, [c.lat, c.lng]);
+    if (!got.found.length) {
+      autoNote = els.some((x) => x.tags?.golf) ? 'This course is on OpenStreetMap, but its holes aren’t numbered there, so they need to be mapped by hand.' : 'This course’s holes aren’t on OpenStreetMap yet, so they need to be mapped by hand (tap the tee and green on each hole).';
+      drawPanel(); return;
+    }
+    let n = 0;
+    for (const k of got.found) {
+      const cur = MAP.holes[k];
+      if (!all && cur && cur.tee && middle(cur)) continue;
+      MAP.holes[k] = got.holes[k]; n++;
+    }
+    const missing = Array.from({ length: 18 }, (_, i) => i + 1).filter((k) => !got.found.includes(k));
+    autoNote = `Filled in ${n} hole${n === 1 ? '' : 's'}${n < got.found.length ? ` (left ${got.found.length - n} you’d already mapped)` : ''}.${missing.length ? ` Not on OpenStreetMap: ${missing.join(', ')}. Map those by hand.` : ''} Check each hole. ${esc(OSM_CREDIT)}.`;
+    if (n) { MAP.src = 'osm'; changed(); pick(MAP.holes[hole] ? hole : got.found[0]); } else drawPanel();
+  } catch (e) { autoNote = esc(e.message || 'That didn’t work. Try again.'); drawPanel(); }
+  finally { if (document.body.contains(btn)) { btn.disabled = false; btn.textContent = was; } }
+}
+
 // ---- where every group is ----
 const groupsLayer = L.layerGroup().addTo(map);
 let GROUPS = [], gTimer = null, fitted = false, TRACK = null;
@@ -307,7 +345,7 @@ function changed(redraw = true) {
 async function save() {
   if (saving) { again = true; return; }
   saving = true;
-  const out = { holes: Object.fromEntries(Object.entries(MAP.holes).filter(([, h]) => h.tee || h.f || h.m || h.b || h.hz.length)) };
+  const out = { src: MAP.src || '', holes: Object.fromEntries(Object.entries(MAP.holes).filter(([, h]) => h.tee || h.f || h.m || h.b || h.hz.length)) };
   try {
     if (key) await post('desk', { key, op: 'map', map: out }); else await post('pro', { pin, op: 'map', map: out });
     $('saved').textContent = `Saved ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
@@ -321,6 +359,7 @@ async function start() {
   catch (e) { $('panel').innerHTML = `<h2>Not found</h2><p class="help">${esc(e.message)}</p>`; return; }
   $('evname').textContent = S.course?.name || S.club || S.name || 'Course map';
   document.title = `Course map · ${S.course?.name || S.name || 'Flagcast'}`;
+  MAP.src = S.map?.src || '';
   for (const [n, h] of Object.entries(S.map?.holes || {})) MAP.holes[n] = { tee: h.tee, f: h.f, m: h.m, b: h.b, hz: (h.hz || []).map((z) => ({ ...z })) };
   if (S.map?.at) $('saved').textContent = `Last saved ${new Date(S.map.at).toLocaleDateString([], { month: 'short', day: 'numeric' })}${S.map.by ? ` · ${S.map.by}` : ''}`;
   const first = Object.keys(MAP.holes).map(Number).sort((a, b) => a - b);

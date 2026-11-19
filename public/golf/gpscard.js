@@ -60,7 +60,7 @@ export function gpsCard({ onHole } = {}) {
     ov.querySelector('.cv-bar small').textContent = `Par ${H.par}${H.yds ? ` · ${H.yds} yds` : ''}`;
     ov.querySelector('.yd').innerHTML = y && y.m != null ? `<div class="m">${y.m}</div>${o?.me ? 'to the middle' : 'from the tee'}${y.f != null || y.b != null ? `<br>${[y.f != null ? `Front <b>${y.f}</b>` : '', y.b != null ? `Back <b>${y.b}</b>` : ''].filter(Boolean).join(' · ')}` : ''}` : 'Not mapped yet';
     ov.querySelector('.cv-foot span').textContent = measure ? `${measure.to} yds there, then ${measure.left} to the middle. Tap it again to clear.` : 'Tap anywhere to measure: how far there, and what’s left to the green.';
-    if (h && middle(h)) view.draw(h, me && me.at); else view.draw(null);
+    if (h && middle(h)) view.draw(h, me && me.at, S.map && S.map.src === 'osm'); else view.draw(null);
   }
 
   function open() {
