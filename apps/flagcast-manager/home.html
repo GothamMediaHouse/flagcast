@@ -14,6 +14,7 @@ header { background: var(--green); color: var(--on-green); padding: 26px 32px 22
 header img { height: 46px; }
 header .sub { color: var(--on-green-muted); font-size: .85rem; margin-top: 4px; }
 header button { -webkit-app-region: no-drag; }
+.mac header { padding-top: 44px; }
 main { max-width: 1060px; margin: 0 auto; padding: 26px 32px 60px; display: grid; grid-template-columns: 1fr 330px; gap: 24px; align-items: start; }
 h2 { font: 700 1.05rem system-ui; letter-spacing: .06em; text-transform: uppercase; margin: 0 0 12px; }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1.5px solid var(--line); background: var(--card); color: var(--ink); border-radius: 8px; padding: 8px 14px; font: 600 .9rem system-ui; cursor: pointer; text-decoration: none; }
@@ -40,6 +41,7 @@ input, select { font: inherit; color: var(--ink); background: var(--paper); bord
 </style>
 </head>
 <body>
+<script>if (/Macintosh/.test(navigator.userAgent)) document.documentElement.classList.add('mac');</script>
 <header>
   <div><img src="logo.svg" alt="Flagcast"><div class="sub">Manager · set up and run your tournaments</div></div>
   <button class="btn" id="settingsBtn" title="Server">Settings</button>
