@@ -1,0 +1,165 @@
+import XCTest
+@testable import Flagcast
+
+/// The Swift scoring math must give exactly what the website's core.js gives. core-fixture.json holds sample
+/// tournaments and core.js's answers for them (regenerate with `node apps/flagcast-ios/tools/make-core-fixture.mjs`).
+final class CoreTests: XCTestCase {
+    struct Fixture: Decodable {
+        struct Case: Decodable { let event: EventState; let scores: Scores }
+        let cases: [Case]
+    }
+    static let url = Bundle(for: CoreTests.self).url(forResource: "core-fixture", withExtension: "json")!
+    static let data = try! Data(contentsOf: url)
+    static let typed = try! JSONDecoder().decode(Fixture.self, from: data)
+    static let raw = try! JSONSerialization.jsonObject(with: data) as! [String: Any]
+    var rawCases: [[String: Any]] { Self.raw["cases"] as! [[String: Any]] }
+
+    // ---- comparing with the JSON core.js wrote: nulls and missing keys are the same thing ----
+    func norm(_ v: Any?) -> Any? {
+        // an Optional boxed inside Any (from [String: Any?]) is not `nil` to a switch: open it up first
+        if let v, Mirror(reflecting: v).displayStyle == .optional {
+            return norm(Mirror(reflecting: v).children.first?.value)
+        }
+        switch v {
+        case nil, is NSNull: return nil
+        case let d as [String: Any]: return d.compactMapValues { norm($0) }
+        case let a as [Any]: return a.map { norm($0) ?? NSNull() }
+        default: return v
+        }
+    }
+    func same(_ a: Any?, _ b: Any?, _ path: String, _ diffs: inout [String]) {
+        let a = norm(a), b = norm(b)
+        switch (a, b) {
+        case (nil, nil): return
+        case let (x as [String: Any], y as [String: Any]):
+            for k in Set(x.keys).union(y.keys) { same(x[k], y[k], "\(path).\(k)", &diffs) }
+        case let (x as [Any], y as [Any]):
+            if x.count != y.count { diffs.append("\(path): \(x.count) items vs \(y.count)"); return }
+            for i in x.indices { same(x[i], y[i], "\(path)[\(i)]", &diffs) }
+        case let (x as String, y as String):
+            if x != y { diffs.append("\(path): \(x) vs \(y)") }
+        case let (x as NSNumber, y as NSNumber):
+            let xb = CFGetTypeID(x) == CFBooleanGetTypeID(), yb = CFGetTypeID(y) == CFBooleanGetTypeID()
+            if xb != yb || abs(x.doubleValue - y.doubleValue) > 1e-9 { diffs.append("\(path): \(x) vs \(y)") }
+        default:
+            diffs.append("\(path): \(String(describing: a)) vs \(String(describing: b))")
+        }
+    }
+    func check(_ swift: Any?, _ js: Any?, _ path: String, file: StaticString = #filePath, line: UInt = #line) {
+        var diffs: [String] = []
+        same(swift, js, path, &diffs)
+        XCTAssert(diffs.isEmpty, "Swift and core.js differ:\n" + diffs.prefix(12).joined(separator: "\n"), file: file, line: line)
+    }
+
+    // ---- the Swift results as the same JSON shapes ----
+    func j(_ r: CardRow) -> [String: Any?] { ["hole": r.hole, "par": r.par, "gross": r.gross, "net": r.net, "done": r.done] }
+    func j(_ l: Line) -> [String: Any?] {
+        ["key": l.key, "teamId": l.teamId, "name": l.name, "sub": l.sub, "flight": l.flight, "start": l.entry.start, "played": l.played,
+         "total": l.total, "toPar": l.toPar, "nr": l.nr, "score": l.score, "pos": l.pos, "thru": l.thru, "card": l.card.map(j)]
+    }
+    func j(_ w: Who) -> [String: Any] { ["name": w.name, "team": w.team] }
+    func j(_ s: HoleStats) -> [String: Any?] {
+        ["holeNo": s.holeNo, "par": s.par, "eagle": s.eagle, "birdie": s.birdie, "par0": s.par0, "bogey": s.bogey, "worse": s.worse,
+         "aces": s.aces.map(j), "n": s.n, "total": s.total, "avg": s.avg]
+    }
+    func j(_ r: SkinRow) -> [String: Any] {
+        switch r {
+        case .open(let h): return ["hole": h, "open": true]
+        case let .won(h, w, s, worth): return ["hole": h, "won": j(w), "score": s, "worth": worth]
+        case let .tied(h, n, s): return ["hole": h, "tied": n, "score": s]
+        }
+    }
+    func j(_ r: SideResult) -> [String: Any?] {
+        var o: [String: Any?] = [
+            "players": r.players.map { ["key": $0.key, "id": $0.id, "team": $0.team, "name": $0.name, "hcp": $0.hcp, "short": $0.short] },
+            "ledger": r.ledger, "settle": r.settle.map { ["from": $0.from, "to": $0.to, "amt": $0.amt] },
+        ]
+        if let s = r.skins {
+            o["skins"] = ["rows": s.rows.map { row -> [String: Any?] in
+                switch row {
+                case let .open(h, pot): return ["hole": h, "open": true, "pot": pot]
+                case let .won(h, w, s, worth): return ["hole": h, "winner": w, "score": s, "worth": worth]
+                case let .tied(h, n, s, pot): return ["hole": h, "tied": n, "score": s, "pot": pot]
+                }
+            }, "won": s.won, "carrying": s.carrying] as [String: Any]
+        }
+        if let n = r.nassau {
+            o["nassau"] = ["sides": n.sides, "segs": n.segs.map { ["label": $0.label, "played": $0.played, "holes": $0.holes, "diff": $0.diff, "done": $0.done, "winner": $0.winner] as [String: Any?] }] as [String: Any]
+        }
+        if let b = r.birdies { o["birdies"] = ["list": b.map { ["key": $0.key, "hole": $0.hole, "count": $0.count, "eagle": $0.eagle] }] }
+        return o
+    }
+
+    func testFixtureHasCases() { XCTAssertEqual(Self.typed.cases.count, rawCases.count); XCTAssertGreaterThan(rawCases.count, 4) }
+
+    func testTeamCards() {
+        for (k, c) in Self.typed.cases.enumerated() {
+            let js = (rawCases[k]["out"] as! [String: Any])["teamCards"] as! [String: Any]
+            for t in c.event.teams { check(Core.teamCard(c.event, t, c.scores[t.id]).map(j), js[t.id], "case\(k).teamCard.\(t.id)") }
+        }
+    }
+
+    func testLeaderboards() {
+        for (k, c) in Self.typed.cases.enumerated() {
+            let out = rawCases[k]["out"] as! [String: Any]
+            check(Core.leaderboard(c.event, c.scores).map(j), out["leaderboard"], "case\(k).leaderboard")
+            check(Core.leaderboard(c.event, c.scores, flight: "A").map(j), out["leaderboardA"], "case\(k).leaderboardA")
+            check(Core.leaderboard(c.event, c.scores, mode: "gross").map(j), out["leaderboardGross"], "case\(k).leaderboardGross")
+        }
+    }
+
+    func testHoleStatsAndSkins() {
+        for (k, c) in Self.typed.cases.enumerated() {
+            let out = rawCases[k]["out"] as! [String: Any]
+            check(c.event.course.holes.map { j(Core.holeStats(c.event, c.scores, $0.n)) }, out["holeStats"], "case\(k).holeStats")
+            check(Core.skins(c.event, c.scores).map(j), out["skins"], "case\(k).skins")
+            check(Core.skins(c.event, c.scores, carry: false).map(j), out["skinsNoCarry"], "case\(k).skinsNoCarry")
+        }
+    }
+
+    func testContests() {
+        for (k, c) in Self.typed.cases.enumerated() {
+            let out = rawCases[k]["out"] as! [String: Any]
+            let mine = c.event.contests.map { ct -> [String: Any] in
+                let l = Core.contestLeader(ct)
+                return ["leader": l.map { ["name": $0.name, "dist": $0.dist] }, "dist": l.map { Core.fmtDist(ct, $0.dist) }]
+            }
+            check(mine, out["contests"], "case\(k).contests")
+        }
+    }
+
+    func testSideGames() {
+        var ran = 0
+        for (k, c) in Self.typed.cases.enumerated() {
+            let list = (rawCases[k]["out"] as! [String: Any])["sideGames"] as! [[String: Any]]
+            for (n, sg) in list.enumerated() {
+                let ids = sg["teamIds"] as! [String]
+                let cfg = try! JSONDecoder().decode(SideConfig.self, from: JSONSerialization.data(withJSONObject: sg["cfg"]!))
+                check(j(Core.sideGames(c.event, c.scores, ids, cfg)), sg["out"], "case\(k).sideGames[\(n)]")
+                ran += 1
+            }
+        }
+        XCTAssertGreaterThan(ran, 10)
+    }
+
+    func testSmallFunctions() {
+        for row in Self.raw["strokes"] as! [[Int]] { XCTAssertEqual(Core.strokesOn(row[0], row[1]), row[2], "strokesOn(\(row[0]), \(row[1]))") }
+        for row in Self.raw["playing"] as! [[Double]] { XCTAssertEqual(Core.playing(row[0], row[1]), Int(row[2]), "playing(\(row[0]), \(row[1]))") }
+        for row in Self.raw["fmtPar"] as! [[Any]] { XCTAssertEqual(Core.fmtPar(row[0] as! Int, row[1] as! Bool), row[2] as! String) }
+        for row in Self.raw["marks"] as! [[Any]] { XCTAssertEqual(Core.mark(row[0] as? Int, row[1] as! Int).rawValue, row[2] as! String, "mark(\(row[0]), \(row[1]))") }
+        for row in Self.raw["dists"] as! [[Any]] {
+            let c = Contest(id: "x", kind: row[0] as! String, hole: 1)
+            XCTAssertEqual(Core.fmtDist(c, (row[1] as! NSNumber).doubleValue), row[2] as! String)
+        }
+    }
+
+    func testStateDecodesLeniently() throws {
+        let json = #"{"name":"X","teams":[{"id":"a1b2","players":[{"id":"p1","name":"Ann","hcp":"7"}],"start":3},{"bad":true}],"cams":{"4":"https://x/a.m3u8"},"scores":{"a1b2":{"p1":[4,null,0]}}}"#
+        let s = try JSONDecoder().decode(EventState.self, from: Data(json.utf8))
+        XCTAssertEqual(s.teams.first?.players.first?.hcp, 7)
+        XCTAssertEqual(s.teams.first?.start, 3)
+        XCTAssertEqual(s.cams[4], "https://x/a.m3u8")
+        XCTAssertEqual(s.course.holes.count, 18)
+        XCTAssertEqual(s.scores["a1b2"]?["p1"]?[1], .some(nil))
+    }
+}
