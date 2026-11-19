@@ -87,7 +87,7 @@ export function cleanMap(m) {
         k: HAZARDS.includes(z.k) ? z.k : 'other', n: clip(z.n, 40), p: pt(z.p), c: pt(z.c) })).filter((z) => z.p) };
     if (o.tee || o.f || o.m || o.b || o.hz.length) holes[n] = o;
   }
-  return { holes };
+  return { holes, src: m?.src === 'osm' ? 'osm' : '' }; // osm: made from OpenStreetMap (credit shown with it)
 }
 
 // the setup as the desk sends it, tidied so nothing odd gets stored
