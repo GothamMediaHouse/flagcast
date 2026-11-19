@@ -1,0 +1,13 @@
+{
+  "name": "flagcast",
+  "main": "worker.js",
+  "compatibility_date": "2025-09-01",
+  // run_worker_first: so www.flagcast.app and sundaypin.live forward even for pages that exist
+  "assets": { "directory": "./public", "binding": "ASSETS", "not_found_handling": "404-page", "run_worker_first": true },
+  // Keep the variables and secrets set in the Cloudflare dashboard (GOLF_CREATE_PASS) when this deploys
+  "keep_vars": true,
+  "previews": {},
+  // one room per golf tournament: live scores and leaderboard screens at /g/<id> (golf.js)
+  "durable_objects": { "bindings": [{ "name": "GOLF", "class_name": "GolfEvent" }] },
+  "migrations": [{ "tag": "golf-v1", "new_sqlite_classes": ["GolfEvent"] }]
+}
