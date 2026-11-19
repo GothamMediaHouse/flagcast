@@ -309,7 +309,7 @@ export class GolfEvent extends DurableObject {
     if (b.op === 'stats') return json({ stats: await this.getStats(), log: ev.log || [] });
     if (b.op === 'groups') {
       if (!trackingOn(ev)) {
-        if (Object.keys(await this.spots()).length) { this.wh = {}; await this.ctx.storage.delete('where'); } // the day is over: wipe them
+        if (Object.keys(await this.spots()).length) await this.wipeSpots(); // the day is over: wipe them
         return json({ now, on: false, date: ev.date, locked: !!ev.locked, groups: [] });
       }
       const wh = await this.spots();
@@ -387,7 +387,7 @@ export class GolfEvent extends DurableObject {
       if (this.env.CLUBS) this.ctx.waitUntil(this.env.CLUBS.get(this.env.CLUBS.idFromName('directory')).fetch(new Request('https://clubs/course', { method: 'POST', body: JSON.stringify({ id: ev.id, key: ev.key, map: ev.map }) })).catch(() => {}));
     } else if (b.op === 'lock') {
       ev.locked = !!b.locked;
-      if (ev.locked) { this.wh = {}; await this.ctx.storage.delete('where'); } // results are final: group spots are wiped
+      if (ev.locked) await this.wipeSpots(); // results are final: group spots are wiped
     }
     else if (b.op === 'fund') ev.fund.raised = num(b.raised, 0, 1e9, ev.fund.raised);
     else return json({ error: 'Unknown change' }, 400);
@@ -398,8 +398,15 @@ export class GolfEvent extends DurableObject {
 
   // where each group is on the course: scorecards with GPS on send their spot. Only the desk, pros and Admin see it.
   async spots() {
-    if (!this.wh) this.wh = (await this.ctx.storage.get('where')) || {};
+    // one load even when several phones report at once. Each group is its own key, written every time:
+    // the object can be put to sleep between reports, so nothing is kept only in memory
+    if (!this.wh) this.wh = this.whLoad || (this.whLoad = this.ctx.storage.list({ prefix: 'w:' }).then((m) => (this.wh = Object.fromEntries([...m].map(([k, v]) => [k.slice(2), v])))));
     return this.wh;
+  }
+  async wipeSpots() {
+    const keys = [...(await this.ctx.storage.list({ prefix: 'w:' })).keys()];
+    if (keys.length) await this.ctx.storage.delete(keys);
+    this.wh = {}; this.whLoad = null;
   }
   async where(b) {
     const ev = this.ev, team = ev.teams.find((t) => t.id === b.team);
@@ -409,7 +416,7 @@ export class GolfEvent extends DurableObject {
     if (!trackingOn(ev)) return json({ error: 'Group tracking is only on during the tournament.', off: true }, 409);
     const wh = await this.spots(), now = Date.now();
     wh[team.id] = { at: at.map((x) => Math.round(x * 1e6) / 1e6), acc: num(b.acc, 0, 9999, 0), hole: num(b.hole, 0, 18, 0), t: now };
-    if (!this.whSaved || now - this.whSaved > 60000) { this.whSaved = now; await this.ctx.storage.put('where', wh); }
+    await this.ctx.storage.put(`w:${team.id}`, wh[team.id]);
     return json({ ok: true });
   }
 
