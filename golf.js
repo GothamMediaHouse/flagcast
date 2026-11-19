@@ -63,8 +63,11 @@ export const SPOTS = ['title', 'leaderboard', 'hole', 'cam', 'contest', 'turn', 
 // what a screen's playlist can hold
 export const PAGE_KINDS = ['lb', 'p3', 'contests', 'skins', 'fund', 'sponsors', 'sponsor', 'schedule'];
 // changes made on the day (desk or a pro's PIN); marshals only post contest results
-const DAY_OPS = new Set(['fix', 'ctp', 'contest', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats']);
-const MARSHAL_OPS = new Set(['ctp']);
+const DAY_OPS = new Set(['fix', 'ctp', 'contest', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay']);
+// marshals post contest results and replays of shots at their hole
+const MARSHAL_OPS = new Set(['ctp', 'replay']);
+// a replay with no clip link replays the hole's live camera from this many seconds before it was marked
+export const REPLAY_BACK = 25;
 const num = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
 
 // the setup as the desk sends it, tidied so nothing odd gets stored
@@ -273,6 +276,7 @@ export class GolfEvent extends DurableObject {
     if (!who) { this.fails.push(now); return json({ error: 'That PIN is not right.' }, 403); }
     if (b.op === 'hello') return json({ name: who.name, role: who.role });
     if (!(who.role === 'pro' ? DAY_OPS : MARSHAL_OPS).has(b.op)) return json({ error: 'Your PIN can’t make that change. Ask the golf pro.' }, 403);
+    if (who.role !== 'pro') { delete b.screens; delete b.remove; } // marshals save replays; the pro puts them on the screens or removes them
     return this.dayOp(b, who.name);
   }
 
@@ -312,8 +316,23 @@ export class GolfEvent extends DurableObject {
       else delete ev.live.force[b.display];
     } else if (b.op === 'take') { // take over every screen: an ace, an announcement, a sponsor moment, or clear back to the playlists
       if (b.kind === 'clear') { ev.live = { force: {}, take: null }; }
-      else if (['ace', 'msg', 'sponsor'].includes(b.kind)) ev.live.take = { kind: b.kind, text: clip(b.text, 140), sponsor: clip(b.sponsor, 12), at: now, secs: num(b.secs, 5, 120, 25) };
+      else if (b.kind === 'replay') {
+        const r = (ev.replays || []).find((x) => x.id === b.replay); if (!r) return json({ error: 'That replay is gone' }, 404);
+        ev.live.take = { kind: 'replay', replay: r.id, text: r.label, at: now, secs: num(b.secs, 8, 120, r.url ? 30 : r.back + 5) };
+      } else if (['ace', 'msg', 'sponsor'].includes(b.kind)) ev.live.take = { kind: b.kind, text: clip(b.text, 140), sponsor: clip(b.sponsor, 12), at: now, secs: num(b.secs, 5, 120, 25) };
       else return json({ error: 'Unknown take-over' }, 400);
+    } else if (b.op === 'replay') { // par 3 replays: a clip link (.mp4 or .m3u8), or a mark on the live camera to play back
+      if (b.remove) ev.replays = (ev.replays || []).filter((r) => r.id !== b.remove);
+      else {
+        const hole = num(b.hole, 1, 18, 0);
+        const h = ev.course.holes[hole - 1]; if (!h) return json({ error: 'Pick a hole' }, 400);
+        const url = /^https:\/\//.test(b.url || '') ? clip(b.url, 500) : '';
+        if (!url && !ev.cams[hole]) return json({ error: `Hole ${hole} has no camera. Paste a clip link instead.` }, 400);
+        if (!url && !/\.m3u8(\?|$)/.test(ev.cams[hole])) return json({ error: `Hole ${hole}’s camera can’t be replayed from the live feed (it isn’t an HLS .m3u8 link). Paste a clip link instead.` }, 400);
+        const r = { id: rand(6, 'abcdefghijkmnpqrstuvwxyz23456789'), hole, label: clip(b.label, 80), url, at: now, back: url ? 0 : num(b.back, 5, 120, REPLAY_BACK), by: clip(by, 40) };
+        ev.replays = [r, ...(ev.replays || [])].slice(0, 60);
+        if (b.screens) ev.live.take = { kind: 'replay', replay: r.id, text: r.label, at: now, secs: num(b.secs, 8, 120, url ? 30 : r.back + 5) };
+      }
     } else if (b.op === 'lock') ev.locked = !!b.locked;
     else if (b.op === 'fund') ev.fund.raised = num(b.raised, 0, 1e9, ev.fund.raised);
     else return json({ error: 'Unknown change' }, 400);
