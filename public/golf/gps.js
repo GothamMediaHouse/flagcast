@@ -102,7 +102,7 @@ function tile(z, x, y, redraw) {
 
 export function holeView(canvas) {
   const ctx = canvas.getContext('2d');
-  let H = null, ME = null, tap = null, view = null, raf = 0;
+  let H = null, ME = null, tap = null, view = null, raf = 0; const flatCanvas = document.createElement('canvas');
   const redraw = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; paint(); }); };
 
   function layout() {
@@ -115,13 +115,13 @@ export function holeView(canvas) {
     const z0 = 0, pa = a ? toPx(a, z0) : null, pg = toPx(g, z0);
     let ang = 0, len = 0;
     if (pa) { const dx = pg.x - pa.x, dy = pg.y - pa.y; ang = Math.atan2(dx, -dy); len = Math.hypot(dx, dy); }
-    const span = hgt * (pa ? 0.74 : 0.5);
+    const span = hgt * (pa ? 0.62 : 0.5);
     // zoom: the hole fits, but never closer in than about 70 yards top to bottom
     const px70 = 70 / YD / (156543.03 * Math.cos((g[0] * Math.PI) / 180)); // 70 yards in zoom-0 pixels
     const z = Math.min(MAXZ + 1.5, Math.log2(span / Math.max(len, px70)));
     const zi = Math.max(1, Math.min(MAXZ, Math.ceil(z))), sc = 2 ** (z - zi);
     const mid = pa ? { x: (pa.x + pg.x) / 2, y: (pa.y + pg.y) / 2 } : pg;
-    const c = { x: w / 2, y: hgt * (pa ? 0.5 : 0.45) };
+    const c = { x: w / 2, y: hgt * (pa ? 0.56 : 0.5) }; // the green sits below the yardage box
     const m = { x: mid.x * 2 ** zi, y: mid.y * 2 ** zi };
     const cos = Math.cos(-ang), sin = Math.sin(-ang);
     const fwd = (p) => { const q = toPx(p, zi), dx = (q.x - m.x) * sc, dy = (q.y - m.y) * sc; return { x: c.x + dx * cos - dy * sin, y: c.y + dx * sin + dy * cos }; };
@@ -135,60 +135,95 @@ export function holeView(canvas) {
     ctx.fillStyle = '#16301f'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     if (!v) return;
     ctx.setTransform(v.dpr, 0, 0, v.dpr, 0, 0);
-    // satellite tiles, turned
-    ctx.save(); ctx.translate(v.c.x, v.c.y); ctx.rotate(-v.ang); ctx.scale(v.sc, v.sc); ctx.translate(-v.m.x, -v.m.y);
-    const r = Math.hypot(v.w, v.hgt) / v.sc / 2 + 256, n = 2 ** v.zi, seam = 1.5 / v.sc; // overlap so no lines show between tiles
-    for (let ty = Math.floor((v.m.y - r) / 256); ty <= Math.floor((v.m.y + r) / 256); ty++) {
+    // satellite tiles: laid out flat on one picture first, then turned in one go (no lines between tiles)
+    const r = Math.hypot(v.w, v.hgt) / v.sc / 2 + 64, n = 2 ** v.zi;
+    const tx0 = Math.floor((v.m.x - r) / 256), tx1 = Math.floor((v.m.x + r) / 256), ty0 = Math.floor((v.m.y - r) / 256), ty1 = Math.floor((v.m.y + r) / 256);
+    const flat = flatCanvas;
+    flat.width = (tx1 - tx0 + 1) * 256; flat.height = (ty1 - ty0 + 1) * 256;
+    const fc = flat.getContext('2d'); fc.fillStyle = '#2c4a2a'; fc.fillRect(0, 0, flat.width, flat.height);
+    for (let ty = ty0; ty <= ty1; ty++) {
       if (ty < 0 || ty >= n) continue;
-      for (let tx = Math.floor((v.m.x - r) / 256); tx <= Math.floor((v.m.x + r) / 256); tx++) {
-        const wx = ((tx % n) + n) % n, t = tile(v.zi, wx, ty, redraw);
-        if (t.complete && !t.bad && t.naturalWidth) { ctx.drawImage(t, tx * 256, ty * 256, 256 + seam, 256 + seam); continue; }
+      for (let tx = tx0; tx <= tx1; tx++) {
+        const wx = ((tx % n) + n) % n, t = tile(v.zi, wx, ty, redraw), x = (tx - tx0) * 256, y = (ty - ty0) * 256;
+        if (t.complete && !t.bad && t.naturalWidth) { fc.drawImage(t, x, y); continue; }
         // still loading: show the zoomed-out picture under it meanwhile
         const up = tile(v.zi - 1, wx >> 1, ty >> 1, redraw);
-        if (up.complete && !up.bad && up.naturalWidth) ctx.drawImage(up, (wx & 1) * 128, (ty & 1) * 128, 128, 128, tx * 256, ty * 256, 256 + seam, 256 + seam);
+        if (up.complete && !up.bad && up.naturalWidth) fc.drawImage(up, (wx & 1) * 128, (ty & 1) * 128, 128, 128, x, y, 256, 256);
       }
     }
+    ctx.save(); ctx.translate(v.c.x, v.c.y); ctx.rotate(-v.ang); ctx.scale(v.sc, v.sc); ctx.translate(-v.m.x, -v.m.y);
+    ctx.imageSmoothingQuality = 'high'; ctx.drawImage(flat, tx0 * 256, ty0 * 256);
     ctx.restore();
     const h = H, g = middle(h), P = (p) => v.fwd(p);
-    // line from where you are (or the tee) to the green
     const from = v.from && v.from.at;
-    const label = (x, y, text, bg = 'rgba(10,24,16,.82)', fg = '#fff') => {
-      ctx.font = '700 13px system-ui, -apple-system, sans-serif';
-      const w = ctx.measureText(text).width + 12;
-      ctx.fillStyle = bg; roundRect(ctx, x - w / 2, y - 11, w, 22, 11); ctx.fill();
-      ctx.fillStyle = fg; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, x, y + 0.5);
+    // soft shade at the top and bottom so the labels read on any picture
+    let gr = ctx.createLinearGradient(0, 0, 0, 120); gr.addColorStop(0, 'rgba(0,0,0,.35)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = gr; ctx.fillRect(0, 0, v.w, 120);
+    gr = ctx.createLinearGradient(0, v.hgt - 90, 0, v.hgt); gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,.3)');
+    ctx.fillStyle = gr; ctx.fillRect(0, v.hgt - 90, v.w, 90);
+    const FONT = '-apple-system, system-ui, "Segoe UI", sans-serif';
+    const shadow = (on) => { ctx.shadowColor = on ? 'rgba(0,0,0,.45)' : 'transparent'; ctx.shadowBlur = on ? 6 : 0; ctx.shadowOffsetY = on ? 1 : 0; };
+    // a pill with the number; dot = the hazard's colour
+    const label = (x, y, text, { bg = 'rgba(12,22,16,.88)', fg = '#fff', dot: dc = null, size = 13 } = {}) => {
+      ctx.font = `700 ${size}px ${FONT}`;
+      const tw = ctx.measureText(text).width, w = tw + (dc ? 26 : 16), hh = size + 10;
+      x = Math.max(w / 2 + 4, Math.min(v.w - w / 2 - 4, x));
+      shadow(true); ctx.fillStyle = bg; roundRect(ctx, x - w / 2, y - hh / 2, w, hh, hh / 2); ctx.fill(); shadow(false);
+      if (dc) { ctx.beginPath(); ctx.arc(x - w / 2 + 11, y, 4, 0, 7); ctx.fillStyle = dc; ctx.fill(); }
+      ctx.fillStyle = fg; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, x + (dc ? 5 : 0), y + 0.5);
     };
-    const dot = (p, rad, fill, stroke = '#fff') => { const s = P(p); ctx.beginPath(); ctx.arc(s.x, s.y, rad, 0, 7); ctx.fillStyle = fill; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = stroke; ctx.stroke(); return s; };
-    ctx.lineCap = 'round';
-    if (tap && from) {
-      const a = P(from), t = P(tap), gg = P(g);
-      ctx.setLineDash([]); ctx.strokeStyle = '#e8c547'; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(t.x, t.y); ctx.lineTo(gg.x, gg.y); ctx.stroke();
-      dot(tap, 7, '#e8c547', '#1a1a10');
-      label((a.x + t.x) / 2, (a.y + t.y) / 2, `${Math.round(yds(from, tap))}`, '#e8c547', '#1a1a10');
-      label((t.x + gg.x) / 2, (t.y + gg.y) / 2, `${Math.round(yds(tap, g))}`, '#e8c547', '#1a1a10');
-    } else if (from) {
-      const a = P(from), gg = P(g);
-      ctx.setLineDash([6, 7]); ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(gg.x, gg.y); ctx.stroke(); ctx.setLineDash([]);
+    const ring = (p, rad, fill, stroke = '#fff', lw = 2) => { const s = P(p); shadow(true); ctx.beginPath(); ctx.arc(s.x, s.y, rad, 0, 7); ctx.fillStyle = fill; ctx.fill(); shadow(false); ctx.lineWidth = lw; ctx.strokeStyle = stroke; ctx.stroke(); return s; };
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    const line = (pts, color, width, dash = []) => {
+      ctx.setLineDash(dash); shadow(true); ctx.strokeStyle = color; ctx.lineWidth = width; ctx.beginPath();
+      pts.forEach((q, i) => (i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y))); ctx.stroke(); shadow(false); ctx.setLineDash([]);
+    };
+    if (from) {
+      const a = P(from), gg = P(g), toG = yds(from, g);
+      // carry arcs every 50 yards from where you are (like the rings in golf GPS apps)
+      const pxPerYd = Math.hypot(gg.x - a.x, gg.y - a.y) / toG, up = Math.atan2(gg.y - a.y, gg.x - a.x);
+      for (let d = 50; d < toG - 25; d += 50) {
+        if (d < 100 && toG > 250) continue;
+        const r = d * pxPerYd; if (r < 40) continue;
+        const span = Math.min(0.5, 70 / r);
+        ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(a.x, a.y, r, up - span, up + span); ctx.stroke();
+        const ex = a.x + r * Math.cos(up + span), ey = a.y + r * Math.sin(up + span);
+        ctx.font = `700 11px ${FONT}`; ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        shadow(true); ctx.fillText(String(d), ex + 4, ey); shadow(false);
+      }
+      if (tap) {
+        const t = P(tap);
+        line([a, t, gg], '#f2d04f', 3);
+        ring(tap, 8, '#f2d04f', '#1a1a10');
+        label((a.x + t.x) / 2 + 26, (a.y + t.y) / 2, `${Math.round(yds(from, tap))}`, { bg: '#f2d04f', fg: '#1a1a10', size: 15 });
+        label((t.x + gg.x) / 2 + 26, (t.y + gg.y) / 2, `${Math.round(yds(tap, g))}`, { bg: '#f2d04f', fg: '#1a1a10', size: 15 });
+      } else line([a, gg], 'rgba(255,255,255,.95)', 2.5);
     }
-    // hazards
+    // hazards: a small ring where you reach it, a line to where it's carried, and the numbers
     for (const z of h.hz || []) {
-      const s = dot(z.p, 5, HZ_COLOR[z.k] || '#ffb36b', 'rgba(0,0,0,.6)');
-      if (z.c) { const e = P(z.c); ctx.strokeStyle = HZ_COLOR[z.k] || '#ffb36b'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(e.x, e.y); ctx.stroke(); }
-      if (from) label(s.x + (s.x > v.w / 2 ? -34 : 34), s.y, `${Math.round(yds(from, z.p))}${z.c ? `–${Math.round(yds(from, z.c))}` : ''}`);
+      const c = HZ_COLOR[z.k] || '#ffb36b';
+      if (z.c) line([P(z.p), P(z.c)], c, 2.5);
+      const s = ring(z.p, 4.5, c, 'rgba(0,0,0,.55)', 1.5);
+      if (z.c) ring(z.c, 3.5, c, 'rgba(0,0,0,.55)', 1.5);
+      if (from) label(s.x + (s.x > v.w / 2 ? -44 : 44), s.y, `${Math.round(yds(from, z.p))}${z.c ? ` · ${Math.round(yds(from, z.c))}` : ''}`, { dot: c });
     }
-    // the green: front, middle, back
-    for (const k of ['f', 'b']) if (h[k]) dot(h[k], 3.5, '#fff', 'rgba(0,0,0,.5)');
+    // the green: front and back marks, and the flag in the middle
+    for (const k of ['f', 'b']) if (h[k]) ring(h[k], 3, 'rgba(255,255,255,.9)', 'rgba(0,0,0,.4)', 1);
     const gs = P(g);
-    ctx.beginPath(); ctx.moveTo(gs.x, gs.y); ctx.lineTo(gs.x, gs.y - 24); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(gs.x, gs.y - 24); ctx.lineTo(gs.x + 13, gs.y - 19); ctx.lineTo(gs.x, gs.y - 14); ctx.closePath(); ctx.fillStyle = '#c8312b'; ctx.fill();
-    if (h.tee && !(v.from && v.from.me)) dot(h.tee, 5, '#e8c547', '#1a1a10');
+    shadow(true);
+    ctx.beginPath(); ctx.ellipse(gs.x, gs.y, 4, 2, 0, 0, 7); ctx.fillStyle = 'rgba(0,0,0,.5)'; ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(gs.x, gs.y); ctx.lineTo(gs.x, gs.y - 34); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(gs.x + 1, gs.y - 34); ctx.quadraticCurveTo(gs.x + 10, gs.y - 32, gs.x + 18, gs.y - 28); ctx.quadraticCurveTo(gs.x + 10, gs.y - 25, gs.x + 1, gs.y - 22); ctx.closePath();
+    ctx.fillStyle = '#e0362c'; ctx.fill(); shadow(false);
+    if (h.tee && !(v.from && v.from.me)) {
+      const s = ring(h.tee, 9, '#f2d04f', '#1a1a10', 1.5);
+      ctx.font = `800 10px ${FONT}`; ctx.fillStyle = '#1a1a10'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('T', s.x, s.y + 0.5);
+    }
     if (ME) {
       const s = P(ME);
       if (s.x > -20 && s.y > -20 && s.x < v.w + 20 && s.y < v.hgt + 20) {
-        ctx.beginPath(); ctx.arc(s.x, s.y, 12, 0, 7); ctx.fillStyle = 'rgba(70,150,255,.25)'; ctx.fill();
-        dot(ME, 7, '#3a8bff');
+        ctx.beginPath(); ctx.arc(s.x, s.y, 16, 0, 7); ctx.fillStyle = 'rgba(58,139,255,.22)'; ctx.fill();
+        ring(ME, 7.5, '#2f7bff', '#fff', 3);
       }
     }
     ctx.font = '10px system-ui, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillStyle = 'rgba(255,255,255,.7)';
