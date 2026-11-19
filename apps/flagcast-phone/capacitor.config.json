@@ -1,0 +1,14 @@
+{
+  "appId": "app.flagcast.golf",
+  "appName": "Flagcast",
+  "webDir": "www",
+  "appendUserAgent": "FlagcastApp",
+  "backgroundColor": "#123628",
+  "server": {
+    "url": "https://flagcast.app/golf/app/",
+    "allowNavigation": ["flagcast.app"],
+    "errorPath": "offline.html"
+  },
+  "ios": { "contentInset": "never", "limitsNavigationsToAppBoundDomains": false },
+  "android": { "allowMixedContent": false }
+}
