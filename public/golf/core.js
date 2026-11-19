@@ -30,6 +30,22 @@ export function strokesOn(h, si) {
   return -(Math.floor(p / 18) + (si > 18 - (p % 18) ? 1 : 0));
 }
 
+// Handicap Index (GHIN) → course handicap, the World Handicap System way:
+// Index × (Slope ÷ 113) + (Course Rating − Par), rounded. Plus handicaps are negative numbers here (+2.1 → -2.1).
+export const coursePar = (ev) => ev.course.holes.reduce((a, h) => a + h.par, 0);
+export function courseHcp(index, tee, par) {
+  if (index == null || index === '' || !tee || !tee.slope || !tee.rating) return null;
+  return Math.round(Number(index) * tee.slope / 113 + (tee.rating - (tee.par || par)));
+}
+export function parseIndex(v) {
+  const s = String(v ?? '').trim(); if (!s) return null;
+  const n = Number(s.replace(/^\+/, '')); if (!Number.isFinite(n)) return null;
+  return s.startsWith('+') ? -n : n;
+}
+export const fmtIndex = (n) => (n == null || n === '' ? '' : n < 0 ? `+${-n}` : String(n));
+// net double bogey: the most a hole can count for handicap posting (par + 2 + strokes received)
+export const netDoubleBogey = (par, courseHandicap, si) => par + 2 + Math.max(0, strokesOn(courseHandicap, si));
+
 export const playing = (hcp, allowance) => Math.round((Number(hcp) || 0) * (allowance ?? 100) / 100);
 
 const isScore = (v) => typeof v === 'number' && v >= 0;

@@ -14,7 +14,7 @@
 //
 // Pages: /g/<id> live page · /g/<id>/board screens · /g/<id>/desk#<key> desk · /g/<id>/map#<key> course map · /g/<id>/s/<code> cart · /g/<id>/cards QR cards
 import { DurableObject } from 'cloudflare:workers';
-import { defaultHoles } from './public/golf/core.js';
+import { defaultHoles, courseHcp } from './public/golf/core.js';
 import { trackingOn } from './public/golf/gps.js';
 import { clubs } from './clubs.js';
 
@@ -96,6 +96,12 @@ function cleanSetup(s, old) {
     const h = (s.course?.holes || [])[i] || old.course.holes[i] || {};
     return { n: i + 1, par: num(h.par, 3, 6, 4), yds: num(h.yds, 0, 999, 0), hcp: num(h.hcp, 1, 18, i + 1) };
   });
+  // tees for handicaps: slope and course rating (par only when it differs from the card)
+  const tees = (Array.isArray(s.course?.tees) ? s.course.tees : (old.course?.tees || [])).slice(0, 8).map((x) => ({
+    id: /^[a-z0-9]{2,12}$/.test(x.id || '') ? x.id : rand(5, 'abcdefghijkmnpqrstuvwxyz23456789'), name: clip(x.name, 30),
+    slope: num(x.slope, 55, 155, 113), rating: Math.round(num(x.rating, 50, 90, 72) * 10) / 10, par: num(x.par, 0, 80, 0) || 0,
+  })).filter((x) => x.name);
+  const par = holes.reduce((a, h) => a + h.par, 0);
   const codes = new Map((old.teams || []).map((t) => [t.id, t.code]));
   const teams = (Array.isArray(s.teams) ? s.teams : []).slice(0, 200).map((t) => {
     const id = /^[a-z0-9]{4,12}$/.test(t.id || '') ? t.id : rand(6, 'abcdefghijkmnpqrstuvwxyz23456789');
@@ -105,12 +111,21 @@ function cleanSetup(s, old) {
       players: (Array.isArray(t.players) ? t.players : []).slice(0, 4).map((p) => ({
         id: /^[a-z0-9]{2,12}$/.test(p.id || '') ? p.id : rand(5, 'abcdefghijkmnpqrstuvwxyz23456789'),
         name: clip(p.name, 50), hcp: num(p.hcp, -10, 54, 0), guest: !!p.guest,
-      })),
+        // GHIN number and Handicap Index: with a tee, the course handicap is worked out from them
+        ghin: String(p.ghin || '').replace(/\D/g, '').slice(0, 11),
+        index: p.index === null || p.index === '' || p.index === undefined || !Number.isFinite(Number(p.index)) ? null : Math.round(num(p.index, -10, 54, 0) * 10) / 10,
+        tee: clip(p.tee, 12),
+      })).map((p) => {
+        if (p.index == null) return p;
+        const tee = tees.find((x) => x.id === p.tee) || tees[0];
+        if (!tee) return p;
+        return { ...p, tee: tee.id, hcp: courseHcp(p.index, tee, par) };
+      }),
     };
   });
   const f = s.format || {};
   return {
-    name: clip(s.name, 80), club: clip(s.club, 80), date: clip(s.date, 20), course: { name: clip(s.course?.name, 80), holes },
+    name: clip(s.name, 80), club: clip(s.club, 80), date: clip(s.date, 20), course: { name: clip(s.course?.name, 80), holes, tees },
     format: { type: ['bestball', 'stroke', 'scramble', 'stableford'].includes(f.type) ? f.type : 'bestball',
       count: num(f.count, 1, 4, 1), allowance: num(f.allowance, 0, 100, 100), show: f.show === 'gross' ? 'gross' : 'net' },
     sideGames: s.sideGames !== false, // each cart's own skins, Nassau and birdies on the scorecard; no money goes through Flagcast
@@ -172,7 +187,7 @@ export class GolfEvent extends DurableObject {
   async publicState() {
     const ev = await this.load(), sc = await this.scores();
     const { key, pins, log, ...rest } = ev;
-    const teams = ev.teams.map(({ code, ...t }) => t);
+    const teams = ev.teams.map(({ code, ...t }) => ({ ...t, players: t.players.map(({ ghin, ...p }) => p) })); // GHIN numbers stay with the desk
     const online = Object.fromEntries((ev.displays || []).map((d) => [d.id, this.ctx.getWebSockets(`d:${d.id}`).length]));
     const scores = {};
     for (const t of ev.teams) {

@@ -36,7 +36,10 @@ table.t .n { width: 64px; }
 .course td input { width: 54px; text-align: center; padding: 5px 2px; }
 .course th, .course td { text-align: center; }
 .course th:first-child, .course td:first-child { text-align: left; }
-.pl { display: grid; grid-template-columns: 1fr 64px; gap: 4px; margin-bottom: 4px; }
+.pl { display: grid; grid-template-columns: minmax(130px, 1fr) 96px 62px 92px 58px; gap: 4px; margin-bottom: 4px; }
+.pl input[disabled] { background: var(--paper-2); color: var(--ink); font-weight: 600; }
+.plhead { display: grid; grid-template-columns: minmax(130px, 1fr) 96px 62px 92px 58px; gap: 4px; font-size: .72rem; color: var(--muted); font-weight: 500; }
+#tees input { min-width: 70px; }
 .code { font-family: var(--f-mono); font-weight: 600; letter-spacing: .08em; }
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
 .scores td input { width: 38px; text-align: center; padding: 4px 0; font-family: var(--f-mono); }
@@ -99,11 +102,15 @@ table.t .n { width: 64px; }
   <div class="scroll"><table class="t course" id="course"></table></div>
   <div class="row" style="margin-top:12px"><a class="btn dark" id="mapLink" target="_blank" rel="noopener">Course map (hole GPS)</a><a class="btn" id="groupsLink" target="_blank" rel="noopener">Where are the groups</a><span class="help" id="mapHelp">Mark each tee, green and hazard on a satellite view, or walk the course with a phone. Players then see yardages and a course view on their scorecard. Your club keeps the map for its next tournament.</span></div>
   <div class="row"><button class="btn" id="par72">Fill a standard par 72</button><span class="help">Stroke index (SI) 1 is the hardest hole. Use the numbers on the club’s scorecard.</span></div>
+  <h3>Tees (for GHIN handicaps)</h3>
+  <p class="help">Add each set of tees with its course rating and slope from the scorecard or the USGA course rating database. Then give players their Handicap Index on the Teams tab and Flagcast works out each course handicap: Index × Slope ÷ 113 + (Rating − Par).</p>
+  <div class="scroll"><table class="t" id="tees"></table></div>
+  <div class="row"><button class="btn" id="addTee">Add tees</button></div>
 </section>
 
 <section id="s-teams" hidden>
   <h2>Teams</h2>
-  <p class="help">Each team gets its own scorecard code and QR card. Start hole is for a shotgun start. For a scramble, set the team handicap.</p>
+  <p class="help">Each team gets its own scorecard code and QR card. Start hole is for a shotgun start. For a scramble, set the team handicap. Type a player’s Handicap Index (use + for plus handicaps, like +1.2) and pick their tees to have the course handicap worked out; or leave Index empty and type the course handicap yourself.</p>
   <div class="scroll" style="margin-top:12px"><table class="t" id="teams"></table></div>
   <div class="row"><button class="btn" id="addTeam">Add team</button><button class="btn" id="pasteBtn">Paste from a spreadsheet</button></div>
   <div id="pasteBox" hidden style="margin-top:12px">
@@ -177,7 +184,8 @@ table.t .n { width: 64px; }
 
 <section id="s-report" hidden>
   <h2>Report</h2>
-  <div class="row" style="margin-top:0"><button class="btn primary" id="csvResults">Download results (CSV)</button><button class="btn" id="csvSponsors">Download sponsor report (CSV)</button><button class="btn" id="reportRefresh">Refresh</button></div>
+  <div class="row" style="margin-top:0"><button class="btn primary" id="csvResults">Download results (CSV)</button><button class="btn" id="csvSponsors">Download sponsor report (CSV)</button><button class="btn" id="csvGhin">Scores for GHIN posting (CSV)</button><button class="btn" id="reportRefresh">Refresh</button></div>
+  <p class="help">The GHIN file has each player’s GHIN number, tees, rating and slope, hole-by-hole scores and the adjusted gross score (each hole capped at net double bogey, picked-up holes counted as net double bogey), ready for the club’s handicap chair to post. Scramble scores can’t be posted for handicaps.</p>
   <h3>Sponsors</h3>
   <p class="help">Screen time counts every minute a sponsor was on a connected screen. Phone views count each time a player saw it on their scorecard; taps count opens of their link.</p>
   <div class="scroll"><table class="t" id="spReport"></table></div>
@@ -195,7 +203,7 @@ table.t .n { width: 64px; }
 </main>
 <div class="toast" id="toast" hidden></div>
 <script type="module">
-import { defaultHoles, leaderboard } from '/golf/core.js';
+import { defaultHoles, leaderboard, courseHcp, coursePar, parseIndex, fmtIndex, netDoubleBogey } from '/golf/core.js';
 import { eventId, post, live, esc } from '/golf/client.js';
 
 const key = location.hash.slice(1).split('&')[0].replace(/^key=/, '');
@@ -232,7 +240,7 @@ function fill() {
   $('f-title').value = EV.screens.title || ''; $('f-secs').value = EV.screens.seconds; $('f-rows').value = EV.screens.rows; $('f-skins').value = EV.screens.skins ? '1' : '';
   $('f-ticker').value = EV.screens.ticker || '';
   $('f-fund').value = EV.fund.on ? '1' : ''; $('f-fundLabel').value = EV.fund.label; $('f-goal').value = EV.fund.goal || ''; $('f-give').value = EV.fund.give; $('raised').value = EV.fund.raised || '';
-  drawCourse(); drawTeams(); drawContests(); drawCams(); drawSponsors(); drawStaff(); drawLock();
+  drawCourse(); drawTees(); drawTeams(); drawContests(); drawCams(); drawSponsors(); drawStaff(); drawLock();
 }
 function read() {
   EV.name = val('f-name'); EV.club = val('f-club'); EV.date = val('f-date'); EV.course.name = val('f-course');
@@ -252,8 +260,39 @@ function drawCourse() {
   <tr><td>Yards</td>${H.map((h, i) => `<td><input data-c="yds" data-i="${i}" type="number" min="0" max="999" value="${h.yds || ''}" aria-label="Yards hole ${h.n}"></td>`).join('')}<td class="mono">${H.reduce((a, h) => a + (h.yds || 0), 0)}</td></tr>
   <tr><td>SI</td>${H.map((h, i) => `<td><input data-c="hcp" data-i="${i}" type="number" min="1" max="18" value="${h.hcp}" aria-label="Stroke index hole ${h.n}"></td>`).join('')}<td></td></tr></tbody>`;
 }
+function drawTees() {
+  const T = EV.course.tees || (EV.course.tees = []), par = coursePar(EV);
+  $('tees').innerHTML = T.length ? `<thead><tr><th>Tees</th><th>Course rating</th><th>Slope</th><th>Par</th><th></th></tr></thead><tbody>${T.map((t, i) => `<tr data-tee="${i}">
+    <td><input data-tk="name" value="${esc(t.name)}" placeholder="Blue"></td><td><input data-tk="rating" type="number" step="0.1" min="50" max="90" value="${t.rating ?? ''}" placeholder="71.4"></td>
+    <td><input data-tk="slope" type="number" min="55" max="155" value="${t.slope ?? ''}" placeholder="128"></td><td><input data-tk="par" type="number" min="54" max="80" value="${t.par || ''}" placeholder="${par}"></td>
+    <td><button class="btn danger" data-deltee="${i}">Remove</button></td></tr>`).join('')}</tbody>` : '<tbody><tr><td class="help">No tees yet. Add them to use Handicap Index.</td></tr></tbody>';
+}
+$('addTee').onclick = () => { readTables(); (EV.course.tees = EV.course.tees || []).push({ id: rid(), name: ['Blue', 'White', 'Gold', 'Red'][EV.course.tees.length] || '', rating: null, slope: null, par: 0 }); drawTees(); drawTeams(); setDirty(); };
 $('par72').onclick = () => { EV.course.holes = defaultHoles(); drawCourse(); setDirty(); };
 
+// one player line: name, GHIN number, Handicap Index, tees, course handicap (worked out when there's an Index)
+function plRow(p, k) {
+  const T = EV.course.tees || [], tee = T.find((x) => x.id === p.tee) || T[0], ch = p.index != null ? courseHcp(p.index, tee, coursePar(EV)) : null;
+  return `<div class="pl"><input data-p="${k}" data-pk="name" value="${esc(p.name || '')}" placeholder="Player ${k + 1}">
+    <input data-p="${k}" data-pk="ghin" inputmode="numeric" value="${esc(p.ghin || '')}" placeholder="GHIN #">
+    <input data-p="${k}" data-pk="index" inputmode="decimal" value="${esc(fmtIndex(p.index))}" placeholder="Index">
+    <select data-p="${k}" data-pk="tee" ${T.length ? '' : 'disabled'}>${T.length ? T.map((x) => `<option value="${x.id}" ${tee && tee.id === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('') : '<option>No tees</option>'}</select>
+    <input data-p="${k}" data-pk="hcp" type="number" step="1" value="${ch != null ? ch : p.name ? p.hcp ?? 0 : ''}" placeholder="Hcp" ${ch != null ? 'disabled title="From the Handicap Index and tees"' : ''}></div>`;
+}
+// keep each course handicap in step as an Index, tees or a tee's rating/slope changes (without redrawing the table)
+function updateHcps() {
+  const T = EV.course.tees || [], par = coursePar(EV);
+  for (const pl of document.querySelectorAll('#teams .pl')) {
+    const idx = parseIndex(pl.querySelector('[data-pk="index"]').value), sel = pl.querySelector('[data-pk="tee"]'), h = pl.querySelector('[data-pk="hcp"]');
+    const ch = idx != null ? courseHcp(idx, T.find((x) => x.id === sel.value) || T[0], par) : null;
+    if (ch != null) { h.value = ch; h.disabled = true; } else if (h.disabled) { h.disabled = false; }
+  }
+}
+document.addEventListener('input', (e) => {
+  if (e.target.closest('#tees')) { readTables(); updateHcps(); }
+  else if (e.target.closest('#teams') && ['index', 'tee'].includes(e.target.dataset.pk)) updateHcps();
+});
+document.addEventListener('change', (e) => { if (e.target.closest('#tees')) { const keep = [...document.querySelectorAll('#teams .pl [data-pk="tee"]')].map((x) => x.value); drawTeams(); document.querySelectorAll('#teams .pl [data-pk="tee"]').forEach((x, i) => { if (keep[i] && [...x.options].some((o) => o.value === keep[i])) x.value = keep[i]; }); updateHcps(); } });
 function drawTeams() {
   const scr = $('f-type').value === 'scramble';
   $('teams').innerHTML = `<thead><tr><th>Team name</th><th>Flight</th><th>Start</th>${scr ? '<th>Team hcp</th>' : ''}<th>Players and handicaps</th><th>Code</th><th></th></tr></thead><tbody>${EV.teams.map((t, i) => `
@@ -261,12 +300,16 @@ function drawTeams() {
     <td><input data-k="flight" class="n" value="${esc(t.flight)}"></td>
     <td><input data-k="start" class="n" type="number" min="1" max="18" value="${t.start || 1}"></td>
     ${scr ? `<td><input data-k="hcp" class="n" type="number" step="0.1" value="${t.hcp || 0}"></td>` : ''}
-    <td>${[0, 1, 2, 3].map((k) => { const p = t.players[k] || {}; return `<div class="pl"><input data-p="${k}" data-pk="name" value="${esc(p.name || '')}" placeholder="Player ${k + 1}"><input data-p="${k}" data-pk="hcp" type="number" step="0.1" value="${p.name ? p.hcp ?? 0 : ''}" placeholder="Hcp"></div>`; }).join('')}</td>
+    <td><div class="plhead"><span>Player</span><span>GHIN number</span><span>Index</span><span>Tees</span><span>Course hcp</span></div>${[0, 1, 2, 3].map((k) => plRow(t.players[k] || {}, k)).join('')}</td>
     <td class="code">${t.code ? esc(t.code) : '<span class="help">After save</span>'}</td>
     <td><button class="btn danger" data-del="${i}" title="Remove team">Remove</button></td></tr>`).join('')}</tbody>`;
 }
 function readTables() {
   for (const inp of document.querySelectorAll('#course input')) { const h = EV.course.holes[inp.dataset.i]; h[inp.dataset.c] = Number(inp.value) || 0; }
+  for (const tr of document.querySelectorAll('#tees tbody tr[data-tee]')) {
+    const t = EV.course.tees[tr.dataset.tee]; if (!t) continue;
+    for (const inp of tr.querySelectorAll('[data-tk]')) t[inp.dataset.tk] = inp.dataset.tk === 'name' ? inp.value.trim() : inp.value === '' ? null : Number(inp.value);
+  }
   for (const tr of document.querySelectorAll('#teams tbody tr')) {
     const t = EV.teams[tr.dataset.t]; if (!t) continue;
     for (const inp of tr.querySelectorAll('[data-k]')) t[inp.dataset.k] = inp.type === 'number' ? Number(inp.value) || 0 : inp.value.trim();
@@ -274,7 +317,10 @@ function readTables() {
     for (let k = 0; k < 4; k++) {
       const n = tr.querySelector(`[data-p="${k}"][data-pk="name"]`).value.trim(); if (!n) continue;
       const old = t.players[k] || {};
-      players.push({ id: old.id || rid(), name: n, hcp: Number(tr.querySelector(`[data-p="${k}"][data-pk="hcp"]`).value) || 0 });
+      const q = (pk) => tr.querySelector(`[data-p="${k}"][data-pk="${pk}"]`);
+      const index = parseIndex(q('index').value), tee = q('tee').value || '';
+      const T = EV.course.tees || [], ch = index != null ? courseHcp(index, T.find((x) => x.id === tee) || T[0], coursePar(EV)) : null;
+      players.push({ id: old.id || rid(), name: n, ghin: q('ghin').value.replace(/\D/g, ''), index, tee, hcp: ch != null ? ch : Number(q('hcp').value) || 0 });
     }
     t.players = players;
   }
@@ -308,6 +354,7 @@ $('pasteAdd').onclick = () => {
 document.addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.del) { readTables(); const t = EV.teams[b.dataset.del]; if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Remove, sure?'; return; } EV.teams.splice(Number(b.dataset.del), 1); drawTeams(); setDirty(); toast(`${t.name || 'Team'} removed. Its scores go when you save.`); }
+  if (b.dataset.deltee) { readTables(); EV.course.tees.splice(Number(b.dataset.deltee), 1); drawTees(); drawTeams(); setDirty(); }
   if (b.dataset.delc) { readTables(); EV.contests.splice(Number(b.dataset.delc), 1); drawContests(); setDirty(); }
   if (b.dataset.dels) { readTables(); EV.sponsors.splice(Number(b.dataset.dels), 1); drawSponsors(); setDirty(); }
 });
@@ -445,6 +492,27 @@ $('csvResults').onclick = () => {
   csv(fileName('results'), rows);
 };
 $('csvSponsors').onclick = () => { csv(fileName('sponsors'), [['Sponsor', 'Where', 'Holes', 'Screen minutes', 'Phone views', 'Taps'], ...EV.sponsors.map((x) => { const st = REPORT.stats[x.id] || {}; return [x.name, SPOT_NAMES[x.spot] || '', (x.holes || []).join(' '), Math.round((st.secs || 0) / 60), st.view || 0, st.tap || 0]; })]); };
+// every player's round, ready to post to GHIN (hole by hole, and the adjusted gross score)
+$('csvGhin').onclick = () => {
+  if (!LIVE) return toast('Still loading.');
+  if (LIVE.format.type === 'scramble') return toast('Scramble scores can’t be posted for handicaps.');
+  const H = LIVE.course.holes, par = coursePar(LIVE), T = EV.course.tees || [];
+  const rows = [['Player', 'GHIN number', 'Handicap Index', 'Course handicap', 'Date', 'Course', 'Tees', 'Course rating', 'Slope', 'Par', ...H.map((h) => `H${h.n}`), 'Holes played', 'Gross', 'Adjusted gross', 'Picked up on', 'Team']];
+  for (const t of EV.teams) for (const p of t.players) {
+    const arr = (LIVE.scores[t.id] || {})[p.id] || [], tee = T.find((x) => x.id === p.tee) || (p.index != null ? T[0] : null);
+    let gross = 0, adj = 0, n = 0; const pu = [];
+    const holes = H.map((h, i) => {
+      const v = arr[i]; if (v == null) return '';
+      const cap = netDoubleBogey(h.par, p.hcp, h.hcp); n++;
+      if (v === 0) { pu.push(h.n); adj += cap; return cap; } // picked up: most likely score is net double bogey at most
+      gross += v; adj += Math.min(v, cap); return v;
+    });
+    if (!n) continue;
+    rows.push([p.name, p.ghin || '', fmtIndex(p.index), p.hcp, EV.date || '', EV.course.name || EV.club || '', tee ? tee.name : '', tee ? tee.rating : '', tee ? tee.slope : '', tee && tee.par ? tee.par : par, ...holes, n, pu.length ? '' : gross, adj, pu.join(' '), t.name]);
+  }
+  if (rows.length === 1) return toast('No scores yet.');
+  csv(fileName('ghin-posting'), rows);
+};
 $('reportRefresh').onclick = drawReport;
 
 // ---- save and lock ----
