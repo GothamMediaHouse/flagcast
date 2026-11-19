@@ -36,6 +36,15 @@ input, select { font: inherit; color: var(--ink); background: var(--paper); bord
 .empty { text-align: center; padding: 40px 20px; color: var(--muted); background: var(--card); border: 1px dashed var(--line); border-radius: 12px; }
 .screens { border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 8px; }
 .screens .row { display: grid; grid-template-columns: 1fr 220px auto; gap: 8px; align-items: center; }
+.who { color: var(--on-green-muted); font-size: .85rem; }
+.codein { font: 600 1.5rem ui-monospace, Menlo, monospace; letter-spacing: .3em; text-align: center; }
+.clubhd { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.pill { font: 700 .66rem ui-monospace, Menlo, monospace; letter-spacing: .1em; text-transform: uppercase; padding: 3px 8px; border-radius: 3px; background: var(--flag); color: #1a1a10; }
+.pill.off { background: var(--red); color: #fff; }
+.people { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; font-size: .88rem; }
+.people summary { cursor: pointer; color: var(--muted); font-weight: 600; }
+.mem { display: flex; justify-content: space-between; gap: 6px; padding: 5px 0; }
+.mem a { color: var(--red); }
 .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 8px; }
 @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
 </style>
@@ -44,7 +53,7 @@ input, select { font: inherit; color: var(--ink); background: var(--paper); bord
 <script>if (/Macintosh/.test(navigator.userAgent)) document.documentElement.classList.add('mac');</script>
 <header>
   <div><img src="logo.svg" alt="Flagcast"><div class="sub">Manager · set up and run your tournaments</div></div>
-  <button class="btn" id="settingsBtn" title="Server">Settings</button>
+  <div style="display:flex;gap:10px;align-items:center"><span class="who" id="who"></span><button class="btn" id="outBtn" hidden>Sign out</button><button class="btn" id="settingsBtn" title="Server">Settings</button></div>
 </header>
 <main>
   <section>
@@ -52,14 +61,45 @@ input, select { font: inherit; color: var(--ink); background: var(--paper); bord
     <div id="list"></div>
   </section>
   <aside>
-    <div class="box">
-      <h2>New tournament</h2>
+    <div class="box" id="signBox" hidden>
+      <h2>Sign in</h2>
+      <form id="signForm">
+        <p class="help">Sign in with your club email. We’ll email you a 6-digit code, no password needed.</p>
+        <label>Email<input id="sEmail" type="email" autocomplete="email" required placeholder="you@yourclub.com"></label>
+        <button class="btn primary" style="width:100%">Email me a code</button>
+      </form>
+      <form id="codeForm" hidden>
+        <p class="help">We sent a code to <b id="sentTo"></b>. It works for 15 minutes.</p>
+        <label>Code<input id="sCode" class="codein" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required placeholder="••••••"></label>
+        <button class="btn primary" style="width:100%">Sign in</button>
+        <button class="btn" type="button" id="sBack" style="width:100%;margin-top:8px">Use a different email</button>
+      </form>
+      <div class="err" id="sErr" hidden></div>
+      <p class="help" style="margin:12px 0 0">New to Flagcast? Sign in, then set up your club.</p>
+    </div>
+    <div class="box" id="reqBox" hidden>
+      <h2>Set up your club</h2>
+      <p class="help">Tell us about your club. Flagcast will approve it and email you.</p>
+      <form id="reqForm">
+        <label>Club name<input id="rName" required placeholder="Willow Creek Country Club"></label>
+        <label>Your name<input id="rContact"></label>
+        <label>Phone<input id="rPhone" type="tel"></label>
+        <label>Town and state<input id="rCity" placeholder="Rye, NY"></label>
+        <button class="btn primary" style="width:100%">Send to Flagcast</button>
+        <div class="err" id="rErr" hidden></div>
+      </form>
+    </div>
+    <div class="box" id="clubBox" hidden>
+      <div class="clubhd"><h2 id="clubName" style="margin:0"></h2><span class="pill" id="clubPill"></span></div>
+      <p class="help" id="clubState" style="margin:6px 0 14px"></p>
       <form id="newForm">
-        <label>Tournament name<input id="nName" required placeholder="Member-Guest 2027"></label>
-        <label>Passcode<input id="nPass" type="password" autocomplete="off" placeholder="From Flagcast"></label>
+        <label>New tournament<input id="nName" required placeholder="Member-Guest 2027"></label>
         <button class="btn primary" style="width:100%">Make tournament</button>
         <div class="err" id="nErr" hidden></div>
       </form>
+      <details class="people"><summary>People in your club</summary><div id="members"></div>
+        <form id="invForm" hidden style="display:flex;gap:6px;margin-top:8px"><input id="iEmail" type="email" required placeholder="name@yourclub.com"><button class="btn">Add</button></form>
+        <div class="err" id="iErr" hidden></div></details>
     </div>
     <div class="box">
       <h2>Add one you already have</h2>
@@ -81,14 +121,36 @@ const msg = (e) => String(e && e.message || e).replace(/^Error invoking remote m
 function toast(t) { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), 3000); }
 let monitors = [];
 
+let me = null;
+const errBox = (id, x) => { $(id).textContent = x ? msg(x) : ''; $(id).hidden = !x; };
+async function account() {
+  const { signedIn } = await gl.list();
+  me = null;
+  if (signedIn) { try { me = await gl.club('me'); } catch (x) { me = null; } }
+  $('signBox').hidden = !!me; $('reqBox').hidden = !me || !!me.club; $('clubBox').hidden = !me || !me.club;
+  $('outBtn').hidden = !me; $('who').textContent = me ? me.email : '';
+  if (me && me.club) {
+    const c = me.club, ok = c.status === 'active' && c.credits !== 0;
+    $('clubName').textContent = c.name;
+    $('clubPill').textContent = c.status === 'active' ? 'Active' : c.status === 'pending' ? 'Waiting' : 'Off';
+    $('clubPill').className = `pill ${c.status === 'off' ? 'off' : ''}`;
+    $('clubState').textContent = c.status === 'pending' ? 'Waiting for Flagcast to approve your club. We’ll email you when it’s ready.' : c.status === 'off' ? 'This club is switched off. Contact hello@flagcast.app.' : c.credits < 0 ? 'Unlimited tournaments.' : c.credits === 0 ? 'No tournaments left to make. Contact hello@flagcast.app to add more.' : `${c.credits} tournament${c.credits === 1 ? '' : 's'} left to make.`;
+    $('newForm').hidden = !ok;
+    const owner = me.role === 'owner';
+    $('members').innerHTML = me.members.map((m) => `<div class="mem"><span>${esc(m.email)}${m.role === 'owner' ? ' · owner' : ''}</span>${owner && m.role !== 'owner' ? `<a href="#" data-rm="${esc(m.email)}">Remove</a>` : ''}</div>`).join('');
+    $('invForm').hidden = !owner;
+  }
+  await draw();
+}
+
 async function draw() {
   const { base, events } = await gl.list();
   $('base').value = base;
   monitors = await gl.monitors();
   $('list').innerHTML = events.length ? events.map((e) => `<div class="ev" data-id="${e.id}">
     <div class="top"><div><b>${esc(e.name)}</b><div class="meta" data-meta>${esc([e.club, e.date].filter(Boolean).join(' · '))}</div></div><span class="code">${e.id.toUpperCase()}</span></div>
-    <div class="acts"><button class="btn dark" data-desk>Open desk</button><button class="btn" data-screensbtn>Show screens on this computer</button><button class="btn" data-live>Live leaderboard</button><span style="flex:1"></span><button class="btn danger" data-remove>Remove from list</button></div>
-    <div class="screens" data-screens hidden></div></div>`).join('') : '<div class="empty">No tournaments yet. Make one on the right.</div>';
+    <div class="acts"><button class="btn dark" data-desk>Open desk</button><button class="btn" data-screensbtn>Show screens on this computer</button><button class="btn" data-live>Live leaderboard</button><span style="flex:1"></span><button class="btn danger" data-remove>${e.fromClub ? 'Hide' : 'Remove from list'}</button></div>
+    <div class="screens" data-screens hidden></div></div>`).join('') : `<div class="empty">${me && me.club ? 'No tournaments yet. Make one on the right.' : me ? 'Set up your club on the right to make tournaments.' : 'Sign in on the right to see your club’s tournaments.'}</div>`;
   for (const e of events) gl.info(e.id).then((i) => { const el = document.querySelector(`[data-id="${e.id}"] [data-meta]`); if (el) el.textContent = [i.club, i.date, `${i.teams} teams`, i.locked ? 'results final' : ''].filter(Boolean).join(' · '); const b = document.querySelector(`[data-id="${e.id}"] b`); if (b) b.textContent = i.name; }).catch(() => {});
 }
 
@@ -98,7 +160,8 @@ $('list').addEventListener('click', async (ev) => {
   if (b.hasAttribute('data-desk')) gl.openDesk(id);
   if (b.hasAttribute('data-live')) gl.openLive(id);
   if (b.hasAttribute('data-remove')) {
-    if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Remove? Keep the desk link first'; setTimeout(() => { b.dataset.sure = ''; b.textContent = 'Remove from list'; }, 4000); return; }
+    const was = b.textContent;
+    if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = was === 'Hide' ? 'Hide from your club’s list?' : 'Remove? Keep the desk link first'; setTimeout(() => { b.dataset.sure = ''; b.textContent = was; }, 4000); return; }
     await gl.remove(id); draw();
   }
   if (b.hasAttribute('data-screensbtn')) {
@@ -120,8 +183,33 @@ $('list').addEventListener('click', async (ev) => {
 
 $('newForm').addEventListener('submit', async (e) => {
   e.preventDefault(); $('nErr').hidden = true;
-  try { const ev = await gl.create({ name: $('nName').value.trim(), pass: $('nPass').value }); $('nName').value = ''; await draw(); gl.openDesk(ev.id); }
-  catch (x) { $('nErr').textContent = msg(x); $('nErr').hidden = false; }
+  try { const ev = await gl.create({ name: $('nName').value.trim() }); $('nName').value = ''; await draw(); gl.openDesk(ev.id); }
+  catch (x) { errBox('nErr', x); account(); }
+});
+$('signForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); errBox('sErr');
+  try { const j = await gl.club('start', { email: $('sEmail').value.trim() }); $('sentTo').textContent = $('sEmail').value.trim(); $('signForm').hidden = true; $('codeForm').hidden = false; $('sCode').value = j.devCode || ''; $('sCode').focus(); }
+  catch (x) { errBox('sErr', x); }
+});
+$('sBack').onclick = () => { $('signForm').hidden = false; $('codeForm').hidden = true; errBox('sErr'); };
+$('codeForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); errBox('sErr');
+  try { await gl.club('verify', { email: $('sEmail').value.trim(), code: $('sCode').value }); $('signForm').hidden = false; $('codeForm').hidden = true; $('sCode').value = ''; await account(); }
+  catch (x) { errBox('sErr', x); }
+});
+$('outBtn').onclick = async () => { await gl.club('signout').catch(() => {}); account(); };
+$('reqForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); errBox('rErr');
+  try { await gl.club('request', { name: $('rName').value, contact: $('rContact').value, phone: $('rPhone').value, city: $('rCity').value }); account(); }
+  catch (x) { errBox('rErr', x); }
+});
+$('invForm').addEventListener('submit', async (e) => {
+  e.preventDefault(); errBox('iErr');
+  try { await gl.club('invite', { email: $('iEmail').value }); $('iEmail').value = ''; account(); } catch (x) { errBox('iErr', x); }
+});
+$('members').addEventListener('click', async (e) => {
+  const a = e.target.closest('[data-rm]'); if (!a) return; e.preventDefault();
+  try { await gl.club('uninvite', { email: a.dataset.rm }); account(); } catch (x) { errBox('iErr', x); }
 });
 $('addForm').addEventListener('submit', async (e) => {
   e.preventDefault(); $('aErr').hidden = true;
@@ -131,9 +219,11 @@ $('addForm').addEventListener('submit', async (e) => {
 $('settingsBtn').onclick = () => { $('settings').hidden = !$('settings').hidden; };
 $('baseForm').addEventListener('submit', async (e) => {
   e.preventDefault(); $('bErr').hidden = true;
-  try { await gl.setBase($('base').value); draw(); toast('Saved.'); } catch (x) { $('bErr').textContent = msg(x); $('bErr').hidden = false; }
+  try { await gl.setBase($('base').value); account(); toast('Saved.'); } catch (x) { $('bErr').textContent = msg(x); $('bErr').hidden = false; }
 });
-draw();
+account();
+// pick up a club approval or new credits while the app stays open
+window.addEventListener('focus', () => { if (me) account(); });
 </script>
 </body>
 </html>
