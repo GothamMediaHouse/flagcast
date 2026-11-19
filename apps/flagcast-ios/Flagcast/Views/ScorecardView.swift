@@ -8,6 +8,7 @@ struct ScorecardScreen: View {
     @State private var model: ScorecardModel
     @State private var sideGames = false
     @State private var camera: CameraLink?
+    @State private var dismissed = 0.0
     @Environment(Router.self) private var router
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -110,6 +111,16 @@ struct ScorecardScreen: View {
                 .refreshable { await model.feed.refresh(); model.send() }
                 .onChange(of: h) { _, _ in withAnimation { proxy.scrollTo("top", anchor: .top) } }
             }
+            .overlay(alignment: .bottom) {
+                if let r = PhoneCast.current(s, id: model.id), dismissed >= 0 {
+                    PhoneBanner(state: s, route: r, go: { r in
+                        PhoneCast.pending[model.id] = r
+                        router.go(.live(id: model.id))
+                    }, close: { PhoneCast.dismiss(r, id: model.id); withAnimation { dismissed += 1 } })
+                    .padding(.bottom, 8)
+                }
+            }
+            .animation(.spring(duration: 0.35), value: s.live.phone)
             bottomBar(t, h)
         }
         .background(Color.fcPaper)

@@ -149,13 +149,23 @@ struct News: Codable, Hashable { var text: String; var at: Double; var by: Strin
 struct Nudge: Codable, Hashable { var team: String; var text: String; var at: Double }
 struct Ace: Codable, Hashable { var hole: Int; var name: String; var team: String; var at: Double }
 struct Take: Codable, Hashable { var kind: String; var text: String?; var sponsor: String?; var at: Double; var secs: Double? }
+/// "Routed to phones": Admin, the desk or a pro points every player's phone at something (public/golf/phonecast.js).
+struct PhoneRoute: Codable, Hashable {
+    var k: String, fl: String, hole: Int, sponsor: String, text: String, at: Double
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        k = c.str(.k); fl = c.str(.fl); hole = c.int(.hole, 0); sponsor = c.str(.sponsor); text = c.str(.text); at = c.dbl(.at, 0)
+    }
+    var isCamera: Bool { k == "cam" || k == "p3" }
+}
 struct LiveScreens: Codable, Hashable {
-    var force: [String: PageRef] = [:], take: Take?
+    var force: [String: PageRef] = [:], take: Take?, phone: PhoneRoute?
     init() {}
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         force = (try? c.decodeIfPresent([String: PageRef].self, forKey: .force)) ?? [:]
         take = try? c.decodeIfPresent(Take.self, forKey: .take)
+        phone = try? c.decodeIfPresent(PhoneRoute.self, forKey: .phone)
     }
 }
 struct ScheduleItem: Codable, Hashable { var time: String; var what: String }
