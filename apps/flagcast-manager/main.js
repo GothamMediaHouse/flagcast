@@ -21,6 +21,8 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1320, height: 900, minWidth: 900, minHeight: 600, title: 'Flagcast Manager', backgroundColor: '#123628',
     icon: path.join(__dirname, 'build', 'icon.png'),
+    // Mac: no grey title bar; the traffic lights sit inside the green header like a native app
+    ...(process.platform === 'darwin' ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 18, y: 18 } } : {}),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false },
   });
   win.loadFile(path.join(__dirname, 'home.html'));
@@ -32,6 +34,13 @@ function createWindow() {
   // on a desk page, add a way back to the list of tournaments
   win.webContents.on('did-finish-load', () => {
     const u = win.webContents.getURL();
+    // Mac: make room for the traffic lights on the web pages too, and let their green bar move the window
+    if (process.platform === 'darwin' && u.startsWith(base())) {
+      win.webContents.insertCSS(`.topbar { padding-top: 40px !important; -webkit-app-region: drag; }
+        .topbar a, .topbar button, .topbar input, .topbar select, .topbar label { -webkit-app-region: no-drag; }
+        body:not(:has(.topbar)) { padding-top: 32px; }
+        body:not(:has(.topbar))::before { content: ''; position: fixed; inset: 0 0 auto 0; height: 32px; -webkit-app-region: drag; z-index: 999; }`).catch(() => {});
+    }
     if (u.startsWith(base()) && /\/desk/.test(u)) {
       win.webContents.executeJavaScript(`(() => { if (document.getElementById('glm-back')) return;
         const b = document.createElement('button'); b.id = 'glm-back'; b.textContent = '‹ All tournaments';
