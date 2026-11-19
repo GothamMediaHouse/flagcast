@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Course map · Flagcast</title>
+<link rel="icon" href="/golf/brand/mark.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="/golf/golf.css">
+<style>
+html, body { height: 100%; }
+body { display: flex; flex-direction: column; overflow: hidden; }
+.topbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-top: max(12px, env(safe-area-inset-top, 0px)); }
+.topbar h1 { font-size: 1.45rem; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar .ttl { min-width: 0; flex: 1; }
+#saved { font-size: .82rem; color: var(--on-green-muted); }
+.strip { display: flex; gap: 4px; overflow-x: auto; padding: 8px max(12px, env(safe-area-inset-left, 0px)); background: var(--green-2); scrollbar-width: none; }
+.strip button { flex: 0 0 auto; min-width: 44px; padding: 6px 4px; border-radius: 8px; border: 1.5px solid rgba(255,255,255,.2); background: transparent; color: var(--on-green); font: 700 1rem var(--f-mono); line-height: 1.1; }
+.strip button small { display: block; font-size: .6rem; color: var(--on-green-muted); font-weight: 500; }
+.strip button.done { border-color: var(--ok); }
+.strip button[aria-current="true"] { background: var(--flag); color: var(--on-flag); border-color: var(--flag); }
+.strip button[aria-current="true"] small { color: var(--on-flag); }
+.wrap { flex: 1; display: flex; min-height: 0; }
+#map { flex: 1; min-width: 0; background: #16301f; }
+.panel { width: 340px; overflow-y: auto; background: var(--paper); border-left: 1px solid var(--line); padding: 14px 14px calc(18px + env(safe-area-inset-bottom, 0px)); }
+@media (max-width: 760px) {
+  .wrap { flex-direction: column; }
+  #map { flex: 1 1 55%; }
+  .panel { width: auto; flex: 1 1 45%; border-left: 0; border-top: 1px solid var(--line); }
+}
+.panel h2 { font-size: 1.5rem; margin-bottom: 4px; }
+.help { font-size: .84rem; color: var(--muted); margin: 4px 0 10px; }
+.tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.tools button { border: 1.5px solid var(--line); background: var(--card); border-radius: 8px; padding: 8px 2px; font-weight: 600; font-size: .86rem; }
+.tools button.set::after { content: " ✓"; color: var(--ok); }
+.tools button[aria-pressed="true"] { border-color: var(--flag); background: var(--flag); color: var(--on-flag); }
+.row { display: flex; gap: 6px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+.row .btn { padding: 7px 11px; font-size: .86rem; }
+.hint { background: var(--green); color: var(--on-green); border-radius: 8px; padding: 8px 10px; font-size: .86rem; margin: 10px 0; }
+.facts { font-size: .88rem; margin: 10px 0; }
+.facts b { font-family: var(--f-mono); }
+.hz { border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 8px; margin-top: 6px; display: grid; gap: 6px; }
+.hz .r { display: flex; gap: 6px; align-items: center; }
+.hz select, .hz input, .find input { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; background: var(--paper); min-width: 0; }
+.hz input { flex: 1; width: auto; min-width: 0; }
+.hz select { flex: none; width: auto; }
+.hz .r { min-width: 0; }
+@media (max-width: 760px) {
+  .topbar .ttl { flex: 1 1 100%; }
+  .topbar #saved { flex: 1; }
+}
+.hz .lk { background: none; border: 0; color: var(--muted); font-size: .82rem; padding: 2px 4px; text-decoration: underline; }
+.hz .lk.danger { color: var(--red); }
+.find { display: flex; gap: 6px; margin-top: 6px; }
+.find input { flex: 1; }
+details { margin-top: 16px; }
+summary { font-weight: 600; cursor: pointer; }
+.err { color: var(--red); font-size: .86rem; }
+.pt { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.6); display: grid; place-items: center; font: 700 9px var(--f-mono); color: #1a1a10; }
+.lbl { background: rgba(10,24,16,.8); color: #fff; font: 600 11px var(--f-mono); padding: 1px 5px; border-radius: 8px; white-space: nowrap; }
+.mode { display: flex; background: rgba(255,255,255,.1); border-radius: 8px; padding: 3px; }
+.mode button { border: 0; background: transparent; color: var(--on-green); padding: 6px 12px; border-radius: 6px; font-weight: 600; font-size: .88rem; }
+.mode button[aria-pressed="true"] { background: var(--flag); color: var(--on-flag); }
+body.groups .strip { display: none; }
+.grp { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 8px 10px; margin-top: 6px; }
+.grp .n { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: #3a8bff; color: #fff; font: 700 .8rem var(--f-mono); flex: none; }
+.grp.old .n { background: #8a948d; }
+.grp b { display: block; }
+.grp small { color: var(--muted); }
+.gpin { display: grid; place-items: center; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 13px; background: #3a8bff; color: #fff; border: 2px solid #fff; font: 700 11px var(--f-mono); box-shadow: 0 1px 5px rgba(0,0,0,.6); white-space: nowrap; }
+.gpin.old { background: #8a948d; }
+.leaflet-tooltip.gtip { background: rgba(10,24,16,.85); color: #fff; border: 0; font: 600 11px var(--f-body); padding: 2px 6px; box-shadow: none; }
+.leaflet-tooltip.gtip::before { display: none; }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--green); color: var(--on-green); padding: 10px 16px; border-radius: 10px; z-index: 1000; font-size: .9rem; box-shadow: 0 8px 24px rgba(0,0,0,.3); }
+</style>
+</head>
+<body>
+<div class="topbar"><div class="ttl"><div class="label">Course map · hole GPS</div><h1 id="evname">Course map</h1></div><span id="saved"></span><div class="mode" id="mode"><button data-mode="holes" aria-pressed="true">Map holes</button><button data-mode="groups" aria-pressed="false">Groups</button></div></div>
+<div class="strip" id="strip"></div>
+<div class="wrap">
+  <div id="map"></div>
+  <div class="panel" id="panel"><p class="help">Loading…</p></div>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script type="module">
+import { eventId, api, post, esc } from '/golf/client.js';
+import { TILES, TILE_CREDIT, yds, middle, HZ_LABEL } from '/golf/gps.js';
+
+const $ = (id) => document.getElementById(id);
+const id = eventId();
+// the desk link's key (#key), or a golf pro's PIN from the phone app
+const key = location.hash.slice(1).split('&')[0].replace(/^key=/, '').replace(/^groups$/, '');
+let pin = null; try { pin = sessionStorage.getItem(`flagcast:pin:${id}`) || localStorage.getItem(`flagcast:pin:${id}`); } catch {}
+const toast = (m) => { const t = $('toast'); t.textContent = m; t.hidden = false; clearTimeout(t._h); t._h = setTimeout(() => { t.hidden = true; }, 3200); };
+
+let S = null, MAP = { holes: {} }, hole = 1, tool = 'tee', pendingHz = null, mode = /groups/.test(location.hash) ? 'groups' : 'holes';
+const toolName = () => (TOOLS.find(([k]) => k === tool) || [null, ''])[1].toLowerCase();
+const H = () => MAP.holes[hole] || (MAP.holes[hole] = { tee: null, f: null, m: null, b: null, hz: [] });
+const TOOLS = [['tee', 'Tee'], ['f', 'Front'], ['m', 'Middle'], ['b', 'Back']];
+const COLORS = { tee: '#e8c547', f: '#ffffff', m: '#c8312b', b: '#ffffff' };
+const HZC = { bunker: '#f2e2b0', water: '#5fb4ff', trees: '#7fd18b', layup: '#ffffff', other: '#ffb36b' };
+
+// ---- the map ----
+const map = L.map('map', { zoomControl: true, maxZoom: 21, attributionControl: true }).setView([39.5, -98.35], 4);
+L.tileLayer(TILES, { maxNativeZoom: 19, maxZoom: 21, attribution: TILE_CREDIT }).addTo(map);
+const layer = L.layerGroup().addTo(map), others = L.layerGroup().addTo(map);
+let meDot = null;
+const icon = (bg, txt = '') => L.divIcon({ className: '', html: `<div class="pt" style="background:${bg}">${txt}</div>`, iconSize: [18, 18], iconAnchor: [9, 9] });
+const lbl = (text) => L.divIcon({ className: '', html: `<span class="lbl">${esc(text)}</span>`, iconSize: null, iconAnchor: [-12, 8] });
+
+function drawMap() {
+  layer.clearLayers(); others.clearLayers();
+  // the other holes' greens, so you can find your way round
+  for (const [n, h] of Object.entries(MAP.holes)) {
+    if (Number(n) === hole) continue;
+    const g = middle(h); if (g) L.marker(g, { icon: icon('rgba(255,255,255,.5)', n), interactive: true }).on('click', () => pick(Number(n))).addTo(others);
+  }
+  const h = H(), g = middle(h);
+  if (h.tee && g) L.polyline([h.tee, g], { color: '#fff', weight: 2, dashArray: '6 7', opacity: .85 }).addTo(layer);
+  for (const [k] of TOOLS) {
+    const p = h[k]; if (!p) continue;
+    const m = L.marker(p, { icon: icon(COLORS[k], k === 'tee' ? 'T' : k.toUpperCase()), draggable: true }).addTo(layer);
+    m.on('dragend', () => { const ll = m.getLatLng(); h[k] = [ll.lat, ll.lng]; changed(); });
+  }
+  if (!h.m && g && h.f && h.b) L.marker(g, { icon: icon('rgba(200,49,43,.6)', 'M'), interactive: false }).addTo(layer);
+  for (const z of h.hz) {
+    const c = HZC[z.k] || '#ffb36b';
+    const a = L.marker(z.p, { icon: icon(c, '!'), draggable: true }).addTo(layer);
+    a.on('dragend', () => { const ll = a.getLatLng(); z.p = [ll.lat, ll.lng]; changed(); });
+    L.marker(z.p, { icon: lbl(z.n || HZ_LABEL[z.k]), interactive: false }).addTo(layer);
+    if (z.c) {
+      L.polyline([z.p, z.c], { color: c, weight: 3 }).addTo(layer);
+      const e = L.marker(z.c, { icon: icon(c, '›'), draggable: true }).addTo(layer);
+      e.on('dragend', () => { const ll = e.getLatLng(); z.c = [ll.lat, ll.lng]; changed(); });
+    }
+  }
+}
+
+map.on('click', (e) => { if (mode === 'holes') place([e.latlng.lat, e.latlng.lng]); });
+function place(p) {
+  const h = H();
+  if (pendingHz) {
+    if (pendingHz.step === 'p') { const z = { id: Math.random().toString(36).slice(2, 7), k: pendingHz.k, n: '', p, c: null }; h.hz.push(z); pendingHz = { step: 'c', z }; }
+    else { pendingHz.z.c = p; pendingHz = null; }
+    changed(); return;
+  }
+  if (!tool) return; // the hole is done: taps don't move anything, drags do
+  h[tool] = p;
+  // next point in order: tee → front → middle → back
+  const i = TOOLS.findIndex(([k]) => k === tool);
+  const next = TOOLS.slice(i + 1).find(([k]) => !h[k]);
+  tool = next ? next[0] : null;
+  changed();
+}
+
+// ---- the panel ----
+function drawPanel() {
+  const h = H(), g = middle(h), card = S?.course?.holes?.[hole - 1];
+  const len = h.tee && g ? Math.round(yds(h.tee, g)) : null;
+  const depth = h.f && h.b ? Math.round(yds(h.f, h.b)) : null;
+  const hint = pendingHz ? (pendingHz.step === 'p' ? `Tap where the ${HZ_LABEL[pendingHz.k].toLowerCase()} starts (the near edge).` : `Now tap the far edge, where a shot carries it. <button class="lk" data-skipc style="color:var(--flag);background:none;border:0;text-decoration:underline">Skip</button>`)
+    : !tool ? 'This hole is mapped. Drag any point to move it, or pick one above to place it again.'
+    : `Tap the map to set the <b>${toolName()}</b>${tool === 'tee' ? '' : ' of the green'}. Drag any point to move it.`;
+  $('panel').innerHTML = `
+    <h2>Hole ${hole}</h2>
+    <div class="label">${card ? `Par ${card.par}${card.yds ? ` · ${card.yds} yds on the card` : ''}` : ''}</div>
+    <div class="tools" style="margin-top:10px">${TOOLS.map(([k, l]) => `<button data-tool="${k}" aria-pressed="${!pendingHz && tool === k}" class="${h[k] ? 'set' : ''}">${l}</button>`).join('')}</div>
+    <div class="hint">${hint}</div>
+    <div class="row">${tool || pendingHz ? '<button class="btn" data-here>Use my spot</button>' : ''}${tool ? `<button class="btn" data-clear ${h[tool] && !pendingHz ? '' : 'disabled'}>Clear ${toolName()}</button>` : ''}
+      ${g ? '<button class="btn" data-fit>Show the hole</button>' : ''}</div>
+    <p class="help">Walking the course? Stand on the spot and tap <b>Use my spot</b>.${h.f && h.b && !h.m ? ' Middle is worked out between front and back until you set it.' : ''}</p>
+    <div class="facts">${len ? `Tee to middle: <b>${len} yds</b>${card?.yds ? ` (card says ${card.yds})` : ''}<br>` : ''}${depth ? `Green depth: <b>${depth} yds</b>` : ''}</div>
+    <div class="label" style="margin-top:14px">Hazards</div>
+    ${h.hz.map((z, i) => `<div class="hz"><div class="r"><select data-hzk="${i}">${Object.entries(HZ_LABEL).map(([k, l]) => `<option value="${k}" ${z.k === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <input data-hzn="${i}" value="${esc(z.n)}" placeholder="Name, e.g. Left fairway bunker" maxlength="40"></div>
+      <div class="r help" style="margin:0">${h.tee ? `${Math.round(yds(h.tee, z.p))} to reach${z.c ? ` · ${Math.round(yds(h.tee, z.c))} to carry` : ''} from the tee` : ''}<span style="flex:1"></span>
+      ${z.c ? '' : `<button class="lk" data-hzc="${i}">Add carry</button>`}<button class="lk danger" data-hzx="${i}">Remove</button></div></div>`).join('')}
+    <div class="row">${Object.entries(HZ_LABEL).map(([k, l]) => `<button class="btn" data-addhz="${k}">+ ${l}</button>`).join('')}</div>
+    <details ${Object.values(MAP.holes).some((x) => middle(x)) ? '' : 'open'}><summary>Find the course</summary>
+      <form class="find" id="find"><input id="q" placeholder="Course name and town"><button class="btn">Find</button></form>
+      <div class="row"><button class="btn" data-me>Go to my location</button></div>
+      <p class="help">Or paste a spot from Google Maps (right-click → the numbers), like 40.7128, -74.0060.</p>
+      <div class="err" id="ferr" hidden></div></details>
+    <p class="help" style="margin-top:16px">Saves as you go. Your club keeps this map, so its next tournament starts with it.</p>`;
+}
+
+$('panel').addEventListener('click', async (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  const h = H();
+  if (b.dataset.tool) { tool = b.dataset.tool; pendingHz = null; drawPanel(); return; }
+  if (b.hasAttribute('data-here')) {
+    if (!navigator.geolocation) return toast('This device can’t share its location.');
+    b.disabled = true; b.textContent = 'Finding you…';
+    navigator.geolocation.getCurrentPosition((p) => {
+      const at = [p.coords.latitude, p.coords.longitude];
+      showMe(at, p.coords.accuracy); place(at); map.setView(at, Math.max(map.getZoom(), 18));
+      toast(`Set, to within about ${Math.round(p.coords.accuracy * 1.094)} yards.`);
+    }, () => { toast('Couldn’t get your location. Allow location for this page and try again.'); drawPanel(); }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+    return;
+  }
+  if (b.hasAttribute('data-clear')) { h[tool] = null; changed(); return; }
+  if (b.hasAttribute('data-fit')) { fit(); return; }
+  if (b.hasAttribute('data-skipc')) { pendingHz = null; drawPanel(); return; }
+  if (b.dataset.addhz) { pendingHz = { step: 'p', k: b.dataset.addhz }; drawPanel(); return; }
+  if (b.dataset.hzc) { pendingHz = { step: 'c', z: h.hz[Number(b.dataset.hzc)] }; drawPanel(); return; }
+  if (b.dataset.hzx) { h.hz.splice(Number(b.dataset.hzx), 1); changed(); return; }
+  if (b.hasAttribute('data-me')) {
+    navigator.geolocation?.getCurrentPosition((p) => { const at = [p.coords.latitude, p.coords.longitude]; showMe(at, p.coords.accuracy); map.setView(at, 17); }, () => toast('Couldn’t get your location.'));
+  }
+});
+$('panel').addEventListener('change', (e) => {
+  const h = H(), t = e.target;
+  if (t.dataset.hzk) { h.hz[Number(t.dataset.hzk)].k = t.value; changed(); }
+  if (t.dataset.hzn) { h.hz[Number(t.dataset.hzn)].n = t.value.slice(0, 40); changed(false); }
+});
+$('panel').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const q = $('q').value.trim(), err = $('ferr'); err.hidden = true; if (!q) return;
+  const ll = q.match(/(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);
+  if (ll) { map.setView([+ll[1], +ll[2]], 17); return; }
+  try {
+    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`);
+    const j = await r.json();
+    if (!j.length) { err.textContent = 'Couldn’t find that. Try the town too, or paste the spot from Google Maps.'; err.hidden = false; return; }
+    map.setView([+j[0].lat, +j[0].lon], 16);
+  } catch { err.textContent = 'Search isn’t answering. Paste the spot from Google Maps instead.'; err.hidden = false; }
+});
+
+function showMe(at, acc) {
+  if (meDot) meDot.remove();
+  meDot = L.layerGroup([L.circle(at, { radius: acc || 5, color: '#3a8bff', weight: 1, fillOpacity: .15 }), L.circleMarker(at, { radius: 7, color: '#fff', weight: 2, fillColor: '#3a8bff', fillOpacity: 1 })]).addTo(map);
+}
+
+function fit() {
+  const h = H(), pts = [h.tee, h.f, h.m, h.b, ...h.hz.flatMap((z) => [z.p, z.c])].filter(Boolean);
+  if (pts.length === 1) map.setView(pts[0], 18); else if (pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 19 });
+}
+
+function drawStrip() {
+  $('strip').innerHTML = Array.from({ length: 18 }, (_, i) => {
+    const n = i + 1, h = MAP.holes[n], done = h && h.tee && middle(h);
+    return `<button data-hole="${n}" aria-current="${n === hole}" class="${done ? 'done' : ''}">${n}<small>${done ? 'mapped' : h && middle(h) ? 'green' : '—'}</small></button>`;
+  }).join('');
+  document.querySelector('.strip [aria-current="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+}
+$('strip').addEventListener('click', (e) => { const b = e.target.closest('[data-hole]'); if (b) pick(Number(b.dataset.hole)); });
+function pick(n) {
+  hole = n; pendingHz = null;
+  const h = H(); tool = TOOLS.find(([k]) => !h[k])?.[0] || null;
+  drawStrip(); drawMap(); drawPanel();
+  if (middle(h) || h.tee) fit();
+}
+
+// ---- where every group is ----
+const groupsLayer = L.layerGroup().addTo(map);
+let GROUPS = [], gTimer = null, fitted = false, TRACK = null;
+const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : `${Math.floor(m / 60)} h ${m % 60} min ago`; };
+const thru = (teamId) => { const sc = S?.scores?.[teamId] || {}; return Math.max(0, ...Object.values(sc).map((a) => a.filter((v) => v != null).length)); };
+const short = (n) => String(n || '').split(/\s+/).map((w) => w[0]).join('').slice(0, 3).toUpperCase() || '•';
+async function loadGroups() {
+  try {
+    const r = key ? await post('desk', { key, op: 'groups' }) : await post('pro', { pin, op: 'groups' });
+    const st = await (await fetch(api('state'))).json(); if (st && st.teams) S = st;
+    GROUPS = r.groups.sort((a, b) => (b.hole || 0) - (a.hole || 0)); TRACK = r;
+  } catch (e) { toast(e.message); }
+  if (mode === 'groups') drawGroups();
+}
+function drawGroups() {
+  groupsLayer.clearLayers();
+  for (const g of GROUPS) {
+    const old = Date.now() - g.t > 10 * 60000;
+    L.marker(g.at, { icon: L.divIcon({ className: '', html: `<div class="gpin ${old ? 'old' : ''}">${g.hole || '?'}</div>`, iconSize: null, iconAnchor: [13, 13] }) })
+      .bindTooltip(esc(String(g.name).split(' / ')[0]), { permanent: true, direction: 'right', offset: [12, 0], className: 'gtip' }).addTo(groupsLayer)
+      .on('click', () => map.setView(g.at, Math.max(map.getZoom(), 18)));
+  }
+  const teams = (S?.teams || []).length;
+  $('panel').innerHTML = `<h2>Groups on the course</h2>
+    ${TRACK && TRACK.on === false ? `<div class="hint">Group tracking is off. ${TRACK.locked ? 'The results are final, so group spots were wiped.' : TRACK.date ? `It turns on on the tournament day (${esc(TRACK.date)}) and stops when the results are made final.` : 'Set the tournament date in Setup. Tracking turns on that day and stops when the results are made final.'}</div>` : ''}
+    <p class="help">${GROUPS.length} of ${teams} groups sharing their spot. A group shows up once a player turns on GPS on their scorecard. Grey means not seen for 10 minutes. Updates every 15 seconds.</p>
+    ${GROUPS.map((g, i) => `<button class="grp ${Date.now() - g.t > 10 * 60000 ? 'old' : ''}" data-g="${i}"><span class="n">${g.hole || '?'}</span><span style="flex:1;min-width:0"><b>${esc(g.name)}</b><small>${g.hole ? `On hole ${g.hole}` : 'On the course'} · thru ${thru(g.team)} · started on ${g.start} · ${ago(g.t)}</small></span></button>`).join('') || '<p class="help">No groups yet.</p>'}`;
+  if (!fitted && GROUPS.length) { fitted = true; map.fitBounds(GROUPS.map((g) => g.at), { padding: [50, 50], maxZoom: 17 }); }
+}
+function setMode(m) {
+  mode = m; document.body.classList.toggle('groups', m === 'groups');
+  $('mode').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
+  clearInterval(gTimer);
+  if (m === 'groups') {
+    layer.clearLayers(); fitted = false; loadGroups(); gTimer = setInterval(loadGroups, 15000);
+    const any = Object.values(MAP.holes).flatMap((h) => [h.tee, middle(h)]).filter(Boolean);
+    if (any.length) map.fitBounds(any, { padding: [30, 30], maxZoom: 17 });
+  } else { groupsLayer.clearLayers(); drawMap(); drawPanel(); }
+}
+$('mode').addEventListener('click', (e) => { const b = e.target.closest('[data-mode]'); if (b) setMode(b.dataset.mode); });
+$('panel').addEventListener('click', (e) => { const b = e.target.closest('[data-g]'); if (b) { const g = GROUPS[Number(b.dataset.g)]; map.setView(g.at, 18); } });
+
+// ---- saving ----
+let timer = null, saving = false, again = false;
+function changed(redraw = true) {
+  if (redraw) { drawMap(); drawPanel(); drawStrip(); }
+  $('saved').textContent = 'Saving…';
+  clearTimeout(timer); timer = setTimeout(save, 700);
+}
+async function save() {
+  if (saving) { again = true; return; }
+  saving = true;
+  const out = { holes: Object.fromEntries(Object.entries(MAP.holes).filter(([, h]) => h.tee || h.f || h.m || h.b || h.hz.length)) };
+  try {
+    if (key) await post('desk', { key, op: 'map', map: out }); else await post('pro', { pin, op: 'map', map: out });
+    $('saved').textContent = `Saved ${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+  } catch (e) { $('saved').textContent = 'Not saved'; toast(e.message); }
+  saving = false; if (again) { again = false; save(); }
+}
+
+async function start() {
+  if (!id || (!key && !pin)) { $('panel').innerHTML = '<h2>Open this from the desk</h2><p class="help">Open the course map from the tournament desk (Setup → Course map), or from the golf pro’s phone app.</p>'; return; }
+  try { const r = await fetch(api('state')); S = await r.json(); if (!r.ok) throw new Error(S.error || 'Not found'); }
+  catch (e) { $('panel').innerHTML = `<h2>Not found</h2><p class="help">${esc(e.message)}</p>`; return; }
+  $('evname').textContent = S.course?.name || S.club || S.name || 'Course map';
+  document.title = `Course map · ${S.course?.name || S.name || 'Flagcast'}`;
+  for (const [n, h] of Object.entries(S.map?.holes || {})) MAP.holes[n] = { tee: h.tee, f: h.f, m: h.m, b: h.b, hz: (h.hz || []).map((z) => ({ ...z })) };
+  if (S.map?.at) $('saved').textContent = `Last saved ${new Date(S.map.at).toLocaleDateString([], { month: 'short', day: 'numeric' })}${S.map.by ? ` · ${S.map.by}` : ''}`;
+  const first = Object.keys(MAP.holes).map(Number).sort((a, b) => a - b);
+  // start on the first hole that isn't finished
+  hole = Array.from({ length: 18 }, (_, i) => i + 1).find((n) => !(MAP.holes[n]?.tee && middle(MAP.holes[n]))) || 1;
+  tool = TOOLS.find(([k]) => !H()[k])?.[0] || null;
+  drawStrip(); drawMap(); drawPanel();
+  const any = Object.values(MAP.holes).flatMap((h) => [h.tee, middle(h)]).filter(Boolean);
+  if (middle(H()) || H().tee) fit(); else if (any.length) map.fitBounds(any, { padding: [30, 30], maxZoom: 17 });
+  void first;
+  if (mode === 'groups') setMode('groups');
+}
+start();
+</script>
+</body>
+</html>

@@ -160,7 +160,7 @@ function overview() {
   </div>
   <div class="grid"><div>
     <div class="box"><h2>Waiting for approval</h2>${wait.length ? `<table>${wait.map((c) => `<tr><td><b>${esc(c.name)}</b><small>${esc([c.city, c.contact, c.by, c.phone].filter(Boolean).join(' · '))} · asked ${date(c.created)}</small></td><td class="acts"><button class="btn sm primary" data-a="approve" data-club="${c.id}">Approve</button><button class="btn sm" data-open="${c.id}">Open</button></td></tr>`).join('')}</table>` : '<p class="help" style="margin:0">Nobody waiting.</p>'}</div>
-    <div class="box"><h2>Happening now</h2>${events ? (live.length ? `<table>${live.map((e) => `<tr><td><b>${esc(e.name)}</b><small>${esc(e.clubName || '')} · ${e.teams} teams · ${e.scored} scores${e.screens ? ` · <span class="dot ${e.online ? 'on' : ''}"></span>${e.online} of ${e.screens} screens on` : ''}</small></td><td class="acts"><a class="btn sm dark" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener">Desk</a><a class="btn sm" href="/g/${e.id}" target="_blank" rel="noopener">Live</a></td></tr>`).join('')}</table>` : '<p class="help" style="margin:0">No tournaments are being played right now.</p>') : '<p class="help" style="margin:0">Loading…</p>'}</div>
+    <div class="box"><h2>Happening now</h2>${events ? (live.length ? `<table>${live.map((e) => `<tr><td><b>${esc(e.name)}</b><small>${esc(e.clubName || '')} · ${e.teams} teams · ${e.scored} scores${e.screens ? ` · <span class="dot ${e.online ? 'on' : ''}"></span>${e.online} of ${e.screens} screens on` : ''}</small></td><td class="acts"><a class="btn sm dark" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener">Desk</a><a class="btn sm" href="/g/${e.id}" target="_blank" rel="noopener">Live</a><a class="btn sm" href="/g/${e.id}/map#${e.key}&groups" target="_blank" rel="noopener">Groups</a></td></tr>`).join('')}</table>` : '<p class="help" style="margin:0">No tournaments are being played right now.</p>') : '<p class="help" style="margin:0">Loading…</p>'}</div>
   </div><div>${newClubBox()}</div></div>`;
 }
 
@@ -212,7 +212,7 @@ function clubDetail(c) {
 
     <div class="sub">Tournaments</div>
     ${c.events.length ? `<table>${c.events.map((e) => `<tr style="${e.archived || e.hidden ? 'opacity:.55' : ''}"><td><b>${esc(e.name)}</b><small>${e.id.toUpperCase()} · ${date(e.created)}${e.archived ? ' · archived' : e.hidden ? ' · hidden by club' : ''}</small></td><td class="acts">
-      <a class="btn sm dark" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener">Desk</a><a class="btn sm" href="/g/${e.id}" target="_blank" rel="noopener">Live</a><a class="btn sm" href="/g/${e.id}/board" target="_blank" rel="noopener">Screens</a>
+      <a class="btn sm dark" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener">Desk</a><a class="btn sm" href="/g/${e.id}" target="_blank" rel="noopener">Live</a><a class="btn sm" href="/g/${e.id}/map#${e.key}&groups" target="_blank" rel="noopener">Groups</a><a class="btn sm" href="/g/${e.id}/board" target="_blank" rel="noopener">Screens</a>
       <button class="btn sm" data-copy="${location.origin}/g/${e.id}/desk#${e.key}">Copy desk link</button>
       ${others.length ? `<select data-move="${e.id}" style="width:auto;padding:4px"><option value="">Move to…</option>${others.map((o) => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select>` : ''}
       ${e.hidden ? `<button class="btn sm" data-unhide="${e.id}">Unhide</button>` : ''}
@@ -231,7 +231,7 @@ function eventsView() {
   ${list.map((e) => e.gone ? `<tr><td>${esc(e.name)}<small>${e.id.toUpperCase()} · can’t reach it</small></td><td>${esc(e.clubName || '')}</td><td colspan="5"></td></tr>` : `<tr style="${e.archived ? 'opacity:.55' : ''}"><td><b>${esc(e.name)}</b><small>${e.id.toUpperCase()}${e.date ? ` · plays ${esc(e.date)}` : ''} · made ${date(e.created)}${e.archived ? ' · archived' : ''}${e.replays ? ` · ${e.replays} replays` : ''}</small></td><td>${esc(e.clubName || '')}</td>
     <td class="num">${e.teams}</td><td class="num">${e.scored}</td><td class="num">${e.screens ? `<span class="dot ${e.online ? 'on' : ''}"></span>${e.online}/${e.screens}` : '—'}</td>
     <td>${e.locked ? '<span class="pill gray">Final</span>' : '<span class="pill ok">Open</span>'}</td>
-    <td class="acts"><a class="btn sm dark" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener">Desk</a><a class="btn sm" href="/g/${e.id}" target="_blank" rel="noopener">Live</a>
+    <td class="acts"><a class="btn sm dark" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener">Desk</a><a class="btn sm" href="/g/${e.id}" target="_blank" rel="noopener">Live</a><a class="btn sm" href="/g/${e.id}/map#${e.key}&groups" target="_blank" rel="noopener">Groups</a>
       <button class="btn sm" data-lock="${e.id}" data-locked="${e.locked ? '' : '1'}">${e.locked ? 'Reopen scoring' : 'Close scoring'}</button>
       <button class="btn sm" data-archive="${e.id}" data-on="${e.archived ? '' : '1'}">${e.archived ? 'Restore' : 'Archive'}</button></td></tr>`).join('') || '<tr><td colspan="7" class="empty">No tournaments yet.</td></tr>'}
   </tbody></table></div>`;
@@ -274,7 +274,7 @@ function routerBox(e) {
   };
   return `<div class="box" data-ev="${e.id}">
     <div class="row" style="justify-content:space-between"><div><h2 style="margin:0">${esc(e.name)}</h2><p class="help" style="margin:2px 0 0">${esc(e.clubName || '')}${e.date ? ` · ${esc(e.date)}` : ''} · <span class="dot ${e.online ? 'on' : ''}"></span>${e.online} of ${e.screens} screens on${e.locked ? ' · results final' : ''}</p></div>
-      <div class="row"><a class="btn sm" href="/g/${e.id}/board" target="_blank" rel="noopener">Preview</a><a class="btn sm dark" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener">Desk</a></div></div>
+      <div class="row"><a class="btn sm" href="/g/${e.id}/board" target="_blank" rel="noopener">Preview</a><a class="btn sm dark" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener">Desk</a><a class="btn sm" href="/g/${e.id}/map#${e.key}&groups" target="_blank" rel="noopener">Groups on the course</a></div></div>
 
     <div class="sub">Router · click a square to send that source to that screen</div>
     <div class="xwrap"><table class="xtab"><thead><tr><th></th>${src.map((s) => `<th class="xs"><span>${esc(s.key ? s.label : 'Playlist / off')}</span></th>`).join('')}</tr></thead><tbody>

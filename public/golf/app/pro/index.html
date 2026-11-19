@@ -176,7 +176,10 @@ function screensTab() {
   ${sps.length ? `<div class="row" style="margin-top:8px"><select id="takeSp">${sps.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join('')}</select><button class="btn" data-take="sponsor">Sponsor moment</button></div>` : ''}
   <div class="row" style="margin-top:8px"><label class="help" style="display:flex;gap:6px;align-items:center">Seconds <input id="takeSecs" type="number" min="5" max="120" value="25" style="width:80px"></label><button class="btn danger" data-take="clear">Clear and go back to playlists</button></div>
   ${take ? `<p class="help">Last take-over: ${esc(take.kind)}${take.text ? ` · ${esc(take.text)}` : ''}</p>` : ''}</div>
-  <h3>Screens</h3><div class="list">${scr || '<p class="help">No screens yet. Add them in the Manager.</p>'}</div>`;
+  <h3>Screens</h3><div class="list">${scr || '<p class="help">No screens yet. Add them in the Manager.</p>'}</div>
+  <h2 style="margin-top:26px">Course map</h2>
+  <div class="box"><p class="help" style="margin-top:0">${Object.keys(S.map?.holes || {}).length} of 18 holes mapped for hole GPS. Walk the course and set each tee, green and hazard where you stand, or tap them on the satellite view.</p>
+  <div class="row"><a class="btn dark" href="/g/${id}/map">Open the course map</a><a class="btn" href="/g/${id}/map#groups">Where are the groups</a></div></div>`;
 }
 
 // REPLAYS: save the last shot on a par 3 camera (or paste a clip link); the pro can put one on every screen

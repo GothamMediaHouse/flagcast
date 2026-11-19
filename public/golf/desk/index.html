@@ -97,6 +97,7 @@ table.t .n { width: 64px; }
   <p class="help" style="margin-top:10px">Handicaps on the Teams tab are each player’s course handicap. The allowance is applied to it, and strokes fall on the holes by stroke index. A picked-up ball counts as net double bogey. Ties are broken on the back 9, 6, 3 and last hole. Side games let each cart play skins, a Nassau and birdies among themselves; the scorecard works out who owes who, and Flagcast never takes or holds any money.</p>
   <h3>Course</h3>
   <div class="scroll"><table class="t course" id="course"></table></div>
+  <div class="row" style="margin-top:12px"><a class="btn dark" id="mapLink" target="_blank" rel="noopener">Course map (hole GPS)</a><a class="btn" id="groupsLink" target="_blank" rel="noopener">Where are the groups</a><span class="help" id="mapHelp">Mark each tee, green and hazard on a satellite view, or walk the course with a phone. Players then see yardages and a course view on their scorecard. Your club keeps the map for its next tournament.</span></div>
   <div class="row"><button class="btn" id="par72">Fill a standard par 72</button><span class="help">Stroke index (SI) 1 is the hardest hole. Use the numbers on the club’s scorecard.</span></div>
 </section>
 
@@ -494,6 +495,9 @@ function drawLinks() {
     ['This desk', `${location.origin}/g/${eventId()}/desk#${key}`, 'Keep this private. Anyone with it can change the tournament.']];
   $('links').innerHTML = L.map(([n, u, h]) => `<div class="link"><b>${n}<br><span class="help" style="font-weight:400">${h}</span></b><code>${esc(u)}</code><button class="btn" data-copy="${esc(u)}">Copy</button><a class="btn" href="${esc(u)}" target="_blank" rel="noopener">Open</a></div>`).join('');
   $('cardsLink').href = `/g/${eventId()}/cards#${key}`;
+  $('mapLink').href = `/g/${eventId()}/map#${key}`;
+  $('groupsLink').href = `/g/${eventId()}/map#${key}&groups`;
+  { const n = Object.keys(EV.map?.holes || {}).length; if (n) $('mapHelp').textContent = `${n} of 18 holes mapped. Players see yardages and a course view on their scorecard. Your club keeps the map for its next tournament.`; }
   const aces = (LIVE && LIVE.aces) || [];
   $('aces').innerHTML = aces.length ? aces.map((a) => `<div class="row" style="margin-top:6px"><span>Hole ${a.hole}: <b>${esc(a.name)}</b> (${esc(a.team)}), ${new Date(a.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span><button class="btn" data-unace="${a.at}">Remove (entered by mistake)</button></div>`).join('') : 'None yet.';
 }
