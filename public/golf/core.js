@@ -207,3 +207,113 @@ export function mark(v, par) {
   const d = v - par;
   return d <= -2 ? 'eagle' : d === -1 ? 'birdie' : d === 1 ? 'bogey' : d >= 2 ? 'double' : '';
 }
+
+// ---- side games: a cart's own skins, Nassau and birdies, with who owes who at the end ----
+// Played among the players in one cart (every team on its cart code). Flagcast only does the math; players settle up themselves.
+// cfg = { skins: { on, amt, net, carry }, nassau: { on, amt, net, sides: { [playerKey]: 'A' | 'B' } }, birdies: { on, amt, net } }
+export function sideGames(ev, scores, teamIds, cfg = {}) {
+  const allow = ev.format?.allowance ?? 100, holes = ev.course.holes;
+  const teams = teamIds.map((id) => (ev.teams || []).find((t) => t.id === id)).filter(Boolean);
+  const players = [];
+  for (const t of teams) for (const p of t.players || []) players.push({ key: `${t.id}:${p.id}`, id: p.id, team: t.id, name: p.name || 'Player', hcp: playing(p.hcp, allow) });
+  // first names, with a last initial where two players share one
+  const first = (n) => String(n).trim().split(/\s+/)[0];
+  for (const p of players) {
+    const same = players.filter((q) => first(q.name) === first(p.name)).length > 1;
+    const parts = String(p.name).trim().split(/\s+/);
+    p.short = same && parts.length > 1 ? `${parts[0]} ${parts[parts.length - 1][0]}.` : first(p.name);
+  }
+  const raw = (p, i) => (((scores || {})[p.team] || {})[p.id] || [])[i];
+  const entered = (p, i) => { const v = raw(p, i); return v !== null && v !== undefined; };
+  // a hole's score for the games: picked up = net double bogey, like the main leaderboard
+  const val = (p, i, net) => {
+    const v = raw(p, i), st = strokesOn(p.hcp, holes[i].hcp);
+    if (!isScore(v) || v === 0) return net ? holes[i].par + 2 : holes[i].par + 2 + st;
+    return net ? v - st : v;
+  };
+  const start = teams[0]?.start || 1;
+  const order = Array.from({ length: 18 }, (_, k) => (start - 1 + k) % 18);
+  const ledger = Object.fromEntries(players.map((p) => [p.key, 0]));
+  const pay = (from, to, amt) => { if (!amt || from === to) return; ledger[from] -= amt; ledger[to] += amt; };
+  const out = { players, ledger, settle: [] };
+  const n = players.length;
+
+  // skins: a hole is a skin when one player has the lowest score alone; ties carry the skin to the next hole
+  const sk = cfg.skins || {};
+  if (sk.on && n >= 2) {
+    const amt = Number(sk.amt) || 0, rows = []; let pot = 1, won = Object.fromEntries(players.map((p) => [p.key, 0]));
+    for (const i of order) {
+      if (!players.every((p) => entered(p, i))) { rows.push({ hole: i + 1, open: true, pot }); continue; }
+      const live = players.filter((p) => isScore(raw(p, i)) && raw(p, i) > 0);
+      const best = Math.min(...live.map((p) => val(p, i, sk.net)));
+      const who = live.filter((p) => val(p, i, sk.net) === best);
+      if (who.length === 1) {
+        rows.push({ hole: i + 1, winner: who[0].key, score: best, worth: pot });
+        won[who[0].key] += pot;
+        for (const p of players) pay(p.key, who[0].key, amt * pot);
+        pot = 1;
+      } else { rows.push({ hole: i + 1, tied: who.length, score: isFinite(best) ? best : null, pot }); pot = sk.carry === false ? 1 : pot + 1; }
+    }
+    out.skins = { rows, won, carrying: rows.some((r) => !r.open) ? pot - 1 : 0 };
+  }
+
+  // Nassau: side A against side B, match play on the best score of each side; front 9, back 9 and all 18 are three bets
+  const na = cfg.nassau || {};
+  if (na.on && n >= 2) {
+    const sides = { A: [], B: [] };
+    const set = na.sides || {};
+    players.forEach((p, k) => {
+      const s = set[p.key] || (teams.length >= 2 ? (p.team === teams[0].id ? 'A' : 'B') : (k < Math.ceil(n / 2) ? 'A' : 'B'));
+      sides[s === 'B' ? 'B' : 'A'].push(p);
+    });
+    if (sides.A.length && sides.B.length) {
+      const amt = Number(na.amt) || 0;
+      const seg = (from, to, label) => {
+        let a = 0, b = 0, played = 0, all = true;
+        for (let i = from; i <= to; i++) {
+          if (![...sides.A, ...sides.B].every((p) => entered(p, i))) { all = false; continue; }
+          played++;
+          const x = Math.min(...sides.A.map((p) => val(p, i, na.net))), y = Math.min(...sides.B.map((p) => val(p, i, na.net)));
+          if (x < y) a++; else if (y < x) b++;
+        }
+        const diff = a - b, done = all && played === to - from + 1;
+        const r = { label, played, holes: to - from + 1, diff, done, winner: done && diff ? (diff > 0 ? 'A' : 'B') : null };
+        if (r.winner) {
+          const W = sides[r.winner], L = sides[r.winner === 'A' ? 'B' : 'A'];
+          for (const l of L) for (const w of W) pay(l.key, w.key, amt / W.length);
+        }
+        return r;
+      };
+      out.nassau = { sides: { A: sides.A.map((p) => p.key), B: sides.B.map((p) => p.key) }, segs: [seg(0, 8, 'Front 9'), seg(9, 17, 'Back 9'), seg(0, 17, 'Overall')] };
+    }
+  }
+
+  // birdies: each birdie (an eagle or better counts twice) collects from every other player in the cart
+  const bi = cfg.birdies || {};
+  if (bi.on && n >= 2) {
+    const amt = Number(bi.amt) || 0, list = [];
+    for (const p of players) for (const i of order) {
+      const v = raw(p, i); if (!isScore(v) || v === 0) continue;
+      const d = (bi.net ? v - strokesOn(p.hcp, holes[i].hcp) : v) - holes[i].par;
+      if (d > -1) continue;
+      const count = d <= -2 ? 2 : 1;
+      list.push({ key: p.key, hole: i + 1, count, eagle: d <= -2 });
+      for (const q of players) pay(q.key, p.key, amt * count);
+    }
+    out.birdies = { list };
+  }
+
+  // who pays who: the fewest payments that settle everyone up
+  const round = (x) => Math.round(x * 100) / 100;
+  const owe = players.map((p) => ({ key: p.key, v: round(-ledger[p.key]) })).filter((x) => x.v > 0.004).sort((a, b) => b.v - a.v);
+  const get = players.map((p) => ({ key: p.key, v: round(ledger[p.key]) })).filter((x) => x.v > 0.004).sort((a, b) => b.v - a.v);
+  let i = 0, j = 0;
+  while (i < owe.length && j < get.length) {
+    const m = round(Math.min(owe[i].v, get[j].v));
+    if (m > 0) out.settle.push({ from: owe[i].key, to: get[j].key, amt: m });
+    owe[i].v = round(owe[i].v - m); get[j].v = round(get[j].v - m);
+    if (owe[i].v <= 0.004) i++;
+    if (get[j].v <= 0.004) j++;
+  }
+  return out;
+}

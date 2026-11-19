@@ -92,8 +92,9 @@ table.t .n { width: 64px; }
     <label class="f">Handicap allowance (%)<input id="f-allow" type="number" min="0" max="100" step="5"></label>
     <label class="f">Leaderboard shows<select id="f-show"><option value="net">Net scores</option><option value="gross">Gross scores</option></select></label>
     <label class="f">Flights (comma between)<input id="f-flights" placeholder="A, B, C"></label>
+    <label class="f">Side games on the scorecard<select id="f-side"><option value="1">On: skins, Nassau and birdies</option><option value="">Off</option></select></label>
   </div>
-  <p class="help" style="margin-top:10px">Handicaps on the Teams tab are each player’s course handicap. The allowance is applied to it, and strokes fall on the holes by stroke index. A picked-up ball counts as net double bogey. Ties are broken on the back 9, 6, 3 and last hole.</p>
+  <p class="help" style="margin-top:10px">Handicaps on the Teams tab are each player’s course handicap. The allowance is applied to it, and strokes fall on the holes by stroke index. A picked-up ball counts as net double bogey. Ties are broken on the back 9, 6, 3 and last hole. Side games let each cart play skins, a Nassau and birdies among themselves; the scorecard works out who owes who, and Flagcast never takes or holds any money.</p>
   <h3>Course</h3>
   <div class="scroll"><table class="t course" id="course"></table></div>
   <div class="row"><button class="btn" id="par72">Fill a standard par 72</button><span class="help">Stroke index (SI) 1 is the hardest hole. Use the numbers on the club’s scorecard.</span></div>
@@ -222,7 +223,7 @@ function fill() {
   $('evname').textContent = EV.name || 'Tournament';
   $('f-name').value = EV.name; $('f-club').value = EV.club; $('f-date').value = EV.date; $('f-course').value = EV.course.name;
   $('f-type').value = EV.format.type; $('f-count').value = EV.format.count; $('f-allow').value = EV.format.allowance; $('f-show').value = EV.format.show;
-  $('f-flights').value = EV.flights.join(', ');
+  $('f-flights').value = EV.flights.join(', '); $('f-side').value = EV.sideGames === false ? '' : '1';
   $('f-title').value = EV.screens.title || ''; $('f-secs').value = EV.screens.seconds; $('f-rows').value = EV.screens.rows; $('f-skins').value = EV.screens.skins ? '1' : '';
   $('f-ticker').value = EV.screens.ticker || '';
   $('f-fund').value = EV.fund.on ? '1' : ''; $('f-fundLabel').value = EV.fund.label; $('f-goal').value = EV.fund.goal || ''; $('f-give').value = EV.fund.give; $('raised').value = EV.fund.raised || '';
@@ -232,6 +233,7 @@ function read() {
   EV.name = val('f-name'); EV.club = val('f-club'); EV.date = val('f-date'); EV.course.name = val('f-course');
   EV.format = { type: $('f-type').value, count: Number($('f-count').value), allowance: Number($('f-allow').value), show: $('f-show').value };
   EV.flights = val('f-flights').split(',').map((s) => s.trim()).filter(Boolean);
+  EV.sideGames = !!$('f-side').value;
   EV.screens = { title: val('f-title'), seconds: Number($('f-secs').value) || 12, rows: Number($('f-rows').value) || 10, skins: !!$('f-skins').value, ticker: val('f-ticker') };
   EV.fund = { ...EV.fund, on: !!$('f-fund').value, label: val('f-fundLabel'), goal: Number($('f-goal').value) || 0, give: val('f-give') };
 }
