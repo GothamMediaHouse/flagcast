@@ -9,6 +9,8 @@ struct LeaderboardScreen: View {
     @State private var flight = ""
     @State private var open: String?
     @State private var web: URL?
+    @State private var dismissed = 0.0          // bumped when the phone banner is closed, to redraw
+    @State private var scrollTo: String?
     @Environment(Router.self) private var router
     enum Tab: String, CaseIterable { case board = "Leaderboard", par3 = "Par 3s", contests = "Contests", skins = "Skins" }
 
@@ -27,20 +29,34 @@ struct LeaderboardScreen: View {
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
                 tabBar(s)
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 12) {
-                        switch tab {
-                        case .board: board(s)
-                        case .par3: par3s(s)
-                        case .contests: contests(s)
-                        case .skins: skins(s)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 12) {
+                            switch tab {
+                            case .board: board(s)
+                            case .par3: par3s(s)
+                            case .contests: contests(s)
+                            case .skins: skins(s)
+                            }
                         }
+                        .padding(16)
+                        .padding(.bottom, 70)
+                        .frame(maxWidth: 720)
+                        .frame(maxWidth: .infinity)
                     }
-                    .padding(16)
-                    .frame(maxWidth: 720)
-                    .frame(maxWidth: .infinity)
+                    .refreshable { await feed.refresh() }
+                    .onChange(of: scrollTo) { _, t in
+                        guard let t else { return }
+                        Task { try? await Task.sleep(for: .milliseconds(250)); withAnimation { proxy.scrollTo(t, anchor: .top) }; scrollTo = nil }
+                    }
                 }
-                .refreshable { await feed.refresh() }
+                .overlay(alignment: .bottom) {
+                    if let r = PhoneCast.current(s, id: id), dismissed >= 0 {
+                        PhoneBanner(state: s, route: r, go: { follow($0, s) }, close: { PhoneCast.dismiss(r, id: id); withAnimation { dismissed += 1 } })
+                            .padding(.bottom, 8)
+                    }
+                }
+                .animation(.spring(duration: 0.35), value: s.live.phone)
             } else if let m = feed.missing {
                 ContentUnavailableView("Not found", systemImage: "questionmark.circle", description: Text(m))
             } else {
@@ -65,10 +81,26 @@ struct LeaderboardScreen: View {
                 ShareLink(item: Server.page("g/\(id)")) { Label("Share", systemImage: "square.and.arrow.up") }
             }
         }
-        .onAppear { feed.start(); if let s = feed.state { Recents.remember(id: id, name: s.name) } }
+        .onAppear {
+            feed.start()
+            if let s = feed.state { Recents.remember(id: id, name: s.name) }
+            // opened from the scorecard's phone banner: go straight to what it points at
+            if let r = PhoneCast.pending.removeValue(forKey: id), let s = feed.state { follow(r, s) }
+        }
         .onDisappear { feed.stop() }
         .onChange(of: feed.state?.name) { _, n in if let n { Recents.remember(id: id, name: n) } }
         .sheet(item: $web) { SafariView(url: $0).ignoresSafeArea() }
+    }
+
+    /// "See it" / "Watch" on a phone banner: the matching tab (a camera → Par 3s, scrolled to its hole).
+    private func follow(_ r: PhoneRoute, _ s: EventState) {
+        switch r.k {
+        case "cam", "p3": tab = .par3; scrollTo = "p3-\(r.hole)"
+        case "contests": tab = .contests
+        case "skins": tab = tabs(s).contains(.skins) ? .skins : .board
+        case "lb": tab = .board; flight = s.flights.contains(r.fl) ? r.fl : ""
+        default: tab = .board
+        }
     }
 
     private func tabs(_ s: EventState) -> [Tab] {
@@ -218,6 +250,7 @@ struct LeaderboardScreen: View {
             .background(Color.fcCard, in: RoundedRectangle(cornerRadius: 12))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.fcLine))
             .clipShape(RoundedRectangle(cornerRadius: 12))
+            .id("p3-\(h.n)")
         }
     }
 
