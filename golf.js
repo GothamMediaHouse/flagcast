@@ -2,7 +2,7 @@
 // setup and every score, and pushes each change to the open pages over a WebSocket. The scoring math lives in
 // public/golf/core.js and runs in the pages, so this file only checks who may change what and stores it.
 //
-//   POST /golf/api/new                    { name, pass? }  → { id, key }   (GOLF_CREATE_PASS, when set, must match)
+//   POST /golf/api/new                    { token, name } or { pass, name } → { id, key }   (club accounts: see clubs.js)
 //   GET  /golf/api/<id>/state              the public state (setup without codes, scores, contests…)
 //   GET  /golf/api/<id>/ws                 WebSocket: { t: 'state', s } on connect and after every change
 //   POST /golf/api/<id>/cart               { code } → { teams: [ids] }   which teams a cart's QR code scores for
@@ -14,6 +14,7 @@
 // Pages: /g/<id> live page · /g/<id>/board screens · /g/<id>/desk#<key> desk · /g/<id>/s/<code> cart · /g/<id>/cards QR cards
 import { DurableObject } from 'cloudflare:workers';
 import { defaultHoles } from './public/golf/core.js';
+import { clubs } from './clubs.js';
 
 const ID = /^[a-z0-9]{8}$/;
 const CODE = /^[A-HJ-NP-Z2-9]{6}$/;
@@ -39,17 +40,9 @@ export async function golf(request, env) {
   const url = new URL(request.url);
   let m;
   if (request.method === 'OPTIONS' && url.pathname.startsWith('/golf/api/')) return preflight(request);
-  if (url.pathname === '/golf/api/new') {
-    if (request.method !== 'POST') return json({ error: 'Use POST' }, 405);
-    let b = {}; try { b = await request.json(); } catch {}
-    // live sites need the GOLF_CREATE_PASS secret; without it only local dev (localhost) can make tournaments
-    const local = /^(localhost|127\.0\.0\.1)$/.test(new URL(request.url).hostname);
-    if (!env.GOLF_CREATE_PASS && !local) return json({ error: 'New tournaments are not open yet. Ask Flagcast to set one up.' }, 403);
-    if (env.GOLF_CREATE_PASS && b.pass !== env.GOLF_CREATE_PASS) return json({ error: 'That passcode is not right.' }, 403);
-    const id = newId();
-    const r = await env.GOLF.get(env.GOLF.idFromName(id)).fetch(new Request(`https://golf/init?id=${id}`, { method: 'POST', body: JSON.stringify({ name: String(b.name || '').slice(0, 80) }) }));
-    return json(await r.json(), r.status);
-  }
+  // making a tournament and the club accounts go through the club directory (clubs.js)
+  if (url.pathname === '/golf/api/new') return cors(request, await clubs(request, env, 'new'));
+  if ((m = url.pathname.match(/^\/golf\/api\/club\/(start|verify|me|request|invite|uninvite|hide|signout|admin)$/))) return cors(request, await clubs(request, env, m[1]));
   if ((m = url.pathname.match(/^\/golf\/api\/([a-z0-9]{8})\/(state|ws|cart|score|desk|pro|hit)$/))) {
     const stub = env.GOLF.get(env.GOLF.idFromName(m[1]));
     return cors(request, await stub.fetch(request));
@@ -176,7 +169,7 @@ export class GolfEvent extends DurableObject {
     if (url.pathname === '/init') {
       if (await this.load()) return json({ error: 'Taken' }, 409);
       const b = await request.json();
-      const s = cleanSetup({ name: b.name || 'Golf tournament', format: { type: 'bestball', count: 1, allowance: 85 }, flights: ['A', 'B'],
+      const s = cleanSetup({ name: b.name || 'Golf tournament', club: b.club || '', format: { type: 'bestball', count: 1, allowance: 85 }, flights: ['A', 'B'],
         screens: { seconds: 12, rows: 10 } }, { course: { holes: defaultHoles() }, teams: [] });
       this.ev = { ...s, id: url.searchParams.get('id'), key: rand(24, 'abcdefghijkmnpqrstuvwxyz23456789'), locked: false, aces: [], created: Date.now(), v: 1 };
       await this.ctx.storage.put('event', this.ev);

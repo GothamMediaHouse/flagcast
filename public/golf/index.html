@@ -19,42 +19,144 @@ input { background: var(--paper); border: 1px solid var(--line); border-radius: 
 h2 { font-size: 1.5rem; margin: 30px 0 10px; }
 .mine a { display: flex; justify-content: space-between; gap: 10px; padding: 12px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; text-decoration: none; color: var(--ink); margin-bottom: 8px; }
 .mine span { color: var(--muted); font-size: .85rem; }
-#err { color: var(--red); font-size: .9rem; }
+.box { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-top: 16px; }
+.box h2 { margin: 0 0 10px; }
+.help { color: var(--muted); font-size: .9rem; margin: 0 0 10px; }
+.err { color: var(--red); font-size: .9rem; }
+.ev { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 0; border-top: 1px solid var(--line); }
+.ev:first-of-type { border-top: 0; }
+.ev small { display: block; color: var(--muted); }
+.mem { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; font-size: .92rem; border-top: 1px solid var(--line); }
+.status { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.codein { font: 600 1.6rem var(--f-mono); letter-spacing: .3em; text-align: center; }
 </style>
 </head>
 <body>
 <header class="topbar"><div style="max-width:640px;margin:0 auto"><div class="label">Live golf scoring</div><h1><img src="/golf/brand/wide-on-dark.svg" alt="Flagcast" style="height:56px;width:auto;display:block;margin:4px 0 2px"></h1><p>Live scoring for golf tournaments: cart scorecards on players’ phones, a live leaderboard, and big screens with the par 3s, contests and sponsors.</p></div></header>
 <main>
-  <form id="f">
-    <h2 style="margin:0">New tournament</h2>
-    <label>Tournament name<input id="name" required placeholder="2027 Member-Guest"></label>
-    <label>Admin passcode<input id="pass" type="password" autocomplete="current-password" placeholder="Only needed if one is set"></label>
-    <button class="btn primary" type="submit">Make the tournament</button>
-    <div id="err" role="alert"></div>
+  <!-- not signed in -->
+  <form id="signin" hidden>
+    <h2 style="margin:0">Club sign-in</h2>
+    <p class="help" style="margin:0">Sign in with your email. We’ll send you a 6-digit code, no password needed.</p>
+    <label>Email<input id="email" type="email" autocomplete="email" required placeholder="you@yourclub.com"></label>
+    <button class="btn primary" type="submit">Email me a code</button>
+    <div class="err" id="sErr" role="alert"></div>
   </form>
+  <form id="code" hidden>
+    <h2 style="margin:0">Check your email</h2>
+    <p class="help" style="margin:0">We sent a code to <b id="sentTo"></b>. It works for 15 minutes.</p>
+    <label>Code<input id="codeIn" class="codein" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required placeholder="••••••"></label>
+    <button class="btn primary" type="submit">Sign in</button>
+    <button class="btn" type="button" id="back">Use a different email</button>
+    <div class="err" id="cErr" role="alert"></div>
+  </form>
+
+  <!-- signed in, no club yet -->
+  <form id="request" hidden>
+    <h2 style="margin:0">Set up your club</h2>
+    <p class="help" style="margin:0">Tell us about your club. Flagcast will approve it and email you, usually within a day.</p>
+    <label>Club name<input id="rName" required placeholder="Willow Creek Country Club"></label>
+    <label>Your name<input id="rContact" autocomplete="name"></label>
+    <label>Phone<input id="rPhone" type="tel" autocomplete="tel"></label>
+    <label>Town and state<input id="rCity" placeholder="Rye, NY"></label>
+    <button class="btn primary" type="submit">Send to Flagcast</button>
+    <div class="err" id="rErr" role="alert"></div>
+  </form>
+
+  <!-- signed in with a club -->
+  <div id="club" hidden>
+    <div class="box" style="margin-top:0">
+      <div class="status"><div><h2 id="clubName" style="margin:0"></h2><small class="help" id="clubState"></small></div><span class="pill" id="clubPill"></span></div>
+    </div>
+    <form id="f" class="box" style="display:grid">
+      <h2 style="margin:0">New tournament</h2>
+      <label>Tournament name<input id="name" required placeholder="2027 Member-Guest"></label>
+      <button class="btn primary" type="submit" id="makeBtn">Make the tournament</button>
+      <div class="err" id="err" role="alert"></div>
+    </form>
+    <div class="box"><h2>Tournaments</h2><div id="events"></div></div>
+    <div class="box"><h2>People in your club</h2><p class="help">Everyone here can sign in and run the club’s tournaments.</p><div id="members"></div>
+      <form id="invite" hidden style="display:flex;gap:8px;padding:12px 0 0;border:0;background:none"><input id="iEmail" type="email" placeholder="name@yourclub.com" required style="flex:1"><button class="btn" type="submit">Add</button></form>
+      <div class="err" id="iErr" role="alert"></div>
+    </div>
+  </div>
+  <p class="help" id="who" hidden style="margin-top:18px;text-align:center"></p>
   <div id="mineWrap" hidden><h2>Tournaments on this computer</h2><div class="mine" id="mine"></div></div>
 </main>
 <script type="module">
+import { api, token, esc, creditsText } from '/golf/club.js';
+const $ = (id) => document.getElementById(id);
+const show = (id) => { for (const x of ['signin', 'code', 'request', 'club']) $(x).hidden = x !== id; };
+let me = null;
+
+// tournaments made in this browser before club accounts
 const LS = 'golf:mine';
-const get = () => { try { return JSON.parse(localStorage.getItem(LS)) || []; } catch { return []; } };
-const mine = get();
+const mine = (() => { try { return JSON.parse(localStorage.getItem(LS)) || []; } catch { return []; } })();
 if (mine.length) {
-  document.getElementById('mineWrap').hidden = false;
-  document.getElementById('mine').innerHTML = mine.map((m) => `<a href="/g/${m.id}/desk#${m.key}"><b></b><span>${new Date(m.at).toLocaleDateString()}</span></a>`).join('');
+  $('mineWrap').hidden = false;
+  $('mine').innerHTML = mine.map((m) => `<a href="/g/${m.id}/desk#${m.key}"><b></b><span>${new Date(m.at).toLocaleDateString()}</span></a>`).join('');
   document.querySelectorAll('#mine b').forEach((b, i) => (b.textContent = mine[i].name));
 }
-document.getElementById('f').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const err = document.getElementById('err'); err.textContent = '';
-  const name = document.getElementById('name').value.trim();
+
+function draw() {
+  $('who').hidden = !me;
+  if (!me) return show('signin');
+  $('who').innerHTML = `Signed in as ${esc(me.email)} · <a href="#" id="out">Sign out</a>`;
+  $('out').onclick = async (e) => { e.preventDefault(); await api('signout').catch(() => {}); token.set(''); me = null; draw(); };
+  if (!me.club) return show('request');
+  show('club');
+  const c = me.club;
+  $('clubName').textContent = c.name;
+  const open = c.status === 'active' && c.credits !== 0;
+  $('clubState').textContent = c.status === 'pending' ? 'Waiting for Flagcast to approve your club. We’ll email you.' : c.status === 'off' ? 'Switched off. Contact hello@flagcast.app.' : c.credits === 0 ? 'No tournaments left to make. Contact hello@flagcast.app to add more.' : creditsText(c.credits);
+  $('clubPill').textContent = c.status === 'active' ? 'Active' : c.status === 'pending' ? 'Waiting' : 'Off';
+  $('clubPill').className = `pill ${c.status === 'active' ? 'live' : 'off'}`;
+  $('f').hidden = !open;
+  $('events').innerHTML = me.events.length ? me.events.map((e) => `<div class="ev"><div><b>${esc(e.name)}</b><small>${new Date(e.created).toLocaleDateString()} · ${e.id.toUpperCase()}</small></div><a class="btn dark" href="/g/${e.id}/desk#${e.key}">Open desk</a></div>`).join('') : '<p class="help" style="margin:0">No tournaments yet.</p>';
+  const owner = me.role === 'owner';
+  $('members').innerHTML = me.members.map((m) => `<div class="mem"><span>${esc(m.email)}${m.role === 'owner' ? ' · owner' : ''}</span>${owner && m.role !== 'owner' ? `<a href="#" data-rm="${esc(m.email)}">Remove</a>` : ''}</div>`).join('');
+  $('invite').hidden = !owner;
+}
+async function refresh() {
+  if (!token.get()) { me = null; return draw(); }
+  try { me = await api('me'); } catch { me = null; }
+  draw();
+}
+
+$('signin').addEventListener('submit', async (e) => {
+  e.preventDefault(); $('sErr').textContent = '';
+  const email = $('email').value.trim();
   try {
-    const r = await fetch('/golf/api/new', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, pass: document.getElementById('pass').value }) });
-    const j = await r.json();
-    if (!r.ok) throw new Error(j.error || 'That didn’t work. Try again.');
-    try { localStorage.setItem(LS, JSON.stringify([{ id: j.id, key: j.key, name, at: Date.now() }, ...mine].slice(0, 30))); } catch {}
-    location.href = `/g/${j.id}/desk#${j.key}&setup`;
-  } catch (x) { err.textContent = x.message; }
+    const j = await api('start', { email });
+    $('sentTo').textContent = email; show('code'); $('codeIn').value = j.devCode || ''; $('codeIn').focus();
+  } catch (x) { $('sErr').textContent = x.message; }
 });
+$('back').onclick = () => show('signin');
+$('code').addEventListener('submit', async (e) => {
+  e.preventDefault(); $('cErr').textContent = '';
+  try { const j = await api('verify', { email: $('email').value.trim(), code: $('codeIn').value }); token.set(j.token); await refresh(); }
+  catch (x) { $('cErr').textContent = x.message; }
+});
+$('request').addEventListener('submit', async (e) => {
+  e.preventDefault(); $('rErr').textContent = '';
+  try { me = await api('request', { name: $('rName').value, contact: $('rContact').value, phone: $('rPhone').value, city: $('rCity').value }); draw(); }
+  catch (x) { $('rErr').textContent = x.message; }
+});
+$('f').addEventListener('submit', async (e) => {
+  e.preventDefault(); $('err').textContent = '';
+  const name = $('name').value.trim();
+  try { const j = await api('new', { name }); location.href = `/g/${j.id}/desk#${j.key}&setup`; }
+  catch (x) { $('err').textContent = x.message; refresh(); }
+});
+$('invite').addEventListener('submit', async (e) => {
+  e.preventDefault(); $('iErr').textContent = '';
+  try { me = await api('invite', { email: $('iEmail').value }); $('iEmail').value = ''; draw(); } catch (x) { $('iErr').textContent = x.message; }
+});
+$('members').addEventListener('click', async (e) => {
+  const a = e.target.closest('[data-rm]'); if (!a) return; e.preventDefault();
+  try { me = await api('uninvite', { email: a.dataset.rm }); draw(); } catch (x) { $('iErr').textContent = x.message; }
+});
+refresh();
 </script>
 </body>
 </html>

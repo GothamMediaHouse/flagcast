@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('gl', {
   list: () => ipcRenderer.invoke('gl:list'),
   setBase: (b) => ipcRenderer.invoke('gl:setBase', b),
   create: (o) => ipcRenderer.invoke('gl:create', o),
+  club: (op, body) => ipcRenderer.invoke('gl:club', op, body),
   add: (link) => ipcRenderer.invoke('gl:add', link),
   remove: (id) => ipcRenderer.invoke('gl:remove', id),
   info: (id) => ipcRenderer.invoke('gl:info', id),

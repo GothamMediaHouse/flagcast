@@ -2,6 +2,7 @@
 // The website and pages are static files in public/; each tournament is one Durable Object (GolfEvent in golf.js).
 import { golf } from './golf.js';
 export { GolfEvent } from './golf.js';
+export { FlagcastClubs } from './clubs.js';
 
 const HOME = 'flagcast.app';
 const FORWARD = ['www.flagcast.app', 'sundaypin.live', 'www.sundaypin.live'];

@@ -73,14 +73,30 @@ function menu() {
 const own = (e) => { if (!String(e.senderFrame?.url || '').startsWith('file://')) throw new Error('Not allowed'); };
 const handle = (ch, fn) => ipcMain.handle(ch, (e, ...a) => { own(e); return fn(e, ...a); });
 ipcMain.handle('gl:home', () => goHome());
-handle('gl:list', () => ({ base: base(), events: data.events || [] }));
-handle('gl:setBase', (_e, b) => { const u = String(b || '').trim().replace(/\/+$/, ''); if (!/^https?:\/\/[^\s/]+$/.test(u)) throw new Error('Use a web address like https://flagcast.app'); data.base = u; save(data); return base(); });
-handle('gl:create', async (_e, { name, pass }) => {
-  const r = await fetch(`${base()}/golf/api/new`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, pass }) });
+// tournaments: the club's (from its Flagcast account) and any added on this computer by desk link
+const allEvents = () => { const club = (data.clubEvents || []).map((e) => ({ ...e, fromClub: true })); const ids = new Set(club.map((e) => e.id)); return [...club, ...(data.events || []).filter((e) => !ids.has(e.id))]; };
+const findEvent = (id) => allEvents().find((x) => x.id === id);
+handle('gl:list', () => ({ base: base(), events: allEvents(), signedIn: !!data.token }));
+// club account: sign in with an emailed code, then everything goes with the saved sign-in
+handle('gl:club', async (_e, op, body = {}) => {
+  if (!/^(start|verify|me|request|invite|uninvite|hide|signout|new)$/.test(op)) throw new Error('Not allowed');
+  if (op !== 'start' && op !== 'verify' && !data.token) throw new Error('Please sign in.');
+  const r = await fetch(op === 'new' ? `${base()}/golf/api/new` : `${base()}/golf/api/club/${op}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, token: data.token }) });
+  const j = await r.json().catch(() => ({}));
+  if (op === 'signout' || r.status === 401) { data.token = ''; data.clubEvents = []; save(data); }
+  if (!r.ok) throw new Error(j.error || `The server answered ${r.status}`);
+  if (op === 'verify') { data.token = j.token; save(data); return { ok: true }; }
+  if (j.events) { data.clubEvents = j.events.map(({ id, key, name, created }) => ({ id, key, name, added: created })); save(data); }
+  return j;
+});
+handle('gl:setBase', (_e, b) => { const u = String(b || '').trim().replace(/\/+$/, ''); if (!/^https?:\/\/[^\s/]+$/.test(u)) throw new Error('Use a web address like https://flagcast.app'); if (u !== base()) { data.token = ''; data.clubEvents = []; } data.base = u; save(data); return base(); });
+handle('gl:create', async (_e, { name }) => {
+  if (!data.token) throw new Error('Please sign in.');
+  const r = await fetch(`${base()}/golf/api/new`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, token: data.token }) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || `The server answered ${r.status}`);
   const ev = { id: j.id, key: j.key, name: name || 'New tournament', added: Date.now() };
-  data.events = [ev, ...(data.events || [])]; save(data);
+  data.clubEvents = [ev, ...(data.clubEvents || [])]; save(data);
   return ev;
 });
 handle('gl:add', async (_e, link) => {
@@ -93,18 +109,25 @@ handle('gl:add', async (_e, link) => {
   data.events = [{ id, key, name: j.name || 'Tournament', date: j.date || '', added: Date.now() }, ...(data.events || []).filter((x) => x.id !== id)]; save(data);
   return data.events[0];
 });
-handle('gl:remove', (_e, id) => { data.events = (data.events || []).filter((x) => x.id !== id); save(data); return true; });
+handle('gl:remove', async (_e, id) => {
+  if ((data.clubEvents || []).some((x) => x.id === id) && data.token) {
+    await fetch(`${base()}/golf/api/club/hide`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: data.token, id }) }).catch(() => {});
+    data.clubEvents = data.clubEvents.filter((x) => x.id !== id);
+  }
+  data.events = (data.events || []).filter((x) => x.id !== id); save(data); return true;
+});
 // refresh names, dates and screens from the server
 handle('gl:info', async (_e, id) => {
-  const ev = (data.events || []).find((x) => x.id === id); if (!ev) throw new Error('Not found');
+  const ev = findEvent(id); if (!ev) throw new Error('Not found');
   const r = await fetch(`${base()}/golf/api/${id}/desk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: ev.key, op: 'get' }) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || `The server answered ${r.status}`);
-  ev.name = j.name || ev.name; ev.date = j.date || ''; ev.club = j.club || ''; save(data);
+  const mine = (data.events || []).find((x) => x.id === id); if (mine) { mine.name = j.name || mine.name; mine.date = j.date || ''; mine.club = j.club || ''; save(data); }
+  ev.name = j.name || ev.name; ev.date = j.date || ''; ev.club = j.club || '';
   return { id, name: ev.name, date: ev.date, club: ev.club, teams: (j.teams || []).length, displays: (j.displays || []).map((d) => ({ id: d.id, name: d.name })), locked: !!j.locked };
 });
 handle('gl:openDesk', (_e, id) => {
-  const ev = (data.events || []).find((x) => x.id === id); if (!ev) return;
+  const ev = findEvent(id); if (!ev) return;
   win.loadURL(`${base()}/g/${id}/desk#${ev.key}`);
 });
 handle('gl:openLive', (_e, id) => shell.openExternal(`${base()}/g/${id}`));
