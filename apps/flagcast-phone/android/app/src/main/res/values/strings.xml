@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Flagcast</string>
+    <string name="title_activity_main">Flagcast</string>
+    <string name="package_name">app.flagcast.golf</string>
+    <string name="custom_url_scheme">app.flagcast.golf</string>
+</resources>
