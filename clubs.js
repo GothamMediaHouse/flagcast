@@ -66,7 +66,20 @@ export class FlagcastClubs extends DurableObject {
       CREATE TABLE IF NOT EXISTS members (email TEXT PRIMARY KEY, club TEXT, role TEXT, added INTEGER);
       CREATE TABLE IF NOT EXISTS codes (email TEXT PRIMARY KEY, code TEXT, exp INTEGER, tries INTEGER, sent INTEGER, hour INTEGER, hourCount INTEGER);
       CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, email TEXT, created INTEGER, seen INTEGER);
-      CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, club TEXT, key TEXT, name TEXT, created INTEGER, hidden INTEGER DEFAULT 0);`);
+      CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, club TEXT, key TEXT, name TEXT, created INTEGER, hidden INTEGER DEFAULT 0);
+      CREATE TABLE IF NOT EXISTS payments (id TEXT PRIMARY KEY, club TEXT, amount REAL, credits INTEGER, what TEXT, note TEXT, at INTEGER);
+      CREATE TABLE IF NOT EXISTS log (n INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, who TEXT, club TEXT, what TEXT);`);
+    // columns added after the first release
+    for (const q of ['ALTER TABLE clubs ADD COLUMN notes TEXT', 'ALTER TABLE events ADD COLUMN archived INTEGER DEFAULT 0']) { try { this.sql.exec(q); } catch {} }
+  }
+  note(who, club, what) {
+    this.sql.exec('INSERT INTO log (at, who, club, what) VALUES (?, ?, ?, ?)', Date.now(), who || '', club || '', String(what).slice(0, 200));
+    this.sql.exec('DELETE FROM log WHERE n < (SELECT MAX(n) FROM log) - 3000');
+  }
+  // talk to one tournament (GolfEvent) directly
+  async golf(id, path, body) {
+    const r = await this.env.GOLF.get(this.env.GOLF.idFromName(id)).fetch(new Request(`https://golf/${path}`, body ? { method: 'POST', body: JSON.stringify(body) } : {}));
+    const j = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(j.error || 'That tournament didn’t answer.'), { status: r.status }); return j;
   }
   one(q, ...a) { return this.sql.exec(q, ...a).toArray()[0] || null; }
   all(q, ...a) { return this.sql.exec(q, ...a).toArray(); }
@@ -116,6 +129,7 @@ export class FlagcastClubs extends DurableObject {
       this.sql.exec('DELETE FROM codes WHERE email = ?', email);
       const token = rand(40, 'abcdefghijkmnpqrstuvwxyz23456789ABCDEFGHJKLMNPQRSTUVWXYZ');
       this.sql.exec('INSERT INTO sessions (token, email, created, seen) VALUES (?, ?, ?, ?)', token, email, now, now);
+      this.note(email, this.one('SELECT club FROM members WHERE email = ?', email)?.club, 'Signed in');
       this.sql.exec('DELETE FROM sessions WHERE created < ?', now - SESSION_DAYS * DAY);
       return json({ token });
     }
@@ -128,6 +142,7 @@ export class FlagcastClubs extends DurableObject {
       const id = rand(10, 'abcdefghijkmnpqrstuvwxyz23456789');
       this.sql.exec('INSERT INTO clubs (id, name, contact, phone, city, status, created, by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', id, name, clip(b.contact, 80), clip(b.phone, 40), clip(b.city, 80), 'pending', now, u.email);
       this.sql.exec('INSERT OR REPLACE INTO members (email, club, role, added) VALUES (?, ?, ?, ?)', u.email, id, 'owner', now);
+      this.note(u.email, id, `Asked to join: ${name}`);
       if (env.ADMIN_EMAIL) sendMail(env, env.ADMIN_EMAIL, `New club asking for Flagcast: ${name}`, `${name}\n${clip(b.contact, 80)} · ${u.email} · ${clip(b.phone, 40)}\n${clip(b.city, 80)}\n\nApprove it at https://flagcast.app/golf/admin/`).catch(() => {});
       return json(this.me(this.who(b.token)));
     }
@@ -143,6 +158,7 @@ export class FlagcastClubs extends DurableObject {
         this.sql.exec('INSERT OR REPLACE INTO members (email, club, role, added) VALUES (?, ?, ?, ?)', email, u.club.id, 'staff', now);
         sendMail(env, email, `You’ve been added to ${u.club.name} on Flagcast`, `${u.email} added you to ${u.club.name} on Flagcast.\n\nOpen Flagcast Manager (or https://flagcast.app/golf/) and sign in with this email address to see the club’s tournaments.`).catch(() => {});
       } else this.sql.exec('DELETE FROM members WHERE email = ? AND club = ? AND role != ?', email, u.club.id, 'owner');
+      this.note(u.email, u.club.id, `${op === 'invite' ? 'Added' : 'Removed'} ${email}`);
       return json(this.me(u));
     }
     if (op === 'hide') {
@@ -173,6 +189,7 @@ export class FlagcastClubs extends DurableObject {
       if (!r.ok) return json(j, r.status);
       if (club) {
         this.sql.exec('INSERT INTO events (id, club, key, name, created) VALUES (?, ?, ?, ?, ?)', id, club.id, j.key, name || 'New tournament', now);
+        this.note(b.pass ? 'Flagcast' : this.who(b.token).email, club.id, `Made tournament ${name || 'New tournament'} (${id.toUpperCase()})`);
         if (!b.pass && club.credits > 0) this.sql.exec('UPDATE clubs SET credits = credits - 1 WHERE id = ?', club.id);
       }
       return json(j);
@@ -232,9 +249,85 @@ export class FlagcastClubs extends DurableObject {
         made = j;
       }
       if (b.op === 'hide' || b.op === 'unhide') this.sql.exec('UPDATE events SET hidden = ? WHERE id = ?', b.op === 'hide' ? 1 : 0, clip(b.id, 8));
+      if (b.op === 'edit') {
+        need();
+        const name = clip(b.name, 80) || c.name;
+        this.sql.exec('UPDATE clubs SET name = ?, contact = ?, phone = ?, city = ?, notes = ? WHERE id = ?', name, clip(b.contact, 80), clip(b.phone, 40), clip(b.city, 80), clip(b.notes, 2000), cid);
+      }
+      if (b.op === 'pay') {
+        need();
+        const credits = Math.trunc(num(b.credits, -1, 999, 0)), amount = num(b.amount, 0, 1e7, 0);
+        this.sql.exec('INSERT INTO payments (id, club, amount, credits, what, note, at) VALUES (?, ?, ?, ?, ?, ?, ?)', rand(8, 'abcdefghijkmnpqrstuvwxyz23456789'), cid, amount, credits, clip(b.what, 80), clip(b.note, 300), b.at ? num(b.at, 0, 4e12, now) : now);
+        if (credits < 0) this.sql.exec('UPDATE clubs SET credits = -1 WHERE id = ?', cid);
+        else if (credits > 0 && c.credits >= 0) this.sql.exec('UPDATE clubs SET credits = MIN(999, credits + ?) WHERE id = ?', credits, cid);
+        if (c.status === 'pending') this.sql.exec('UPDATE clubs SET status = ? WHERE id = ?', 'active', cid);
+      }
+      if (b.op === 'unpay') this.sql.exec('DELETE FROM payments WHERE id = ?', clip(b.id, 8));
+      if (b.op === 'role') {
+        need();
+        const email = clip(b.email, 254).toLowerCase();
+        if (!this.one('SELECT email FROM members WHERE email = ? AND club = ?', email, cid)) this.fail('That person isn’t in this club.');
+        if (b.role === 'owner') this.sql.exec('UPDATE members SET role = ? WHERE club = ? AND role = ?', 'staff', cid, 'owner');
+        this.sql.exec('UPDATE members SET role = ? WHERE email = ?', b.role === 'owner' ? 'owner' : 'staff', email);
+      }
+      if (b.op === 'signout') this.sql.exec('DELETE FROM sessions WHERE email = ?', clip(b.email, 254).toLowerCase());
+      // one tournament: lock or reopen scoring, archive, move to another club, or add an old one by its desk link
+      const evRow = b.id ? this.one('SELECT * FROM events WHERE id = ?', clip(b.id, 8)) : null;
+      if (['lock', 'archive', 'move'].includes(b.op) && !evRow) this.fail('That tournament isn’t on any club’s list.', 404);
+      if (b.op === 'lock') await this.golf(evRow.id, 'desk', { key: evRow.key, op: 'lock', locked: !!b.locked });
+      if (b.op === 'archive') {
+        this.sql.exec('UPDATE events SET archived = ? WHERE id = ?', b.on ? 1 : 0, evRow.id);
+        if (b.on) await this.golf(evRow.id, 'desk', { key: evRow.key, op: 'lock', locked: true }).catch(() => {});
+      }
+      if (b.op === 'move') {
+        const to = this.one('SELECT * FROM clubs WHERE id = ?', clip(b.to, 10)); if (!to) this.fail('Pick a club to move it to.');
+        this.sql.exec('UPDATE events SET club = ? WHERE id = ?', to.id, evRow.id);
+        const ev = await this.golf(evRow.id, 'desk', { key: evRow.key, op: 'get' });
+        delete ev.stats; await this.golf(evRow.id, 'desk', { key: evRow.key, op: 'save', setup: { ...ev, club: to.name } }).catch(() => {});
+      }
+      if (b.op === 'claim') {
+        need();
+        const m = String(b.link || '').match(/\/g\/([a-z0-9]{8})\/desk#([a-z0-9]{16,40})/i);
+        if (!m) this.fail('Paste the full desk link. It looks like …/g/abcd2345/desk#longkey');
+        const id = m[1].toLowerCase(), key = m[2];
+        const ev = await this.golf(id, 'desk', { key, op: 'get' });
+        const had = this.one('SELECT club FROM events WHERE id = ?', id);
+        if (had && had.club !== cid) this.fail('That tournament belongs to another club. Use Move instead.');
+        this.sql.exec('INSERT OR REPLACE INTO events (id, club, key, name, created, hidden, archived) VALUES (?, ?, ?, ?, ?, 0, 0)', id, cid, key, clip(ev.name, 80) || 'Tournament', ev.created || now);
+      }
+      if (b.op && !['events', 'log', 'day'].includes(b.op)) this.note('Flagcast', cid || evRow?.club || '', `Admin: ${b.op}${b.email ? ` ${clip(b.email, 254)}` : ''}${evRow ? ` ${evRow.name}` : ''}${b.op === 'pay' ? ` $${num(b.amount, 0, 1e7, 0)}` : ''}`);
+      // screen control for any club's tournament: the same day ops as the desk
+      if (b.op === 'day') {
+        const row = this.one('SELECT * FROM events WHERE id = ?', clip(b.id, 8)); if (!row) this.fail('That tournament isn’t on any club’s list.', 404);
+        const d = b.day || {};
+        if (!['screen', 'take', 'flash'].includes(d.op)) this.fail('Not allowed');
+        await this.golf(row.id, 'desk', { ...d, key: row.key });
+        this.note('Flagcast', row.club, `Admin screens: ${d.op}${d.kind ? ` ${d.kind}` : ''}${d.page ? ` ${d.page.k}` : ''} · ${row.name}`);
+        return json({ ok: true });
+      }
+      if (b.op === 'log') return json({ log: this.all('SELECT * FROM log ORDER BY n DESC LIMIT 400') });
+      if (b.op === 'events') {
+        // every tournament on every club's list, with how it's going
+        const rows = this.all('SELECT e.id, e.key, e.name, e.created, e.hidden, e.archived, e.club, c.name AS clubName FROM events e LEFT JOIN clubs c ON c.id = e.club ORDER BY e.created DESC LIMIT 300');
+        const out = await Promise.all(rows.map(async (e) => {
+          try {
+            const s = await this.golf(e.id, 'state');
+            const scored = Object.values(s.scores || {}).reduce((n, pl) => n + Object.values(pl).reduce((m, arr) => m + arr.filter((v) => v != null).length, 0), 0);
+            const online = Object.values(s.online || {}).reduce((n, v) => n + v, 0);
+            return { ...e, name: s.name || e.name, date: s.date || '', teams: (s.teams || []).length, scored, screens: (s.displays || []).length, online, locked: !!s.locked, replays: (s.replays || []).length,
+              // for screen control
+              displays: (s.displays || []).map((d) => ({ id: d.id, name: d.name, online: (s.online || {})[d.id] || 0, force: s.live?.force?.[d.id] || null, pages: (d.playlist || []).length })),
+              p3: (s.course?.holes || []).filter((h) => h.par === 3).map((h) => h.n), sponsors: (s.sponsors || []).map((x) => ({ id: x.id, name: x.name })),
+              replayList: (s.replays || []).slice(0, 12).map((r) => ({ id: r.id, hole: r.hole, label: r.label, at: r.at })), take: s.live?.take || null, flash: s.flash || null };
+          } catch { return { ...e, gone: true }; }
+        }));
+        return json({ events: out });
+      }
+      const seen = Object.fromEntries(this.all('SELECT email, MAX(seen) AS seen FROM sessions GROUP BY email').map((s) => [s.email, s.seen]));
       const clubs = this.all('SELECT * FROM clubs ORDER BY (status = \'pending\') DESC, name COLLATE NOCASE').map((x) => ({
-        ...x, members: this.all('SELECT email, role FROM members WHERE club = ? ORDER BY role DESC, added', x.id),
-        events: this.all('SELECT id, key, name, created, hidden FROM events WHERE club = ? ORDER BY created DESC', x.id),
+        ...x, members: this.all('SELECT email, role, added FROM members WHERE club = ? ORDER BY role DESC, added', x.id).map((m) => ({ ...m, seen: seen[m.email] || 0 })),
+        events: this.all('SELECT id, key, name, created, hidden, archived FROM events WHERE club = ? ORDER BY created DESC', x.id),
+        payments: this.all('SELECT * FROM payments WHERE club = ? ORDER BY at DESC', x.id),
       }));
       return json({ clubs, made, mail: !!env.RESEND_API_KEY });
     }
@@ -249,7 +342,7 @@ export class FlagcastClubs extends DurableObject {
     const { id, name, status, city, credits } = u.club;
     out.club = { id, name, status, city, credits };
     out.members = this.all('SELECT email, role FROM members WHERE club = ? ORDER BY role DESC, added', id);
-    out.events = this.all('SELECT id, key, name, created FROM events WHERE club = ? AND hidden = 0 ORDER BY created DESC', id);
+    out.events = this.all('SELECT id, key, name, created FROM events WHERE club = ? AND hidden = 0 AND archived = 0 ORDER BY created DESC', id);
     return out;
   }
 }

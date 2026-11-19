@@ -9,43 +9,63 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <link rel="stylesheet" href="/golf/golf.css">
 <style>
-.topbar .in { max-width: 1100px; margin: 0 auto; display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }
+.topbar .in { max-width: 1240px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .topbar h1 { font-size: 2rem; display: flex; align-items: center; gap: 12px; }
 .topbar h1 img { height: 40px; }
 .topbar .btn { background: transparent; color: var(--on-green); border-color: rgba(255,255,255,.25); padding: 6px 12px; }
-main { max-width: 1100px; margin: 0 auto; padding: 22px 16px 60px; }
-.grid { display: grid; grid-template-columns: 1fr 320px; gap: 22px; align-items: start; }
-@media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+nav.tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+nav.tabs button { background: transparent; border: 0; color: var(--on-green-muted); font: 600 .95rem var(--f-body); padding: 8px 12px; border-radius: 8px; }
+nav.tabs button[aria-current="true"] { background: rgba(255,255,255,.12); color: var(--on-green); }
+nav.tabs .n { background: var(--flag); color: var(--on-flag); border-radius: 999px; font: 700 .7rem var(--f-mono); padding: 1px 6px; margin-left: 4px; }
+main { max-width: 1240px; margin: 0 auto; padding: 22px 16px 60px; }
+.grid { display: grid; grid-template-columns: 1fr 330px; gap: 22px; align-items: start; }
+.cols { display: grid; grid-template-columns: 340px 1fr; gap: 18px; align-items: start; }
+@media (max-width: 900px) { .grid, .cols { grid-template-columns: 1fr; } }
 .box { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
 h2 { font-size: 1.4rem; margin: 0 0 10px; }
+h3 { font-size: 1.05rem; margin: 18px 0 8px; }
 label { display: grid; gap: 4px; font-size: .82rem; color: var(--muted); font-weight: 500; margin-bottom: 10px; }
-input, select { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; width: 100%; }
+input, select, textarea { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; width: 100%; }
+textarea { min-height: 70px; resize: vertical; }
 .help { color: var(--muted); font-size: .86rem; margin: 0 0 10px; }
 .err { color: var(--red); font-size: .88rem; }
 .warn { background: color-mix(in srgb, var(--warn) 18%, var(--card)); border: 1px solid var(--warn); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; font-size: .9rem; }
-.club { background: var(--card); border: 1px solid var(--line); border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
-.club > .hd { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 16px; cursor: pointer; }
-.club > .hd b { font-size: 1.1rem; }
-.club > .hd small { display: block; color: var(--muted); }
-.club .bd { border-top: 1px solid var(--line); padding: 14px 16px; display: grid; gap: 14px; }
-.club.pending { border-color: var(--flag); }
-.right { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
-.cred { font-family: var(--f-mono); font-size: .85rem; white-space: nowrap; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.row input { flex: 1; min-width: 160px; width: auto; }
+.row > input, .row > select { flex: 1; min-width: 140px; width: auto; }
 .btn.sm { padding: 5px 10px; font-size: .85rem; }
-.sub { font: 700 .72rem var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
-.li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); font-size: .92rem; }
-.li:first-of-type { border-top: 0; }
-.li small { color: var(--muted); }
+.sub { font: 700 .72rem var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 16px 0 6px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+.stat b { display: block; font: 800 2.2rem var(--f-display); line-height: 1; }
+.stat span { color: var(--muted); font-size: .82rem; }
+.clist { display: grid; gap: 6px; }
+.citem { text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.citem[aria-current="true"] { border-color: var(--green-2); box-shadow: 0 0 0 2px var(--green-2) inset; }
+.citem small { display: block; color: var(--muted); font-size: .78rem; }
+.citem.pending { border-color: var(--flag); }
+table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+th { font: 700 .7rem var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+td small { color: var(--muted); display: block; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.acts { text-align: right; }
+td.acts > .btn, td.acts > select { margin: 2px 0 2px 4px; vertical-align: middle; }
 .pill.wait { background: var(--flag); color: var(--on-flag); }
 .pill.ok { background: var(--ok); color: #fff; }
+.pill.gray { background: var(--paper-2); color: var(--muted); }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--line); margin-right: 4px; }
+.dot.on { background: var(--ok); }
 .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 8px; z-index: 9; }
 #gate { max-width: 380px; margin: 60px auto; }
+dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); padding: 18px; width: min(440px, 92vw); }
+dialog::backdrop { background: rgba(0,0,0,.45); }
+.empty { color: var(--muted); padding: 16px; text-align: center; }
 </style>
 </head>
 <body>
-<header class="topbar"><div class="in"><h1><img src="/golf/brand/wide-on-dark.svg" alt="Flagcast"> Admin</h1><button class="btn" id="lock" hidden>Lock</button></div></header>
+<header class="topbar"><div class="in"><h1><img src="/golf/brand/wide-on-dark.svg" alt="Flagcast"> Admin</h1>
+  <nav class="tabs" id="tabs" hidden></nav>
+  <button class="btn" id="lock" hidden>Lock</button></div></header>
 
 <form id="gate" class="box" hidden>
   <h2>Flagcast Admin</h2>
@@ -57,26 +77,10 @@ input, select { background: var(--paper); border: 1px solid var(--line); border-
 
 <main id="app" hidden>
   <div class="warn" id="nomail" hidden>Emails aren’t set up yet (no RESEND_API_KEY on the flagcast worker), so clubs can’t get sign-in codes. You can still set clubs up and make tournaments for them here.</div>
-  <div class="grid">
-    <section>
-      <div class="row" style="margin-bottom:12px"><input id="q" type="search" placeholder="Find a club"><select id="filter" style="width:auto"><option value="">All clubs</option><option value="pending">Waiting for approval</option><option value="active">Active</option><option value="off">Switched off</option></select></div>
-      <div id="clubs"></div>
-    </section>
-    <aside>
-      <form class="box" id="newClub">
-        <h2>Set up a club</h2>
-        <label>Club name<input id="cName" required placeholder="Willow Creek Country Club"></label>
-        <label>Owner’s email<input id="cEmail" type="email" placeholder="pro@willowcreek.com"></label>
-        <label>Town and state<input id="cCity" placeholder="Rye, NY"></label>
-        <label>Tournaments they can make<select id="cCredits"><option value="0">None yet</option><option value="1" selected>1</option><option value="2">2</option><option value="5">5</option><option value="10">10</option><option value="-1">Unlimited (season)</option></select></label>
-        <button class="btn primary" style="width:100%">Set up club</button>
-        <p class="help" style="margin:8px 0 0">The owner gets an email telling them to download Flagcast Manager and sign in.</p>
-        <div class="err" id="nErr" role="alert"></div>
-      </form>
-      <div class="box"><h2>Totals</h2><div id="totals" class="help" style="margin:0"></div></div>
-    </aside>
-  </div>
+  <div id="view"></div>
 </main>
+
+<dialog id="dlg"><form method="dialog" id="dlgForm"></form></dialog>
 <div class="toast" id="toast" hidden></div>
 
 <script type="module">
@@ -84,79 +88,289 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const KEY = 'flagcast:admin-pass';
 let pass = (() => { try { return localStorage.getItem(KEY) || sessionStorage.getItem(KEY) || ''; } catch { return ''; } })();
-let clubs = [], open = new Set();
-function toast(t) { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), 2600); }
+let clubs = [], events = null, logRows = null, tab = 'overview', sel = null, q = '', filter = '';
+function toast(t) { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), 2800); }
+const date = (t) => t ? new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+const when = (t) => t ? new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'never';
+const money = (n) => `$${Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+const credText = (n) => (n < 0 ? 'Unlimited' : `${n} left`);
+const clubName = (id) => clubs.find((c) => c.id === id)?.name || '—';
 
-async function admin(body) {
+async function call(body) {
   const r = await fetch('/golf/api/club/admin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pass, ...body }) });
   const j = await r.json().catch(() => ({}));
   if (r.status === 403 && !body.op) throw Object.assign(new Error(j.error || 'That passcode is not right.'), { gate: true });
   if (!r.ok) throw new Error(j.error || 'That didn’t work.');
-  clubs = j.clubs; $('nomail').hidden = j.mail; draw();
   return j;
 }
-const credText = (n) => (n < 0 ? 'Unlimited' : `${n} left`);
-const date = (t) => new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+async function admin(body) {
+  const j = await call(body);
+  if (j.clubs) { clubs = j.clubs; $('nomail').hidden = j.mail; }
+  if (body.op && !['events', 'log'].includes(body.op)) { events = null; logRows = null; }
+  draw(); return j;
+}
+async function loadEvents() { const j = await call({ op: 'events' }); events = j.events; draw(); }
+async function loadLog() { const j = await call({ op: 'log' }); logRows = j.log; draw(); }
 
+// ---------- views ----------
+const TABS = [['overview', 'Overview'], ['clubs', 'Clubs'], ['events', 'Tournaments'], ['screens', 'Screens'], ['payments', 'Payments'], ['activity', 'Activity']];
+function drawTabs() {
+  const wait = clubs.filter((c) => c.status === 'pending').length;
+  $('tabs').innerHTML = TABS.map(([k, l]) => `<button data-tab="${k}" aria-current="${tab === k}">${l}${k === 'clubs' && wait ? `<span class="n">${wait}</span>` : ''}</button>`).join('');
+}
 function draw() {
-  const q = $('q').value.trim().toLowerCase(), f = $('filter').value;
-  const list = clubs.filter((c) => (!f || c.status === f) && (!q || `${c.name} ${c.city} ${c.members.map((m) => m.email).join(' ')}`.toLowerCase().includes(q)));
-  $('clubs').innerHTML = list.length ? list.map((c) => {
-    const pill = c.status === 'pending' ? '<span class="pill wait">Waiting</span>' : c.status === 'active' ? '<span class="pill ok">Active</span>' : '<span class="pill off">Off</span>';
-    const evs = c.events;
-    return `<div class="club ${c.status}" data-club="${c.id}">
-      <div class="hd" data-toggle><div><b>${esc(c.name)}</b><small>${esc([c.city, c.contact, c.phone].filter(Boolean).join(' · '))}${c.city || c.contact || c.phone ? ' · ' : ''}since ${date(c.created)}</small></div>
-        <div class="right"><span class="cred">${credText(c.credits)}</span><span class="cred">${evs.length} made</span>${pill}</div></div>
-      ${open.has(c.id) ? `<div class="bd">
-        <div class="row">${c.status === 'pending' ? '<button class="btn primary sm" data-op="approve">Approve</button>' : c.status === 'active' ? '<button class="btn sm danger" data-op="off">Switch off</button>' : '<button class="btn sm" data-op="on">Switch on</button>'}
-          ${evs.length ? '' : '<button class="btn sm danger" data-op="delete">Delete club</button>'}</div>
-        <div><div class="sub">Tournaments they can make · ${credText(c.credits)}</div>
-          <div class="row"><button class="btn sm" data-credits="1">+1</button><button class="btn sm" data-credits="5">+5</button><button class="btn sm" data-credits="-1">−1</button><button class="btn sm" data-set="-1">Unlimited</button><button class="btn sm" data-set="0">None</button></div></div>
-        <div><div class="sub">People</div>${c.members.length ? c.members.map((m) => `<div class="li"><span>${esc(m.email)} <small>${m.role}</small></span><button class="btn sm danger" data-rm="${esc(m.email)}">Remove</button></div>`).join('') : '<p class="help" style="margin:0">Nobody yet. Add the owner’s email.</p>'}
-          <form class="row" data-invite style="margin-top:8px"><input type="email" required placeholder="name@club.com"><button class="btn sm">Add person</button></form></div>
-        <div><div class="sub">Tournaments</div>${evs.length ? evs.map((e) => `<div class="li" style="${e.hidden ? 'opacity:.5' : ''}"><span>${esc(e.name)} <small>${e.id.toUpperCase()} · ${date(e.created)}${e.hidden ? ' · hidden by club' : ''}</small></span><span class="row"><a class="btn sm dark" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener">Desk</a><a class="btn sm" href="/g/${e.id}" target="_blank" rel="noopener">Live</a></span></div>`).join('') : '<p class="help" style="margin:0">None yet.</p>'}
-          <form class="row" data-event style="margin-top:8px"><input required placeholder="Tournament name, e.g. 2027 Member-Guest"><button class="btn sm primary">Make for this club</button></form>
-          <p class="help" style="margin:6px 0 0">Making one here doesn’t use the club’s credits.</p></div>
-      </div>` : ''}</div>`;
-  }).join('') : `<div class="box help">${clubs.length ? 'No clubs match.' : 'No clubs yet. Set one up on the right, or wait for clubs to ask from flagcast.app/golf.'}</div>`;
-  const act = clubs.filter((c) => c.status === 'active').length, wait = clubs.filter((c) => c.status === 'pending').length;
-  $('totals').innerHTML = `${clubs.length} clubs · ${act} active${wait ? ` · <b>${wait} waiting</b>` : ''}<br>${clubs.reduce((n, c) => n + c.events.length, 0)} tournaments made`;
+  drawTabs();
+  const v = $('view');
+  if (tab === 'overview') v.innerHTML = overview();
+  if (tab === 'clubs') v.innerHTML = clubsView();
+  if (tab === 'events') { v.innerHTML = eventsView(); if (!events) loadEvents().catch((x) => toast(x.message)); }
+  if (tab === 'screens') { v.innerHTML = screensView(); if (!events) loadEvents().catch((x) => toast(x.message)); }
+  if (tab === 'payments') v.innerHTML = paymentsView();
+  if (tab === 'activity') { v.innerHTML = activityView(); if (!logRows) loadLog().catch((x) => toast(x.message)); }
 }
 
-$('clubs').addEventListener('click', async (e) => {
-  const el = e.target.closest('[data-club]'); if (!el) return;
-  const club = el.dataset.club;
-  if (e.target.closest('[data-toggle]')) { open.has(club) ? open.delete(club) : open.add(club); return draw(); }
-  const b = e.target.closest('button'); if (!b || b.form) return;
+function overview() {
+  const wait = clubs.filter((c) => c.status === 'pending'), act = clubs.filter((c) => c.status === 'active');
+  const pays = clubs.flatMap((c) => c.payments.map((p) => ({ ...p, club: c.id })));
+  const month = new Date(); month.setDate(1); month.setHours(0, 0, 0, 0);
+  const evAll = clubs.flatMap((c) => c.events), evMonth = evAll.filter((e) => e.created >= month.getTime());
+  const live = (events || []).filter((e) => !e.gone && !e.locked && !e.archived && (e.online || e.scored));
+  if (!events) loadEvents().catch(() => {});
+  return `<div class="stats">
+    <div class="stat"><b>${act.length}</b><span>Active clubs</span></div>
+    <div class="stat"><b>${wait.length}</b><span>Waiting for you</span></div>
+    <div class="stat"><b>${evAll.length}</b><span>Tournaments made (${evMonth.length} this month)</span></div>
+    <div class="stat"><b>${money(pays.reduce((n, p) => n + p.amount, 0))}</b><span>Payments logged (${money(pays.filter((p) => p.at >= month.getTime()).reduce((n, p) => n + p.amount, 0))} this month)</span></div>
+  </div>
+  <div class="grid"><div>
+    <div class="box"><h2>Waiting for approval</h2>${wait.length ? `<table>${wait.map((c) => `<tr><td><b>${esc(c.name)}</b><small>${esc([c.city, c.contact, c.by, c.phone].filter(Boolean).join(' · '))} · asked ${date(c.created)}</small></td><td class="acts"><button class="btn sm primary" data-a="approve" data-club="${c.id}">Approve</button><button class="btn sm" data-open="${c.id}">Open</button></td></tr>`).join('')}</table>` : '<p class="help" style="margin:0">Nobody waiting.</p>'}</div>
+    <div class="box"><h2>Happening now</h2>${events ? (live.length ? `<table>${live.map((e) => `<tr><td><b>${esc(e.name)}</b><small>${esc(e.clubName || '')} · ${e.teams} teams · ${e.scored} scores${e.screens ? ` · <span class="dot ${e.online ? 'on' : ''}"></span>${e.online} of ${e.screens} screens on` : ''}</small></td><td class="acts"><a class="btn sm dark" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener">Desk</a><a class="btn sm" href="/g/${e.id}" target="_blank" rel="noopener">Live</a></td></tr>`).join('')}</table>` : '<p class="help" style="margin:0">No tournaments are being played right now.</p>') : '<p class="help" style="margin:0">Loading…</p>'}</div>
+  </div><div>${newClubBox()}</div></div>`;
+}
+
+function newClubBox() {
+  return `<form class="box" id="newClub"><h2>Set up a club</h2>
+    <label>Club name<input name="name" required placeholder="Willow Creek Country Club"></label>
+    <label>Owner’s email<input name="email" type="email" placeholder="pro@willowcreek.com"></label>
+    <label>Town and state<input name="city" placeholder="Rye, NY"></label>
+    <label>Tournaments they can make<select name="credits"><option value="0">None yet</option><option value="1" selected>1</option><option value="2">2</option><option value="5">5</option><option value="10">10</option><option value="-1">Unlimited (season)</option></select></label>
+    <button class="btn primary" style="width:100%">Set up club</button>
+    <p class="help" style="margin:8px 0 0">The owner gets an email telling them to download Flagcast Manager and sign in.</p></form>`;
+}
+
+function clubsView() {
+  const list = clubs.filter((c) => (!filter || c.status === filter) && (!q || `${c.name} ${c.city} ${c.contact} ${c.members.map((m) => m.email).join(' ')}`.toLowerCase().includes(q)));
+  if (!sel && list.length) sel = list[0].id;
+  const c = clubs.find((x) => x.id === sel);
+  return `<div class="cols"><div>
+    <div class="row" style="margin-bottom:10px"><input id="q" type="search" placeholder="Find a club" value="${esc(q)}"><select id="filter" style="flex:0 0 auto;min-width:0"><option value="">All</option><option value="pending" ${filter === 'pending' ? 'selected' : ''}>Waiting</option><option value="active" ${filter === 'active' ? 'selected' : ''}>Active</option><option value="off" ${filter === 'off' ? 'selected' : ''}>Off</option></select></div>
+    <button class="btn" style="width:100%;margin-bottom:10px" data-newclub>+ Set up a club</button>
+    <div class="clist">${list.map((x) => `<button class="citem ${x.status}" data-open="${x.id}" aria-current="${x.id === sel}"><span><b>${esc(x.name)}</b><small>${esc(x.city || '')}${x.city ? ' · ' : ''}${x.events.length} made · ${credText(x.credits)}</small></span>${pillFor(x.status)}</button>`).join('') || '<div class="empty">No clubs match.</div>'}</div>
+  </div><div>${c ? clubDetail(c) : '<div class="box empty">Pick a club, or set one up.</div>'}</div></div>`;
+}
+const pillFor = (s) => s === 'pending' ? '<span class="pill wait">Waiting</span>' : s === 'active' ? '<span class="pill ok">Active</span>' : '<span class="pill off">Off</span>';
+
+function clubDetail(c) {
+  const paid = c.payments.reduce((n, p) => n + p.amount, 0), others = clubs.filter((x) => x.id !== c.id);
+  return `<div class="box" data-club="${c.id}">
+    <div class="row" style="justify-content:space-between"><h2 style="margin:0">${esc(c.name)}</h2><div class="row">${pillFor(c.status)}
+      ${c.status === 'pending' ? '<button class="btn sm primary" data-a="approve">Approve</button>' : c.status === 'active' ? '<button class="btn sm danger" data-a="off">Switch off</button>' : '<button class="btn sm" data-a="on">Switch on</button>'}
+      ${c.events.length ? '' : '<button class="btn sm danger" data-a="delete">Delete</button>'}</div></div>
+    <p class="help" style="margin:4px 0 0">Since ${date(c.created)}${c.by ? ` · asked by ${esc(c.by)}` : ''} · ${c.events.length} tournaments · ${money(paid)} paid</p>
+
+    <div class="sub">Details</div>
+    <form class="grid" data-edit style="grid-template-columns:1fr 1fr;gap:0 10px">
+      <label>Club name<input name="name" value="${esc(c.name)}"></label><label>Town and state<input name="city" value="${esc(c.city || '')}"></label>
+      <label>Contact<input name="contact" value="${esc(c.contact || '')}"></label><label>Phone<input name="phone" value="${esc(c.phone || '')}"></label>
+      <label style="grid-column:1/-1">Notes (only you see these)<textarea name="notes" placeholder="Package, what they need, who to call…">${esc(c.notes || '')}</textarea></label>
+      <div><button class="btn sm dark">Save details</button></div>
+    </form>
+
+    <div class="sub">Tournaments they can make · ${credText(c.credits)}</div>
+    <div class="row"><button class="btn sm primary" data-pay>Record a payment…</button><button class="btn sm" data-cr="1">+1</button><button class="btn sm" data-cr="5">+5</button><button class="btn sm" data-cr="-1">−1</button><button class="btn sm" data-set="-1">Unlimited</button><button class="btn sm" data-set="0">None</button></div>
+    ${c.payments.length ? `<table style="margin-top:8px">${c.payments.map((p) => `<tr><td>${date(p.at)}</td><td>${esc(p.what || 'Payment')}${p.note ? `<small>${esc(p.note)}</small>` : ''}</td><td class="num">${p.credits < 0 ? 'Unlimited' : p.credits ? `+${p.credits}` : ''}</td><td class="num"><b>${money(p.amount)}</b></td><td class="acts"><button class="btn sm danger" data-unpay="${p.id}" title="Remove this payment from the log">✕</button></td></tr>`).join('')}</table>` : ''}
+
+    <div class="sub">People</div>
+    ${c.members.length ? `<table>${c.members.map((m) => `<tr><td>${esc(m.email)}<small>${m.role}${m.seen ? ` · last seen ${when(m.seen)}` : ' · hasn’t signed in yet'}</small></td><td class="acts">${m.role !== 'owner' ? `<button class="btn sm" data-owner="${esc(m.email)}">Make owner</button>` : ''}${m.seen ? `<button class="btn sm" data-signout="${esc(m.email)}">Sign out</button>` : ''}<button class="btn sm danger" data-rm="${esc(m.email)}">Remove</button></td></tr>`).join('')}</table>` : '<p class="help" style="margin:0">Nobody yet. Add the owner’s email.</p>'}
+    <form class="row" data-invite style="margin-top:8px"><input type="email" required placeholder="name@club.com"><button class="btn sm">Add person</button></form>
+
+    <div class="sub">Tournaments</div>
+    ${c.events.length ? `<table>${c.events.map((e) => `<tr style="${e.archived || e.hidden ? 'opacity:.55' : ''}"><td><b>${esc(e.name)}</b><small>${e.id.toUpperCase()} · ${date(e.created)}${e.archived ? ' · archived' : e.hidden ? ' · hidden by club' : ''}</small></td><td class="acts">
+      <a class="btn sm dark" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener">Desk</a><a class="btn sm" href="/g/${e.id}" target="_blank" rel="noopener">Live</a><a class="btn sm" href="/g/${e.id}/board" target="_blank" rel="noopener">Screens</a>
+      <button class="btn sm" data-copy="${location.origin}/g/${e.id}/desk#${e.key}">Copy desk link</button>
+      ${others.length ? `<select data-move="${e.id}" style="width:auto;padding:4px"><option value="">Move to…</option>${others.map((o) => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select>` : ''}
+      ${e.hidden ? `<button class="btn sm" data-unhide="${e.id}">Unhide</button>` : ''}
+      <button class="btn sm ${e.archived ? '' : 'danger'}" data-archive="${e.id}" data-on="${e.archived ? '' : '1'}">${e.archived ? 'Restore' : 'Archive'}</button></td></tr>`).join('')}</table>` : '<p class="help" style="margin:0">None yet.</p>'}
+    <form class="row" data-event style="margin-top:8px"><input required placeholder="New tournament name, e.g. 2027 Member-Guest"><button class="btn sm primary">Make for this club</button></form>
+    <p class="help" style="margin:6px 0 0">Making one here doesn’t use the club’s credits.</p>
+    <form class="row" data-claim style="margin-top:8px"><input required placeholder="Add an older tournament by its desk link (…/g/abcd2345/desk#…)"><button class="btn sm">Add to this club</button></form>
+  </div>`;
+}
+
+function eventsView() {
+  if (!events) return '<div class="box empty">Loading every tournament…</div>';
+  const list = events.filter((e) => !q || `${e.name} ${e.clubName} ${e.id}`.toLowerCase().includes(q));
+  return `<div class="row" style="margin-bottom:10px"><input id="q" type="search" placeholder="Find a tournament or club" value="${esc(q)}"><button class="btn" data-reload>Refresh</button></div>
+  <div class="box" style="padding:6px 12px"><table><thead><tr><th>Tournament</th><th>Club</th><th class="num">Teams</th><th class="num">Scores</th><th class="num">Screens on</th><th>Scoring</th><th></th></tr></thead><tbody>
+  ${list.map((e) => e.gone ? `<tr><td>${esc(e.name)}<small>${e.id.toUpperCase()} · can’t reach it</small></td><td>${esc(e.clubName || '')}</td><td colspan="5"></td></tr>` : `<tr style="${e.archived ? 'opacity:.55' : ''}"><td><b>${esc(e.name)}</b><small>${e.id.toUpperCase()}${e.date ? ` · plays ${esc(e.date)}` : ''} · made ${date(e.created)}${e.archived ? ' · archived' : ''}${e.replays ? ` · ${e.replays} replays` : ''}</small></td><td>${esc(e.clubName || '')}</td>
+    <td class="num">${e.teams}</td><td class="num">${e.scored}</td><td class="num">${e.screens ? `<span class="dot ${e.online ? 'on' : ''}"></span>${e.online}/${e.screens}` : '—'}</td>
+    <td>${e.locked ? '<span class="pill gray">Final</span>' : '<span class="pill ok">Open</span>'}</td>
+    <td class="acts"><a class="btn sm dark" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener">Desk</a><a class="btn sm" href="/g/${e.id}" target="_blank" rel="noopener">Live</a>
+      <button class="btn sm" data-lock="${e.id}" data-locked="${e.locked ? '' : '1'}">${e.locked ? 'Reopen scoring' : 'Close scoring'}</button>
+      <button class="btn sm" data-archive="${e.id}" data-on="${e.archived ? '' : '1'}">${e.archived ? 'Restore' : 'Archive'}</button></td></tr>`).join('') || '<tr><td colspan="7" class="empty">No tournaments yet.</td></tr>'}
+  </tbody></table></div>`;
+}
+
+// SCREENS: every club's screens, and the same controls the desk and the pro's phone have
+const PAGES = [['lb', 'Leaderboard'], ['contests', 'Contests'], ['sponsors', 'Sponsors'], ['schedule', 'Schedule'], ['fund', 'Fundraising'], ['skins', 'Skins']];
+const pageName = (f) => !f ? 'Playing its list' : f.k === 'p3' ? `Hole ${f.hole} camera` : (PAGES.find((p) => p[0] === f.k)?.[1] || f.k);
+let scrQ = '';
+function screensView() {
+  if (!events) return '<div class="box empty">Loading every club’s screens…</div>';
+  const list = events.filter((e) => !e.gone && !e.archived && (!scrQ || `${e.name} ${e.clubName}`.toLowerCase().includes(scrQ)))
+    .sort((a, b) => (b.online - a.online) || (b.created - a.created));
+  return `<div class="row" style="margin-bottom:10px"><input id="scrq" type="search" placeholder="Find a tournament or club" value="${esc(scrQ)}"><button class="btn" data-reload>Refresh</button></div>
+  <p class="help">Tournaments with screens on right now come first. Changes show on the screens within a second.</p>
+  ${list.map((e) => {
+    const opts = [...e.p3.map((n) => `<option value="p3:${n}">Hole ${n} camera</option>`), ...PAGES.map(([k, l]) => `<option value="${k}">${l}</option>`)].join('');
+    const tk = e.take;
+    return `<div class="box" data-ev="${e.id}">
+      <div class="row" style="justify-content:space-between"><div><h2 style="margin:0">${esc(e.name)}</h2><p class="help" style="margin:2px 0 0">${esc(e.clubName || '')}${e.date ? ` · ${esc(e.date)}` : ''} · <span class="dot ${e.online ? 'on' : ''}"></span>${e.online} of ${e.screens} screens on${e.locked ? ' · results final' : ''}</p></div>
+        <div class="row"><a class="btn sm" href="/g/${e.id}/board" target="_blank" rel="noopener">Preview screens</a><a class="btn sm dark" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener">Desk</a></div></div>
+      <div class="sub">Take over every screen${tk ? ` · last: ${esc(tk.kind)}${tk.text ? ` “${esc(tk.text)}”` : ''} at ${when(tk.at)}` : ''}</div>
+      <div class="row"><input data-ttext maxlength="140" placeholder="Announcement (Awards in 10 minutes)"><input data-tsecs type="number" min="5" max="120" value="25" style="flex:0 0 80px;min-width:0" title="Seconds"></div>
+      <div class="row" style="margin-top:8px"><button class="btn sm dark" data-take="msg">Announcement</button><button class="btn sm primary" data-take="ace">Hole in one!</button>
+        ${e.sponsors.length ? `<select data-tsp style="flex:0 1 200px">${e.sponsors.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select><button class="btn sm" data-take="sponsor">Sponsor moment</button>` : ''}
+        ${e.replayList.length ? `<select data-trep style="flex:0 1 220px">${e.replayList.map((r) => `<option value="${r.id}">Hole ${r.hole}: ${esc(r.label || 'Replay')}</option>`).join('')}</select><button class="btn sm" data-take="replay">Replay</button>` : ''}
+        <button class="btn sm danger" data-take="clear">Clear, back to playlists</button>
+        <button class="btn sm" data-flash>Ticker news only</button></div>
+      <div class="sub">Screens</div>
+      ${e.displays.length ? `<table>${e.displays.map((d) => `<tr><td><span class="dot ${d.online ? 'on' : ''}"></span><b>${esc(d.name)}</b><small>${d.online ? 'Connected' : 'Not connected'} · ${pageName(d.force)}${d.force ? '' : d.pages ? ` (${d.pages} pages)` : ' (everything)'}</small></td>
+        <td class="acts"><select data-page="${d.id}" style="width:auto;padding:4px">${opts}</select><button class="btn sm dark" data-show="${d.id}">Show</button><button class="btn sm" data-back="${d.id}" ${d.force ? '' : 'disabled'}>Back to playlist</button></td></tr>`).join('')}</table>` : '<p class="help" style="margin:0">No screens added yet. The club adds them in the desk under Staff and playlists. Any screen opened from the board link still shows take-overs.</p>'}
+    </div>`;
+  }).join('') || '<div class="box empty">No tournaments yet.</div>'}`;
+}
+async function day(id, d, ok) { await call({ op: 'day', id, day: d }); toast(ok); events = null; await loadEvents(); }
+
+function paymentsView() {
+  const pays = clubs.flatMap((c) => c.payments.map((p) => ({ ...p, clubName: c.name, club: c.id }))).sort((a, b) => b.at - a.at);
+  const byMonth = {}; for (const p of pays) { const k = new Date(p.at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }); byMonth[k] = (byMonth[k] || 0) + p.amount; }
+  return `<div class="stats">${Object.entries(byMonth).slice(0, 4).map(([k, v]) => `<div class="stat"><b>${money(v)}</b><span>${k}</span></div>`).join('') || '<div class="stat"><b>$0</b><span>No payments logged yet</span></div>'}</div>
+  <div class="box"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Payments</h2><button class="btn sm" data-csv="payments">Download CSV</button></div>
+  <p class="help">Payments you’ve recorded. Flagcast doesn’t charge cards; record each invoice or check here when a club pays. Recording one can add tournaments at the same time.</p>
+  ${pays.length ? `<table><thead><tr><th>Date</th><th>Club</th><th>For</th><th class="num">Tournaments</th><th class="num">Amount</th></tr></thead><tbody>${pays.map((p) => `<tr><td>${date(p.at)}</td><td><a href="#" data-open="${p.club}">${esc(p.clubName)}</a></td><td>${esc(p.what || '')}${p.note ? `<small>${esc(p.note)}</small>` : ''}</td><td class="num">${p.credits < 0 ? 'Unlimited' : p.credits || ''}</td><td class="num"><b>${money(p.amount)}</b></td></tr>`).join('')}</tbody></table>` : ''}</div>`;
+}
+
+function activityView() {
+  if (!logRows) return '<div class="box empty">Loading…</div>';
+  return `<div class="box"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Activity</h2><div class="row"><button class="btn sm" data-reload>Refresh</button><button class="btn sm" data-csv="log">Download CSV</button></div></div>
+  <p class="help">Sign-ins, clubs asking to join, tournaments made, people added, and everything done here.</p>
+  <table><tbody>${logRows.map((r) => `<tr><td style="white-space:nowrap">${when(r.at)}</td><td>${esc(r.who)}</td><td>${esc(r.club ? clubName(r.club) : '')}</td><td>${esc(r.what)}</td></tr>`).join('') || '<tr><td class="empty">Nothing yet.</td></tr>'}</tbody></table></div>`;
+}
+
+// ---------- dialogs ----------
+function payDialog(c) {
+  const d = $('dlg'), f = $('dlgForm');
+  f.innerHTML = `<h2>Record a payment · ${esc(c.name)}</h2>
+    <label>What for<select name="what"><option>Par package</option><option>Birdie package</option><option>Eagle package</option><option>App only, one event</option><option>Season (unlimited)</option><option>LED wall add-on</option><option>Camera add-on</option><option>Other</option></select></label>
+    <div class="row"><label style="flex:1">Amount ($)<input name="amount" type="number" min="0" step="0.01" required></label><label style="flex:1">Date<input name="at" type="date" value="${new Date().toISOString().slice(0, 10)}"></label></div>
+    <label>Tournaments to add<select name="credits"><option value="0">None</option><option value="1" selected>1</option><option value="2">2</option><option value="3">3</option><option value="5">5</option><option value="10">10</option><option value="-1">Unlimited</option></select></label>
+    <label>Note<input name="note" placeholder="Invoice 1042, check, paid by card…"></label>
+    <div class="row" style="justify-content:flex-end"><button class="btn" value="cancel" formnovalidate>Cancel</button><button class="btn primary" value="ok">Record payment</button></div>`;
+  const what = f.querySelector('[name=what]'), cr = f.querySelector('[name=credits]');
+  what.onchange = () => { if (what.value.startsWith('Season')) cr.value = '-1'; };
+  d.showModal();
+  d.onclose = async () => {
+    if (d.returnValue !== 'ok') return;
+    const v = Object.fromEntries(new FormData(f));
+    try { await admin({ op: 'pay', club: c.id, what: v.what, amount: Number(v.amount), credits: Number(v.credits), note: v.note, at: v.at ? new Date(`${v.at}T12:00:00`).getTime() : undefined }); toast('Payment recorded.'); } catch (x) { toast(x.message); }
+  };
+}
+
+function csv(rows) { return rows.map((r) => r.map((x) => `"${String(x ?? '').replace(/"/g, '""')}"`).join(',')).join('\n'); }
+function download(name, text) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv' })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
+
+// ---------- events ----------
+$('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (!b) return; tab = b.dataset.tab; q = ''; draw(); scrollTo(0, 0); });
+$('view').addEventListener('input', (e) => { if (e.target.id === 'scrq') { scrQ = e.target.value.trim().toLowerCase(); const pos = e.target.selectionStart; draw(); const n = $('scrq'); n.focus(); n.setSelectionRange(pos, pos); return; }
+  if (e.target.id === 'q') { q = e.target.value.trim().toLowerCase(); const pos = e.target.selectionStart; draw(); const n = $('q'); n.focus(); n.setSelectionRange(pos, pos); } });
+$('view').addEventListener('change', async (e) => {
+  if (e.target.id === 'filter') { filter = e.target.value; draw(); return; }
+  if (e.target.dataset.move) {
+    const to = e.target.value; if (!to) return;
+    if (!confirm(`Move this tournament to ${clubName(to)}? It leaves this club’s list.`)) { e.target.value = ''; return; }
+    try { await admin({ op: 'move', id: e.target.dataset.move, to }); toast('Moved.'); } catch (x) { toast(x.message); }
+  }
+});
+$('view').addEventListener('click', async (e) => {
+  const sb = e.target.closest('[data-take],[data-show],[data-back],[data-flash]');
+  if (sb) {
+    const box = sb.closest('[data-ev]'), id = box.dataset.ev, text = box.querySelector('[data-ttext]').value.trim(), secs = Number(box.querySelector('[data-tsecs]').value) || 25;
+    try {
+      if (sb.dataset.take) {
+        const k = sb.dataset.take;
+        if (k === 'msg' && !text) return toast('Type the announcement first.');
+        await day(id, { op: 'take', kind: k, text, secs, sponsor: k === 'sponsor' ? box.querySelector('[data-tsp]').value : '', replay: k === 'replay' ? box.querySelector('[data-trep]').value : '' }, k === 'clear' ? 'Screens back to their playlists.' : 'On every screen.');
+      }
+      if (sb.hasAttribute('data-flash')) { if (!text) return toast('Type the news first.'); await day(id, { op: 'flash', text }, 'Sent to the ticker and phones.'); }
+      if (sb.dataset.show) { const v = box.querySelector(`[data-page="${sb.dataset.show}"]`).value; const [k, hole] = v.split(':'); await day(id, { op: 'screen', display: sb.dataset.show, page: { k, hole: Number(hole) || 0 } }, 'Screen switched.'); }
+      if (sb.dataset.back) await day(id, { op: 'screen', display: sb.dataset.back, page: null }, 'Back to its playlist.');
+    } catch (x) { toast(x.message); }
+    return;
+  }
+  const el = e.target.closest('[data-open],[data-a],[data-cr],[data-set],[data-rm],[data-owner],[data-signout],[data-unpay],[data-pay],[data-archive],[data-lock],[data-unhide],[data-copy],[data-reload],[data-csv],[data-newclub]');
+  if (!el) return;
+  if (el.tagName === 'A' && el.dataset.open) e.preventDefault();
+  const club = el.dataset.club || el.closest('[data-club]')?.dataset.club;
+  const c = clubs.find((x) => x.id === club);
   try {
-    if (b.dataset.op === 'delete' && !confirm('Delete this club? This can’t be undone.')) return;
-    if (b.dataset.op) { await admin({ op: b.dataset.op, club }); toast(b.dataset.op === 'approve' ? 'Approved. They’ve been emailed.' : 'Done.'); }
-    if (b.dataset.credits) await admin({ op: 'credits', club, add: Number(b.dataset.credits) });
-    if (b.dataset.set) await admin({ op: 'credits', club, set: Number(b.dataset.set) });
-    if (b.dataset.rm) await admin({ op: 'uninvite', club, email: b.dataset.rm });
+    if (el.dataset.open) { sel = el.dataset.open; tab = 'clubs'; draw(); return; }
+    if (el.hasAttribute('data-newclub')) { tab = 'overview'; draw(); document.querySelector('#newClub input')?.focus(); return; }
+    if (el.dataset.a) {
+      if (el.dataset.a === 'delete' && !confirm('Delete this club? This can’t be undone.')) return;
+      if (el.dataset.a === 'off' && !confirm('Switch this club off? They won’t be able to make tournaments.')) return;
+      await admin({ op: el.dataset.a, club }); toast(el.dataset.a === 'approve' ? 'Approved. They’ve been emailed.' : 'Done.'); if (el.dataset.a === 'delete') sel = null; return;
+    }
+    if (el.dataset.cr) return void await admin({ op: 'credits', club, add: Number(el.dataset.cr) });
+    if (el.dataset.set) return void await admin({ op: 'credits', club, set: Number(el.dataset.set) });
+    if (el.hasAttribute('data-pay')) return payDialog(c);
+    if (el.dataset.unpay) { if (confirm('Remove this payment from the log? Tournaments it added stay.')) await admin({ op: 'unpay', id: el.dataset.unpay }); return; }
+    if (el.dataset.rm) { if (confirm(`Remove ${el.dataset.rm} from the club?`)) await admin({ op: 'uninvite', club, email: el.dataset.rm }); return; }
+    if (el.dataset.owner) { await admin({ op: 'role', club, email: el.dataset.owner, role: 'owner' }); toast('Owner changed.'); return; }
+    if (el.dataset.signout) { await admin({ op: 'signout', email: el.dataset.signout }); toast('Signed out everywhere.'); return; }
+    if (el.dataset.unhide) { await admin({ op: 'unhide', id: el.dataset.unhide }); return; }
+    if (el.dataset.archive) {
+      const on = !!el.dataset.on;
+      if (on && !confirm('Archive this tournament? It leaves the club’s list and scoring closes. You can restore it.')) return;
+      await admin({ op: 'archive', id: el.dataset.archive, on }); if (tab === 'events') await loadEvents(); toast(on ? 'Archived.' : 'Restored.'); return;
+    }
+    if (el.dataset.lock) { await admin({ op: 'lock', id: el.dataset.lock, locked: !!el.dataset.locked }); await loadEvents(); toast(el.dataset.locked ? 'Scoring closed.' : 'Scoring open again.'); return; }
+    if (el.dataset.copy) { await navigator.clipboard.writeText(el.dataset.copy); toast('Desk link copied. Keep it private.'); return; }
+    if (el.hasAttribute('data-reload')) { if (tab === 'events' || tab === 'screens') { events = null; draw(); } else { logRows = null; draw(); } return; }
+    if (el.dataset.csv === 'payments') download('flagcast-payments.csv', csv([['Date', 'Club', 'For', 'Tournaments', 'Amount', 'Note'], ...clubs.flatMap((x) => x.payments.map((p) => [new Date(p.at).toISOString().slice(0, 10), x.name, p.what, p.credits < 0 ? 'Unlimited' : p.credits, p.amount, p.note]))]));
+    if (el.dataset.csv === 'log') download('flagcast-activity.csv', csv([['When', 'Who', 'Club', 'What'], ...(logRows || []).map((r) => [new Date(r.at).toISOString(), r.who, r.club ? clubName(r.club) : '', r.what])]));
   } catch (x) { toast(x.message); }
 });
-$('clubs').addEventListener('submit', async (e) => {
+$('view').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const f = e.target, club = f.closest('[data-club]').dataset.club, v = f.querySelector('input').value.trim();
+  const f = e.target, club = f.closest('[data-club]')?.dataset.club;
   try {
+    if (f.id === 'newClub') {
+      const v = Object.fromEntries(new FormData(f));
+      const j = await admin({ op: 'create', name: v.name, email: v.email, city: v.city, credits: Number(v.credits) });
+      if (j.made) { sel = j.made.club; tab = 'clubs'; draw(); } toast('Club set up.'); return;
+    }
+    if (f.hasAttribute('data-edit')) { const v = Object.fromEntries(new FormData(f)); await admin({ op: 'edit', club, ...v }); toast('Saved.'); return; }
+    const v = f.querySelector('input').value.trim();
     if (f.hasAttribute('data-invite')) { await admin({ op: 'invite', club, email: v }); toast('Added. They’ve been emailed.'); }
+    if (f.hasAttribute('data-claim')) { await admin({ op: 'claim', club, link: v }); toast('Added to this club.'); }
     if (f.hasAttribute('data-event')) { const j = await admin({ op: 'event', club, name: v }); toast('Tournament made. It’s in the club’s Manager now.'); if (j.made) window.open(`/g/${j.made.id}/desk#${j.made.key}&setup`, '_blank', 'noopener'); }
   } catch (x) { toast(x.message); }
 });
-$('newClub').addEventListener('submit', async (e) => {
-  e.preventDefault(); $('nErr').textContent = '';
-  try {
-    const j = await admin({ op: 'create', name: $('cName').value, email: $('cEmail').value, city: $('cCity').value, credits: Number($('cCredits').value) });
-    if (j.made) open.add(j.made.club); draw();
-    $('cName').value = $('cEmail').value = $('cCity').value = ''; toast('Club set up.');
-  } catch (x) { $('nErr').textContent = x.message; }
-});
-$('q').oninput = draw; $('filter').onchange = draw;
 
 async function start() {
-  try { await admin({}); $('gate').hidden = true; $('app').hidden = false; $('lock').hidden = false; }
-  catch (x) { $('gate').hidden = false; $('app').hidden = true; $('lock').hidden = true; if (pass) $('gErr').textContent = x.message; }
+  try { await admin({}); $('gate').hidden = true; $('app').hidden = false; $('lock').hidden = false; $('tabs').hidden = false; }
+  catch (x) { $('gate').hidden = false; $('app').hidden = true; $('lock').hidden = true; $('tabs').hidden = true; if (pass) $('gErr').textContent = x.message; }
 }
 $('gate').addEventListener('submit', async (e) => {
   e.preventDefault(); $('gErr').textContent = ''; pass = $('pass').value;
@@ -165,7 +379,18 @@ $('gate').addEventListener('submit', async (e) => {
 });
 $('lock').onclick = () => { try { localStorage.removeItem(KEY); sessionStorage.removeItem(KEY); } catch {} pass = ''; $('pass').value = ''; start(); };
 start();
-setInterval(() => { if (!$('app').hidden && document.visibilityState === 'visible') admin({}).catch(() => {}); }, 60000);
+// keep it fresh while it's open (not while typing)
+setInterval(() => {
+  const a = document.activeElement;
+  if ($('app').hidden || document.visibilityState !== 'visible' || $('dlg').open || (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName))) return;
+  call({}).then((j) => { clubs = j.clubs; $('nomail').hidden = j.mail; if (tab === 'overview' || tab === 'events') events = null; draw(); }).catch(() => {});
+}, 60000);
+// screens tab: refresh who's connected every 15 seconds
+setInterval(() => {
+  const a = document.activeElement;
+  if (tab !== 'screens' || $('app').hidden || document.visibilityState !== 'visible' || (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName))) return;
+  loadEvents().catch(() => {});
+}, 15000);
 </script>
 </body>
 </html>
