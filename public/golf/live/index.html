@@ -85,9 +85,18 @@ import { leaderboard, fmtPar, holeStats, contestLeader, fmtDist, skins, mark, FO
 import { live, esc } from '/golf/client.js';
 import { appBar, remember } from '/golf/appbar.js';
 import { attach, detach, playReplay, rewind, goLive, replayTime } from '/golf/replay.js';
+import { phoneBanner } from '/golf/phonecast.js';
 appBar('live');
 
-let S = null, view = location.hash.startsWith('#hole-') ? 'p3' : 'lb', flight = '', openRow = null;
+const HV = (location.hash.match(/^#v=(\w+)/) || [])[1];
+let S = null, view = location.hash.startsWith('#hole-') ? 'p3' : ['lb', 'p3', 'ct', 'sk'].includes(HV) ? HV : 'lb', flight = '', openRow = null;
+// a page routed to every phone: jump there when the player taps the banner
+function goRoute(r) {
+  const v = r.k === 'cam' || r.k === 'p3' ? 'p3' : r.k === 'contests' ? 'ct' : r.k === 'skins' ? 'sk' : 'lb';
+  if (r.k === 'lb') flight = r.fl || '';
+  view = v; render(); scrollTo(0, 0);
+  if (v === 'p3') setTimeout(() => document.getElementById(`hole-${r.hole}`)?.scrollIntoView({ behavior: 'smooth' }), 50);
+}
 const $ = (id) => document.getElementById(id);
 
 function camHtml(url, n) {
@@ -191,7 +200,7 @@ document.addEventListener('click', (e) => {
   const r = e.target.closest('tr.r'); if (r) { openRow = openRow === r.dataset.k ? null : r.dataset.k; render(); }
 });
 
-live((s) => { const had = !!S; S = s; remember(s.name); render(had); }, (on) => { $('pill').textContent = on ? 'LIVE' : 'RECONNECTING'; $('pill').className = `pill ${on ? 'live pulse' : 'off'}`; });
+live((s) => { const had = !!S; S = s; remember(s.name); render(had); phoneBanner(S, goRoute); }, (on) => { $('pill').textContent = on ? 'LIVE' : 'RECONNECTING'; $('pill').className = `pill ${on ? 'live pulse' : 'off'}`; });
 </script>
 </body>
 </html>
