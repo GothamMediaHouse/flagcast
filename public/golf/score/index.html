@@ -112,6 +112,7 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
 <div class="toast" id="toast" hidden></div>
 <div class="nudge" id="nudge" role="alertdialog" aria-labelledby="nudgeH" hidden><div><span class="label">From the pro shop</span><h2 id="nudgeH">A note for your cart</h2><p id="nudgeText"></p><button class="btn primary" onclick="this.closest('.nudge').hidden=true">OK</button></div></div>
 <script type="module">
+import { phoneBanner } from '/golf/phonecast.js';
 import { leaderboard, teamCard, strokesOn, playing, fmtPar, mark, contestLeader, fmtDist, sideGames } from '/golf/core.js';
 import { eventId, post, live, esc } from '/golf/client.js';
 import { appBar, remember } from '/golf/appbar.js';
@@ -353,7 +354,7 @@ async function start() {
     if (e.status === 404) { $('main').innerHTML = `<div class="center"><h2>Code not found</h2><p>${esc(e.message)}</p></div>`; return; }
     // no signal: carry on with what this phone already knows
   }
-  live((s) => { S = s; store.set('state', s); remember(s.name, code); render(); nudges(); }, (on) => { online = on; syncLabel(); if (on) send(); });
+  live((s) => { S = s; store.set('state', s); remember(s.name, code); render(); nudges(); phoneBanner(S, (r) => { location.href = `/g/${eventId()}${r.k === 'cam' || r.k === 'p3' ? `#hole-${r.hole}` : `#v=${r.k === 'contests' ? 'ct' : r.k === 'skins' ? 'sk' : 'lb'}`}`; }); }, (on) => { online = on; syncLabel(); if (on) send(); });
   if (!S) { const saved = store.get('state', null); if (saved && teams.length) { S = saved; render(); } }
   send();
 }

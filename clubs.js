@@ -300,9 +300,9 @@ export class FlagcastClubs extends DurableObject {
       if (b.op === 'day') {
         const row = this.one('SELECT * FROM events WHERE id = ?', clip(b.id, 8)); if (!row) this.fail('That tournament isn’t on any club’s list.', 404);
         const d = b.day || {};
-        if (!['screen', 'take', 'flash'].includes(d.op)) this.fail('Not allowed');
+        if (!['screen', 'take', 'flash', 'scene'].includes(d.op)) this.fail('Not allowed');
         await this.golf(row.id, 'desk', { ...d, key: row.key });
-        this.note('Flagcast', row.club, `Admin screens: ${d.op}${d.kind ? ` ${d.kind}` : ''}${d.page ? ` ${d.page.k}` : ''} · ${row.name}`);
+        this.note('Flagcast', row.club, `Admin screens: ${d.op}${d.kind ? ` ${d.kind}` : ''}${d.page ? ` ${d.page.k}${d.page.hole ? ` ${d.page.hole}` : ''}` : d.op === 'screen' ? ' playlist' : ''}${d.display ? ` → ${Array.isArray(d.display) ? d.display.join(', ') : d.display}` : ''} · ${row.name}`);
         return json({ ok: true });
       }
       if (b.op === 'log') return json({ log: this.all('SELECT * FROM log ORDER BY n DESC LIMIT 400') });
@@ -318,7 +318,8 @@ export class FlagcastClubs extends DurableObject {
               // for screen control
               displays: (s.displays || []).map((d) => ({ id: d.id, name: d.name, online: (s.online || {})[d.id] || 0, force: s.live?.force?.[d.id] || null, pages: (d.playlist || []).length })),
               p3: (s.course?.holes || []).filter((h) => h.par === 3).map((h) => h.n), sponsors: (s.sponsors || []).map((x) => ({ id: x.id, name: x.name })),
-              replayList: (s.replays || []).slice(0, 12).map((r) => ({ id: r.id, hole: r.hole, label: r.label, at: r.at })), take: s.live?.take || null, flash: s.flash || null };
+              replayList: (s.replays || []).slice(0, 12).map((r) => ({ id: r.id, hole: r.hole, label: r.label, at: r.at })), take: s.live?.take || null, flash: s.flash || null,
+              phone: s.live?.phone || null, scenes: (s.scenes || []).map((x) => ({ id: x.id, name: x.name })), scene: s.live?.scene || '', flights: s.flights || [], fund: !!s.fund?.on, skins: !!s.screens?.skins };
           } catch { return { ...e, gone: true }; }
         }));
         return json({ events: out });

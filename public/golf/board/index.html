@@ -19,6 +19,9 @@ header h1 { font-size: 2.6vw; font-weight: 800; letter-spacing: .03em; white-spa
 header .right { display: flex; align-items: center; gap: 1.4vw; font-family: var(--f-mono); font-size: 1.1vw; color: #a9bdb0; white-space: nowrap; }
 header .pill { font-size: .9vw; padding: .2vw .7vw; }
 .stage { position: relative; overflow: hidden; }
+.camfull { position: absolute; inset: 0; }
+.camfull .cam { position: absolute; inset: 0; border-radius: 0; }
+.camfull .tag { font-size: 1.3vw; padding: .3vw 1vw; }
 .slide { position: absolute; inset: 0; padding: 1.8vw 2.4vw; opacity: 0; transition: opacity .6s ease; }
 .slide.on { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .slide { transition: none; } }
@@ -158,6 +161,7 @@ function pageSlides(it) {
     for (let p = 0; p < Math.min(pages, 4); p++) out.push({ k: 'lb', fl: it.fl || null, lb: lb.slice(p * rows, p * rows + rows), p, pages, stab, secs });
     return out;
   }
+  if (it.k === 'cam') { const h = S.course.holes.find((x) => x.n === it.hole); return h ? [{ k: 'cam', h, secs }] : []; }
   if (it.k === 'p3') { const h = S.course.holes.find((x) => x.n === it.hole) || S.course.holes.find((x) => x.par === 3); return h ? [{ k: 'p3', h, secs }] : []; }
   if (it.k === 'sponsor') { const sp = (S.sponsors || []).find((x) => x.id === it.sponsor); return sp ? [{ k: 'sponsor', sp, secs }] : []; }
   if (it.k === 'fund' && !S.fund?.on) return [];
@@ -267,6 +271,7 @@ function scheduleSlide() {
 function draw(s) {
   if (s.k === 'lb') return lbSlide(s);
   if (s.k === 'p3') return p3Slide(s);
+  if (s.k === 'cam') return `<div class="camfull"><div class="cam">${camHtml(S.cams[s.h.n], s.h.n)}</div></div>`;
   if (s.k === 'contests') return contestsSlide();
   if (s.k === 'skins') return skinsSlide();
   if (s.k === 'fund') return fundSlide();
@@ -316,6 +321,7 @@ function refresh() {
   if (idx >= slides.length) idx = -1;
   const cur = curEl;
   if (!cur || idx < 0) return advance();
+  if (slides[idx].k === 'cam' && cur.dataset.sig === sig(slides[idx])) return; // the camera keeps playing
   if (slides[idx].k === 'p3' && cur.dataset.sig === sig(slides[idx])) { // keep the video playing: redraw only the side panel
     const tmp = document.createElement('div'); tmp.innerHTML = draw(slides[idx]);
     const side = cur.querySelector('.p3info'), fresh = tmp.querySelector('.p3info');

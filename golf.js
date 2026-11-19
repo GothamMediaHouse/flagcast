@@ -61,9 +61,10 @@ const clip = (s, n) => String(s ?? '').slice(0, n);
 // contest (closest to the pin / long drive on its holes), turn (card after the 9th), ace (hole-in-one take-over), slide (big-screen slide)
 export const SPOTS = ['title', 'leaderboard', 'hole', 'cam', 'contest', 'turn', 'ace', 'slide'];
 // what a screen's playlist can hold
-export const PAGE_KINDS = ['lb', 'p3', 'contests', 'skins', 'fund', 'sponsors', 'sponsor', 'schedule'];
+// (cam = one hole's camera, full frame)
+export const PAGE_KINDS = ['lb', 'p3', 'cam', 'contests', 'skins', 'fund', 'sponsors', 'sponsor', 'schedule'];
 // changes made on the day (desk or a pro's PIN); marshals only post contest results
-const DAY_OPS = new Set(['fix', 'ctp', 'contest', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay']);
+const DAY_OPS = new Set(['fix', 'ctp', 'contest', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay', 'scene']);
 // marshals post contest results and replays of shots at their hole
 const MARSHAL_OPS = new Set(['ctp', 'replay']);
 // a replay with no clip link replays the hole's live camera from this many seconds before it was marked
@@ -310,10 +311,28 @@ export class GolfEvent extends DurableObject {
     } else if (b.op === 'nudge') {
       const team = ev.teams.find((t) => t.id === b.team); if (!team) return json({ error: 'No such team' }, 404);
       ev.nudges = [...(ev.nudges || []), { team: team.id, text: clip(b.text || 'Please keep up the pace of play. Thank you!', 140), at: now }].slice(-50);
-    } else if (b.op === 'screen') { // switch one screen to a page, or back to its playlist (page: null)
-      if (!(ev.displays || []).find((d) => d.id === b.display)) return json({ error: 'No such screen' }, 404);
-      if (b.page && PAGE_KINDS.includes(b.page.k)) ev.live.force[b.display] = { k: b.page.k, fl: clip(b.page.fl, 12), hole: num(b.page.hole, 0, 18, 0), sponsor: clip(b.page.sponsor, 12), at: now };
-      else delete ev.live.force[b.display];
+    } else if (b.op === 'screen') { // route a page to one screen, several (a list) or all ('*'), or send them back to their playlists (page: null)
+      const all = (ev.displays || []).map((d) => d.id), want = Array.isArray(b.display) ? b.display : [b.display];
+      // 'phones': every player's phone gets a banner pointing at this page (live leaderboard page and scorecards)
+      if (want.includes('phones')) ev.live.phone = b.page && PAGE_KINDS.includes(b.page.k) ? { k: b.page.k, fl: clip(b.page.fl, 12), hole: num(b.page.hole, 0, 18, 0), sponsor: clip(b.page.sponsor, 12), text: clip(b.text, 140), at: now } : null;
+      const ids = b.display === '*' ? all : want.filter((x) => all.includes(x));
+      if (!ids.length && !want.includes('phones')) return json({ error: 'No such screen' }, 404);
+      for (const id of ids) {
+        if (b.page && PAGE_KINDS.includes(b.page.k)) ev.live.force[id] = { k: b.page.k, fl: clip(b.page.fl, 12), hole: num(b.page.hole, 0, 18, 0), sponsor: clip(b.page.sponsor, 12), at: now };
+        else delete ev.live.force[id];
+      }
+    } else if (b.op === 'scene') { // saved routings: save what every screen shows now, put one back, or delete one
+      ev.scenes = ev.scenes || [];
+      if (b.save) {
+        const name = clip(b.save, 40).trim(); if (!name) return json({ error: 'Name the scene' }, 400);
+        const map = Object.fromEntries((ev.displays || []).map((d) => [d.id, ev.live.force[d.id] ? { ...ev.live.force[d.id], at: undefined } : null]));
+        ev.scenes = [...ev.scenes.filter((s) => s.name.toLowerCase() !== name.toLowerCase()), { id: rand(6, 'abcdefghijkmnpqrstuvwxyz23456789'), name, map }].slice(-20);
+      } else if (b.remove) ev.scenes = ev.scenes.filter((s) => s.id !== b.remove);
+      else if (b.apply) {
+        const sc = ev.scenes.find((s) => s.id === b.apply); if (!sc) return json({ error: 'That scene is gone' }, 404);
+        for (const d of ev.displays || []) { const f = sc.map[d.id]; if (f) ev.live.force[d.id] = { ...f, at: now }; else delete ev.live.force[d.id]; }
+        ev.live.scene = sc.id;
+      } else return json({ error: 'Unknown change' }, 400);
     } else if (b.op === 'take') { // take over every screen: an ace, an announcement, a sponsor moment, or clear back to the playlists
       if (b.kind === 'clear') { ev.live = { force: {}, take: null }; }
       else if (b.kind === 'replay') {

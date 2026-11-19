@@ -60,6 +60,22 @@ td.acts > .btn, td.acts > select { margin: 2px 0 2px 4px; vertical-align: middle
 dialog { border: 1px solid var(--line); border-radius: 12px; background: var(--card); color: var(--ink); padding: 18px; width: min(440px, 92vw); }
 dialog::backdrop { background: rgba(0,0,0,.45); }
 .empty { color: var(--muted); padding: 16px; text-align: center; }
+.cols > div, .grid > div { min-width: 0; }
+.xwrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; }
+.xtab { border-collapse: separate; border-spacing: 0; width: auto; min-width: 100%; }
+.xtab th, .xtab td { border-bottom: 1px solid var(--line); padding: 6px; }
+.xtab tbody th { text-align: left; white-space: nowrap; font: 600 .9rem var(--f-body); letter-spacing: 0; text-transform: none; color: var(--ink); position: sticky; left: 0; background: var(--card); z-index: 1; padding-right: 14px; }
+.xtab tbody th small { display: block; color: var(--muted); font-weight: 400; font-size: .74rem; }
+.xtab th.xs { height: 120px; vertical-align: bottom; padding: 4px 2px; }
+.xtab th.xs span { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; font: 600 .78rem var(--f-body); letter-spacing: 0; text-transform: none; color: var(--ink); }
+.xtab td.xp { text-align: center; padding: 4px; }
+.xtab .allrow th, .xtab .allrow td { background: var(--paper-2); }
+.xtab .phonerow th, .xtab .phonerow td { border-top: 3px solid var(--line); }
+.xpt { width: 30px; height: 30px; border-radius: 6px; border: 1.5px solid var(--line); background: var(--paper); }
+.xpt:hover { border-color: var(--green-2); }
+.xpt.cam { border-style: dashed; }
+.xpt.on { background: var(--ok); border-color: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 30%, transparent); }
+.scene { display: inline-flex; gap: 2px; }
 </style>
 </head>
 <body>
@@ -221,34 +237,65 @@ function eventsView() {
   </tbody></table></div>`;
 }
 
-// SCREENS: every club's screens, and the same controls the desk and the pro's phone have
+// SCREENS: a router for every club's screens. Sources across, screens down; click a square to route it.
 const PAGES = [['lb', 'Leaderboard'], ['contests', 'Contests'], ['sponsors', 'Sponsors'], ['schedule', 'Schedule'], ['fund', 'Fundraising'], ['skins', 'Skins']];
-const pageName = (f) => !f ? 'Playing its list' : f.k === 'p3' ? `Hole ${f.hole} camera` : (PAGES.find((p) => p[0] === f.k)?.[1] || f.k);
-let scrQ = '';
+let scrQ = '', scrOpen = null;
+function sources(e) {
+  const out = [{ key: '', label: 'Playlist', page: null }];
+  out.push({ key: 'lb', label: 'Leaderboard', page: { k: 'lb' } });
+  if (e.flights.length > 1) for (const fl of e.flights) out.push({ key: `lb:${fl}`, label: `Flight ${fl}`, page: { k: 'lb', fl } });
+  for (const n of e.p3) { out.push({ key: `cam:${n}`, label: `Hole ${n} camera`, page: { k: 'cam', hole: n }, cam: true }); out.push({ key: `p3:${n}`, label: `Hole ${n} page`, page: { k: 'p3', hole: n } }); }
+  out.push({ key: 'contests', label: 'Contests', page: { k: 'contests' } });
+  if (e.skins) out.push({ key: 'skins', label: 'Skins', page: { k: 'skins' } });
+  if (e.fund) out.push({ key: 'fund', label: 'Fundraising', page: { k: 'fund' } });
+  if (e.sponsors.length) out.push({ key: 'sponsors', label: 'All sponsors', page: { k: 'sponsors' } });
+  for (const sp of e.sponsors) out.push({ key: `sponsor:${sp.id}`, label: sp.name, page: { k: 'sponsor', sponsor: sp.id } });
+  out.push({ key: 'schedule', label: 'Schedule', page: { k: 'schedule' } });
+  return out;
+}
+const routeKey = (f) => !f ? '' : f.k === 'lb' ? (f.fl ? `lb:${f.fl}` : 'lb') : (f.k === 'cam' || f.k === 'p3') ? `${f.k}:${f.hole}` : f.k === 'sponsor' ? `sponsor:${f.sponsor}` : f.k;
 function screensView() {
   if (!events) return '<div class="box empty">Loading every club’s screens…</div>';
   const list = events.filter((e) => !e.gone && !e.archived && (!scrQ || `${e.name} ${e.clubName}`.toLowerCase().includes(scrQ)))
     .sort((a, b) => (b.online - a.online) || (b.created - a.created));
-  return `<div class="row" style="margin-bottom:10px"><input id="scrq" type="search" placeholder="Find a tournament or club" value="${esc(scrQ)}"><button class="btn" data-reload>Refresh</button></div>
-  <p class="help">Tournaments with screens on right now come first. Changes show on the screens within a second.</p>
-  ${list.map((e) => {
-    const opts = [...e.p3.map((n) => `<option value="p3:${n}">Hole ${n} camera</option>`), ...PAGES.map(([k, l]) => `<option value="${k}">${l}</option>`)].join('');
-    const tk = e.take;
-    return `<div class="box" data-ev="${e.id}">
-      <div class="row" style="justify-content:space-between"><div><h2 style="margin:0">${esc(e.name)}</h2><p class="help" style="margin:2px 0 0">${esc(e.clubName || '')}${e.date ? ` · ${esc(e.date)}` : ''} · <span class="dot ${e.online ? 'on' : ''}"></span>${e.online} of ${e.screens} screens on${e.locked ? ' · results final' : ''}</p></div>
-        <div class="row"><a class="btn sm" href="/g/${e.id}/board" target="_blank" rel="noopener">Preview screens</a><a class="btn sm dark" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener">Desk</a></div></div>
-      <div class="sub">Take over every screen${tk ? ` · last: ${esc(tk.kind)}${tk.text ? ` “${esc(tk.text)}”` : ''} at ${when(tk.at)}` : ''}</div>
-      <div class="row"><input data-ttext maxlength="140" placeholder="Announcement (Awards in 10 minutes)"><input data-tsecs type="number" min="5" max="120" value="25" style="flex:0 0 80px;min-width:0" title="Seconds"></div>
-      <div class="row" style="margin-top:8px"><button class="btn sm dark" data-take="msg">Announcement</button><button class="btn sm primary" data-take="ace">Hole in one!</button>
-        ${e.sponsors.length ? `<select data-tsp style="flex:0 1 200px">${e.sponsors.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select><button class="btn sm" data-take="sponsor">Sponsor moment</button>` : ''}
-        ${e.replayList.length ? `<select data-trep style="flex:0 1 220px">${e.replayList.map((r) => `<option value="${r.id}">Hole ${r.hole}: ${esc(r.label || 'Replay')}</option>`).join('')}</select><button class="btn sm" data-take="replay">Replay</button>` : ''}
-        <button class="btn sm danger" data-take="clear">Clear, back to playlists</button>
-        <button class="btn sm" data-flash>Ticker news only</button></div>
-      <div class="sub">Screens</div>
-      ${e.displays.length ? `<table>${e.displays.map((d) => `<tr><td><span class="dot ${d.online ? 'on' : ''}"></span><b>${esc(d.name)}</b><small>${d.online ? 'Connected' : 'Not connected'} · ${pageName(d.force)}${d.force ? '' : d.pages ? ` (${d.pages} pages)` : ' (everything)'}</small></td>
-        <td class="acts"><select data-page="${d.id}" style="width:auto;padding:4px">${opts}</select><button class="btn sm dark" data-show="${d.id}">Show</button><button class="btn sm" data-back="${d.id}" ${d.force ? '' : 'disabled'}>Back to playlist</button></td></tr>`).join('')}</table>` : '<p class="help" style="margin:0">No screens added yet. The club adds them in the desk under Staff and playlists. Any screen opened from the board link still shows take-overs.</p>'}
-    </div>`;
-  }).join('') || '<div class="box empty">No tournaments yet.</div>'}`;
+  if (!scrOpen || !list.find((e) => e.id === scrOpen)) scrOpen = list[0]?.id || null;
+  const e = list.find((x) => x.id === scrOpen);
+  return `<div class="cols" style="grid-template-columns:280px 1fr"><div>
+    <div class="row" style="margin-bottom:10px"><input id="scrq" type="search" placeholder="Find a tournament or club" value="${esc(scrQ)}"><button class="btn" data-reload title="Refresh">↻</button></div>
+    <div class="clist">${list.map((x) => `<button class="citem" data-scr="${x.id}" aria-current="${x.id === scrOpen}"><span><b>${esc(x.name)}</b><small>${esc(x.clubName || '')}</small></span><span class="help" style="margin:0;white-space:nowrap"><span class="dot ${x.online ? 'on' : ''}"></span>${x.online}/${x.screens}</span></button>`).join('') || '<div class="empty">No tournaments.</div>'}</div>
+  </div><div>${e ? routerBox(e) : '<div class="box empty">Pick a tournament.</div>'}</div></div>`;
+}
+function routerBox(e) {
+  const src = sources(e), tk = e.take;
+  const cell = (d, s) => {
+    const on = d === 'phones' ? routeKey(e.phone) === s.key : d ? routeKey(d.force) === s.key : e.displays.length && e.displays.every((x) => routeKey(x.force) === s.key);
+    const to = d === 'phones' ? 'phones' : d ? d.id : '*', name = d === 'phones' ? 'every player’s phone' : d ? d.name : 'every screen';
+    return `<td class="xp"><button class="xpt ${on ? 'on' : ''} ${s.cam ? 'cam' : ''}" data-route="${to}" data-src="${esc(s.key)}" title="${esc(d === 'phones' && !s.key ? 'Nothing (no banner)' : s.label)} → ${esc(name)}"></button></td>`;
+  };
+  return `<div class="box" data-ev="${e.id}">
+    <div class="row" style="justify-content:space-between"><div><h2 style="margin:0">${esc(e.name)}</h2><p class="help" style="margin:2px 0 0">${esc(e.clubName || '')}${e.date ? ` · ${esc(e.date)}` : ''} · <span class="dot ${e.online ? 'on' : ''}"></span>${e.online} of ${e.screens} screens on${e.locked ? ' · results final' : ''}</p></div>
+      <div class="row"><a class="btn sm" href="/g/${e.id}/board" target="_blank" rel="noopener">Preview</a><a class="btn sm dark" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener">Desk</a></div></div>
+
+    <div class="sub">Router · click a square to send that source to that screen</div>
+    <div class="xwrap"><table class="xtab"><thead><tr><th></th>${src.map((s) => `<th class="xs"><span>${esc(s.key ? s.label : 'Playlist / off')}</span></th>`).join('')}</tr></thead><tbody>
+      ${e.displays.length ? `<tr class="allrow"><th>Every screen</th>${src.map((s) => cell(null, s)).join('')}</tr>` : ''}
+      ${e.displays.map((d) => `<tr><th><span class="dot ${d.online ? 'on' : ''}"></span>${esc(d.name)}<small>${d.online ? 'Connected' : 'Not connected'}</small></th>${src.map((s) => cell(d, s)).join('')}</tr>`).join('')}
+      <tr class="phonerow"><th>📱 Players’ phones<small>${e.phone ? `Banner: ${esc(sources(e).find((s) => s.key === routeKey(e.phone))?.label || '')}` : 'No banner'}</small></th>${src.map((s) => cell('phones', s)).join('')}</tr>
+    </tbody></table></div>
+    ${e.displays.length ? '' : '<p class="help" style="margin:6px 0 0">No screens added yet. The club adds them in the desk under Staff and playlists.</p>'}
+    <p class="help" style="margin:6px 0 0">Phones: players get a banner on the live leaderboard and their scorecard with a Watch / See it button. “Playlist / off” takes the banner away.</p>
+
+    <div class="sub">Scenes · save how every screen is routed, bring it back with one click</div>
+    <div class="row">${e.scenes.map((s) => `<span class="scene ${e.scene === s.id ? 'on' : ''}"><button class="btn sm ${e.scene === s.id ? 'primary' : ''}" data-scene="${s.id}">${esc(s.name)}</button><button class="btn sm" data-unscene="${s.id}" title="Delete scene">✕</button></span>`).join('')}
+      ${e.displays.length ? `<input data-scname maxlength="40" placeholder="Name, e.g. Shotgun start" style="flex:0 1 220px"><button class="btn sm" data-savescene>Save current routing</button>` : ''}</div>
+
+    <div class="sub">Take over every screen${tk ? ` · last: ${esc(tk.kind)}${tk.text ? ` “${esc(tk.text)}”` : ''} at ${when(tk.at)}` : ''}</div>
+    <div class="row"><input data-ttext maxlength="140" placeholder="Announcement (Awards in 10 minutes)"><input data-tsecs type="number" min="5" max="120" value="25" style="flex:0 0 80px;min-width:0" title="Seconds"></div>
+    <div class="row" style="margin-top:8px"><button class="btn sm dark" data-take="msg">Announcement</button><button class="btn sm primary" data-take="ace">Hole in one!</button>
+      ${e.sponsors.length ? `<select data-tsp style="flex:0 1 200px">${e.sponsors.map((s) => `<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select><button class="btn sm" data-take="sponsor">Sponsor moment</button>` : ''}
+      ${e.replayList.length ? `<select data-trep style="flex:0 1 220px">${e.replayList.map((r) => `<option value="${r.id}">Hole ${r.hole}: ${esc(r.label || 'Replay')}</option>`).join('')}</select><button class="btn sm" data-take="replay">Replay</button>` : ''}
+      <button class="btn sm danger" data-take="clear">Clear take-over</button><button class="btn sm" data-flash>Ticker news only</button></div>
+  </div>`;
 }
 async function day(id, d, ok) { await call({ op: 'day', id, day: d }); toast(ok); events = null; await loadEvents(); }
 
@@ -303,7 +350,8 @@ $('view').addEventListener('change', async (e) => {
   }
 });
 $('view').addEventListener('click', async (e) => {
-  const sb = e.target.closest('[data-take],[data-show],[data-back],[data-flash]');
+  const sc = e.target.closest('[data-scr]'); if (sc) { scrOpen = sc.dataset.scr; draw(); return; }
+  const sb = e.target.closest('[data-take],[data-route],[data-scene],[data-unscene],[data-savescene],[data-flash]');
   if (sb) {
     const box = sb.closest('[data-ev]'), id = box.dataset.ev, text = box.querySelector('[data-ttext]').value.trim(), secs = Number(box.querySelector('[data-tsecs]').value) || 25;
     try {
@@ -313,8 +361,15 @@ $('view').addEventListener('click', async (e) => {
         await day(id, { op: 'take', kind: k, text, secs, sponsor: k === 'sponsor' ? box.querySelector('[data-tsp]').value : '', replay: k === 'replay' ? box.querySelector('[data-trep]').value : '' }, k === 'clear' ? 'Screens back to their playlists.' : 'On every screen.');
       }
       if (sb.hasAttribute('data-flash')) { if (!text) return toast('Type the news first.'); await day(id, { op: 'flash', text }, 'Sent to the ticker and phones.'); }
-      if (sb.dataset.show) { const v = box.querySelector(`[data-page="${sb.dataset.show}"]`).value; const [k, hole] = v.split(':'); await day(id, { op: 'screen', display: sb.dataset.show, page: { k, hole: Number(hole) || 0 } }, 'Screen switched.'); }
-      if (sb.dataset.back) await day(id, { op: 'screen', display: sb.dataset.back, page: null }, 'Back to its playlist.');
+      if (sb.dataset.route !== undefined) {
+        const ev = events.find((x) => x.id === id), s = sources(ev).find((x) => x.key === sb.dataset.src);
+        sb.classList.add('on');
+        const to = sb.dataset.route, toName = to === '*' ? 'every screen' : to === 'phones' ? 'every player’s phone' : ev.displays.find((d) => d.id === to)?.name;
+        await day(id, { op: 'screen', display: to, page: s.page }, to === 'phones' && !s.page ? 'Phone banner off.' : `${s.label} → ${toName}`);
+      }
+      if (sb.dataset.scene) await day(id, { op: 'scene', apply: sb.dataset.scene }, 'Scene on.');
+      if (sb.dataset.unscene) { if (confirm('Delete this scene?')) await day(id, { op: 'scene', remove: sb.dataset.unscene }, 'Scene deleted.'); }
+      if (sb.hasAttribute('data-savescene')) { const n = box.querySelector('[data-scname]').value.trim(); if (!n) return toast('Name the scene first.'); await day(id, { op: 'scene', save: n }, 'Scene saved.'); }
     } catch (x) { toast(x.message); }
     return;
   }
