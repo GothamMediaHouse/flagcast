@@ -55,41 +55,5 @@ ID=$(security find-identity -v -p codesigning | grep -o '"Developer ID Applicati
 codesign --force --timestamp --sign "$ID" "$DMG"
 notarize "$DMG"; staple "$DMG"
 
-echo "== Update feeds"
-FEED="https://flagcast.app/updates/$LOWER"
-SIG=$(Vendor/sparkle-dist/bin/sign_update --account flagcast "$ZIP")   # sparkle:edSignature="…" length="…"
-cat > "$OUT/appcast.xml" <<EOF
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
-  <channel>
-    <title>$NAME</title>
-    <item>
-      <title>$NAME $VERSION</title>
-      <pubDate>$(LC_ALL=C date -u "+%a, %d %b %Y %H:%M:%S +0000")</pubDate>
-      <sparkle:version>$BUILD</sparkle:version>
-      <sparkle:shortVersionString>$VERSION</sparkle:shortVersionString>
-      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-      <enclosure url="$FEED/$(basename "$ZIP")" $SIG type="application/octet-stream"/>
-    </item>
-  </channel>
-</rss>
-EOF
-# the older (Electron) app reads latest-mac.yml and installs the .zip: the same signed app, so it moves to this one
-python3 - "$ZIP" "$DMG" "$VERSION" "$OUT/latest-mac.yml" <<'PY'
-import sys, hashlib, base64, os, datetime
-z, d, v, out = sys.argv[1:5]
-h = lambda p: base64.b64encode(hashlib.sha512(open(p, 'rb').read()).digest()).decode()
-open(out, 'w').write(f"""version: {v}
-files:
-  - url: {os.path.basename(z)}
-    sha512: {h(z)}
-    size: {os.path.getsize(z)}
-  - url: {os.path.basename(d)}
-    sha512: {h(d)}
-    size: {os.path.getsize(d)}
-path: {os.path.basename(z)}
-sha512: {h(z)}
-releaseDate: '{datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.000Z')}'
-""")
-PY
+tools/feeds.sh "$APP_T"
 echo; echo "Ready: $NAME $VERSION in apps/flagcast-mac/$OUT"; ls -la "$OUT"
