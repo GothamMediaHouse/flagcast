@@ -50,9 +50,9 @@ struct CardGrid: View {
                 ForEach(Array(rows.enumerated()), id: \.offset) { _, r in
                     GridRow {
                         Text(r.name).font(.subheadline.weight(.semibold)).lineLimit(1).padding(.trailing, 8)
-                        ForEach(holes.indices, id: \.self) { i in ScoreMark(value: i < r.scores.count ? r.scores[i] : nil, par: holes[i].par) }
+                        ForEach(holes, id: \.n) { h in ScoreMark(value: h.n - 1 < r.scores.count ? r.scores[h.n - 1] : nil, par: h.par) }
                         if showTotal {
-                            let t = r.scores.reduce(0) { $0 + max(0, $1 ?? 0) }
+                            let t = holes.reduce(0) { sum, h in sum + (h.n - 1 < r.scores.count ? max(0, r.scores[h.n - 1] ?? 0) : 0) }
                             Text(t > 0 ? "\(t)" : "").font(.footnote.monospaced().weight(.semibold))
                         }
                     }

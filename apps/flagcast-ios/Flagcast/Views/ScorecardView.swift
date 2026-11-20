@@ -90,7 +90,7 @@ struct ScorecardScreen: View {
                         if Geo.mapped(s) {
                             GPSCard(state: s, hole: h) { d in
                                 let ord = model.order(t), i = ord.firstIndex(of: model.currentHole()) ?? 0
-                                model.hole = ord[max(0, min(17, i + d))]
+                                model.hole = ord[max(0, min(ord.count - 1, i + d))]
                             }
                         }
                         sponsors(s, h)
@@ -107,7 +107,7 @@ struct ScorecardScreen: View {
                                 Label("Side games" + (model.side.anyOn ? " · playing" : ""), systemImage: "dollarsign.circle")
                             }.buttonStyle(.fcPlain)
                         }
-                        CardGrid(holes: s.course.holes,
+                        CardGrid(holes: s.course.holes.filter { Core.playHoles(s).contains($0.n) },
                                  rows: s.scorers(t).map { p in (Fmt.firstName(p.name), (model.myScores()[t.id]?[p.id]) ?? []) },
                                  showTotal: true)
                             .padding(.top, 8)
@@ -318,19 +318,19 @@ struct ScorecardScreen: View {
     }
 
     private func bottomBar(_ t: Team, _ h: Int) -> some View {
-        let ord = model.order(t), i = ord.firstIndex(of: h) ?? 0
+        let ord = model.order(t), i = ord.firstIndex(of: h) ?? 0, last = ord.count - 1
         return HStack(spacing: 10) {
             Button { model.hole = ord[max(0, i - 1)] } label: { Label("Back", systemImage: "chevron.left") }
                 .buttonStyle(.fcPlain).disabled(i == 0)
             Button {
-                if i == 17 { router.go(.live(id: model.id)); return }
+                if i == last { router.go(.live(id: model.id)); return }
                 if let s = model.state {
                     let missing = s.scorers(t).filter { model.value($0.id, h) == nil }
                     if !missing.isEmpty { model.toast = "No score yet for \(missing.map { Fmt.firstName($0.name) }.joined(separator: " and ")) on hole \(h)." }
                 }
-                model.hole = ord[min(17, i + 1)]
+                model.hole = ord[min(last, i + 1)]
             } label: {
-                Label(i == 17 ? "Done" : "Hole \(ord[min(17, i + 1)])", systemImage: i == 17 ? "flag.checkered" : "chevron.right")
+                Label(i == last ? "Done" : "Hole \(ord[min(last, i + 1)])", systemImage: i == last ? "flag.checkered" : "chevron.right")
                     .labelStyle(TrailingIcon())
             }
             .buttonStyle(.fcPrimary)

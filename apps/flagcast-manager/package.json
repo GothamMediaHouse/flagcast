@@ -1,7 +1,7 @@
 {
   "name": "flagcast-manager",
   "productName": "Flagcast Manager",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Set up and run Flagcast golf tournaments: teams, sponsors, screens, staff and reports.",
   "main": "main.js",
   "author": "Flagcast",
@@ -21,6 +21,7 @@
     "productName": "Flagcast Manager",
     "files": [
       "main.js",
+      "updater.js",
       "preload.js",
       "home.html",
       "logo.svg",
@@ -37,7 +38,8 @@
         "zip"
       ],
       "icon": "build/icon-mac.png",
-      "hardenedRuntime": true
+      "hardenedRuntime": true,
+      "artifactName": "Flagcast-Manager-${version}-${arch}-mac.${ext}"
     },
     "win": {
       "target": [
@@ -52,7 +54,22 @@
       "artifactName": "Flagcast-Manager-Setup-${version}.exe"
     },
     "dmg": {
-      "artifactName": "Flagcast-Manager-${version}-${arch}.dmg"
-    }
+      "artifactName": "Flagcast-Manager-${version}-universal.dmg"
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://flagcast.app/updates/manager"
+      }
+    ],
+    "extraResources": [
+      {
+        "from": "build/app-update.yml",
+        "to": "app-update.yml"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
   }
 }

@@ -237,19 +237,20 @@ struct ProScoresTab: View {
     private func grid(_ t: Team) -> some View {
         let sc = s.scores[t.id] ?? [:]
         let rows = s.format.isScramble ? [Player(id: "T", name: "Team")] : t.players
+        let holes = s.course.holes.filter { Core.playHoles(s).contains($0.n) }   // only the 9 on a 9-hole round
         return Grid(horizontalSpacing: 0, verticalSpacing: 0) {
             GridRow {
                 Text("Hole").fcLabel().gridColumnAlignment(.leading)
-                ForEach(s.course.holes, id: \.n) { h in Text("\(h.n)").font(.caption.monospaced()).foregroundStyle(Color.fcMuted).frame(width: 38) }
+                ForEach(holes, id: \.n) { h in Text("\(h.n)").font(.caption.monospaced()).foregroundStyle(Color.fcMuted).frame(width: 38) }
             }
             GridRow {
                 Text("Par").fcLabel()
-                ForEach(s.course.holes, id: \.n) { h in Text("\(h.par)").font(.caption.monospaced()).foregroundStyle(Color.fcMuted) }
+                ForEach(holes, id: \.n) { h in Text("\(h.par)").font(.caption.monospaced()).foregroundStyle(Color.fcMuted) }
             }
             ForEach(rows) { p in
                 GridRow {
                     Text(Fmt.firstName(p.name)).font(.subheadline.weight(.semibold)).padding(.trailing, 8)
-                    ForEach(s.course.holes, id: \.n) { h in
+                    ForEach(holes, id: \.n) { h in
                         let v = (sc[p.id] ?? []).count >= h.n ? sc[p.id]![h.n - 1] : nil
                         Button { editing = Fix(p: p, h: h.n) } label: {
                             Text(v == nil ? "·" : v == 0 ? "PU" : "\(v!)").font(.subheadline.monospaced())

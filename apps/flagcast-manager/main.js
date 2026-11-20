@@ -3,6 +3,7 @@
 // opens each one's desk, and puts a club screen's page full screen on any monitor plugged into this computer.
 const { app, BrowserWindow, ipcMain, screen, shell, Menu, dialog } = require('electron');
 const path = require('path');
+const updates = require('./updater');
 const fs = require('fs');
 
 const DEFAULT_BASE = 'https://flagcast.app';
@@ -65,7 +66,7 @@ function menu() {
     { label: 'View', submenu: [{ role: 'reload' }, { role: 'togglefullscreen' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'toggleDevTools' }] },
     { label: 'Screens', submenu: [{ label: 'Close all screens on this computer', accelerator: 'CmdOrCtrl+Shift+W', click: () => { for (const w of screenWins.values()) w.close(); } }] },
     { role: 'windowMenu' },
-    { role: 'help', submenu: [{ label: 'flagcast.app', click: () => shell.openExternal('https://flagcast.app') }] },
+    { role: 'help', submenu: [{ label: 'Check for Updates…', click: () => updates.check(false) }, { type: 'separator' }, { label: 'flagcast.app', click: () => shell.openExternal('https://flagcast.app') }] },
   ]));
 }
 
@@ -145,5 +146,5 @@ handle('gl:openScreen', (_e, { id, screenId, monitor }) => {
 });
 
 app.setName('Flagcast Manager');
-app.whenReady().then(() => { menu(); createWindow(); app.on('activate', () => { if (!win) createWindow(); }); });
+app.whenReady().then(() => { menu(); createWindow(); setTimeout(() => updates.check(true), 4000); app.on('activate', () => { if (!win) createWindow(); }); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

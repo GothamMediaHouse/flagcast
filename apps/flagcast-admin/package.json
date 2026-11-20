@@ -1,7 +1,7 @@
 {
   "name": "flagcast-admin",
   "productName": "Flagcast Admin",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Flagcast Admin: set up clubs, give them tournaments, approve and switch off clubs.",
   "main": "main.js",
   "author": "Flagcast",
@@ -21,6 +21,7 @@
     "productName": "Flagcast Admin",
     "files": [
       "main.js",
+      "updater.js",
       "build/icon.png"
     ],
     "directories": {
@@ -34,7 +35,8 @@
         "zip"
       ],
       "icon": "build/icon-mac.png",
-      "hardenedRuntime": true
+      "hardenedRuntime": true,
+      "artifactName": "Flagcast-Admin-${version}-${arch}-mac.${ext}"
     },
     "win": {
       "target": [
@@ -49,7 +51,22 @@
       "artifactName": "Flagcast-Admin-Setup-${version}.exe"
     },
     "dmg": {
-      "artifactName": "Flagcast-Admin-${version}-${arch}.dmg"
-    }
+      "artifactName": "Flagcast-Admin-${version}-universal.dmg"
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://flagcast.app/updates/admin"
+      }
+    ],
+    "extraResources": [
+      {
+        "from": "build/app-update.yml",
+        "to": "app-update.yml"
+      }
+    ]
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
   }
 }
