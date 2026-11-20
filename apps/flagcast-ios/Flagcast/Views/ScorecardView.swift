@@ -92,6 +92,10 @@ struct ScorecardScreen: View {
                                 let ord = model.order(t), i = ord.firstIndex(of: model.currentHole()) ?? 0
                                 model.hole = ord[max(0, min(ord.count - 1, i + d))]
                             }
+                        } else {
+                            // no course map yet: say where Course view and GPS come from, instead of nothing
+                            Label("Course view: map this course in the Desk first (Setup → Course map).", systemImage: "map")
+                                .font(.footnote).foregroundStyle(Color.fcMuted)
                         }
                         sponsors(s, h)
                         ForEach(s.contests.filter { $0.hole == h }) { c in contestNote(c) }
