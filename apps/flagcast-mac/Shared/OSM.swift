@@ -15,17 +15,26 @@ enum OSM {
     static func fetch(south: Double, west: Double, north: Double, east: Double) async throws -> [Element] {
         let bb = "\(south),\(west),\(north),\(east)"
         let q = "[out:json][timeout:25];(way[\"golf\"=\"hole\"](\(bb));way[\"golf\"~\"^(green|tee|bunker|water_hazard|lateral_water_hazard|fairway)$\"](\(bb));way[\"natural\"=\"water\"](\(bb));way[\"natural\"=\"sand\"](\(bb)););out geom;"
-        var req = URLRequest(url: URL(string: "https://overpass-api.de/api/interpreter")!)
-        req.httpMethod = "POST"
-        req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
-        req.httpBody = ("data=" + (q.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")).data(using: .utf8)
-        req.timeoutInterval = 40
-        let (d, r) = try await URLSession.shared.data(for: req)
-        if let h = r as? HTTPURLResponse, h.statusCode != 200 {
-            throw APIError(status: h.statusCode, message: h.statusCode == 429 || h.statusCode == 504 ? "The map data service is busy. Try again in a minute." : "The map data service didn’t answer. Try again.")
-        }
         struct R: Decodable { var elements: [Element]? }
-        return try JSONDecoder().decode(R.self, from: d).elements ?? []
+        var last: Error = APIError(status: 0, message: "The map data service didn’t answer. Try again.")
+        // the main server, then a public mirror when it's busy (it often is at peak times)
+        for server in ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter"] {
+            var req = URLRequest(url: URL(string: server)!)
+            req.httpMethod = "POST"
+            req.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+            req.setValue("FlagcastMac/2.0 (golf course maps; https://flagcast.app)", forHTTPHeaderField: "User-Agent")   // the service refuses requests without one
+            req.httpBody = ("data=" + (q.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")).data(using: .utf8)
+            req.timeoutInterval = 40
+            do {
+                let (d, r) = try await URLSession.shared.data(for: req)
+                if let h = r as? HTTPURLResponse, h.statusCode != 200 {
+                    last = APIError(status: h.statusCode, message: [429, 502, 503, 504].contains(h.statusCode) ? "The map data service is busy. Try again in a minute." : "The map data service didn’t answer. Try again.")
+                    continue
+                }
+                if let els = try? JSONDecoder().decode(R.self, from: d).elements { return els }
+            } catch { last = error }
+        }
+        throw last
     }
 
     typealias XY = (x: Double, y: Double)
