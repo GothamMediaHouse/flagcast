@@ -1,0 +1,342 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXFileReference section */
+		0BA4EB149F28194350479116 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Flagcast Manager.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		8663FE6E6BC6B032B001D569 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Manager-Info.plist"; sourceTree = "<group>"; };
+		96DD9AE71EDA99D5DFAC4100 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Flagcast Admin.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		41EE10D9F45B9D7AE28BB95A = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Admin-Info.plist"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		EB1AE74EA98E84C65C083FB6 = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		50F4FEBA64CF5F09BB07CC8C = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Manager;
+			sourceTree = "<group>";
+		};
+		A7E06F9F10DCFA18DE12411A = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Admin;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+		BE49EBEEBE1DAB0546F4E1A1 = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D609334B8D3A76AF3FFD5370 = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A975EDD3C8D7F3F61C669616 = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		761A6EA2FDFDAAD6C19CA083 = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F8A916AAF588B4E74DFAF950 = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		BBA592876FC0724AA6E75385 = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+
+		A25322BB60D9DEA0F6056D93 = {
+			isa = PBXGroup;
+			children = (
+				EB1AE74EA98E84C65C083FB6,
+				50F4FEBA64CF5F09BB07CC8C,
+				A7E06F9F10DCFA18DE12411A,
+				8663FE6E6BC6B032B001D569,
+				41EE10D9F45B9D7AE28BB95A,
+				3000CFD8FAEAE6DEE06B6D71,
+			);
+			sourceTree = "<group>";
+		};
+		3000CFD8FAEAE6DEE06B6D71 = {
+			isa = PBXGroup;
+			children = (
+				0BA4EB149F28194350479116,
+				96DD9AE71EDA99D5DFAC4100,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		DB286E70D34405202AEB7344 = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CFADF3BD60FB2D395E28CC1F;
+			buildPhases = (
+				BE49EBEEBE1DAB0546F4E1A1,
+				D609334B8D3A76AF3FFD5370,
+				A975EDD3C8D7F3F61C669616,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				EB1AE74EA98E84C65C083FB6,
+				50F4FEBA64CF5F09BB07CC8C,
+			);
+			name = Manager;
+			productName = "Flagcast Manager";
+			productReference = 0BA4EB149F28194350479116;
+			productType = "com.apple.product-type.application";
+		};
+		5BD71769F682320E10E921C9 = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EC13FDFBD33D7981E202E9BA;
+			buildPhases = (
+				761A6EA2FDFDAAD6C19CA083,
+				F8A916AAF588B4E74DFAF950,
+				BBA592876FC0724AA6E75385,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				EB1AE74EA98E84C65C083FB6,
+				A7E06F9F10DCFA18DE12411A,
+			);
+			name = Admin;
+			productName = "Flagcast Admin";
+			productReference = 96DD9AE71EDA99D5DFAC4100;
+			productType = "com.apple.product-type.application";
+		};
+
+		CEDD15C3A1A3E04A33D4809B = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+			};
+			buildConfigurationList = 1C616BA8C1E36C69AC62FFAF;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A25322BB60D9DEA0F6056D93;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 3000CFD8FAEAE6DEE06B6D71;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				DB286E70D34405202AEB7344,
+				5BD71769F682320E10E921C9,
+			);
+		};
+		DA28781D46135C99EB770856 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		4D1547E3B2EAD66C472B480D /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				SDKROOT = iphoneos;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		54940A5A00A1EC63B45B957F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C8KXPB4QNA;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Manager-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.manager;
+				PRODUCT_NAME = "Flagcast Manager";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		0230DAC49D2259B252A9B225 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C8KXPB4QNA;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Manager-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.manager;
+				PRODUCT_NAME = "Flagcast Manager";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		A3CC808DA76C66D4933EEBA3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C8KXPB4QNA;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Admin-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.admin;
+				PRODUCT_NAME = "Flagcast Admin";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		5F0F6C335FC27D0541D324EC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C8KXPB4QNA;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Admin-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.admin;
+				PRODUCT_NAME = "Flagcast Admin";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		1C616BA8C1E36C69AC62FFAF = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DA28781D46135C99EB770856 /* Debug */,
+				4D1547E3B2EAD66C472B480D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		CFADF3BD60FB2D395E28CC1F = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				54940A5A00A1EC63B45B957F /* Debug */,
+				0230DAC49D2259B252A9B225 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		EC13FDFBD33D7981E202E9BA = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A3CC808DA76C66D4933EEBA3 /* Debug */,
+				5F0F6C335FC27D0541D324EC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+	};
+	rootObject = CEDD15C3A1A3E04A33D4809B;
+}
