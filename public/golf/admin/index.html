@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
 <title>Flagcast Admin</title>
+<link rel="manifest" href="/golf/admin/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/golf/brand/admin-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Admin">
+<meta name="theme-color" content="#123628">
 <link rel="icon" href="/golf/brand/mark.svg" type="image/svg+xml">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <link rel="stylesheet" href="/golf/golf.css">
@@ -20,7 +27,8 @@ nav.tabs .n { background: var(--flag); color: var(--on-flag); border-radius: 999
 main { max-width: 1240px; margin: 0 auto; padding: 22px 16px 60px; }
 .grid { display: grid; grid-template-columns: 1fr 330px; gap: 22px; align-items: start; }
 .cols { display: grid; grid-template-columns: 340px 1fr; gap: 18px; align-items: start; }
-@media (max-width: 900px) { .grid, .cols { grid-template-columns: 1fr; } }
+.cols.scr { grid-template-columns: 280px 1fr; }
+@media (max-width: 900px) { .grid, .cols, .cols.scr { grid-template-columns: 1fr; } }
 .box { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 14px; }
 h2 { font-size: 1.4rem; margin: 0 0 10px; }
 h3 { font-size: 1.05rem; margin: 18px 0 8px; }
@@ -76,6 +84,31 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 .xpt.cam { border-style: dashed; }
 .xpt.on { background: var(--ok); border-color: var(--ok); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ok) 30%, transparent); }
 .scene { display: inline-flex; gap: 2px; }
+/* phones and small tablets: tabs scroll in one row under the title, tables turn into stacked rows */
+@media (max-width: 700px) {
+  .topbar { position: sticky; top: 0; z-index: 5; padding-bottom: 6px; }
+  .topbar .in { flex-wrap: wrap; gap: 6px 10px; }
+  .topbar h1 { font-size: 1.45rem; gap: 8px; }
+  .topbar h1 img { height: 30px; }
+  nav.tabs { order: 3; width: 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -4px; }
+  nav.tabs::-webkit-scrollbar { display: none; }
+  nav.tabs button { flex: none; white-space: nowrap; }
+  main { padding-top: 14px; }
+  main table:not(.xtab) thead { display: none; }
+  main table:not(.xtab), main table:not(.xtab) tbody, main table:not(.xtab) tr { display: block; width: 100%; }
+  main table:not(.xtab) tr { padding: 8px 0; border-bottom: 1px solid var(--line); }
+  main table:not(.xtab) tr:last-child { border-bottom: 0; }
+  main table:not(.xtab) td { display: inline-block; border: 0; padding: 2px 10px 2px 0; text-align: left; }
+  main table:not(.xtab) td:first-child { display: block; }
+  main table:not(.xtab) td.acts { display: block; text-align: left; padding-top: 6px; }
+  main table:not(.xtab) td.acts > .btn, main table:not(.xtab) td.acts > select { margin: 4px 6px 0 0; }
+  table.evt td:nth-child(2)::before { content: "Club "; color: var(--muted); }
+  table.evt td:nth-child(3)::before { content: "Teams "; color: var(--muted); }
+  table.evt td:nth-child(4)::before { content: "Scores "; color: var(--muted); }
+  table.evt td:nth-child(5)::before { content: "Screens "; color: var(--muted); }
+  .row > input, .row > select { min-width: 0; }
+  dialog { width: calc(100vw - 24px); }
+}
 </style>
 </head>
 <body>
@@ -227,7 +260,7 @@ function eventsView() {
   if (!events) return '<div class="box empty">Loading every tournament…</div>';
   const list = events.filter((e) => !q || `${e.name} ${e.clubName} ${e.id}`.toLowerCase().includes(q));
   return `<div class="row" style="margin-bottom:10px"><input id="q" type="search" placeholder="Find a tournament or club" value="${esc(q)}"><button class="btn" data-reload>Refresh</button></div>
-  <div class="box" style="padding:6px 12px"><table><thead><tr><th>Tournament</th><th>Club</th><th class="num">Teams</th><th class="num">Scores</th><th class="num">Screens on</th><th>Scoring</th><th></th></tr></thead><tbody>
+  <div class="box" style="padding:6px 12px"><table class="evt"><thead><tr><th>Tournament</th><th>Club</th><th class="num">Teams</th><th class="num">Scores</th><th class="num">Screens on</th><th>Scoring</th><th></th></tr></thead><tbody>
   ${list.map((e) => e.gone ? `<tr><td>${esc(e.name)}<small>${e.id.toUpperCase()} · can’t reach it</small></td><td>${esc(e.clubName || '')}</td><td colspan="5"></td></tr>` : `<tr style="${e.archived ? 'opacity:.55' : ''}"><td><b>${esc(e.name)}</b><small>${e.id.toUpperCase()}${e.date ? ` · plays ${esc(e.date)}` : ''} · made ${date(e.created)}${e.archived ? ' · archived' : ''}${e.replays ? ` · ${e.replays} replays` : ''}</small></td><td>${esc(e.clubName || '')}</td>
     <td class="num">${e.teams}</td><td class="num">${e.scored}</td><td class="num">${e.screens ? `<span class="dot ${e.online ? 'on' : ''}"></span>${e.online}/${e.screens}` : '—'}</td>
     <td>${e.locked ? '<span class="pill gray">Final</span>' : '<span class="pill ok">Open</span>'}</td>
@@ -260,7 +293,7 @@ function screensView() {
     .sort((a, b) => (b.online - a.online) || (b.created - a.created));
   if (!scrOpen || !list.find((e) => e.id === scrOpen)) scrOpen = list[0]?.id || null;
   const e = list.find((x) => x.id === scrOpen);
-  return `<div class="cols" style="grid-template-columns:280px 1fr"><div>
+  return `<div class="cols scr"><div>
     <div class="row" style="margin-bottom:10px"><input id="scrq" type="search" placeholder="Find a tournament or club" value="${esc(scrQ)}"><button class="btn" data-reload title="Refresh">↻</button></div>
     <div class="clist">${list.map((x) => `<button class="citem" data-scr="${x.id}" aria-current="${x.id === scrOpen}"><span><b>${esc(x.name)}</b><small>${esc(x.clubName || '')}</small></span><span class="help" style="margin:0;white-space:nowrap"><span class="dot ${x.online ? 'on' : ''}"></span>${x.online}/${x.screens}</span></button>`).join('') || '<div class="empty">No tournaments.</div>'}</div>
   </div><div>${e ? routerBox(e) : '<div class="box empty">Pick a tournament.</div>'}</div></div>`;
