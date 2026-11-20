@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- one-click updates (Sparkle): the feed flagcast.app serves from the latest GitHub release -->
+	<key>SUFeedURL</key>
+	<string>https://flagcast.app/updates/manager/appcast.xml</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+</dict>
+</plist>
