@@ -612,6 +612,7 @@ $('scores').addEventListener('change', async (e) => {
 function setMapLinks() {
   $('mapLink').href = `/g/${eventId()}/map#${key}`;
   $('groupsLink').href = `/g/${eventId()}/map#${key}&groups`;
+  $('cardsLink').href = `/g/${eventId()}/cards#${key}`; // the Teams tab's cart cards button too
 }
 function drawLinks() {
   const base = `${location.origin}/g/${eventId()}`;
