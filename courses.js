@@ -14,7 +14,8 @@ function shape(c) {
   const loc = c.location || {};
   const name = [c.club_name, c.course_name].filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).join(' · ');
   const tees = [];
-  for (const [side, women] of [['male', false], ['female', true]]) for (const t of (c.tees || {})[side] || []) {
+  // search results give a count of tees (a number), a course gives the lists
+  for (const [side, women] of [['male', false], ['female', true]]) for (const t of [].concat(Array.isArray((c.tees || {})[side]) ? c.tees[side] : [])) {
     tees.push({ name: String(t.tee_name || 'Tees'), women, rating: num(t.course_rating), slope: num(t.slope_rating), par: num(t.par_total),
       yards: num(t.total_yards), holes: (t.holes || []).map((h) => ({ par: num(h.par), yds: num(h.yardage), hcp: num(h.handicap) })) });
   }
