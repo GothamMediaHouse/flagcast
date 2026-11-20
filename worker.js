@@ -2,6 +2,7 @@
 // The website and pages are static files in public/; each tournament is one Durable Object (GolfEvent in golf.js).
 import { golf } from './golf.js';
 import { downloads } from './downloads.js';
+import { courses } from './courses.js';
 export { GolfEvent } from './golf.js';
 export { FlagcastClubs } from './clubs.js';
 
@@ -13,6 +14,7 @@ export default {
     const url = new URL(request.url);
     // the old name's domain and www forward to flagcast.app
     if (FORWARD.includes(url.hostname)) return Response.redirect(`https://${HOME}${url.pathname}${url.search}`, 301);
+    if (url.pathname === '/golf/api/courses' || url.pathname.startsWith('/golf/api/courses/')) return courses(request, env, ctx);
     if (url.pathname.startsWith('/golf/api/') || url.pathname.startsWith('/g/')) { const r = await golf(request, env); if (r) return r; }
     if (/^\/(download\/[a-z]|api\/[a-z]+\/latest|updates\/)/.test(url.pathname)) { const r = await downloads(request, env, ctx); if (r) return r; }
     return env.ASSETS.fetch(request);
