@@ -234,19 +234,34 @@ $('panel').addEventListener('submit', async (e) => {
   const ll = q.match(/(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);
   if (ll) { map.setView([+ll[1], +ll[2]], 17); return; }
   try {
-    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`);
-    const j = await r.json();
-    if (!j.length) { err.textContent = 'Couldn’t find that. Try the town too, or paste the spot from Google Maps.'; err.hidden = false; return; }
-    map.setView([+j[0].lat, +j[0].lon], 16);
+    const at = await osmFind(q);
+    if (!at) { err.textContent = 'Couldn’t find that. Try the town too, or paste the spot from Google Maps.'; err.hidden = false; return; }
+    map.setView([at.lat, at.lng], 16);
   } catch { err.textContent = 'Search isn’t answering. Paste the spot from Google Maps instead.'; err.hidden = false; }
 });
+
+// OpenStreetMap's place search, retrying with a simpler name: it often knows "Torrey Pines golf" but not
+// "Torrey Pines Municipal Golf Course"
+async function osmFind(q) {
+  const simple = q.split(' · ')[0].replace(/\b(municipal|public|golf course|golf club|country club|golf links|gc|cc)\b/gi, ' ').replace(/[·,&]+/g, ' ').replace(/\s+/g, ' ').trim();
+  for (const t of [q, simple && `${simple} golf`, simple].filter((x, i, a) => x && a.indexOf(x) === i)) {
+    const j = await (await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(t)}`)).json();
+    if (j.length) return { lat: +j[0].lat, lng: +j[0].lon };
+  }
+  return null;
+}
 
 // open on the course the Desk knows (its spot from Find the course, else a search for its name), then map it automatically
 async function goToCourse() {
   let at = S.course?.at;
   const name = S.course?.name || '';
-  if (!at && name) {
-    try { const j = await (await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(name)}`)).json(); if (j.length) at = { lat: +j[0].lat, lng: +j[0].lon }; } catch {}
+  if (!at && name) {   // a course typed in by hand, or set before courses had a location: ask the course lookup, then OpenStreetMap
+    try {
+      const j = await (await fetch(`/golf/api/courses?q=${encodeURIComponent(name.split(' · ')[0].slice(0, 80))}`)).json();
+      const c = (j.courses || []).find((x) => x.name === name) || (j.courses || [])[0];
+      if (c) at = c.at || (await (await fetch(`/golf/api/courses/${encodeURIComponent(c.id)}`)).json()).at || null;
+    } catch {}
+    if (!at) try { at = await osmFind(name); } catch {}
   }
   if (!at) return;
   if ($('q')) $('q').value = name;
