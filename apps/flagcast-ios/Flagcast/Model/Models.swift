@@ -197,6 +197,46 @@ struct Replay: Codable, Hashable, Identifiable {
     var isClip: Bool { !url.isEmpty }
 }
 
+/// The club's course map for hole GPS (golf.js cleanMap): per hole the tee, the front / middle / back of the green,
+/// and hazards (p = where you reach it, c = what carries it). Points are [lat, lng].
+struct GeoPoint: Codable, Hashable {
+    var lat: Double, lng: Double
+    init(lat: Double, lng: Double) { self.lat = lat; self.lng = lng }
+    init(from d: Decoder) throws {
+        var c = try d.unkeyedContainer()
+        lat = try c.decode(Double.self); lng = try c.decode(Double.self)
+    }
+    func encode(to e: Encoder) throws { var c = e.unkeyedContainer(); try c.encode(lat); try c.encode(lng) }
+}
+struct Hazard: Codable, Hashable, Identifiable {
+    var id: String, k: String, n: String, p: GeoPoint, c: GeoPoint?
+}
+struct HoleMap: Codable, Hashable {
+    var tee: GeoPoint?, f: GeoPoint?, m: GeoPoint?, b: GeoPoint?, hz: [Hazard]
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        tee = try? c.decodeIfPresent(GeoPoint.self, forKey: .tee); f = try? c.decodeIfPresent(GeoPoint.self, forKey: .f)
+        m = try? c.decodeIfPresent(GeoPoint.self, forKey: .m); b = try? c.decodeIfPresent(GeoPoint.self, forKey: .b)
+        hz = c.list(.hz)
+    }
+}
+struct CourseMap: Codable, Hashable {
+    var holes: [Int: HoleMap] = [:], src = ""
+    enum CodingKeys: String, CodingKey { case holes, src }
+    init() {}
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        let raw = (try? c.decodeIfPresent([String: Lenient<HoleMap>].self, forKey: .holes)) ?? [:]
+        holes = Dictionary(uniqueKeysWithValues: raw.compactMap { k, v in Int(k).flatMap { n in v.value.map { (n, $0) } } })
+        src = c.str(.src)
+    }
+    func encode(to e: Encoder) throws {
+        var c = e.container(keyedBy: CodingKeys.self)
+        try c.encode(Dictionary(uniqueKeysWithValues: holes.map { (String($0.key), $0.value) }), forKey: .holes)
+        try c.encode(src, forKey: .src)
+    }
+}
+
 /// scores[teamId][playerId or "T"] = 18 values: nil = not yet, 0 = picked up, else strokes
 typealias Scores = [String: [String: [Int?]]]
 
@@ -221,12 +261,13 @@ struct EventState: Codable, Hashable {
     var nudges: [Nudge] = []
     var live = LiveScreens()
     var replays: [Replay] = []
+    var map = CourseMap()
     var scores: Scores = [:]
     var online: [String: Int] = [:]
 
     enum CodingKeys: String, CodingKey {
         case id, name, club, date, course, format, sideGames, flights, teams, screens, cams, sponsors, schedule, displays, fund, contests
-        case locked, aces, flash, news, nudges, live, replays, scores, online
+        case locked, aces, flash, news, nudges, live, replays, map, scores, online
     }
     init() {}
     init(from d: Decoder) throws {
@@ -249,6 +290,7 @@ struct EventState: Codable, Hashable {
         news = c.list(.news); nudges = c.list(.nudges)
         live = (try? c.decodeIfPresent(LiveScreens.self, forKey: .live)) ?? LiveScreens()
         replays = c.list(.replays)
+        map = (try? c.decodeIfPresent(CourseMap.self, forKey: .map)) ?? CourseMap()
         scores = (try? c.decodeIfPresent(Scores.self, forKey: .scores)) ?? [:]
         online = (try? c.decodeIfPresent([String: Int].self, forKey: .online)) ?? [:]
     }
@@ -261,7 +303,7 @@ struct EventState: Codable, Hashable {
         try c.encode(sponsors, forKey: .sponsors); try c.encode(schedule, forKey: .schedule); try c.encode(displays, forKey: .displays)
         try c.encode(fund, forKey: .fund); try c.encode(contests, forKey: .contests); try c.encode(locked, forKey: .locked)
         try c.encode(aces, forKey: .aces); try c.encodeIfPresent(flash, forKey: .flash); try c.encode(news, forKey: .news)
-        try c.encode(nudges, forKey: .nudges); try c.encode(live, forKey: .live); try c.encode(replays, forKey: .replays); try c.encode(scores, forKey: .scores); try c.encode(online, forKey: .online)
+        try c.encode(nudges, forKey: .nudges); try c.encode(live, forKey: .live); try c.encode(replays, forKey: .replays); try c.encode(map, forKey: .map); try c.encode(scores, forKey: .scores); try c.encode(online, forKey: .online)
     }
 
     /// The name shown at the top of pages: the screens title when the desk set one.

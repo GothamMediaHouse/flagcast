@@ -63,13 +63,25 @@ final class ScorecardModel {
         feed.onState["score:\(code)"] = { [weak self] s in self?.arrived(s) }
         feed.onLink["score:\(code)"] = { [weak self] on in if on { self?.send() } }
         feed.start()
+        Locator.shared.onFix["score:\(code)"] = { [weak self] p, acc in self?.reportSpot(p, acc) }
         Task { await lookUpCart() }
         if let s = state { arrived(s) }
         send()
         askForNotifications()
     }
 
+    // ---- group spot for the desk (only while the tournament is on): every 30 s, or sooner after a walk ----
+    @ObservationIgnored private var sentSpot: (at: GeoPoint, t: Date)?
+    func reportSpot(_ at: GeoPoint, _ acc: Int) {
+        guard let s = state, let t = teamId, Geo.trackingOn(s) else { return }
+        if let last = sentSpot, Date().timeIntervalSince(last.t) < 30, (Geo.yds(last.at, at) ?? 0) < 25 { return }
+        sentSpot = (at, Date())
+        let h = currentHole()
+        Task { _ = try? await API.post(id, "where", ["code": code, "team": t, "at": [at.lat, at.lng], "acc": acc, "hole": h]) }
+    }
+
     func stop() {
+        Locator.shared.onFix["score:\(code)"] = nil
         feed.onState["score:\(code)"] = nil
         feed.onLink["score:\(code)"] = nil
         feed.stop()

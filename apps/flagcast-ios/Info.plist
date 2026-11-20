@@ -48,6 +48,8 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Flagcast shows yardages to the green and hazards from where you are. During a tournament the desk can see where your group is on the course.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Flagcast uses the camera to scan the QR code on your cart card.</string>
 	<key>UIApplicationSceneManifest</key>
