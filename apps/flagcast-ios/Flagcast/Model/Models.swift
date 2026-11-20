@@ -36,11 +36,24 @@ struct Hole: Codable, Hashable {
 }
 
 struct Player: Codable, Hashable, Identifiable {
+    /// hcp is the playing handicap the scoring uses. When the desk entered a GHIN Handicap Index, the server
+    /// has already worked hcp out as the course handicap for the player's tee; index and tee are shown with it.
     var id: String, name: String, hcp: Double, guest: Bool
+    var index: Double? = nil, tee: String = ""
     init(id: String, name: String, hcp: Double = 0, guest: Bool = false) { self.id = id; self.name = name; self.hcp = hcp; self.guest = guest }
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         id = c.str(.id); name = c.str(.name); hcp = c.dbl(.hcp, 0); guest = c.bool(.guest, false)
+        index = c.num(.index); tee = c.str(.tee)
+    }
+}
+
+/// A set of tees with its USGA rating and slope, for course handicaps.
+struct Tee: Codable, Hashable, Identifiable {
+    var id: String, name: String, slope: Double, rating: Double, par: Int
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        id = c.str(.id); name = c.str(.name); slope = c.dbl(.slope, 113); rating = c.dbl(.rating, 72); par = c.int(.par, 0)
     }
 }
 
@@ -74,10 +87,12 @@ struct Format: Codable, Hashable {
 
 struct Course: Codable, Hashable {
     var name: String, holes: [Hole]
+    var tees: [Tee] = []
     init(name: String = "", holes: [Hole] = Core.defaultHoles()) { self.name = name; self.holes = holes }
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         name = c.str(.name)
+        tees = c.list(.tees)
         let h: [Hole] = c.list(.holes)
         holes = h.count == 18 ? h : Core.defaultHoles()
     }
