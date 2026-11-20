@@ -125,6 +125,13 @@ enum Core {
         return -(p / 18 + (si > 18 - (p % 18) ? 1 : 0))
     }
 
+    /// GHIN Handicap Index as written on a card: plus handicaps are negative here (+2.1 → -2.1), so show them with a +.
+    static func fmtIndex(_ n: Double?) -> String {
+        guard let n else { return "" }
+        let s = n == n.rounded() ? String(Int(abs(n))) : String(format: "%.1f", abs(n))
+        return n < 0 ? "+" + s : s
+    }
+
     static func playing(_ hcp: Double, _ allowance: Double) -> Int {
         let v = jsRound(hcp * allowance / 100)
         return v.isFinite ? Int(v) : 0

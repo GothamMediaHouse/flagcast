@@ -241,6 +241,12 @@ struct ScorecardScreen: View {
                         else { Text("no strokes here") }
                     }
                     .font(.caption).foregroundStyle(Color.fcMuted)
+                    if let ix = p.index {
+                        // GHIN: Handicap Index, tee and the course handicap the server worked out from them
+                        let tee = s.course.tees.first { $0.id == p.tee }?.name ?? ""
+                        Text("Index \(Core.fmtIndex(ix))\(tee.isEmpty ? "" : " · \(tee)") · CH \(Core.fmtIndex(p.hcp))")
+                            .font(.caption2.monospaced()).foregroundStyle(Color.fcMuted).lineLimit(1).minimumScaleFactor(0.75)
+                    }
                 }
                 Spacer(minLength: 4)
                 stepButton("minus", "One fewer for \(p.name)") { model.step(p.id, -1) }
