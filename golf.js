@@ -125,7 +125,10 @@ function cleanSetup(s, old) {
   });
   const f = s.format || {};
   return {
-    name: clip(s.name, 80), club: clip(s.club, 80), date: clip(s.date, 20), course: { name: clip(s.course?.name, 80), holes, tees },
+    name: clip(s.name, 80), club: clip(s.club, 80), date: clip(s.date, 20), course: { name: clip(s.course?.name, 80), holes, tees,
+      // where the course is (from Find the course), so the course map opens on it
+      at: (() => { const a = s.course?.at || old.course?.at; const lat = Number(a?.lat), lng = Number(a?.lng);
+        return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && (lat || lng) ? { lat, lng } : null; })() },
     format: { type: ['bestball', 'stroke', 'scramble', 'stableford'].includes(f.type) ? f.type : 'bestball',
       count: num(f.count, 1, 4, 1), allowance: num(f.allowance, 0, 100, 100), show: f.show === 'gross' ? 'gross' : 'net',
       nine: ['front', 'back'].includes(f.nine) ? f.nine : '' }, // '' = all 18 holes

@@ -19,7 +19,8 @@ function shape(c) {
     tees.push({ name: String(t.tee_name || 'Tees'), women, rating: num(t.course_rating), slope: num(t.slope_rating), par: num(t.par_total),
       yards: num(t.total_yards), holes: (t.holes || []).map((h) => ({ par: num(h.par), yds: num(h.yardage), hcp: num(h.handicap) })) });
   }
-  return { id: c.id, name: name || 'Course', club: c.club_name || '', course: c.course_name || '', city: loc.city || '', state: loc.state || '', tees };
+  const lat = num(loc.latitude), lng = num(loc.longitude);
+  return { id: c.id, name: name || 'Course', club: c.club_name || '', course: c.course_name || '', city: loc.city || '', state: loc.state || '', at: lat != null && lng != null ? { lat, lng } : null, tees };
 }
 
 export async function courses(request, env, ctx) {
