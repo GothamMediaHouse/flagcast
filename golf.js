@@ -127,7 +127,8 @@ function cleanSetup(s, old) {
   return {
     name: clip(s.name, 80), club: clip(s.club, 80), date: clip(s.date, 20), course: { name: clip(s.course?.name, 80), holes, tees },
     format: { type: ['bestball', 'stroke', 'scramble', 'stableford'].includes(f.type) ? f.type : 'bestball',
-      count: num(f.count, 1, 4, 1), allowance: num(f.allowance, 0, 100, 100), show: f.show === 'gross' ? 'gross' : 'net' },
+      count: num(f.count, 1, 4, 1), allowance: num(f.allowance, 0, 100, 100), show: f.show === 'gross' ? 'gross' : 'net',
+      nine: ['front', 'back'].includes(f.nine) ? f.nine : '' }, // '' = all 18 holes
     sideGames: s.sideGames !== false, // each cart's own skins, Nassau and birdies on the scorecard; no money goes through Flagcast
     flights: (Array.isArray(s.flights) ? s.flights : []).slice(0, 12).map((x) => clip(x, 12)).filter(Boolean),
     teams,
