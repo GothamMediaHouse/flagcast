@@ -46,6 +46,9 @@ export const fmtIndex = (n) => (n == null || n === '' ? '' : n < 0 ? `+${-n}` : 
 // net double bogey: the most a hole can count for handicap posting (par + 2 + strokes received)
 export const netDoubleBogey = (par, courseHandicap, si) => par + 2 + Math.max(0, strokesOn(courseHandicap, si));
 
+// which holes the round is played on: all 18, the front 9 (1–9) or the back 9 (10–18) — event.format.nine = '' | 'front' | 'back'
+export const playHoles = (ev) => { const n = ev?.format?.nine; return Array.from({ length: n ? 9 : 18 }, (_, i) => i + 1 + (n === 'back' ? 9 : 0)); };
+
 export const playing = (hcp, allowance) => Math.round((Number(hcp) || 0) * (allowance ?? 100) / 100);
 
 const isScore = (v) => typeof v === 'number' && v >= 0;
@@ -56,9 +59,10 @@ export function teamCard(ev, team, sc) {
   const type = f.type || 'bestball';
   const count = type === 'stroke' ? 1 : Math.max(1, Math.min(4, f.count || 1));
   const s = sc || {};
-  const rows = [];
+  const rows = [], inPlay = new Set(playHoles(ev));
   for (let i = 0; i < 18; i++) {
     const hole = holes[i];
+    if (!inPlay.has(i + 1)) { rows.push({ hole: hole.n, par: hole.par, gross: null, net: null, done: false, off: true }); continue; }
     let gross = null, net = null, pts = null, done = false, parFor = hole.par;
     if (type === 'scramble') {
       const v = (s.T || [])[i];
@@ -131,6 +135,7 @@ export function leaderboard(ev, scores, opts = {}) {
     }
     return { ...e, card, played, total, toPar, nr, score: stab ? total : toPar };
   });
+  const ph = playHoles(ev), full = ph.length, endH = ph[full - 1];
   const filtered = opts.flight ? lines.filter((l) => l.flight === opts.flight) : lines;
   const back = (l, from) => l.card.slice(from - 1).reduce((t, r) => t + (r.done ? ((mode === 'gross' ? r.gross : r.net) ?? 0) - (stab ? 0 : r.par) : 0), 0);
   filtered.sort((a, b) => {
@@ -139,8 +144,8 @@ export function leaderboard(ev, scores, opts = {}) {
     const d = stab ? b.score - a.score : a.score - b.score;
     if (d) return d;
     // card-off for players who finished: back 9, back 6, back 3, last hole
-    if (a.played === 18 && b.played === 18) {
-      for (const from of [10, 13, 16, 18]) {
+    if (a.played === full && b.played === full) {
+      for (const from of (full === 18 ? [10, 13, 16, 18] : [endH - 5, endH - 2, endH])) {
         const x = back(a, from), y = back(b, from);
         if (x !== y) return stab ? y - x : x - y;
       }
@@ -153,7 +158,7 @@ export function leaderboard(ev, scores, opts = {}) {
     const tied = (o) => o && o.played && l.played && o.nr === l.nr && o.score === l.score;
     if (!tied(prev)) pos = i + 1;
     l.pos = l.played ? (tied(prev) || tied(filtered[i + 1]) ? `T${pos}` : String(pos)) : '';
-    l.thru = l.played === 18 ? 'F' : l.played ? String(l.played) : (l.start && l.start !== 1 ? `Starts ${l.start}` : '—');
+    l.thru = l.played === full ? 'F' : l.played ? String(l.played) : (l.start && l.start !== 1 ? `Starts ${l.start}` : '—');
   });
   return filtered;
 }
@@ -248,7 +253,8 @@ export function sideGames(ev, scores, teamIds, cfg = {}) {
     return net ? v - st : v;
   };
   const start = teams[0]?.start || 1;
-  const order = Array.from({ length: 18 }, (_, k) => (start - 1 + k) % 18);
+  const ph = playHoles(ev).map((h) => h - 1), k0 = Math.max(0, ph.indexOf(start - 1));
+  const order = [...ph.slice(k0), ...ph.slice(0, k0)]; // hole indexes this round plays, from the starting hole
   const ledger = Object.fromEntries(players.map((p) => [p.key, 0]));
   const pay = (from, to, amt) => { if (!amt || from === to) return; ledger[from] -= amt; ledger[to] += amt; };
   const out = { players, ledger, settle: [] };
@@ -300,7 +306,7 @@ export function sideGames(ev, scores, teamIds, cfg = {}) {
         }
         return r;
       };
-      out.nassau = { sides: { A: sides.A.map((p) => p.key), B: sides.B.map((p) => p.key) }, segs: [seg(0, 8, 'Front 9'), seg(9, 17, 'Back 9'), seg(0, 17, 'Overall')] };
+      out.nassau = { sides: { A: sides.A.map((p) => p.key), B: sides.B.map((p) => p.key) }, segs: ev.format?.nine ? [seg(ph[0], ph[8], 'Match')] : [seg(0, 8, 'Front 9'), seg(9, 17, 'Back 9'), seg(0, 17, 'Overall')] };
     }
   }
 

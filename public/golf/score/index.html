@@ -115,7 +115,7 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
 import { phoneBanner } from '/golf/phonecast.js';
 import { gpsCard } from '/golf/gpscard.js';
 import { onGps, yds, trackingOn } from '/golf/gps.js';
-import { leaderboard, teamCard, strokesOn, playing, fmtPar, mark, contestLeader, fmtDist, sideGames } from '/golf/core.js';
+import { leaderboard, playHoles, teamCard, strokesOn, playing, fmtPar, mark, contestLeader, fmtDist, sideGames } from '/golf/core.js';
 import { eventId, post, live, esc } from '/golf/client.js';
 import { appBar, remember } from '/golf/appbar.js';
 appBar('score');
@@ -140,7 +140,9 @@ function myScores() {
 }
 const team = () => S && S.teams.find((t) => t.id === teamId);
 const who = (t) => (S.format.type === 'scramble' ? [{ id: 'T', name: t.name || 'Team', hcp: t.hcp }] : t.players);
-const order = (t) => Array.from({ length: 18 }, (_, i) => ((t.start || 1) - 1 + i) % 18 + 1);
+// the holes this cart plays, in order from its starting hole (only the front or back 9 on a 9-hole round)
+const inRound = (h) => playHoles(S).includes(h.n);
+const order = (t) => { const ph = playHoles(S), k = Math.max(0, ph.indexOf(t.start || ph[0])); return [...ph.slice(k), ...ph.slice(0, k)]; };
 
 function setScore(p, h, v) {
   pending = pending.filter((e) => !(e.team === teamId && e.p === p && e.h === h));
@@ -203,7 +205,7 @@ function nudges() {
 }
 
 // hole GPS: yardages and the course view, when the course is mapped
-const gps = gpsCard({ onHole: (d) => { const t = team(); if (!t) return; const ord = order(t), i = ord.indexOf(hole); hole = ord[Math.max(0, Math.min(17, i + d))]; render(); } });
+const gps = gpsCard({ onHole: (d) => { const t = team(); if (!t) return; const ord = order(t), i = ord.indexOf(hole); hole = ord[Math.max(0, Math.min(ord.length - 1, i + d))]; render(); } });
 // with GPS on, the desk sees where this group is (every 30 s, or sooner after a walk)
 let sent = null;
 onGps((f) => {
@@ -225,7 +227,8 @@ function render() {
   tabs.hidden = teams.length < 2;
   tabs.innerHTML = teams.map((id) => { const x = S.teams.find((y) => y.id === id); return x ? `<button data-team="${id}" aria-pressed="${id === teamId}">${esc(x.name || x.players.map((p) => p.name).join(' / '))}</button>` : ''; }).join('');
   const sc = myScores(), mine = sc[t.id] || {}, holes = S.course.holes, ps = who(t);
-  if (!hole) hole = order(t).find((h) => !ps.every((p) => (mine[p.id] || [])[h - 1] != null)) || t.start || 1;
+  if (hole && !order(t).includes(hole)) hole = 0; // a hole saved from before the round was set to 9 holes
+  if (!hole) hole = order(t).find((h) => !ps.every((p) => (mine[p.id] || [])[h - 1] != null)) || order(t)[0];
   const allow = S.format.allowance ?? 100;
   $('strip').innerHTML = order(t).map((h) => {
     const done = ps.every((p) => (mine[p.id] || [])[h - 1] != null);
@@ -260,15 +263,15 @@ function render() {
       <div style="text-align:right"><div class="label">Position</div><div class="big">${lb && lb.pos ? lb.pos : '—'}</div></div></div>
     <a class="btn" style="width:100%;margin-top:10px" href="/g/${eventId()}">Full leaderboard</a>
     ${sideOK() ? `<button class="btn" style="width:100%;margin-top:10px" data-view="side">Side games${side.skins.on || side.nassau.on || side.birdies.on ? ' · playing' : ''}</button>` : ''}
-    <div class="card"><table><thead><tr><th>Hole</th>${holes.map((h) => `<th>${h.n}</th>`).join('')}<th>Tot</th></tr>
-      <tr><th>Par</th>${holes.map((h) => `<th>${h.par}</th>`).join('')}<th>${holes.reduce((a, h) => a + h.par, 0)}</th></tr></thead>
+    <div class="card"><table><thead><tr><th>Hole</th>${holes.filter(inRound).map((h) => `<th>${h.n}</th>`).join('')}<th>Tot</th></tr>
+      <tr><th>Par</th>${holes.filter(inRound).map((h) => `<th>${h.par}</th>`).join('')}<th>${holes.filter(inRound).reduce((a, h) => a + h.par, 0)}</th></tr></thead>
       <tbody>${ps.map((p) => { const arr = mine[p.id] || []; const tot = arr.reduce((a, v) => a + (v > 0 ? v : 0), 0);
-        return `<tr><td>${esc(p.name.split(' ')[0] || p.name)}</td>${holes.map((h, i) => { const v = arr[i]; return `<td>${v == null ? '' : v === 0 ? 'PU' : `<span class="sc ${mark(v, h.par)}">${v}</span>`}</td>`; }).join('')}<td>${tot || ''}</td></tr>`; }).join('')}</tbody></table></div>`;
+        return `<tr><td>${esc(p.name.split(' ')[0] || p.name)}</td>${holes.filter(inRound).map((h) => { const v = arr[h.n - 1]; return `<td>${v == null ? '' : v === 0 ? 'PU' : `<span class="sc ${mark(v, h.par)}">${v}</span>`}</td>`; }).join('')}<td>${tot || ''}</td></tr>`; }).join('')}</tbody></table></div>`;
   gps.update(S, hole); gps.mount($('gpsSlot'));
   $('bar').hidden = false;
   const ord = order(t), i = ord.indexOf(hole);
   $('prev').disabled = i === 0;
-  $('next').textContent = i === 17 ? 'Done' : `Hole ${ord[i + 1]}`;
+  $('next').textContent = i === ord.length - 1 ? 'Done' : `Hole ${ord[i + 1]}`;
   store.set('hole', hole);
   document.querySelector('.strip [aria-current="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
 }
@@ -347,7 +350,7 @@ document.addEventListener('click', (e) => {
   if (b.dataset.clear) return setScore(b.dataset.clear, hole, null);
   if (b.id === 'next' || b.id === 'prev') {
     const ord = order(t), i = ord.indexOf(hole);
-    if (b.id === 'next' && i === 17) { location.href = `/g/${eventId()}`; return; }
+    if (b.id === 'next' && i === ord.length - 1) { location.href = `/g/${eventId()}`; return; }
     if (b.id === 'next') {
       const mine = myScores()[t.id] || {};
       const missing = who(t).filter((p) => (mine[p.id] || [])[hole - 1] == null);
