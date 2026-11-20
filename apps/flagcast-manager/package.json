@@ -36,7 +36,7 @@
         "dmg",
         "zip"
       ],
-      "icon": "build/icon.png",
+      "icon": "build/icon-mac.png",
       "hardenedRuntime": true
     },
     "win": {
