@@ -102,7 +102,7 @@ struct CourseView: View {
         ZStack(alignment: .top) {
             if let h, let g = Geo.middle(h) {
                 MapReader { proxy in
-                    Map(position: $camera, interactionModes: [.zoom, .pan]) {
+                    Map(position: $camera, interactionModes: threeD ? [.zoom, .pan, .pitch, .rotate] : [.zoom, .pan]) {
                         content(h, g)
                     }
                     .mapStyle(.imagery(elevation: threeD ? .realistic : .flat))
@@ -115,7 +115,10 @@ struct CourseView: View {
                     }
                 }
                 .ignoresSafeArea()
-                .onAppear { frame(h, g) }
+                .onAppear {
+                    frame(h, g)
+                    if threeD { DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { if let h = self.h, let g = Geo.middle(h) { frame(h, g) } } }
+                }
                 .onChange(of: hole) { _, _ in tap = nil; if let h = self.h, let g = Geo.middle(h) { frame(h, g) } }
                 .onChange(of: origin?.me) { _, _ in frame(h, g) }
                 .onChange(of: threeD) { _, _ in
@@ -347,6 +350,8 @@ struct CourseView: View {
             Group {
                 if let t = tap, let o = origin, let g = h.flatMap(Geo.middle) {
                     Text("\(Int(jsRound(Geo.yds(o.at, t) ?? 0))) yds there, then \(Int(jsRound(Geo.yds(t, g) ?? 0))) to the middle. Tap it again to clear.")
+                } else if threeD {
+                    Text("3D: tap to measure, two fingers to tilt or turn. Where Apple has no 3D for a course you see a tilted satellite view.")
                 } else {
                     Text("Tap anywhere to measure: how far there, and what’s left to the green.")
                 }
