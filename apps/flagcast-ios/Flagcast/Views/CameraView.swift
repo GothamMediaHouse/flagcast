@@ -132,6 +132,7 @@ struct CameraBox: View {
     var camURL: URL?
     var replays: [Replay]
     @State private var cam: CameraController
+    @State private var fullscreen = false
 
     init(hole: Int, camURL: URL?, replays: [Replay]) {
         self.hole = hole; self.camURL = camURL; self.replays = replays
@@ -152,6 +153,16 @@ struct CameraBox: View {
                 if cam.loading { ProgressView().tint(.white).frame(maxWidth: .infinity, maxHeight: .infinity) }
             }
             .aspectRatio(16 / 9, contentMode: .fit)
+            .overlay(alignment: .topTrailing) {
+                if camURL != nil || cam.replay != nil {
+                    Button { fullscreen = true } label: {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right").font(.subheadline.weight(.bold))
+                            .frame(width: 36, height: 36).background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 8)).foregroundStyle(.white)
+                    }
+                    .padding(8)
+                    .accessibilityLabel("Full screen")
+                }
+            }
             .clipShape(RoundedRectangle(cornerRadius: 8))
 
             if camURL != nil || !replays.isEmpty {
@@ -181,7 +192,155 @@ struct CameraBox: View {
             }
         }
         .onAppear { cam.start() }
+        .onDisappear { if !fullscreen { cam.pause() } }
+        .fullScreenCover(isPresented: $fullscreen) { FullscreenCamera(cam: cam, hole: hole, replays: replays) }
+    }
+}
+
+/// One camera filling the screen (turn the phone sideways for the biggest picture). Tap to show or hide the
+/// controls: live, 30 s back, and the hole's replays.
+struct FullscreenCamera: View {
+    var cam: CameraController
+    var hole: Int
+    var replays: [Replay]
+    @Environment(\.dismiss) private var dismiss
+    @State private var controls = true
+    @State private var hideTask: Task<Void, Never>?
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            VideoPlayer(player: cam.player).ignoresSafeArea().allowsHitTesting(false)
+            Color.clear.contentShape(Rectangle()).onTapGesture { withAnimation { controls.toggle() }; autoHide() }
+            if controls {
+                VStack {
+                    HStack(spacing: 10) {
+                        Button { dismiss() } label: { Image(systemName: "xmark").font(.headline).frame(width: 44, height: 44).background(.black.opacity(0.55), in: Circle()) }
+                            .accessibilityLabel("Close")
+                        Text("Hole \(hole)").font(.system(.title3, weight: .heavy)).fontWidth(.condensed).textCase(.uppercase)
+                        Text(cam.replay != nil ? "REPLAY" : "LIVE").font(.caption2.monospaced().weight(.semibold)).tracking(1)
+                            .padding(.horizontal, 6).padding(.vertical, 2)
+                            .background(cam.replay != nil ? Color(UIColor(hex: 0xe8c547)) : Color(UIColor(hex: 0xc8312b)))
+                            .foregroundStyle(cam.replay != nil ? Color.fcOnFlag : .white)
+                        Spacer()
+                    }
+                    Spacer()
+                    if let m = cam.message { Text(m).font(.footnote).padding(8).background(.black.opacity(0.6), in: RoundedRectangle(cornerRadius: 8)) }
+                    HStack(spacing: 8) {
+                        if cam.replay != nil {
+                            Button { cam.goLive() } label: { Label("Back to live", systemImage: "dot.radiowaves.left.and.right") }.buttonStyle(.fc(.primary, full: false))
+                        } else if cam.camURL != nil {
+                            Button { cam.rewind(30) } label: { Label("30s", systemImage: "gobackward.30") }.buttonStyle(.fc(.dark, full: false)).disabled(!cam.canRewind)
+                            Button { cam.goLive() } label: { Label("Live", systemImage: "dot.radiowaves.left.and.right") }.buttonStyle(.fc(.dark, full: false))
+                        }
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 6) {
+                                ForEach(replays) { r in
+                                    Chip(title: "\(r.label.isEmpty ? "Replay" : r.label) · \(Fmt.time(r.at))", on: cam.replay?.id == r.id) { Task { await cam.play(r) }; autoHide() }
+                                }
+                            }
+                        }
+                    }
+                    .font(.subheadline)
+                }
+                .padding(16)
+                .foregroundStyle(.white)
+                .transition(.opacity)
+            }
+        }
+        .statusBarHidden(!controls)
+        .persistentSystemOverlays(.hidden)
+        .onAppear { cam.player.play(); autoHide() }
+        .preferredColorScheme(.dark)
+    }
+
+    private func autoHide() {
+        hideTask?.cancel()
+        hideTask = Task { try? await Task.sleep(for: .seconds(4)); if !Task.isCancelled { withAnimation { controls = false } } }
+    }
+}
+
+/// Every par 3 camera at once, in a grid (two across; turn the phone sideways for a 2×2 quad). Tap one for it alone.
+struct AllPar3s: View {
+    var state: EventState
+    @Environment(\.dismiss) private var dismiss
+    @State private var picked: Int?
+
+    var holes: [Hole] { state.course.holes.filter { $0.par == 3 && (state.cams[$0.n].map { $0.lowercased().contains(".m3u8") } ?? false) } }
+
+    var body: some View {
+        GeometryReader { geo in
+            let wide = geo.size.width > geo.size.height
+            let cols = Array(repeating: GridItem(.flexible(), spacing: 4), count: holes.count == 1 ? 1 : 2)
+            ZStack(alignment: .topLeading) {
+                Color.black.ignoresSafeArea()
+                LazyVGrid(columns: cols, spacing: 4) {
+                    ForEach(holes, id: \.n) { h in
+                        QuadTile(hole: h, url: URL(string: state.cams[h.n] ?? ""), height: wide ? (geo.size.height - 4) / 2 : nil)
+                            .onTapGesture { picked = h.n }
+                    }
+                }
+                .frame(maxHeight: .infinity, alignment: wide ? .center : .center)
+                Button { dismiss() } label: { Image(systemName: "xmark").font(.headline).foregroundStyle(.white).frame(width: 44, height: 44).background(.black.opacity(0.55), in: Circle()) }
+                    .padding(12).accessibilityLabel("Close")
+            }
+        }
+        .statusBarHidden()
+        .persistentSystemOverlays(.hidden)
+        .preferredColorScheme(.dark)
+        .fullScreenCover(item: Binding(get: { picked.map { PickedHole(n: $0) } }, set: { picked = $0?.n })) { p in
+            SingleCamera(hole: p.n, url: URL(string: state.cams[p.n] ?? ""), replays: state.replays.filter { $0.hole == p.n })
+        }
+    }
+    struct PickedHole: Identifiable { var n: Int; var id: Int { n } }
+}
+
+/// A par 3 tile in the quad: live, muted, with the hole number.
+private struct QuadTile: View {
+    var hole: Hole
+    var url: URL?
+    var height: CGFloat?
+    @State private var cam: CameraController
+    init(hole: Hole, url: URL?, height: CGFloat?) {
+        self.hole = hole; self.url = url; self.height = height
+        _cam = State(initialValue: CameraController(camURL: url))
+    }
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            Color(UIColor(hex: 0x0a120e))
+            VideoPlayer(player: cam.player).allowsHitTesting(false)
+            HStack(spacing: 6) {
+                Text("LIVE").font(.caption2.monospaced().weight(.semibold)).padding(.horizontal, 5).padding(.vertical, 1).background(Color(UIColor(hex: 0xc8312b)))
+                Text("Hole \(hole.n)").font(.subheadline.weight(.heavy)).fontWidth(.condensed).textCase(.uppercase)
+                if hole.yds > 0 { Text("\(hole.yds) yds").font(.caption.monospaced()).foregroundStyle(.white.opacity(0.75)) }
+            }
+            .foregroundStyle(.white).padding(8).background(LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom))
+        }
+        .aspectRatio(16 / 9, contentMode: .fit)
+        .frame(maxHeight: height)
+        .contentShape(Rectangle())
+        .onAppear { cam.start() }
         .onDisappear { cam.pause() }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Shows this camera full screen")
+    }
+}
+
+/// One camera full screen with its own player (opened from the quad).
+private struct SingleCamera: View {
+    var hole: Int
+    var url: URL?
+    var replays: [Replay]
+    @State private var cam: CameraController
+    init(hole: Int, url: URL?, replays: [Replay]) {
+        self.hole = hole; self.url = url; self.replays = replays
+        _cam = State(initialValue: CameraController(camURL: url))
+    }
+    var body: some View {
+        FullscreenCamera(cam: cam, hole: hole, replays: replays)
+            .onAppear { cam.start() }
+            .onDisappear { cam.pause() }
     }
 }
 
