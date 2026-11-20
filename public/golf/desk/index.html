@@ -6,7 +6,12 @@
 <meta name="robots" content="noindex">
 <title>Tournament desk · Flagcast</title>
 <link rel="icon" href="/golf/brand/mark.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="/golf/brand/app-icon-180.png">
+<link rel="apple-touch-icon" href="/golf/brand/manager-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Desk">
+<meta name="theme-color" content="#123628">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <link rel="stylesheet" href="/golf/golf.css">
 <style>
@@ -15,7 +20,7 @@
 .top .acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .top .btn { padding: 7px 12px; font-size: .9rem; }
 #dirty { font-size: .85rem; color: var(--flag); }
-nav.tabs { display: flex; gap: 2px; padding: 0 max(16px, env(safe-area-inset-left, 0px)); background: var(--green); overflow-x: auto; }
+nav.tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: 2px; padding: 0 max(16px, env(safe-area-inset-left, 0px)); background: var(--green); overflow-x: auto; }
 nav.tabs a { padding: 10px 14px; color: var(--on-green-muted); text-decoration: none; font-weight: 600; font-size: .92rem; border-bottom: 3px solid transparent; white-space: nowrap; }
 nav.tabs a[aria-current="page"] { color: var(--on-green); border-color: var(--flag); }
 main { max-width: 1180px; margin: 0 auto; padding: 24px max(16px, env(safe-area-inset-left, 0px)) 80px max(16px, env(safe-area-inset-right, 0px)); }
