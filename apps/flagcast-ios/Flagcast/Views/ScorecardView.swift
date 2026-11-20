@@ -39,10 +39,12 @@ struct ScorecardScreen: View {
         .onAppear {
             model.start()
             UIApplication.shared.isIdleTimerDisabled = true   // keep the screen on while scoring
+            Locator.shared.resume()
         }
         .onDisappear {
             model.stop()
             UIApplication.shared.isIdleTimerDisabled = false
+            Locator.shared.pause()
         }
         .toast($model.toast)
         .sensoryFeedback(.selection, trigger: model.changes)
@@ -85,6 +87,12 @@ struct ScorecardScreen: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
                         holeHeader(s, H).id("top")
+                        if Geo.mapped(s) {
+                            GPSCard(state: s, hole: h) { d in
+                                let ord = model.order(t), i = ord.firstIndex(of: model.currentHole()) ?? 0
+                                model.hole = ord[max(0, min(17, i + d))]
+                            }
+                        }
                         sponsors(s, h)
                         ForEach(s.contests.filter { $0.hole == h }) { c in contestNote(c) }
                         if let cam = s.cams[h], let u = URL(string: cam) {
