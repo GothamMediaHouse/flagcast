@@ -248,7 +248,7 @@ function fill() {
   $('f-title').value = EV.screens.title || ''; $('f-secs').value = EV.screens.seconds; $('f-rows').value = EV.screens.rows; $('f-skins').value = EV.screens.skins ? '1' : '';
   $('f-ticker').value = EV.screens.ticker || '';
   $('f-fund').value = EV.fund.on ? '1' : ''; $('f-fundLabel').value = EV.fund.label; $('f-goal').value = EV.fund.goal || ''; $('f-give').value = EV.fund.give; $('raised').value = EV.fund.raised || '';
-  drawCourse(); drawTees(); drawTeams(); drawContests(); drawCams(); drawSponsors(); drawStaff(); drawLock();
+  setMapLinks(); drawCourse(); drawTees(); drawTeams(); drawContests(); drawCams(); drawSponsors(); drawStaff(); drawLock();
 }
 function read() {
   EV.name = val('f-name'); EV.club = val('f-club'); EV.date = val('f-date'); EV.course.name = val('f-course');
@@ -608,6 +608,11 @@ $('scores').addEventListener('change', async (e) => {
   try { await post('score', { desk: key, team, list: [{ p, h: Number(h), v, at: Date.now() }] }); } catch (err) { toast(err.message); }
 });
 
+// the course map links live on the Setup tab, so they're set as soon as the desk opens (not only on Links and cards)
+function setMapLinks() {
+  $('mapLink').href = `/g/${eventId()}/map#${key}`;
+  $('groupsLink').href = `/g/${eventId()}/map#${key}&groups`;
+}
 function drawLinks() {
   const base = `${location.origin}/g/${eventId()}`;
   const L = [['Live leaderboard for phones', `${base}`, 'Share with players, guests and anyone at home.'],
@@ -617,8 +622,6 @@ function drawLinks() {
     ['This desk', `${location.origin}/g/${eventId()}/desk#${key}`, 'Keep this private. Anyone with it can change the tournament.']];
   $('links').innerHTML = L.map(([n, u, h]) => `<div class="link"><b>${n}<br><span class="help" style="font-weight:400">${h}</span></b><code>${esc(u)}</code><button class="btn" data-copy="${esc(u)}">Copy</button><a class="btn" href="${esc(u)}" target="_blank" rel="noopener">Open</a></div>`).join('');
   $('cardsLink').href = `/g/${eventId()}/cards#${key}`;
-  $('mapLink').href = `/g/${eventId()}/map#${key}`;
-  $('groupsLink').href = `/g/${eventId()}/map#${key}&groups`;
   { const n = Object.keys(EV.map?.holes || {}).length; if (n) $('mapHelp').textContent = `${n} of 18 holes mapped. Players see yardages and a course view on their scorecard. Your club keeps the map for its next tournament.`; }
   const aces = (LIVE && LIVE.aces) || [];
   $('aces').innerHTML = aces.length ? aces.map((a) => `<div class="row" style="margin-top:6px"><span>Hole ${a.hole}: <b>${esc(a.name)}</b> (${esc(a.team)}), ${new Date(a.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span><button class="btn" data-unace="${a.at}">Remove (entered by mistake)</button></div>`).join('') : 'None yet.';
