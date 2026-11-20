@@ -89,6 +89,11 @@ struct CourseView: View {
     @State private var camera: MapCameraPosition = .automatic
     @State private var tap: GeoPoint?
     @State private var framedFor = ""
+    /// 3D: Apple's elevation imagery seen from behind where you hit from (remembered). Flat satellite where
+    /// Apple has no 3D data for the course.
+    @AppStorage("flagcast.course3d") private var threeD = false
+    @State private var fly = 0          // bumps to run "Fly the hole"
+    @State private var flying = false
 
     private var h: HoleMap? { state.map.holes[hole] }
     private var origin: (at: GeoPoint, me: Bool)? { h.flatMap { Geo.origin($0, loc.fix?.at) } }
@@ -100,8 +105,9 @@ struct CourseView: View {
                     Map(position: $camera, interactionModes: [.zoom, .pan]) {
                         content(h, g)
                     }
-                    .mapStyle(.imagery(elevation: .flat))
+                    .mapStyle(.imagery(elevation: threeD ? .realistic : .flat))
                     .mapControlVisibility(.hidden)
+                    .mapCameraKeyframeAnimator(trigger: fly) { _ in flight(h, g) }
                     .onTapGesture { pt in
                         guard let c = proxy.convert(pt, from: .local) else { return }
                         let p = GeoPoint(c)
@@ -112,6 +118,10 @@ struct CourseView: View {
                 .onAppear { frame(h, g) }
                 .onChange(of: hole) { _, _ in tap = nil; if let h = self.h, let g = Geo.middle(h) { frame(h, g) } }
                 .onChange(of: origin?.me) { _, _ in frame(h, g) }
+                .onChange(of: threeD) { _, _ in
+                    // let the map switch styles first, or the tilt is dropped
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { if let h = self.h, let g = Geo.middle(h) { frame(h, g) } }
+                }
             } else {
                 Color(UIColor(hex: 0x0b1a12)).ignoresSafeArea()
                 Text("Hole \(hole) isn’t on the course map yet.").foregroundStyle(.white).padding(.top, 200)
@@ -119,6 +129,7 @@ struct CourseView: View {
             topBar
         }
         .overlay(alignment: .topTrailing) { yardageBox.padding(.top, 76).padding(.trailing, 12) }
+        .overlay(alignment: .bottomLeading) { flyButton.padding(.leading, 12).padding(.bottom, 12) }
         .safeAreaInset(edge: .bottom) { footer }
         .preferredColorScheme(.dark)
         .onAppear { if loc.on { loc.resume() } }
@@ -207,8 +218,78 @@ struct CourseView: View {
         let heading = o == nil ? 0 : Geo.bearing(a, g)
         // distance (metres) the camera sits above: enough to fit the hole in about 60% of the screen height
         let metres = len / Geo.YD * 3.8
-        withAnimation(.easeInOut(duration: 0.4)) {
-            camera = .camera(MapCamera(centerCoordinate: center.coordinate, distance: metres, heading: heading, pitch: 0))
+        withAnimation(.easeInOut(duration: threeD ? 0.8 : 0.4)) {
+            camera = .camera(threeD ? view3D(from: a, to: g, heading: o == nil ? 0 : nil)
+                                    : MapCamera(centerCoordinate: center.coordinate, distance: metres, heading: heading, pitch: 0))
+        }
+    }
+
+    static let pitch3D = 56.0
+
+    /// The 3D view of a hole: tilted about 56°, looking along the line to the green from behind and above where
+    /// you hit from, far enough back that the whole hole (where you are to the green) is on screen.
+    private func view3D(from a: GeoPoint, to g: GeoPoint, heading: Double? = nil) -> MapCamera {
+        let len = max(60, Geo.yds(a, g) ?? 60), up = heading ?? Geo.bearing(a, g)
+        let look = Geo.offset(a, yards: len * 0.47, bearing: up)
+        // tuned on the simulator: this puts where you are near the bottom and the green below the top bar
+        let metres = (len * 0.54 + 60) / Geo.YD / sin(Self.pitch3D * .pi / 180) * 2.15
+        return MapCamera(centerCoordinate: look.coordinate, distance: metres, heading: up, pitch: Self.pitch3D)
+    }
+
+    /// "Fly the hole": from behind the tee down the line to just short of the green (about 6 s), then it settles
+    /// on the green.
+    private func flightPlan(_ h: HoleMap, _ g: GeoPoint) -> (start: GeoPoint, short: GeoPoint, up: Double, end: MapCamera) {
+        let tee = h.tee ?? origin?.at ?? g
+        let up = Geo.bearing(tee, g), len = max(60, Geo.yds(tee, g) ?? 60)
+        let ahead = Self.flyLow * sin(60 * .pi / 180) * Geo.YD     // yards from the camera to the point it looks at
+        return (Geo.offset(tee, yards: ahead - 30, bearing: up),          // camera about 30 yds behind the tee
+                Geo.offset(tee, yards: max(ahead, len - 25), bearing: up),
+                up, view3D(from: tee, to: g))
+    }
+    static let flyLow = 260.0, flySettle = 210.0   // metres from the camera to the point it looks at
+
+    @KeyframesBuilder<MapCamera>
+    private func flight(_ h: HoleMap, _ g: GeoPoint) -> some Keyframes<MapCamera> {
+        let p = flightPlan(h, g)
+        KeyframeTrack(\MapCamera.centerCoordinate) {
+            CubicKeyframe(p.start.coordinate, duration: 0.6)
+            CubicKeyframe(p.short.coordinate, duration: 6)
+            CubicKeyframe(g.coordinate, duration: 1.8)
+            CubicKeyframe(p.end.centerCoordinate, duration: 1.2)
+        }
+        KeyframeTrack(\MapCamera.distance) {
+            CubicKeyframe(Self.flyLow, duration: 0.6)
+            LinearKeyframe(Self.flyLow, duration: 6)
+            CubicKeyframe(Self.flySettle, duration: 1.8)
+            CubicKeyframe(p.end.distance, duration: 1.2)
+        }
+        KeyframeTrack(\MapCamera.pitch) {
+            CubicKeyframe(60, duration: 0.6)
+            LinearKeyframe(60, duration: 6)
+            CubicKeyframe(45, duration: 1.8)
+            CubicKeyframe(Self.pitch3D, duration: 1.2)
+        }
+        KeyframeTrack(\MapCamera.heading) {
+            CubicKeyframe(p.up, duration: 0.6)
+            LinearKeyframe(p.up, duration: 9)
+        }
+    }
+
+    @ViewBuilder private var flyButton: some View {
+        if threeD, let h, Geo.middle(h) != nil {
+            Button {
+                flying = true; fly += 1
+                DispatchQueue.main.asyncAfter(deadline: .now() + 9.8) {
+                    flying = false
+                    if let h = self.h, let g = Geo.middle(h) { camera = .camera(view3D(from: h.tee ?? origin?.at ?? g, to: g)); frame(h, g) }
+                }
+            } label: {
+                Label(flying ? "Flying…" : "Fly the hole", systemImage: "airplane").font(.subheadline.weight(.bold))
+                    .padding(.horizontal, 14).frame(minHeight: 40)
+                    .background(Color(UIColor(hex: 0xf2d04f)), in: Capsule()).foregroundStyle(Color.fcOnFlag)
+                    .shadow(color: .black.opacity(0.4), radius: 4, y: 1)
+            }
+            .disabled(flying)
         }
     }
 
@@ -222,6 +303,12 @@ struct CourseView: View {
                 Text("Par \(H.par)\(H.yds > 0 ? " · \(H.yds) yds" : "")").font(.caption.monospaced()).foregroundStyle(Color(UIColor(hex: 0xa9bdb0)))
             }
             Spacer()
+            Button { threeD.toggle() } label: {
+                Text("3D").font(.subheadline.weight(.heavy)).frame(width: 44, height: 40)
+                    .background(threeD ? Color(UIColor(hex: 0xf2d04f)) : .white.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+                    .foregroundStyle(threeD ? Color.fcOnFlag : .white)
+            }
+            .accessibilityLabel(threeD ? "3D view on" : "3D view off")
             Button { step(-1) } label: { Image(systemName: "chevron.left").font(.headline).frame(width: 40, height: 40).background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 8)) }
                 .accessibilityLabel("Previous hole")
             Button { step(1) } label: { Image(systemName: "chevron.right").font(.headline).frame(width: 40, height: 40).background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 8)) }
@@ -233,8 +320,8 @@ struct CourseView: View {
     }
 
     private func step(_ d: Int) {
-        let n = (hole - 1 + d + 18) % 18 + 1
-        hole = n
+        let ph = Core.playHoles(state), i = ph.firstIndex(of: hole) ?? 0
+        hole = ph[(i + d + ph.count) % ph.count]
         onHole(d)
     }
 
