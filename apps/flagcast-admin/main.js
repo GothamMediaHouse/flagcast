@@ -3,6 +3,7 @@
 // switch clubs off, and make tournaments for a club. Unlocked with the GOLF_CREATE_PASS secret.
 const { app, BrowserWindow, shell, Menu } = require('electron');
 const path = require('path');
+const updates = require('./updater');
 const fs = require('fs');
 
 const DEFAULT_BASE = 'https://flagcast.app';
@@ -45,9 +46,9 @@ function menu() {
     { role: 'editMenu' },
     { label: 'View', submenu: [{ label: 'Reload', accelerator: 'CmdOrCtrl+R', click: () => win && win.loadURL(`${base()}/golf/admin/`) }, { role: 'togglefullscreen' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'toggleDevTools' }] },
     { role: 'windowMenu' },
-    { role: 'help', submenu: [{ label: 'flagcast.app', click: () => shell.openExternal('https://flagcast.app') }] },
+    { role: 'help', submenu: [{ label: 'Check for Updates…', click: () => updates.check(false) }, { type: 'separator' }, { label: 'flagcast.app', click: () => shell.openExternal('https://flagcast.app') }] },
   ]));
 }
 
-app.whenReady().then(() => { menu(); createWindow(); app.on('activate', () => { if (!win) createWindow(); }); });
+app.whenReady().then(() => { menu(); createWindow(); setTimeout(() => updates.check(true), 4000); app.on('activate', () => { if (!win) createWindow(); }); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

@@ -18,7 +18,7 @@ extension Array {
     }
 }
 
-struct CardRow: Hashable { var hole: Int, par: Int, gross: Int?, net: Int?, done: Bool }
+struct CardRow: Hashable { var hole: Int, par: Int, gross: Int?, net: Int?, done: Bool, off: Bool = false }
 
 struct Entry: Hashable {
     var key: String, teamId: String, name: String, sub: String, flight: String, start: Int, team: Team
@@ -140,6 +140,11 @@ enum Core {
     private static func isScore(_ v: Int?) -> Bool { (v ?? -1) >= 0 }
     private static func at(_ arr: [Int?]?, _ i: Int) -> Int? { guard let a = arr, i < a.count else { return nil }; return a[i] }
 
+    /// The holes the round is played on: all 18, the front 9 (1–9) or the back 9 (10–18), from format.nine.
+    static func playHoles(_ ev: EventState) -> [Int] {
+        switch ev.format.nine { case "front": return Array(1...9); case "back": return Array(10...18); default: return Array(1...18) }
+    }
+
     /// One team's card, hole by hole: what counts on each hole for this format.
     static func teamCard(_ ev: EventState, _ team: Team, _ sc: [String: [Int?]]?) -> [CardRow] {
         let f = ev.format, holes = ev.course.holes, allow = f.allowance
@@ -147,8 +152,10 @@ enum Core {
         let count = type == "stroke" ? 1 : max(1, min(4, f.count == 0 ? 1 : f.count))
         let s = sc ?? [:]
         var rows: [CardRow] = []
+        let inPlay = Set(playHoles(ev))
         for i in 0..<18 {
             let hole = holes[i]
+            if !inPlay.contains(i + 1) { rows.append(CardRow(hole: hole.n, par: hole.par, gross: nil, net: nil, done: false, off: true)); continue }
             var gross: Int? = nil, net: Int? = nil, done = false, parFor = hole.par
             if type == "scramble" {
                 if let v = at(s["T"], i) {
@@ -226,6 +233,7 @@ enum Core {
             l.score = stab ? l.total : l.toPar
             return l
         }
+        let ph = playHoles(ev), full = ph.count, endH = ph[full - 1]
         let filtered0 = (flight?.isEmpty == false) ? lines.filter { $0.flight == flight } : lines
         func back(_ l: Line, _ from: Int) -> Int {
             l.card[(from - 1)...].reduce(0) { t, r in t + (r.done ? ((mode == "gross" ? r.gross : r.net) ?? 0) - (stab ? 0 : r.par) : 0) }
@@ -236,8 +244,8 @@ enum Core {
             if a.nr != b.nr { return a.nr ? 1 : -1 }
             let d = stab ? b.score - a.score : a.score - b.score
             if d != 0 { return d }
-            if a.played == 18 && b.played == 18 {
-                for from in [10, 13, 16, 18] {
+            if a.played == full && b.played == full {
+                for from in (full == 18 ? [10, 13, 16, 18] : [endH - 5, endH - 2, endH]) {
                     let x = back(a, from), y = back(b, from)
                     if x != y { return stab ? y - x : x - y }
                 }
@@ -253,7 +261,7 @@ enum Core {
             let prev = i > 0 ? filtered[i - 1] : nil, next = i + 1 < filtered.count ? filtered[i + 1] : nil
             if !tied(prev, l) { pos = i + 1 }
             filtered[i].pos = l.played > 0 ? (tied(prev, l) || tied(next, l) ? "T\(pos)" : String(pos)) : ""
-            filtered[i].thru = l.played == 18 ? "F" : l.played > 0 ? String(l.played) : (l.entry.start != 1 ? "Starts \(l.entry.start)" : "—")
+            filtered[i].thru = l.played == full ? "F" : l.played > 0 ? String(l.played) : (l.entry.start != 1 ? "Starts \(l.entry.start)" : "—")
         }
         return filtered
     }
@@ -347,7 +355,9 @@ enum Core {
             return net ? v - st : v
         }
         let start = teams.first.map { $0.start == 0 ? 1 : $0.start } ?? 1
-        let order = (0..<18).map { (start - 1 + $0) % 18 }
+        // hole indexes this round plays, from the starting hole
+        let ph = playHoles(ev).map { $0 - 1 }, k0 = max(0, ph.firstIndex(of: start - 1) ?? 0)
+        let order = Array(ph[k0...] + ph[..<k0])
         var ledger = Dictionary(uniqueKeysWithValues: players.map { ($0.key, 0.0) })
         func pay(_ from: String, _ to: String, _ amt: Double) { if amt == 0 || from == to { return }; ledger[from]! -= amt; ledger[to]! += amt }
         var out = SideResult(players: players, ledger: [:])
@@ -402,7 +412,7 @@ enum Core {
                     }
                     return NassauSeg(label: label, played: played, holes: to - from + 1, diff: diff, done: done, winner: winner)
                 }
-                out.nassau = SideNassau(sides: ["A": A.map(\.key), "B": B.map(\.key)], segs: [seg(0, 8, "Front 9"), seg(9, 17, "Back 9"), seg(0, 17, "Overall")])
+                out.nassau = SideNassau(sides: ["A": A.map(\.key), "B": B.map(\.key)], segs: ev.format.nine.isEmpty ? [seg(0, 8, "Front 9"), seg(9, 17, "Back 9"), seg(0, 17, "Overall")] : [seg(ph[0], ph[8], "Match")])
             }
         }
 

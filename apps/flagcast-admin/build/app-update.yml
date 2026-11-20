@@ -1,0 +1,4 @@
+# Where Flagcast Admin looks for updates (electron-updater). Shipped in the app's Resources.
+provider: generic
+url: https://flagcast.app/updates/admin
+updaterCacheDirName: flagcast-admin-updater

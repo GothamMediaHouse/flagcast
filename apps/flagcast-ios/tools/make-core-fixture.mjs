@@ -29,7 +29,7 @@ function makeEvent(type, opts = {}) {
   return {
     id: 'sample01', name: `Sample ${type}`, club: 'Club', date: '', sideGames: true, flights: ['A', 'B'],
     course: { name: 'Course', holes },
-    format: { type, count: opts.count || 1, allowance: opts.allowance ?? 100, show: opts.show || 'net' },
+    format: { type, count: opts.count || 1, allowance: opts.allowance ?? 100, show: opts.show || 'net', nine: opts.nine || '' },
     teams, screens: { title: '', ticker: '', seconds: 12, skins: true, rows: 10 }, cams: {}, sponsors: [], schedule: [], displays: [],
     fund: { on: false, label: '', goal: 0, raised: 0, give: '' },
     contests: [
@@ -44,19 +44,21 @@ function makeEvent(type, opts = {}) {
 function makeScores(ev, opts = {}) {
   const sc = {};
   ev.teams.forEach((t, ti) => {
-    const upto = opts.allDone ? 18 : [18, 18, 11, 7, 0, 18][ti % 6];
+    // the holes this team plays, in order from its start (a 9-hole round starts outside its 9 at the first hole)
+    const ph = core.playHoles(ev), k0 = Math.max(0, ph.indexOf(t.start || 1)), ord = [...ph.slice(k0), ...ph.slice(0, k0)];
+    const upto = Math.min(ord.length, opts.allDone ? 18 : [18, 18, 11, 7, 0, 18][ti % 6]);
     if (!upto) return;
     const who = ev.format.type === 'scramble' ? ['T'] : t.players.map((p) => p.id);
     const s = {};
     for (const id of who) {
       const arr = Array(18).fill(null);
       for (let k = 0; k < upto; k++) {
-        const i = ((t.start || 1) - 1 + k) % 18, par = ev.course.holes[i].par;
+        const i = ord[k] - 1, par = ev.course.holes[i].par;
         const r = rnd();
         arr[i] = r < 0.04 ? 0 : r < 0.08 ? (par === 3 ? 1 : par - 2) : r < 0.3 ? par - 1 : r < 0.6 ? par : r < 0.85 ? par + 1 : par + 2 + Math.floor(rnd() * 2);
       }
       // a hole one player forgot (holes not done for the team)
-      if (who.length > 1 && upto > 3 && rnd() < 0.3) arr[(t.start - 1 + 2) % 18] = null;
+      if (who.length > 1 && upto > 3 && rnd() < 0.3) arr[ord[2] - 1] = null;
       s[id] = arr;
     }
     sc[t.id] = s;
@@ -88,6 +90,9 @@ const variants = [
   ['stableford', { count: 2, allowance: 90, shotgun: true }],
   ['scramble', { allowance: 25, twins: true }],
   ['bestball', { count: 3, allowance: 80, allDone: true, twins: true }],
+  ['bestball', { count: 2, allowance: 90, nine: 'back', shotgun: true, twins: true }],
+  ['stroke', { teams: 4, size: 2, allowance: 100, nine: 'front', twins: true }],
+  ['stableford', { count: 1, allowance: 100, nine: 'back', allDone: true }],
 ];
 for (const [type, opts] of variants) {
   const ev = makeEvent(type, opts);

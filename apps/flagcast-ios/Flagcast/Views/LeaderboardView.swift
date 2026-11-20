@@ -180,7 +180,7 @@ struct LeaderboardScreen: View {
             .accessibilityHint(isOpen ? "Hides the card" : "Shows the card")
             if isOpen {
                 let who = s.format.isScramble ? [Player(id: "T", name: l.team.name.isEmpty ? "Team" : l.team.name)] : l.team.players
-                CardGrid(holes: s.course.holes, rows: who.map { ($0.name, s.scores[l.teamId]?[$0.id] ?? []) })
+                CardGrid(holes: s.course.holes.filter { Core.playHoles(s).contains($0.n) }, rows: who.map { ($0.name, s.scores[l.teamId]?[$0.id] ?? []) })
                     .padding(.horizontal, 12).padding(.bottom, 12)
                     .background(Color.fcPaper2)
             }

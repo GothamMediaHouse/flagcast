@@ -52,7 +52,7 @@ final class CoreTests: XCTestCase {
     }
 
     // ---- the Swift results as the same JSON shapes ----
-    func j(_ r: CardRow) -> [String: Any?] { ["hole": r.hole, "par": r.par, "gross": r.gross, "net": r.net, "done": r.done] }
+    func j(_ r: CardRow) -> [String: Any?] { ["hole": r.hole, "par": r.par, "gross": r.gross, "net": r.net, "done": r.done, "off": r.off ? true : nil] }
     func j(_ l: Line) -> [String: Any?] {
         ["key": l.key, "teamId": l.teamId, "name": l.name, "sub": l.sub, "flight": l.flight, "start": l.entry.start, "played": l.played,
          "total": l.total, "toPar": l.toPar, "nr": l.nr, "score": l.score, "pos": l.pos, "thru": l.thru, "card": l.card.map(j)]

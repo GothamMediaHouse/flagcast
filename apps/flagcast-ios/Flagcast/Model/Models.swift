@@ -73,12 +73,15 @@ struct Team: Codable, Hashable, Identifiable {
 
 struct Format: Codable, Hashable {
     var type: String, count: Int, allowance: Double, show: String
-    init(type: String = "bestball", count: Int = 1, allowance: Double = 100, show: String = "net") {
-        self.type = type; self.count = count; self.allowance = allowance; self.show = show
+    /// "" = all 18 holes, "front" = holes 1–9, "back" = holes 10–18
+    var nine: String = ""
+    init(type: String = "bestball", count: Int = 1, allowance: Double = 100, show: String = "net", nine: String = "") {
+        self.type = type; self.count = count; self.allowance = allowance; self.show = show; self.nine = nine
     }
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         type = c.str(.type, "bestball"); count = c.int(.count, 1); allowance = c.dbl(.allowance, 100); show = c.str(.show, "net")
+        nine = ["front", "back"].contains(c.str(.nine, "")) ? c.str(.nine, "") : ""
     }
     var isScramble: Bool { type == "scramble" }
     var isStableford: Bool { type == "stableford" }

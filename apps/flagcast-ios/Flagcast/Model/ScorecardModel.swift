@@ -125,16 +125,27 @@ final class ScorecardModel {
         return sc
     }
 
-    func order(_ t: Team) -> [Int] { (0..<18).map { (max(1, t.start) - 1 + $0) % 18 + 1 } }
+    /// The holes this cart plays, in order from its starting hole (only the front or back 9 on a 9-hole round;
+    /// a start outside those 9 means the first of them).
+    func order(_ t: Team) -> [Int] {
+        guard let s = state else { return (0..<18).map { (max(1, t.start) - 1 + $0) % 18 + 1 } }
+        let ph = Core.playHoles(s), k = ph.firstIndex(of: max(1, t.start)) ?? 0
+        return Array(ph[k...] + ph[..<k])
+    }
 
     /// The hole on screen. Picked once when the card opens (the first hole in playing order still missing a
-    /// score), then it only moves when the golfer moves it, like the web scorecard.
-    func currentHole() -> Int { hole ?? firstOpenHole() }
+    /// score), then it only moves when the golfer moves it, like the web scorecard. A hole saved from before the
+    /// round was set to 9 holes is dropped.
+    func currentHole() -> Int {
+        if let h = hole, let t = team, state != nil, !order(t).contains(h) { return firstOpenHole() }
+        return hole ?? firstOpenHole()
+    }
 
     private func firstOpenHole() -> Int {
         guard let s = state, let t = team else { return 1 }
         let who = s.scorers(t)
-        return order(t).first { h in !who.allSatisfy { value($0.id, h) != nil } } ?? max(1, t.start)
+        let ord = order(t)
+        return ord.first { h in !who.allSatisfy { value($0.id, h) != nil } } ?? ord[0]
     }
     private func settleHole() { if hole == nil, state != nil, team != nil { hole = firstOpenHole() } }
 
