@@ -25,7 +25,7 @@ function shape(c) {
 export async function courses(request, env, ctx) {
   const url = new URL(request.url);
   if (!env.GOLF_COURSE_API_KEY) return json({ error: 'Course lookup isn’t switched on yet. Type the par, rating and slope from the club’s scorecard for now.', off: true }, 501);
-  const id = url.pathname.match(/^\/golf\/api\/courses\/(\d{1,9})$/)?.[1];
+  const id = url.pathname.match(/^\/golf\/api\/courses\/([A-Za-z0-9_-]{1,32})$/)?.[1]; // GolfCourseAPI ids are letters and numbers
   const q = (url.searchParams.get('q') || '').trim().slice(0, 80);
   if (!id && q.length < 3) return json({ error: 'Type at least 3 letters of the course name.' }, 400);
   const target = id ? `${API}/courses/${id}` : `${API}/search?search_query=${encodeURIComponent(q)}`;
