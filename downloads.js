@@ -4,7 +4,7 @@
 //   /download/<app>              → the right installer for this computer (Mac .dmg or Windows .exe)
 //   /download/<app>/<mac|win>    → that platform's installer
 //   /api/<app>/latest            → { version, date, notes, mac, win } (null when nothing is published)
-//   /updates/<app>/<file>        → electron-updater "generic" feed: latest*.yml served, other files redirect to the release
+//   /updates/<app>/<file>        → update feeds: latest*.yml (electron-updater) and appcast.xml (Sparkle) served, other files redirect to the release
 const REPO = 'GothamMediaHouse/flagcast';
 const APPS = { manager: 'Flagcast Manager', admin: 'Flagcast Admin' };
 const TTL = 300; // seconds a GitHub answer is reused
@@ -51,7 +51,7 @@ function guessAssets(tag) {
   const m = tag.match(/^([a-z]+)-v(\d+\.\d+\.\d+)$/); if (!m || !APPS[m[1]]) return [];
   const n = APPS[m[1]].replace(/ /g, '-'), v = m[2], base = `https://github.com/${REPO}/releases/download/${tag}/`;
   return [`${n}-${v}-universal.dmg`, `${n}-${v}-universal-mac.zip`, `${n}-${v}-universal-mac.zip.blockmap`, `${n}-Setup-${v}.exe`,
-    `${n}-Setup-${v}.exe.blockmap`, 'latest-mac.yml', 'latest.yml'].map((name) => ({ name, url: base + name, size: 0 }));
+    `${n}-Setup-${v}.exe.blockmap`, 'latest-mac.yml', 'latest.yml', 'appcast.xml'].map((name) => ({ name, url: base + name, size: 0 }));
 }
 
 async function latest(app, ctx, env) {
@@ -95,9 +95,10 @@ export async function downloads(request, env, ctx) {
       const rel = await latest(p[1], ctx, env);
       const file = rel && rel.assets.find((x) => x.name === name);
       if (!file) return new Response('Not found', { status: 404 });
-      if (/\.ya?ml$/i.test(name)) {
+      if (/\.(ya?ml|xml)$/i.test(name)) { // update feeds: latest*.yml (Electron) and appcast.xml (Sparkle, native Mac apps)
         const r = await fetch(file.url, { headers: { 'User-Agent': 'flagcast-downloads' } });
-        return new Response(await r.text(), { status: r.status, headers: { 'Content-Type': 'text/yaml; charset=utf-8', 'Cache-Control': 'no-store' } });
+        const type = /\.xml$/i.test(name) ? 'text/xml' : 'text/yaml';
+        return new Response(await r.text(), { status: r.status, headers: { 'Content-Type': `${type}; charset=utf-8`, 'Cache-Control': 'no-store' } });
       }
       return Response.redirect(file.url, 302);
     }
