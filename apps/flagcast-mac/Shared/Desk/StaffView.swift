@@ -1,0 +1,200 @@
+import SwiftUI
+
+let PAGE_NAMES: [(String, String)] = [("lb", "Leaderboard"), ("p3", "Par 3 camera"), ("cam", "One hole’s camera"), ("contests", "Contests"), ("skins", "Skins"),
+                                      ("fund", "Fundraising"), ("sponsors", "All sponsors"), ("sponsor", "One sponsor"), ("schedule", "Schedule")]
+
+/// Staff and playlists: golf pros' and marshals' PINs, the club's screens and what each plays, and the schedule.
+struct StaffView: View {
+    @Bindable var doc: DeskDoc
+
+    var body: some View {
+        Form {
+            SwiftUI.Section {
+                LabeledContent("Tournament code") { Text(doc.id.uppercased()).font(.title3.monospaced().weight(.semibold)).textSelection(.enabled) }
+                ForEach($doc.ev.pins) { $p in
+                    HStack {
+                        Image(systemName: p.role == "marshal" ? "flag" : "person.badge.key").foregroundStyle(.secondary).frame(width: 20)
+                        TextField("Name", text: $p.name)
+                        Picker("", selection: $p.role) { Text("Golf pro").tag("pro"); Text("Marshal").tag("marshal") }.labelsHidden().frame(width: 110)
+                        TextField("PIN", text: Binding(get: { p.pin }, set: { p.pin = String($0.filter(\.isNumber).prefix(8)) })).font(.body.monospaced()).frame(width: 90)
+                        Button(role: .destructive) { doc.ev.pins.removeAll { $0.id == p.id } } label: { Image(systemName: "minus.circle") }.buttonStyle(.borderless)
+                    }
+                }
+                HStack {
+                    Button { addPin("pro") } label: { Label("Add Golf Pro", systemImage: "plus") }
+                    Button { addPin("marshal") } label: { Label("Add Marshal", systemImage: "plus") }
+                }
+            } header: { Text("Golf pros and marshals") } footer: {
+                Help("They sign in to the Flagcast phone app with the tournament code and their PIN (4 to 8 digits). A golf pro can fix scores, switch screens, take over the screens and nudge a cart. A marshal can only post contest results.")
+            }
+            SwiftUI.Section {
+                ForEach($doc.ev.displays) { $d in DisplayEditor(display: $d, doc: doc) }
+                Button { doc.ev.displays.append(Display(name: "Screen \(doc.ev.displays.count + 1)")) } label: { Label("Add Screen", systemImage: "plus") }
+            } header: { Text("Screens at the club") } footer: {
+                Help("Add each TV or LED wall and pick what it plays, in order. Open its link full screen on that TV. A screen with an empty list shows everything.")
+            }
+            SwiftUI.Section {
+                ForEach($doc.ev.schedule.indices, id: \.self) { i in
+                    HStack {
+                        TextField("Time", text: $doc.ev.schedule[i].time, prompt: Text("8:00 AM")).frame(width: 110)
+                        TextField("What", text: $doc.ev.schedule[i].what, prompt: Text("Shotgun start"))
+                        Button(role: .destructive) { doc.ev.schedule.remove(at: i) } label: { Image(systemName: "minus.circle") }.buttonStyle(.borderless)
+                    }
+                }
+                Button { doc.ev.schedule.append(ScheduleItem()) } label: { Label("Add a Time", systemImage: "plus") }
+            } header: { Text("Schedule") } footer: { Help("Shows on the Schedule page of the screens.") }
+        }
+        .formStyle(.grouped)
+    }
+    private func addPin(_ role: String) {
+        let pin = String(format: "%04d", Int.random(in: 1000...9999))
+        doc.ev.pins.append(StaffPin(name: role == "pro" ? "Golf pro" : "Marshal \(doc.ev.pins.filter { $0.role == "marshal" }.count + 1)", role: role, pin: pin))
+    }
+}
+
+/// One screen at the club: its name, its link, whether it's on, and its playlist.
+struct DisplayEditor: View {
+    @Binding var display: Display
+    let doc: DeskDoc
+    private var url: String { "\(doc.boardURL.absoluteString)?screen=\(display.id)" }
+    private var on: Int { doc.live?.online[display.id] ?? 0 }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Circle().fill(on > 0 ? Color.green : Color.secondary.opacity(0.4)).frame(width: 8, height: 8).help(on > 0 ? "On now" : "Not connected")
+                TextField("Screen name", text: $display.name).fontWeight(.medium)
+                Button("Copy Link") { copy(url) }
+                Button("Open") { NSWorkspace.shared.open(URL(string: url)!) }
+                Button(role: .destructive) { doc.ev.displays.removeAll { $0.id == display.id } } label: { Image(systemName: "trash") }.buttonStyle(.borderless)
+            }
+            ForEach($display.playlist.indices, id: \.self) { k in
+                HStack {
+                    Text("\(k + 1)").monospacedDigit().foregroundStyle(.secondary).frame(width: 18)
+                    Picker("", selection: $display.playlist[k].k) { ForEach(PAGE_NAMES, id: \.0) { Text($0.1).tag($0.0) } }.labelsHidden().frame(width: 170)
+                    switch display.playlist[k].k {
+                    case "lb": TextField("Flight", text: $display.playlist[k].fl, prompt: Text("All flights")).frame(width: 100)
+                    case "p3", "cam": Picker("", selection: $display.playlist[k].hole) {
+                        Text("Each in turn").tag(0); ForEach(doc.ev.course.holes.filter { display.playlist[k].k == "cam" || $0.par == 3 }, id: \.n) { Text("Hole \($0.n)").tag($0.n) } }.labelsHidden().frame(width: 130)
+                    case "sponsor": Picker("", selection: $display.playlist[k].sponsor) { Text("Pick one").tag(""); ForEach(doc.ev.sponsors) { Text($0.name).tag($0.id) } }.labelsHidden().frame(width: 160)
+                    default: EmptyView()
+                    }
+                    Stepper("\(display.playlist[k].secs) s", value: $display.playlist[k].secs, in: 4...300, step: 2).monospacedDigit()
+                    Spacer()
+                    Button { if k > 0 { display.playlist.swapAt(k, k - 1) } } label: { Image(systemName: "arrow.up") }.buttonStyle(.borderless).disabled(k == 0)
+                    Button(role: .destructive) { display.playlist.remove(at: k) } label: { Image(systemName: "minus.circle") }.buttonStyle(.borderless)
+                }
+            }
+            Button { display.playlist.append(PageRef(k: "lb")) } label: { Label("Add a Page", systemImage: "plus") }.controlSize(.small)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+// MARK: - report
+
+struct ReportView: View {
+    @Bindable var doc: DeskDoc
+    @State private var file: CSVFile?
+
+    var body: some View {
+        Form {
+            SwiftUI.Section {
+                HStack {
+                    Button("Results (CSV)…") { export("results", results()) }.buttonStyle(.borderedProminent)
+                    Button("Sponsor Report (CSV)…") { export("sponsors", sponsors()) }
+                    Button("Scores for GHIN Posting (CSV)…") { if let r = ghin() { export("ghin-posting", r) } }
+                    Spacer()
+                    Button { Task { await doc.refreshDay() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                }
+            } header: { Text("Download") } footer: {
+                Help("The GHIN file has each player’s GHIN number, tees, rating and slope, hole-by-hole scores and the adjusted gross score (each hole capped at net double bogey, picked-up holes counted as net double bogey), ready for the club’s handicap chair. Scramble scores can’t be posted for handicaps.")
+            }
+            SwiftUI.Section {
+                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 6) {
+                    GridRow { Text("Sponsor"); Text("Where"); Text("Screen time"); Text("Phone views"); Text("Taps") }.font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    ForEach(doc.ev.sponsors) { s in
+                        let st = doc.ev.stats[s.id]
+                        GridRow {
+                            Text(s.name).fontWeight(.medium)
+                            Text((SPOT_NAMES.first { $0.0 == s.spot }?.1 ?? "") + (s.holes.isEmpty ? "" : " · " + s.holes.map(String.init).joined(separator: ", "))).foregroundStyle(.secondary)
+                            Text("\(Int((st?.secs ?? 0) / 60)) min").monospacedDigit()
+                            Text("\(Int(st?.view ?? 0))").monospacedDigit()
+                            Text("\(Int(st?.tap ?? 0))").monospacedDigit()
+                        }
+                    }
+                }
+                if doc.ev.sponsors.isEmpty { Text("No sponsors.").foregroundStyle(.secondary) }
+            } header: { Text("Sponsors") } footer: { Help("Screen time counts every minute a sponsor was on a connected screen. Phone views count each time a player saw it on their scorecard; taps count opens of their link.") }
+            SwiftUI.Section("Score changes by staff") {
+                if doc.ev.log.isEmpty { Text("None.").foregroundStyle(.secondary) }
+                ForEach(Array(doc.ev.log.reversed().enumerated()), id: \.offset) { _, l in
+                    HStack {
+                        Text(Date(timeIntervalSince1970: l.at / 1000).formatted(date: .omitted, time: .shortened)).monospacedDigit().foregroundStyle(.secondary).frame(width: 70, alignment: .leading)
+                        Text("\(l.by): \(l.player) (\(l.team)), hole \(l.h): \(l.from.map(String.init) ?? "–") → \(l.to.map(String.init) ?? "removed")")
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .task { await doc.refreshDay() }
+        .fileExporter(isPresented: Binding(get: { file != nil }, set: { if !$0 { file = nil } }), document: file, contentType: .commaSeparatedText, defaultFilename: file?.name) { _ in file = nil }
+    }
+
+    private func export(_ what: String, _ rows: [[String]]) {
+        let name = "\(doc.ev.name.isEmpty ? "Tournament" : doc.ev.name.replacingOccurrences(of: "/", with: "-")) - \(what).csv"
+        file = CSVFile(name: name, rows: rows)
+    }
+    private func results() -> [[String]] {
+        guard let live = doc.live else { return [] }
+        let flights: [String?] = live.flights.isEmpty ? [nil] : live.flights
+        var rows = [["Flight", "Pos", "Team", "Players", "Thru", "Score"] + live.course.holes.map { "H\($0.n)" }]
+        for fl in flights {
+            for l in Core.leaderboard(live, live.scores, flight: fl) {
+                rows.append([fl ?? "", l.pos, l.name, l.sub, l.thru, l.played > 0 ? String(l.score) : ""] + l.card.map { r in r.done ? ((live.format.show == "gross" ? r.gross : r.net).map(String.init) ?? "") : "" })
+            }
+        }
+        return rows
+    }
+    private func sponsors() -> [[String]] {
+        [["Sponsor", "Where", "Holes", "Screen minutes", "Phone views", "Taps"]] + doc.ev.sponsors.map { s in
+            let st = doc.ev.stats[s.id]
+            return [s.name, SPOT_NAMES.first { $0.0 == s.spot }?.1 ?? "", s.holes.map(String.init).joined(separator: " "), "\(Int((st?.secs ?? 0) / 60))", "\(Int(st?.view ?? 0))", "\(Int(st?.tap ?? 0))"]
+        }
+    }
+    private func ghin() -> [[String]]? {
+        guard let live = doc.live else { return nil }
+        if doc.ev.format.isScramble { doc.flash("Scramble scores can’t be posted for handicaps."); return nil }
+        let H = doc.ev.course.holes, par = doc.ev.course.par, T = doc.ev.course.tees
+        var rows = [["Player", "GHIN number", "Handicap Index", "Course handicap", "Date", "Course", "Tees", "Course rating", "Slope", "Par"] + H.map { "H\($0.n)" } + ["Holes played", "Gross", "Adjusted gross", "Picked up on", "Team"]]
+        for t in doc.ev.teams { for p in t.players {
+            let arr = live.scores[t.id]?[p.id] ?? []
+            let tee = T.first { $0.id == p.tee } ?? (p.index != nil ? T.first : nil)
+            var gross = 0, adj = 0, n = 0, pu: [Int] = []
+            let holes: [String] = H.enumerated().map { i, h in
+                guard i < arr.count, let v = arr[i] else { return "" }
+                let cap = h.par + 2 + max(0, Core.strokesOn(Int(p.hcp), h.hcp)); n += 1
+                if v == 0 { pu.append(h.n); adj += cap; return String(cap) }
+                gross += v; adj += min(v, cap); return String(v)
+            }
+            if n == 0 { continue }
+            rows.append([p.name, p.ghin, Core.fmtIndex(p.index), "\(Int(p.hcp))", doc.ev.date, doc.ev.course.name.isEmpty ? doc.ev.club : doc.ev.course.name,
+                         tee?.name ?? "", tee.map { String($0.rating) } ?? "", tee.map { String(Int($0.slope)) } ?? "", "\(tee.map { $0.par > 0 ? $0.par : par } ?? par)"]
+                        + holes + ["\(n)", pu.isEmpty ? "\(gross)" : "", "\(adj)", pu.map(String.init).joined(separator: " "), t.name])
+        } }
+        if rows.count == 1 { doc.flash("No scores yet."); return nil }
+        return rows
+    }
+}
+
+import UniformTypeIdentifiers
+struct CSVFile: FileDocument {
+    static var readableContentTypes: [UTType] { [.commaSeparatedText] }
+    var name: String, rows: [[String]]
+    init(name: String, rows: [[String]]) { self.name = name; self.rows = rows }
+    init(configuration: ReadConfiguration) throws { name = ""; rows = [] }
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        let text = rows.map { $0.map { "\"\($0.replacingOccurrences(of: "\"", with: "\"\""))\"" }.joined(separator: ",") }.joined(separator: "\r\n")
+        return FileWrapper(regularFileWithContents: Data(("\u{FEFF}" + text).utf8))
+    }
+}

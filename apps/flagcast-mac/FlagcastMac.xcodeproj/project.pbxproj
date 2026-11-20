@@ -1,0 +1,432 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		E4D032DD34500369D3770266 = {isa = PBXBuildFile; fileRef = F4D57C4521017BE73D8F5E1B; };
+		FAF5652DA53260BBF9075DE6 = {isa = PBXBuildFile; fileRef = 726CB379D3AA7CCFAD50641C; };
+		D48657414165AB11C472641F = {isa = PBXBuildFile; fileRef = E74CD2FD1A07E59432C86CAE; };
+		1C3F74AEB3DC3AD609D32AF1 = {isa = PBXBuildFile; fileRef = 379A05E62FF6D64D18D6F506; };
+		AD8B49FE0F9A5FC36383CE74 = {isa = PBXBuildFile; fileRef = F4D57C4521017BE73D8F5E1B; };
+		E94082227F2DB132976B18B0 = {isa = PBXBuildFile; fileRef = 726CB379D3AA7CCFAD50641C; };
+		98516A33E3F060877C24F7B8 = {isa = PBXBuildFile; fileRef = E74CD2FD1A07E59432C86CAE; };
+		E78F6FFC1A5F842F4EA0F7A1 = {isa = PBXBuildFile; fileRef = 379A05E62FF6D64D18D6F506; };
+		061D24816F2C6B76D185DE67 = {isa = PBXBuildFile; fileRef = 85A512E66350D728E9EB3D75; };
+		5644135018E0DF937F115E10 = {isa = PBXBuildFile; fileRef = 85A512E66350D728E9EB3D75; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		F94CF8FE44DB00C6DDD787FA = {isa = PBXBuildFile; fileRef = 85A512E66350D728E9EB3D75; };
+		8C872051079F8F7900AE8B31 = {isa = PBXBuildFile; fileRef = 85A512E66350D728E9EB3D75; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		DA27C18AB14AF9347E2DFE82 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Flagcast Manager.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		DEEA272F649E373E87AD99EC = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Flagcast Admin.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		F4D57C4521017BE73D8F5E1B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Models.swift; path = "../flagcast-ios/Flagcast/Model/Models.swift"; sourceTree = SOURCE_ROOT; };
+		726CB379D3AA7CCFAD50641C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Core.swift; path = "../flagcast-ios/Flagcast/Model/Core.swift"; sourceTree = SOURCE_ROOT; };
+		E74CD2FD1A07E59432C86CAE = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Server.swift; path = "../flagcast-ios/Flagcast/Net/Server.swift"; sourceTree = SOURCE_ROOT; };
+		379A05E62FF6D64D18D6F506 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = EventFeed.swift; path = "../flagcast-ios/Flagcast/Net/EventFeed.swift"; sourceTree = SOURCE_ROOT; };
+		85A512E66350D728E9EB3D75 = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = Vendor/Sparkle.xcframework; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		3092658031E5775F53A32D9E = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = E4C4A8A63F1BBBCE795261D7;
+		};
+		697C3B74E37AFD2FA65E0A39 = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 4C210D619DA5D2AAEB2C8BC0;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		9694F55A4D95B7BDB294D8E1 = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		866F0A55AFF36461B89B6663 = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				3092658031E5775F53A32D9E,
+			);
+			path = Manager;
+			sourceTree = "<group>";
+		};
+		A2EFA9212CB75714A2869963 = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				697C3B74E37AFD2FA65E0A39,
+			);
+			path = Admin;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+		BFD7BDDC16053CBCA09D7BBF = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E4D032DD34500369D3770266,
+				FAF5652DA53260BBF9075DE6,
+				D48657414165AB11C472641F,
+				1C3F74AEB3DC3AD609D32AF1,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		777C0B87C38DB20727CA6428 = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				061D24816F2C6B76D185DE67,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CAE6A87EB32AEBC2FB4BB80F = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D444F444A586C677CA1422A5 = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				5644135018E0DF937F115E10,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		3BD0AB52D525EBED49EF37F9 = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AD8B49FE0F9A5FC36383CE74,
+				E94082227F2DB132976B18B0,
+				98516A33E3F060877C24F7B8,
+				E78F6FFC1A5F842F4EA0F7A1,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		683180E5D8C296B8E39AFBF2 = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F94CF8FE44DB00C6DDD787FA,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		52A8558C494DB404CBF57AD4 = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F62C7D08B121F5ABB92D5ED7 = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				8C872051079F8F7900AE8B31,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+
+		74655E7D32E726AA3771212B = {
+			isa = PBXGroup;
+			children = (
+				9694F55A4D95B7BDB294D8E1,
+				866F0A55AFF36461B89B6663,
+				A2EFA9212CB75714A2869963,
+				EAEC0AFA760BE2AF9C8D24CE,
+				85A512E66350D728E9EB3D75,
+				B2A6231AE15F3846F8C3A109,
+			);
+			sourceTree = "<group>";
+		};
+		EAEC0AFA760BE2AF9C8D24CE = {
+			isa = PBXGroup;
+			children = (
+				F4D57C4521017BE73D8F5E1B,
+				726CB379D3AA7CCFAD50641C,
+				E74CD2FD1A07E59432C86CAE,
+				379A05E62FF6D64D18D6F506,
+			);
+			name = "Shared with the iPhone app";
+			sourceTree = "<group>";
+		};
+		B2A6231AE15F3846F8C3A109 = {
+			isa = PBXGroup;
+			children = (
+				DA27C18AB14AF9347E2DFE82,
+				DEEA272F649E373E87AD99EC,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		E4C4A8A63F1BBBCE795261D7 = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 4784D1D91900B2BCF24B12D6;
+			buildPhases = (
+				BFD7BDDC16053CBCA09D7BBF,
+				777C0B87C38DB20727CA6428,
+				CAE6A87EB32AEBC2FB4BB80F,
+				D444F444A586C677CA1422A5,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				9694F55A4D95B7BDB294D8E1,
+				866F0A55AFF36461B89B6663,
+			);
+			name = Manager;
+			productName = "Flagcast Manager";
+			productReference = DA27C18AB14AF9347E2DFE82;
+			productType = "com.apple.product-type.application";
+		};
+		4C210D619DA5D2AAEB2C8BC0 = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA87E133F18DE626BEE94A59;
+			buildPhases = (
+				3BD0AB52D525EBED49EF37F9,
+				683180E5D8C296B8E39AFBF2,
+				52A8558C494DB404CBF57AD4,
+				F62C7D08B121F5ABB92D5ED7,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				9694F55A4D95B7BDB294D8E1,
+				A2EFA9212CB75714A2869963,
+			);
+			name = Admin;
+			productName = "Flagcast Admin";
+			productReference = DEEA272F649E373E87AD99EC;
+			productType = "com.apple.product-type.application";
+		};
+
+		27986695B7AAC84ED7A6558E = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+			};
+			buildConfigurationList = 42ECA6FB9D09A9A7856B629D;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 74655E7D32E726AA3771212B;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = B2A6231AE15F3846F8C3A109;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				E4C4A8A63F1BBBCE795261D7,
+				4C210D619DA5D2AAEB2C8BC0,
+			);
+		};
+		E6EB8F75FC2E03D9FE1F614D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				SDKROOT = macosx;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		C6B723E2A26D598106EDCF6B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				SDKROOT = macosx;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ONLY_ACTIVE_ARCH = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		29DFFAC0279509C6A16357B3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C8KXPB4QNA;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Manager/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Flagcast Manager";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.sports";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Flagcast";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 2.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.manager.debug;
+				PRODUCT_NAME = "Flagcast Manager";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		5CE3D22169E73FEE5344E671 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C8KXPB4QNA;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Manager/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Flagcast Manager";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.sports";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Flagcast";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 2.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.manager;
+				PRODUCT_NAME = "Flagcast Manager";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		ECAD4CFF3D5CBDBA79077CBE /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C8KXPB4QNA;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Admin/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Flagcast Admin";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.sports";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Flagcast";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 2.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.admin.debug;
+				PRODUCT_NAME = "Flagcast Admin";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		C0364852F7F009805C7B54AE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = C8KXPB4QNA;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Admin/Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Flagcast Admin";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.sports";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Flagcast";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 2.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.admin;
+				PRODUCT_NAME = "Flagcast Admin";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		42ECA6FB9D09A9A7856B629D = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				E6EB8F75FC2E03D9FE1F614D /* Debug */,
+				C6B723E2A26D598106EDCF6B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		4784D1D91900B2BCF24B12D6 = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				29DFFAC0279509C6A16357B3 /* Debug */,
+				5CE3D22169E73FEE5344E671 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA87E133F18DE626BEE94A59 = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				ECAD4CFF3D5CBDBA79077CBE /* Debug */,
+				C0364852F7F009805C7B54AE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+	};
+	rootObject = 27986695B7AAC84ED7A6558E;
+}

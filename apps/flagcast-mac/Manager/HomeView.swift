@@ -1,0 +1,139 @@
+import SwiftUI
+
+/// Home: sign in, the club, make a tournament, add one by its desk link, and the club's people.
+struct HomeView: View {
+    @Environment(AppModel.self) private var model
+    @State private var email = ""
+    @State private var code = ""
+    @State private var sent = false
+    @State private var busy = false
+    @State private var err: String?
+    @State private var newName = ""
+    @State private var newErr: String?
+    @State private var link = ""
+    @State private var addErr: String?
+    @State private var req = ClubRequest()
+    @State private var reqErr: String?
+    @State private var invite = ""
+    @State private var inviteErr: String?
+    @FocusState private var focus: Field?
+    enum Field { case email, code, new, add }
+
+    var body: some View {
+        Form {
+            if !model.signedIn || model.me == nil { signIn }
+            else if let club = model.me?.club { clubSection(club) }
+            else { requestClub }
+            SwiftUI.Section {
+                HStack {
+                    TextField("Desk link", text: $link, prompt: Text("https://flagcast.app/g/…/desk#…")).focused($focus, equals: .add)
+                        .onSubmit(add)
+                    Button("Add", action: add).disabled(link.isEmpty)
+                }
+                if let addErr { Text(addErr).foregroundStyle(.red).font(.callout) }
+            } header: { Text("Add a tournament you already have") } footer: { Text("Paste its desk link. It ends in a long key after a # sign.").foregroundStyle(.secondary) }
+        }
+        .formStyle(.grouped)
+        .navigationTitle(model.me?.club?.name ?? "Flagcast Manager")
+        .onChange(of: model.focusNew) { _, on in if on { focus = .new; model.focusNew = false } }
+        .onChange(of: model.focusAdd) { _, on in if on { focus = .add; model.focusAdd = false } }
+        .onAppear { if model.focusNew { focus = .new; model.focusNew = false } }
+    }
+
+    @ViewBuilder private var signIn: some View {
+        SwiftUI.Section {
+            if !sent {
+                TextField("Email", text: $email, prompt: Text("you@yourclub.com")).textContentType(.emailAddress).focused($focus, equals: .email).onSubmit(start)
+                HStack { Spacer(); Button("Email Me a Code", action: start).buttonStyle(.borderedProminent).disabled(email.isEmpty || busy) }
+            } else {
+                Text("We sent a 6-digit code to \(email). It works for 15 minutes.").foregroundStyle(.secondary)
+                TextField("Code", text: $code, prompt: Text("123456")).font(.title3.monospaced()).focused($focus, equals: .code).onSubmit(verify)
+                HStack { Button("Use a Different Email") { sent = false; code = "" }; Spacer(); Button("Sign In", action: verify).buttonStyle(.borderedProminent).disabled(code.count < 6 || busy) }
+            }
+            if let err { Text(err).foregroundStyle(.red).font(.callout) }
+        } header: { Text("Sign in") } footer: { Text("Use your club email. No password: we email you a code. New to Flagcast? Sign in, then set up your club.").foregroundStyle(.secondary) }
+    }
+
+    @ViewBuilder private var requestClub: some View {
+        SwiftUI.Section {
+            TextField("Club name", text: $req.name, prompt: Text("Willow Creek Country Club"))
+            TextField("Your name", text: $req.contact)
+            TextField("Phone", text: $req.phone)
+            TextField("Town and state", text: $req.city, prompt: Text("Rye, NY"))
+            HStack { Spacer(); Button("Send to Flagcast") { Task { do { try await model.club("request", ["name": req.name, "contact": req.contact, "phone": req.phone, "city": req.city]); await model.refresh() } catch { reqErr = error.localizedDescription } } }.buttonStyle(.borderedProminent).disabled(req.name.isEmpty) }
+            if let reqErr { Text(reqErr).foregroundStyle(.red).font(.callout) }
+        } header: { Text("Set up your club") } footer: { Text("Flagcast approves it and emails you.").foregroundStyle(.secondary) }
+    }
+
+    @ViewBuilder private func clubSection(_ club: ClubMe.Club) -> some View {
+        SwiftUI.Section {
+            LabeledContent("Club") { HStack { Text(club.name); StatusPill(text: club.status == "active" ? "Active" : club.status == "pending" ? "Waiting" : "Off", warn: club.status == "off") } }
+            LabeledContent("Tournaments", value: club.stateLine)
+            LabeledContent("Signed in as", value: model.me?.email ?? "")
+        }
+        if club.canMake {
+            SwiftUI.Section("New tournament") {
+                HStack {
+                    TextField("Name", text: $newName, prompt: Text("Member-Guest 2027")).focused($focus, equals: .new).onSubmit(make)
+                    Button("Make Tournament", action: make).buttonStyle(.borderedProminent).disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                if let newErr { Text(newErr).foregroundStyle(.red).font(.callout) }
+            }
+        }
+        SwiftUI.Section {
+            ForEach(model.me?.members ?? [], id: \.self) { m in
+                HStack {
+                    Text(m.email); if m.role == "owner" { Text("owner").foregroundStyle(.secondary) }
+                    Spacer()
+                    if model.me?.isOwner == true && m.role != "owner" {
+                        Button("Remove", role: .destructive) { Task { do { try await model.club("uninvite", ["email": m.email]); await model.refresh() } catch { inviteErr = error.localizedDescription } } }.buttonStyle(.borderless)
+                    }
+                }
+            }
+            if model.me?.isOwner == true {
+                HStack {
+                    TextField("Add someone", text: $invite, prompt: Text("name@yourclub.com"))
+                    Button("Add") { Task { do { try await model.club("invite", ["email": invite]); invite = ""; await model.refresh() } catch { inviteErr = error.localizedDescription } } }.disabled(invite.isEmpty)
+                }
+            }
+            if let inviteErr { Text(inviteErr).foregroundStyle(.red).font(.callout) }
+        } header: { Text("People who can run your club’s tournaments") }
+    }
+
+    private func start() { busy = true; err = nil; Task { defer { busy = false }; do { let dev = try await model.startSignIn(email.trimmingCharacters(in: .whitespaces)); sent = true; code = dev ?? ""; focus = .code } catch { err = error.localizedDescription } } }
+    private func verify() { busy = true; err = nil; Task { defer { busy = false }; do { try await model.verify(email.trimmingCharacters(in: .whitespaces), code); sent = false; code = "" } catch { err = error.localizedDescription } } }
+    private func make() { newErr = nil; Task { do { try await model.create(newName.trimmingCharacters(in: .whitespaces)); newName = "" } catch { newErr = error.localizedDescription } } }
+    private func add() { addErr = nil; Task { do { try await model.add(link: link); link = "" } catch { addErr = error.localizedDescription } } }
+}
+
+struct ClubRequest { var name = ""; var contact = ""; var phone = ""; var city = "" }
+
+struct StatusPill: View {
+    var text: String, warn = false
+    var body: some View {
+        Text(text.uppercased()).font(.caption2.weight(.bold)).padding(.horizontal, 6).padding(.vertical, 2)
+            .background(warn ? Color.red : Color.fcFlag, in: RoundedRectangle(cornerRadius: 4)).foregroundStyle(warn ? .white : .black)
+    }
+}
+
+struct SettingsView: View {
+    @Environment(AppModel.self) private var model
+    @AppStorage("updates.auto") private var autoCheck = true
+    var body: some View {
+        TabView {
+            Form {
+                LabeledContent("Signed in as", value: model.me?.email ?? "Not signed in")
+                if let c = model.me?.club { LabeledContent("Club", value: c.name) }
+                if model.signedIn { Button("Sign Out") { Task { await model.signOut() } } }
+            }
+            .formStyle(.grouped).tabItem { Label("Account", systemImage: "person.crop.circle") }
+            Form {
+                Toggle("Check for updates when Flagcast Manager opens", isOn: $autoCheck)
+                LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
+                Button("Check for Updates Now") { Updates.shared.check() }
+            }
+            .formStyle(.grouped).tabItem { Label("Updates", systemImage: "arrow.down.circle") }
+        }
+        .frame(width: 460, height: 260)
+    }
+}
