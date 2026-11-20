@@ -23,6 +23,17 @@ function shape(c) {
   return { id: c.id, name: name || 'Course', club: c.club_name || '', course: c.course_name || '', city: loc.city || '', state: loc.state || '', at: lat != null && lng != null ? { lat, lng } : null, tees };
 }
 
+const COMMON = new Set(['the', 'at', 'of', 'and', 'golf', 'club', 'country', 'cc', 'gc', 'g&cc', 'course', 'courses', 'links', 'resort', 'preserve', 'national', 'estates', 'village']);
+export function altQueries(q) {
+  const words = q.toLowerCase().replace(/[^a-z0-9& ]+/g, ' ').split(/\s+/).filter(Boolean);
+  const keep = words.filter((w) => !COMMON.has(w) && w.length > 2);
+  const out = [];
+  if (keep.length && keep.join(' ') !== words.join(' ')) out.push(keep.join(' '));
+  const longest = [...keep].sort((x, y) => y.length - x.length)[0];
+  if (longest && longest.length >= 4 && !out.includes(longest) && longest !== words.join(' ')) out.push(longest);
+  return out.slice(0, 2);
+}
+
 export async function courses(request, env, ctx) {
   const url = new URL(request.url);
   if (!env.GOLF_COURSE_API_KEY) return json({ error: 'Course lookup isn’t switched on yet. Type the par, rating and slope from the club’s scorecard for now.', off: true }, 501);
@@ -32,13 +43,27 @@ export async function courses(request, env, ctx) {
   const target = id ? `${API}/courses/${id}` : `${API}/search?search_query=${encodeURIComponent(q)}`;
   const cache = caches.default, key = new Request(`https://flagcast.app/_cache/courses/${id ? `c${id}` : `q/${encodeURIComponent(q.toLowerCase())}`}`);
   const hit = await cache.match(key); if (hit) return hit;
-  let r;
-  try { r = await fetch(target, { headers: { Authorization: `Key ${env.GOLF_COURSE_API_KEY}`, Accept: 'application/json' } }); }
-  catch { return json({ error: 'The course lookup didn’t answer. Try again in a minute.' }, 502); }
-  if (r.status === 404) return json(id ? { error: 'That course wasn’t found.' } : { courses: [] }, id ? 404 : 200);
-  if (r.status === 429) return json({ error: 'Too many lookups today. Type the numbers from the scorecard, or try again tomorrow.' }, 429);
-  if (!r.ok) return json({ error: `The course lookup had a problem (${r.status}).` }, 502);
-  const d = await r.json();
+  const ask = async (t) => {
+    let r;
+    try { r = await fetch(t, { headers: { Authorization: `Key ${env.GOLF_COURSE_API_KEY}`, Accept: 'application/json' } }); }
+    catch { return { err: json({ error: 'The course lookup didn’t answer. Try again in a minute.' }, 502) }; }
+    if (r.status === 404) return id ? { err: json({ error: 'That course wasn’t found.' }, 404) } : { d: { courses: [] } };
+    if (r.status === 429) return { err: json({ error: 'Too many lookups today. Type the numbers from the scorecard, or try again tomorrow.' }, 429) };
+    if (!r.ok) return { err: json({ error: `The course lookup had a problem (${r.status}).` }, 502) };
+    return { d: await r.json() };
+  };
+  let a = await ask(target);
+  if (a.err) return a.err;
+  // Clubs get renamed ("The Preserve at Ironhorse" is listed as "Ironhorse Country Club"), so when a name finds
+  // nothing, try again with only its distinctive words, then its longest word (at most 2 more lookups).
+  if (!id && !(a.d.courses || []).length) {
+    for (const alt of altQueries(q)) {
+      const b = await ask(`${API}/search?search_query=${encodeURIComponent(alt)}`);
+      if (b.err) break;
+      if ((b.d.courses || []).length) { a = b; break; }
+    }
+  }
+  const d = a.d;
   const out = id ? shape(d.course || d) : { courses: (d.courses || []).slice(0, 15).map((c) => { const s = shape(c); delete s.tees; return s; }) };
   const res = json(out, 200, DAY);
   ctx?.waitUntil ? ctx.waitUntil(cache.put(key, res.clone())) : await cache.put(key, res.clone());
