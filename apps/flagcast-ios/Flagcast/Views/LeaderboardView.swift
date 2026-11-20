@@ -11,6 +11,7 @@ struct LeaderboardScreen: View {
     @State private var web: URL?
     @State private var dismissed = 0.0          // bumped when the phone banner is closed, to redraw
     @State private var scrollTo: String?
+    @State private var allPar3s = false
     @Environment(Router.self) private var router
     enum Tab: String, CaseIterable { case board = "Leaderboard", par3 = "Par 3s", contests = "Contests", skins = "Skins" }
 
@@ -90,6 +91,7 @@ struct LeaderboardScreen: View {
         .onDisappear { feed.stop() }
         .onChange(of: feed.state?.name) { _, n in if let n { Recents.remember(id: id, name: n) } }
         .sheet(item: $web) { SafariView(url: $0).ignoresSafeArea() }
+        .fullScreenCover(isPresented: $allPar3s) { if let s = feed.state { AllPar3s(state: s) } }
     }
 
     /// "See it" / "Watch" on a phone banner: the matching tab (a camera → Par 3s, scrolled to its hole).
@@ -226,6 +228,10 @@ struct LeaderboardScreen: View {
     @ViewBuilder private func par3s(_ s: EventState) -> some View {
         let holes = s.course.holes.filter { $0.par == 3 }
         if holes.isEmpty { ContentUnavailableView("No par 3s", systemImage: "flag", description: Text("No par 3s are set for this course.")) }
+        if s.course.holes.filter({ $0.par == 3 && (s.cams[$0.n]?.lowercased().contains(".m3u8") ?? false) }).count >= 2 {
+            Button { allPar3s = true } label: { Label("Watch all par 3s", systemImage: "rectangle.split.2x2.fill") }
+                .buttonStyle(.fcDark)
+        }
         ForEach(holes, id: \.n) { h in
             let st = Core.holeStats(s, s.scores, h.n)
             let sp = s.sponsors.first { $0.holes.contains(h.n) }
