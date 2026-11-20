@@ -105,6 +105,8 @@ table.t .n { width: 64px; }
   </div>
   <p class="help" style="margin-top:10px">Handicaps on the Teams tab are each player’s course handicap. The allowance is applied to it, and strokes fall on the holes by stroke index. A picked-up ball counts as net double bogey. Ties are broken on the back 9, 6, 3 and last hole. Side games let each cart play skins, a Nassau and birdies among themselves; the scorecard works out who owes who, and Flagcast never takes or holds any money.</p>
   <h3>Course</h3>
+  <form class="row" id="cfind" style="margin-top:6px"><input id="cq" placeholder="Find the course by name or town" style="flex:1 1 240px" aria-label="Find the course"><button class="btn dark">Find the course</button><span class="help">Fills in par, yardage, stroke index and every set of tees with its rating and slope.</span></form>
+  <div id="cres"></div>
   <div class="scroll"><table class="t course" id="course"></table></div>
   <div class="row" style="margin-top:12px"><a class="btn dark" id="mapLink" target="_blank" rel="noopener">Course map (hole GPS)</a><a class="btn" id="groupsLink" target="_blank" rel="noopener">Where are the groups</a><span class="help" id="mapHelp">Mark each tee, green and hazard on a satellite view, or walk the course with a phone. Players then see yardages and a course view on their scorecard. Your club keeps the map for its next tournament.</span></div>
   <div class="row"><button class="btn" id="par72">Fill a standard par 72</button><span class="help">Stroke index (SI) 1 is the hardest hole. Use the numbers on the club’s scorecard.</span></div>
@@ -256,7 +258,7 @@ function read() {
   EV.screens = { title: val('f-title'), seconds: Number($('f-secs').value) || 12, rows: Number($('f-rows').value) || 10, skins: !!$('f-skins').value, ticker: val('f-ticker') };
   EV.fund = { ...EV.fund, on: !!$('f-fund').value, label: val('f-fundLabel'), goal: Number($('f-goal').value) || 0, give: val('f-give') };
 }
-document.addEventListener('input', (e) => { if (e.target.closest('#s-setup, #s-teams, #s-screens, #s-contests') && !e.target.closest('.entries') && !['flash', 'raised', 'paste'].includes(e.target.id)) setDirty(); });
+document.addEventListener('input', (e) => { if (e.target.closest('#s-setup, #s-teams, #s-screens, #s-contests') && !e.target.closest('.entries') && !['flash', 'raised', 'paste', 'cq'].includes(e.target.id)) setDirty(); });
 document.addEventListener('change', (e) => { if (e.target.closest('#s-setup, #s-teams, #s-screens, #s-contests') && !e.target.closest('.entries') && !['flash', 'raised'].includes(e.target.id)) { readTables(); setDirty(); } });
 
 function drawCourse() {
@@ -274,6 +276,52 @@ function drawTees() {
     <td><button class="btn danger" data-deltee="${i}">Remove</button></td></tr>`).join('')}</tbody>` : '<tbody><tr><td class="help">No tees yet. Add them to use Handicap Index.</td></tr></tbody>';
 }
 $('addTee').onclick = () => { readTables(); (EV.course.tees = EV.course.tees || []).push({ id: rid(), name: ['Blue', 'White', 'Gold', 'Red'][EV.course.tees.length] || '', rating: null, slope: null, par: 0 }); drawTees(); drawTeams(); setDirty(); };
+// course lookup: pick the course, then the tees the field plays; holes come from those tees, and every set of tees
+// (men's and women's) goes into the Tees table with its rating and slope
+const cres = $('cres');
+const cbox = (h) => { cres.innerHTML = `<div class="card2" style="margin-top:10px">${h}</div>`; };
+$('cfind').onsubmit = async (e) => {
+  e.preventDefault(); const q = $('cq').value.trim(); if (q.length < 3) return toast('Type at least 3 letters.');
+  cbox('<p class="help">Looking…</p>');
+  try {
+    const r = await fetch(`/golf/api/courses?q=${encodeURIComponent(q)}`), j = await r.json();
+    if (!r.ok) return cbox(`<p class="help">${esc(j.error || 'The lookup didn’t work.')}</p>`);
+    if (!j.courses.length) return cbox('<p class="help">No course by that name. Try the club’s name or the town.</p>');
+    cbox(`<p class="help" style="margin:0 0 8px">Pick the course:</p><div class="row" style="margin:0">${j.courses.map((c) => `<button class="btn" type="button" data-cid="${c.id}">${esc(c.name)}${c.city || c.state ? ` <span class="help">· ${esc([c.city, c.state].filter(Boolean).join(', '))}</span>` : ''}</button>`).join('')}</div>`);
+  } catch { cbox('<p class="help">The lookup didn’t answer. Check the internet and try again.</p>'); }
+};
+let FOUND = null;
+cres.addEventListener('click', async (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.cid) {
+    cbox('<p class="help">Getting the scorecard…</p>');
+    try {
+      const r = await fetch(`/golf/api/courses/${b.dataset.cid}`), j = await r.json();
+      if (!r.ok) return cbox(`<p class="help">${esc(j.error || 'The lookup didn’t work.')}</p>`);
+      FOUND = j; const T = j.tees.filter((t) => t.holes.length);
+      if (!T.length) return cbox('<p class="help">That course has no scorecard in the lookup. Type the numbers from the club’s card.</p>');
+      cbox(`<p style="margin:0 0 4px"><b>${esc(j.name)}</b>${j.city ? ` <span class="help">· ${esc([j.city, j.state].filter(Boolean).join(', '))}</span>` : ''}</p><p class="help" style="margin:0 0 8px">Which tees does the field play? Holes come from these; every set of tees is added for handicaps.</p>
+        <div class="row" style="margin:0">${j.tees.map((t, i) => t.holes.length ? `<button class="btn" type="button" data-tee-pick="${i}">${esc(t.name)}${t.women ? ' (women)' : ''} <span class="help">· ${t.rating ?? '–'} / ${t.slope ?? '–'} · par ${t.par ?? '–'}${t.yards ? ` · ${t.yards.toLocaleString()} yds` : ''}</span></button>` : '').join('')}</div>`);
+    } catch { cbox('<p class="help">The lookup didn’t answer. Try again.</p>'); }
+    return;
+  }
+  if (b.dataset.teePick != null && FOUND) {
+    readTables();
+    const t = FOUND.tees[Number(b.dataset.teePick)], H = EV.course.holes;
+    t.holes.slice(0, 18).forEach((h, i) => { if (!H[i]) return; if (h.par) H[i].par = h.par; if (h.yds != null) H[i].yds = h.yds; if (h.hcp) H[i].hcp = h.hcp; });
+    const nine = t.holes.length <= 9;
+    if (!$('f-course').value.trim()) { EV.course.name = FOUND.name; $('f-course').value = FOUND.name; }
+    const keep = EV.course.tees || [];
+    EV.course.tees = FOUND.tees.filter((x) => x.rating && x.slope).slice(0, 8).map((x) => {
+      const name = `${x.name}${x.women ? ' (women)' : ''}`, old = keep.find((k) => k.name === name);
+      return { id: old ? old.id : rid(), name, rating: x.rating, slope: x.slope, par: x.par && x.par !== coursePar(EV) ? x.par : 0 };
+    });
+    // the tees picked go first, so players without tees set use them
+    const first = EV.course.tees.findIndex((x) => x.name === `${t.name}${t.women ? ' (women)' : ''}`); if (first > 0) EV.course.tees.unshift(EV.course.tees.splice(first, 1)[0]);
+    drawCourse(); drawTees(); drawTeams(); setDirty();
+    cbox(`<p class="help" style="margin:0">Filled in from ${esc(t.name)} tees${nine ? ' (a 9-hole card: holes 1–9)' : ''} and added ${EV.course.tees.length} set${EV.course.tees.length === 1 ? '' : 's'} of tees. Check them against the club’s scorecard, then <b>Save</b>.</p>`);
+  }
+});
 $('par72').onclick = () => { EV.course.holes = defaultHoles(); drawCourse(); setDirty(); };
 
 // one player line: name, GHIN number, Handicap Index, tees, course handicap (worked out when there's an Index)

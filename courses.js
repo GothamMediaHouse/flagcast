@@ -1,0 +1,44 @@
+// Course lookup for the desk: find a course by name and fill in its par, yardage, stroke index and each set of
+// tees' course rating and slope. Data from GolfCourseAPI (golfcourseapi.com), with the key in the
+// GOLF_COURSE_API_KEY secret (Cloudflare dashboard → flagcast → Settings → Variables and Secrets).
+//   GET /golf/api/courses?q=<name or town>  → { courses: [{ id, name, club, city, state }] }
+//   GET /golf/api/courses/<id>              → { id, name, club, city, state, tees: [{ name, women, rating, slope, par, yards, holes: [{ par, yds, hcp }] }] }
+const API = 'https://api.golfcourseapi.com/v1';
+const DAY = 86400;
+
+const json = (o, s = 200, cache = 0) => new Response(JSON.stringify(o), { status: s, headers: {
+  'Content-Type': 'application/json', 'Cache-Control': cache ? `max-age=${cache}` : 'no-store' } });
+const num = (v) => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Number(v));
+
+function shape(c) {
+  const loc = c.location || {};
+  const name = [c.club_name, c.course_name].filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).join(' · ');
+  const tees = [];
+  for (const [side, women] of [['male', false], ['female', true]]) for (const t of (c.tees || {})[side] || []) {
+    tees.push({ name: String(t.tee_name || 'Tees'), women, rating: num(t.course_rating), slope: num(t.slope_rating), par: num(t.par_total),
+      yards: num(t.total_yards), holes: (t.holes || []).map((h) => ({ par: num(h.par), yds: num(h.yardage), hcp: num(h.handicap) })) });
+  }
+  return { id: c.id, name: name || 'Course', club: c.club_name || '', course: c.course_name || '', city: loc.city || '', state: loc.state || '', tees };
+}
+
+export async function courses(request, env, ctx) {
+  const url = new URL(request.url);
+  if (!env.GOLF_COURSE_API_KEY) return json({ error: 'Course lookup isn’t switched on yet. Type the par, rating and slope from the club’s scorecard for now.', off: true }, 501);
+  const id = url.pathname.match(/^\/golf\/api\/courses\/(\d{1,9})$/)?.[1];
+  const q = (url.searchParams.get('q') || '').trim().slice(0, 80);
+  if (!id && q.length < 3) return json({ error: 'Type at least 3 letters of the course name.' }, 400);
+  const target = id ? `${API}/courses/${id}` : `${API}/search?search_query=${encodeURIComponent(q)}`;
+  const cache = caches.default, key = new Request(`https://flagcast.app/_cache/courses/${id ? `c${id}` : `q/${encodeURIComponent(q.toLowerCase())}`}`);
+  const hit = await cache.match(key); if (hit) return hit;
+  let r;
+  try { r = await fetch(target, { headers: { Authorization: `Key ${env.GOLF_COURSE_API_KEY}`, Accept: 'application/json' } }); }
+  catch { return json({ error: 'The course lookup didn’t answer. Try again in a minute.' }, 502); }
+  if (r.status === 404) return json(id ? { error: 'That course wasn’t found.' } : { courses: [] }, id ? 404 : 200);
+  if (r.status === 429) return json({ error: 'Too many lookups today. Type the numbers from the scorecard, or try again tomorrow.' }, 429);
+  if (!r.ok) return json({ error: `The course lookup had a problem (${r.status}).` }, 502);
+  const d = await r.json();
+  const out = id ? shape(d.course || d) : { courses: (d.courses || []).slice(0, 15).map((c) => { const s = shape(c); delete s.tees; return s; }) };
+  const res = json(out, 200, DAY);
+  ctx?.waitUntil ? ctx.waitUntil(cache.put(key, res.clone())) : await cache.put(key, res.clone());
+  return res;
+}
