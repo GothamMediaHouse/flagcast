@@ -310,6 +310,7 @@ cres.addEventListener('click', async (e) => {
     const t = FOUND.tees[Number(b.dataset.teePick)], H = EV.course.holes;
     t.holes.slice(0, 18).forEach((h, i) => { if (!H[i]) return; if (h.par) H[i].par = h.par; if (h.yds != null) H[i].yds = h.yds; if (h.hcp) H[i].hcp = h.hcp; });
     const nine = t.holes.length <= 9;
+    if (FOUND.at) EV.course.at = FOUND.at;
     if (!$('f-course').value.trim()) { EV.course.name = FOUND.name; $('f-course').value = FOUND.name; }
     const keep = EV.course.tees || [];
     EV.course.tees = FOUND.tees.filter((x) => x.rating && x.slope).slice(0, 8).map((x) => {

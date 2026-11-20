@@ -241,6 +241,20 @@ $('panel').addEventListener('submit', async (e) => {
   } catch { err.textContent = 'Search isn’t answering. Paste the spot from Google Maps instead.'; err.hidden = false; }
 });
 
+// open on the course the Desk knows (its spot from Find the course, else a search for its name), then map it automatically
+async function goToCourse() {
+  let at = S.course?.at;
+  const name = S.course?.name || '';
+  if (!at && name) {
+    try { const j = await (await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(name)}`)).json(); if (j.length) at = { lat: +j[0].lat, lng: +j[0].lon }; } catch {}
+  }
+  if (!at) return;
+  if ($('q')) $('q').value = name;
+  map.setView([at.lat, at.lng], 15);
+  await new Promise((r) => setTimeout(r, 400));
+  document.querySelector('[data-auto="fill"]')?.click();
+}
+
 function showMe(at, acc) {
   if (meDot) meDot.remove();
   meDot = L.layerGroup([L.circle(at, { radius: acc || 5, color: '#3a8bff', weight: 1, fillOpacity: .15 }), L.circleMarker(at, { radius: 7, color: '#fff', weight: 2, fillColor: '#3a8bff', fillOpacity: 1 })]).addTo(map);
@@ -369,6 +383,7 @@ async function start() {
   drawStrip(); drawMap(); drawPanel();
   const any = Object.values(MAP.holes).flatMap((h) => [h.tee, middle(h)]).filter(Boolean);
   if (middle(H()) || H().tee) fit(); else if (any.length) map.fitBounds(any, { padding: [30, 30], maxZoom: 17 });
+  else goToCourse(); // nothing mapped yet: open on the course picked in the Desk and fill the holes in from OpenStreetMap
   void first;
   if (mode === 'groups') setMode('groups');
 }
