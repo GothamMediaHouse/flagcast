@@ -1,6 +1,6 @@
 // Cloudflare Stream Live for NDI cameras (stream.js), with the Stream API mocked.  node test/stream.test.mjs
 import assert from 'node:assert/strict';
-import { streamReady, liveInput, inputState, playbackURL, deleteInput, camUid, parseMpd, camPlaylist, WINDOW } from '../stream.js';
+import { streamReady, liveInput, inputState, playbackURL, deleteInput, camUid, parseMpd, camPlaylist, WINDOW, listAll, deleteVideo } from '../stream.js';
 
 let n = 0; const ok = (name) => console.log(`ok ${++n} - ${name}`);
 const env = { CF_ACCOUNT_ID: 'acct123', CF_STREAM_TOKEN: 'tok-test' };
@@ -124,5 +124,21 @@ assert.equal(r.status, 404); assert.match((await r.json()).error, /older than th
 r = await camPlaylist(cf('', 204), U, 'video', new URLSearchParams()); assert.equal(r.status, 404); assert.match((await r.json()).error, /isn’t sending/);
 r = await camPlaylist(cf(mpdXml(300)), U, 'v99', new URLSearchParams()); assert.equal(r.status, 404);
 ok('a moment before this broadcast, a camera that isn’t sending, or a gone track: a clear message');
+
+{
+  const calls = [];
+  const f = async (url, init = {}) => {
+    calls.push(`${init.method || 'GET'} ${url.replace(/^.*\/accounts\/acct123\/stream/, '')}`);
+    const res = (body) => ({ ok: true, status: 200, json: async () => ({ success: true, result: body }) });
+    if (url.endsWith('/live_inputs')) return res([{ uid: 'i1', meta: { name: 'Camera test · hole 4' }, created: '2026-11-21', status: { current: { state: 'disconnected' } } }]);
+    if (url.endsWith('/stream')) return res([{ uid: 'v1', meta: { name: 'Camera test · hole 4 2026-11-21' }, liveInput: 'i1', duration: 95.4, status: { state: 'ready' } }]);
+    return res(null);
+  };
+  const all = await listAll(env, f);
+  assert.deepEqual(all.inputs, [{ uid: 'i1', name: 'Camera test · hole 4', created: '2026-11-21', state: 'disconnected' }]);
+  assert.deepEqual(all.videos[0], { uid: 'v1', name: 'Camera test · hole 4 2026-11-21', input: 'i1', created: '', secs: 95, state: 'ready' });
+  await deleteVideo(env, f, 'v1'); assert.equal(calls.at(-1), 'DELETE /v1');
+}
+ok('Flagcast Admin can list every live input and recording, and delete a leftover recording');
 
 console.log(`\n${n} passed`);

@@ -69,6 +69,20 @@ export async function deleteInput(env, fetcher, uid) {
   return (videos || []).length;
 }
 
+/** Everything on the Stream account, for Flagcast Admin to find leftovers: live inputs and recordings */
+export async function listAll(env, fetcher) {
+  const [inputs, videos] = await Promise.all([call(env, fetcher, 'GET', '/live_inputs'), call(env, fetcher, 'GET', '')]);
+  return {
+    inputs: (inputs || []).map((i) => ({ uid: i.uid, name: i.meta?.name || '', created: i.created || '', state: i.status?.current?.state || '' })),
+    videos: (videos || []).map((v) => ({ uid: v.uid, name: v.meta?.name || '', input: v.liveInput || '', created: v.created || '', secs: Math.round(v.duration || 0), state: v.status?.state || '' })),
+  };
+}
+/** delete one recording */
+export async function deleteVideo(env, fetcher, uid) {
+  try { await call(env, fetcher, 'DELETE', `/${encodeURIComponent(uid)}`); }
+  catch (e) { if (e.status === 501) throw Object.assign(new Error('Cloudflare is still finishing this recording. Try again in a minute.'), { status: 501 }); if (e.status !== 404) throw e; }
+}
+
 // ---- Flagcast's HLS for a Stream camera --------------------------------------------------------------------------
 // Cloudflare's DASH manifest for a live input lists the whole broadcast from segment 1 with exact timing, and every
 // segment stays fetchable, though its HLS only lists the last few. So Flagcast serves HLS made from the DASH manifest:

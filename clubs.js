@@ -29,7 +29,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { SEED, slug } from './courselib.js';
 import { hashPassword, checkPassword, passwordProblem, verifyAppleToken, appleKeys, verifyGoogleToken, googleKeys } from './auth.js';
-import { streamReady, liveInput, inputState, deleteInput } from './stream.js';
+import { streamReady, liveInput, inputState, deleteInput, listAll, deleteVideo } from './stream.js';
 
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
 const EMAIL = /^[^\s@<>"',;]{1,64}@[^\s@<>"',;]{1,190}\.[a-z]{2,24}$/i;
@@ -441,7 +441,7 @@ export class FlagcastClubs extends DurableObject {
         if (had && had.club !== cid) this.fail('That tournament belongs to another club. Use Move instead.');
         this.sql.exec('INSERT OR REPLACE INTO events (id, club, key, name, created, hidden, archived) VALUES (?, ?, ?, ?, ?, 0, 0)', id, cid, key, clip(ev.name, 80) || 'Tournament', ev.created || now);
       }
-      if (b.op && !['events', 'log', 'day', 'cams', 'stream', 'streams', 'unstream'].includes(b.op)) this.note('Flagcast', cid || evRow?.club || '', `Admin: ${b.op}${b.email ? ` ${clip(b.email, 254)}` : ''}${evRow ? ` ${evRow.name}` : ''}${b.op === 'pay' ? ` $${num(b.amount, 0, 1e7, 0)}` : ''}`);
+      if (b.op && !['events', 'log', 'day', 'cams', 'stream', 'streams', 'unstream', 'streamlist'].includes(b.op)) this.note('Flagcast', cid || evRow?.club || '', `Admin: ${b.op}${b.email ? ` ${clip(b.email, 254)}` : ''}${evRow ? ` ${evRow.name}` : ''}${b.op === 'pay' ? ` $${num(b.amount, 0, 1e7, 0)}` : ''}`);
       // screen control for any club's tournament: the same day ops as the desk
       if (b.op === 'day') {
         const row = this.one('SELECT * FROM events WHERE id = ?', clip(b.id, 8)); if (!row) this.fail('That tournament isn’t on any club’s list.', 404);
@@ -483,6 +483,23 @@ export class FlagcastClubs extends DurableObject {
         const st = await this.golf(tid, 'state'); const cams = { ...(st.cams || {}) }; delete cams[hole];
         await this.golf(tid, 'cams', { cams });
         return json({ ok: true, recordings: removed });
+      }
+      // everything on the Stream account, each live input marked with the tournament hole using it (to find leftovers)
+      if (b.op === 'streamlist') {
+        if (!streamReady(env)) this.fail('Cloudflare Stream isn’t set up.', 409);
+        const all = await listAll(env, fetch).catch((e) => this.fail(e.message, 502));
+        const used = Object.fromEntries(this.all('SELECT uid, event, hole FROM streams').map((r) => [r.uid, { event: r.event, hole: r.hole }]));
+        return json({ inputs: all.inputs.map((i) => ({ ...i, use: used[i.uid] || null })), videos: all.videos });
+      }
+      // delete a leftover: a live input no tournament uses (with its recordings), or one recording
+      if (b.op === 'streamdelete') {
+        if (!streamReady(env)) this.fail('Cloudflare Stream isn’t set up.', 409);
+        const input = /^[0-9a-f]{32}$/.test(b.input || '') ? b.input : '', video = /^[0-9a-f]{32}$/.test(b.video || '') ? b.video : '';
+        if (!input && !video) this.fail('Pick a live input or a recording.');
+        if (input && this.one('SELECT hole FROM streams WHERE uid = ?', input)) this.fail('A tournament hole uses that camera. Remove it from the hole instead.', 409);
+        if (input) return json({ ok: true, recordings: await deleteInput(env, fetch, input).catch((e) => this.fail(e.message, e.status === 501 ? 409 : 502)) });
+        await deleteVideo(env, fetch, video).catch((e) => this.fail(e.message, e.status === 501 ? 409 : 502));
+        return json({ ok: true });
       }
       // is each streamed hole's camera sending? → { holes: { 7: 'connected' } }
       if (b.op === 'streams') {
