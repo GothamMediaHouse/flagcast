@@ -61,6 +61,39 @@ import Foundation
 /// Test builds only: FLAGCAST_SELFTEST=1 loads the first tournament, saves it unchanged, and checks that the
 /// server's copy of every setup field is the same before and after (nothing lost or changed by the Mac app's model).
 @MainActor
+/// Test builds: FLAGCAST_NDI_TEST=1 finds an NDI source, bridges it to hole 3 of a pretend tournament for 12 seconds,
+/// checks the local HLS files and the TV server (/local-cams index and a page passed through), then quits.
+enum NDISelfTest {
+    static func run() {
+        guard ProcessInfo.processInfo.environment["FLAGCAST_NDI_TEST"] == "1" else { return }
+        Task {
+            func log(_ s: String) { FileHandle.standardError.write(Data("ndi-test: \(s)\n".utf8)) }
+            log("library loaded: \(NDILib.shared.loaded), ffmpeg: \(Bridges.ffmpeg ?? "none")")
+            NDISources.shared.watch()
+            for _ in 0..<20 where NDISources.shared.names.isEmpty { try? await Task.sleep(for: .seconds(1)) }
+            log("sources: \(NDISources.shared.names)")
+            guard let src = NDISources.shared.names.first else { log("FAIL no NDI source"); NSApp.terminate(nil); return }
+            Bridges.shared.start(event: "selftest", hole: 3, source: src, rtmps: nil)
+            try? await Task.sleep(for: .seconds(12))
+            let b = Bridges.shared.bridge("selftest", 3)
+            log("bridge: receiving=\(b?.receiving ?? false) size=\(b?.size ?? "") state=\(b?.state ?? "")")
+            let files = (try? FileManager.default.contentsOfDirectory(atPath: b?.dir.path ?? "")) ?? []
+            log("hls files: \(files.sorted().prefix(6))")
+            func get(_ path: String) async -> (Int, String) {
+                guard let (d, r) = try? await URLSession.shared.data(from: URL(string: "http://127.0.0.1:\(LOCAL_PORT)\(path)")!) else { return (0, "") }
+                return ((r as? HTTPURLResponse)?.statusCode ?? 0, String(decoding: d.prefix(120), as: UTF8.self))
+            }
+            log("index.json: \(await get("/local-cams/selftest/index.json"))")
+            let pl = await get("/local-cams/selftest/3/index.m3u8"); log("playlist: \(pl.0) \(pl.1.replacingOccurrences(of: "\n", with: " | "))")
+            let page = await get("/golf/"); log("proxied /golf/: \(page.0) \(page.1.prefix(40))")
+            let api = await get("/golf/api/courses?q=ironhorse"); log("proxied api: \(api.0) \(api.1.prefix(60))")
+            Bridges.shared.stopAll()
+            log("done"); NSApp.terminate(nil)
+        }
+    }
+}
+
+@MainActor
 enum SelfTest {
     static func run(_ model: AppModel) {
         guard ProcessInfo.processInfo.environment["FLAGCAST_SELFTEST"] == "1", let e = model.events.first else { return }
