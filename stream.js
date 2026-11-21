@@ -63,7 +63,8 @@ export async function inputState(env, fetcher, uid) {
 export async function deleteInput(env, fetcher, uid) {
   let videos = [];
   try { videos = await call(env, fetcher, 'GET', `/live_inputs/${encodeURIComponent(uid)}/videos`); } catch (e) { if (e.status !== 404) throw e; }
-  for (const v of videos || []) { try { await call(env, fetcher, 'DELETE', `/${encodeURIComponent(v.uid)}`); } catch (e) { if (e.status !== 404) throw e; } }
+  // a recording Cloudflare is still finishing (the camera stopped seconds ago) can't be deleted yet: it answers 501
+  for (const v of videos || []) { try { await call(env, fetcher, 'DELETE', `/${encodeURIComponent(v.uid)}`); } catch (e) { if (e.status === 501) throw Object.assign(new Error('Cloudflare is still finishing this camera’s last recording. Try again in a minute.'), { status: 501 }); if (e.status !== 404) throw e; } }
   try { await call(env, fetcher, 'DELETE', `/live_inputs/${encodeURIComponent(uid)}`); } catch (e) { if (e.status !== 404) throw e; }
   return (videos || []).length;
 }
