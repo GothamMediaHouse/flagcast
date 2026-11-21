@@ -201,10 +201,7 @@ struct SettingsView: View {
                     NavigationLink { SignInView() } label: { ListRow(icon: "person.badge.plus", title: "Sign in", last: true) { Chevron() } }.buttonStyle(.plain)
                 }
             }
-            CardBox(title: "Tools", footer: model.isAdmin ? "You’re a Flagcast admin, so Engineering is always on." : "Engineering adds every TV in one grid, switching several at once, and take-overs to the Screens tab. Club staff don’t need it.") {
-                ListRow(icon: "slider.horizontal.3", iconColor: FC.blue, title: "Show engineering tools") {
-                    Toggle("", isOn: Binding(get: { model.showEngineering }, set: { model.showEngineering = $0 })).labelsHidden().tint(FC.primary)
-                }
+            CardBox(title: "Flagcast staff") {
                 Button { passcode = true } label: {
                     ListRow(icon: "lock.shield.fill", iconColor: FC.green2, title: "Flagcast admin passcode", sub: !(model.admin.pass ?? "").isEmpty ? "Unlocked on this phone" : "For Flagcast staff without a sign-in", last: true) { Chevron() }
                 }
