@@ -1,20 +1,8 @@
 import SwiftUI
 
-/// Engineering (admins, or Settings → Show engineering tools): every TV in one grid (TVs down, pages across: tap a
+/// Engineering (Flagcast Admin only, Admin → Screens & phones): every TV in one grid (TVs down, pages across: tap a
 /// cell to switch that TV), tick several to switch them together, how long it lasts, and the take-over, players'
 /// phones banner, announcement and scenes.
-struct EngineeringSheet: View {
-    let doc: DeskDoc
-    @Environment(\.dismiss) private var dismiss
-    var body: some View {
-        ScrollView { EngineeringPanel(src: doc.engSource).padding(16) }
-            .background(FC.paper)
-            .navigationTitle("Engineering").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-            .overlay(alignment: .bottom) { NoticeBar(text: doc.notice).padding(.bottom, 10).animation(.snappy, value: doc.notice) }
-    }
-}
-
 struct EngineeringPanel: View {
     var src: EngSource
     @State private var selected: Set<String> = []

@@ -1,8 +1,7 @@
 import SwiftUI
 
 /// Screens: every TV at the club as a card. "What should this TV show?" picture tiles, Show something else for a bit
-/// and Back to normal, Where is it?, Set up this TV, and the detail under Customize. Engineering (every TV in one
-/// grid, several at once, take-overs) for admins, or with Settings → Show engineering tools.
+/// and Back to normal, Where is it?, Set up this TV, and the detail under Customize. (Engineering is Flagcast's: Admin.)
 struct ScreensView: View {
     var body: some View {
         WithTournament { doc in ScreensPage(doc: doc) }
@@ -13,7 +12,6 @@ struct ScreensView: View {
 private struct ScreensPage: View {
     @Bindable var doc: DeskDoc
     @Environment(DeskNav.self) private var nav
-    @State private var engineering = false
     @State private var allSending = false
 
     static let PLACES = ["Clubhouse", "Bar", "Grill room", "Pro shop", "Tent", "Patio", "Locker room", "Hole 7 tee", "Hole 18 green"]
@@ -28,7 +26,7 @@ private struct ScreensPage: View {
     var body: some View {
         PhotoPage(image: doc.picture.image, kicker: "\(doc.ev.displays.filter { (doc.live?.online[$0.id] ?? 0) > 0 }.count) of \(doc.ev.displays.count) on",
                   title: "TVs", sub: "What the TVs at the club show", height: 220) {
-            if nav.canEngineer() { Button { engineering = true } label: { Label("Engineering", systemImage: "slider.horizontal.3") }.buttonStyle(WhiteButton()) }
+            EmptyView()
         } content: {
             if doc.ev.displays.isEmpty {
                 VStack(spacing: 12) {
@@ -45,7 +43,6 @@ private struct ScreensPage: View {
                 Button { addTV() } label: { Label("Add Another TV", systemImage: "plus") }.buttonStyle(PlainCardButton(full: true))
             }
         }
-        .sheet(isPresented: $engineering) { NavigationStack { EngineeringSheet(doc: doc) } }
     }
 
     private var allAtOnce: some View {
