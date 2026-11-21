@@ -107,6 +107,7 @@ table.t .n { width: 64px; }
   <h3>Course</h3>
   <form class="row" id="cfind" style="margin-top:6px"><input id="cq" placeholder="Find the course by name or town" style="flex:1 1 240px" aria-label="Find the course"><button class="btn dark">Find the course</button><span class="help">Fills in par, yardage, stroke index and every set of tees with its rating and slope.</span></form>
   <div id="cres"></div>
+  <p class="help" style="margin:8px 0 0">Course set up and mapped? <button class="btn" type="button" id="libSave">Save to the Flagcast course list</button> so any club can pick it.</p>
   <div class="scroll"><table class="t course" id="course"></table></div>
   <div class="row" style="margin-top:12px"><a class="btn dark" id="mapLink" target="_blank" rel="noopener">Course map (hole GPS)</a><a class="btn" id="groupsLink" target="_blank" rel="noopener">Where are the groups</a><span class="help" id="mapHelp">Mark each tee, green and hazard on a satellite view, or walk the course with a phone. Players then see yardages and a course view on their scorecard. Your club keeps the map for its next tournament.</span></div>
   <div class="row"><button class="btn" id="par72">Fill a standard par 72</button><span class="help">Stroke index (SI) 1 is the hardest hole. Use the numbers on the club’s scorecard.</span></div>
@@ -287,10 +288,18 @@ $('cfind').onsubmit = async (e) => {
     const r = await fetch(`/golf/api/courses?q=${encodeURIComponent(q)}`), j = await r.json();
     if (!r.ok) return cbox(`<p class="help">${esc(j.error || 'The lookup didn’t work.')}</p>`);
     if (!j.courses.length) return cbox('<p class="help">No course by that name. Try the club’s name or the town.</p>');
-    cbox(`<p class="help" style="margin:0 0 8px">Pick the course:</p><div class="row" style="margin:0">${j.courses.map((c) => `<button class="btn" type="button" data-cid="${c.id}">${esc(c.name)}${c.city || c.state ? ` <span class="help">· ${esc([c.city, c.state].filter(Boolean).join(', '))}</span>` : ''}</button>`).join('')}</div>`);
+    cbox(`<p class="help" style="margin:0 0 8px">Pick the course:</p><div class="row" style="margin:0">${j.courses.map((c) => `<button class="btn" type="button" data-cid="${c.id}">${c.library ? '<b>Flagcast</b> · ' : ''}${esc(c.name)}${c.city || c.state ? ` <span class="help">· ${esc([c.city, c.state].filter(Boolean).join(', '))}</span>` : ''}</button>`).join('')}</div>`);
   } catch { cbox('<p class="help">The lookup didn’t answer. Check the internet and try again.</p>'); }
 };
 let FOUND = null;
+$('libSave').onclick = async () => {
+  if (dirty) return toast('Save your changes first');
+  if (!confirm(`Add ${EV.course.name || 'this course'} to the Flagcast course list? Every club will be able to pick its scorecard, tees and hole map.`)) return;
+  try {
+    const r = await fetch('/golf/api/courses/library', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: eventId(), key }) }), j = await r.json();
+    toast(r.ok ? 'Saved to the Flagcast course list' : (j.error || 'That didn’t work'));
+  } catch { toast('That didn’t work. Check the internet.'); }
+};
 cres.addEventListener('click', async (e) => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.cid) {
@@ -311,6 +320,8 @@ cres.addEventListener('click', async (e) => {
     t.holes.slice(0, 18).forEach((h, i) => { if (!H[i]) return; if (h.par) H[i].par = h.par; if (h.yds != null) H[i].yds = h.yds; if (h.hcp) H[i].hcp = h.hcp; });
     const nine = t.holes.length <= 9;
     if (FOUND.at) EV.course.at = FOUND.at;
+    // a Flagcast library course brings its hole map (GPS) too, when this tournament has none yet
+    if (FOUND.map && FOUND.map.holes && !(EV.map && EV.map.holes && Object.keys(EV.map.holes).length)) desk('map', { map: FOUND.map }).then(() => { EV.map = FOUND.map; toast('Hole map added from the Flagcast course list'); }).catch(() => {});
     if (!$('f-course').value.trim()) { EV.course.name = FOUND.name; $('f-course').value = FOUND.name; }
     const keep = EV.course.tees || [];
     EV.course.tees = FOUND.tees.filter((x) => x.rating && x.slope).slice(0, 8).map((x) => {

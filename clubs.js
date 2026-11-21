@@ -22,6 +22,7 @@
 // ADMIN_EMAIL (optional) gets a note when a club asks to join. On localhost with no RESEND_API_KEY the code
 // comes back in the answer (devCode) so the pages can be tried without email.
 import { DurableObject } from 'cloudflare:workers';
+import { SEED, slug } from './courselib.js';
 
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
 const EMAIL = /^[^\s@<>"',;]{1,64}@[^\s@<>"',;]{1,190}\.[a-z]{2,24}$/i;
@@ -71,6 +72,13 @@ export class FlagcastClubs extends DurableObject {
       CREATE TABLE IF NOT EXISTS log (n INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, who TEXT, club TEXT, what TEXT);`);
     // columns added after the first release
     for (const q of ['ALTER TABLE clubs ADD COLUMN notes TEXT', 'ALTER TABLE events ADD COLUMN archived INTEGER DEFAULT 0', 'ALTER TABLE clubs ADD COLUMN course TEXT']) { try { this.sql.exec(q); } catch {} }
+    // the Flagcast course library (courselib.js): courses any club can pick in Find the course
+    this.sql.exec('CREATE TABLE IF NOT EXISTS library (id TEXT PRIMARY KEY, name TEXT, city TEXT, state TEXT, data TEXT, club TEXT, updated INTEGER)');
+    for (const c of SEED) if (!this.one('SELECT id FROM library WHERE id = ?', c.id)) this.libPut(c, '', 0);
+  }
+  libPut(c, club, at) {
+    this.sql.exec('INSERT OR REPLACE INTO library (id, name, city, state, data, club, updated) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      c.id, c.name, c.city || '', c.state || '', JSON.stringify({ ...c, by: club || c.by || '', updated: at || c.updated || 0 }), club || '', at || 0);
   }
   note(who, club, what) {
     this.sql.exec('INSERT INTO log (at, who, club, what) VALUES (?, ?, ?, ?)', Date.now(), who || '', club || '', String(what).slice(0, 200));
@@ -106,6 +114,38 @@ export class FlagcastClubs extends DurableObject {
 
   async route(op, b, local) {
     const env = this.env, now = Date.now();
+    // the course library (only reached from courses.js, never straight from the web)
+    if (op === 'lib-search') {
+      const words = clip(b.q, 80).toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 1).slice(0, 5);
+      if (!words.length) return json({ courses: [] });
+      const rows = this.all('SELECT id, name, city, state FROM library').filter((r) => { const t = `${r.name} ${r.city} ${r.state}`.toLowerCase(); return words.every((w) => t.includes(w)); });
+      return json({ courses: rows.slice(0, 10).map((r) => ({ id: r.id, name: r.name, city: r.city, state: r.state, library: true })) });
+    }
+    if (op === 'lib-get') {
+      const r = this.one('SELECT data FROM library WHERE id = ?', clip(b.id, 60));
+      return r ? json({ ...JSON.parse(r.data), library: true }) : json({ error: 'That course isn’t in the Flagcast library.' }, 404);
+    }
+    if (op === 'lib-save') { // from a tournament's desk: its course (scorecard, tees, location, hole map) goes in the library
+      const e = this.one('SELECT * FROM events WHERE id = ?', clip(b.event, 8));
+      const admin = isAdmin(env, b.pass);
+      if (!admin && !b.key) this.fail('This desk link is not right.', 403);
+      if (!/^[a-z0-9]{8}$/.test(String(b.event || ''))) this.fail('Not found', 404);
+      // the tournament itself checks the desk key
+      const ev = await this.golf(b.event, 'desk', { key: b.key || e?.key, op: 'get' });
+      const c = ev.course || {}, name = clip(c.name, 80);
+      if (!name) this.fail('Type the course name in Setup first.');
+      const id = slug(name), old = this.one('SELECT club FROM library WHERE id = ?', id);
+      if (old && !(e?.club && old.club === e.club) && !admin) this.fail('That course is already in the Flagcast library. Ask Flagcast to update it.', 409);
+      const holes = (c.holes || []).map((h) => ({ par: h.par, yds: h.yds || null, hcp: h.hcp }));
+      const par = holes.reduce((a, h) => a + (h.par || 0), 0), yards = holes.reduce((a, h) => a + (h.yds || 0), 0) || null;
+      const entry = { id, name, club: clip(ev.club, 80), course: '', city: clip(b.city, 60), state: clip(b.state, 30), at: c.at || null,
+        tees: (c.tees || []).map((t) => ({ name: t.name, women: /\(women\)|\(w\)/i.test(t.name), rating: t.rating, slope: t.slope, par: t.par || par, yards, holes })),
+        map: ev.map && ev.map.holes && Object.keys(ev.map.holes).length ? { holes: ev.map.holes, src: ev.map.src || '' } : null, src: `Saved from ${clip(ev.name, 60)}` };
+      if (JSON.stringify(entry).length > 250000) this.fail('Too big');
+      this.libPut(entry, e?.club || '', now);
+      this.note(admin ? 'admin' : 'desk', e?.club || '', `Course library: saved ${name}`);
+      return json({ ok: true, id });
+    }
     if (op === 'course') { // only from a tournament (GolfEvent) after its map was saved: the club keeps the latest one
       const e = this.one('SELECT * FROM events WHERE id = ?', clip(b.id, 8));
       if (!e || !b.key || !same(b.key, e.key)) this.fail('Not found', 404);

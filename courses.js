@@ -2,6 +2,8 @@
 // tees' course rating and slope. Data from GolfCourseAPI (golfcourseapi.com), with the key in the
 // GOLF_COURSE_API_KEY secret (Cloudflare dashboard → flagcast → Settings → Variables and Secrets).
 //   GET /golf/api/courses?q=<name or town>  → { courses: [{ id, name, club, city, state }] }
+//   GET /golf/api/courses/fc-<name>         → a Flagcast library course (courselib.js), same shape plus map and library:true
+//   POST /golf/api/courses/library {event,key} → save that tournament's course to the library
 //   GET /golf/api/courses/<id>              → { id, name, club, city, state, tees: [{ name, women, rating, slope, par, yards, holes: [{ par, yds, hcp }] }] }
 const API = 'https://api.golfcourseapi.com/v1';
 const DAY = 86400;
@@ -34,15 +36,42 @@ export function altQueries(q) {
   return out.slice(0, 2);
 }
 
+// the Flagcast course library lives in the club directory (clubs.js, courselib.js)
+const lib = async (env, op, body) => {
+  if (!env.CLUBS) return null;
+  const r = await env.CLUBS.get(env.CLUBS.idFromName('directory')).fetch(new Request(`https://clubs/${op}`, { method: 'POST', body: JSON.stringify(body) }));
+  return { status: r.status, body: await r.json().catch(() => ({})) };
+};
+
 export async function courses(request, env, ctx) {
   const url = new URL(request.url);
-  if (!env.GOLF_COURSE_API_KEY) return json({ error: 'Course lookup isn’t switched on yet. Type the par, rating and slope from the club’s scorecard for now.', off: true }, 501);
+  // POST /golf/api/courses/library { event, key } → save that tournament's course to the library for every club
+  if (url.pathname === '/golf/api/courses/library') {
+    if (request.method !== 'POST') return json({ error: 'POST only' }, 405);
+    let b = {}; try { b = await request.json(); } catch {}
+    const r = await lib(env, 'lib-save', { event: b.event, key: b.key, pass: b.pass, city: b.city, state: b.state });
+    return r ? json(r.body, r.status) : json({ error: 'The course library isn’t available.' }, 501);
+  }
+  const libId = url.pathname.match(/^\/golf\/api\/courses\/(fc-[a-z0-9-]{1,40})$/)?.[1];
+  if (libId) { const r = await lib(env, 'lib-get', { id: libId }); return r ? json(r.body, r.status) : json({ error: 'Not found' }, 404); }
   const id = url.pathname.match(/^\/golf\/api\/courses\/([A-Za-z0-9_-]{1,32})$/)?.[1]; // GolfCourseAPI ids are letters and numbers
   const q = (url.searchParams.get('q') || '').trim().slice(0, 80);
   if (!id && q.length < 3) return json({ error: 'Type at least 3 letters of the course name.' }, 400);
+  // search: Flagcast library courses first, then GolfCourseAPI
+  const mine = !id ? ((await lib(env, 'lib-search', { q }).catch(() => null))?.body?.courses || []) : [];
+  if (!env.GOLF_COURSE_API_KEY) {
+    if (mine.length) return json({ courses: mine });
+    return json({ error: 'Course lookup isn’t switched on yet. Type the par, rating and slope from the club’s scorecard for now.', off: true }, 501);
+  }
   const target = id ? `${API}/courses/${id}` : `${API}/search?search_query=${encodeURIComponent(q)}`;
   const cache = caches.default, key = new Request(`https://flagcast.app/_cache/courses/${id ? `c${id}` : `q/${encodeURIComponent(q.toLowerCase())}`}`);
-  const hit = await cache.match(key); if (hit) return hit;
+  const withLib = async (res) => { // library courses go first; the API answer stays cached on its own
+    if (id || !mine.length) return res;
+    const j = await res.clone().json().catch(() => ({}));
+    const seen = new Set(mine.map((c) => c.name.toLowerCase()));
+    return json({ courses: [...mine, ...(j.courses || []).filter((c) => !seen.has(String(c.club || c.name).toLowerCase()))] });
+  };
+  const hit = await cache.match(key); if (hit) return withLib(hit);
   const ask = async (t) => {
     let r;
     try { r = await fetch(t, { headers: { Authorization: `Key ${env.GOLF_COURSE_API_KEY}`, Accept: 'application/json' } }); }
@@ -53,7 +82,7 @@ export async function courses(request, env, ctx) {
     return { d: await r.json() };
   };
   let a = await ask(target);
-  if (a.err) return a.err;
+  if (a.err) return mine.length ? json({ courses: mine }) : a.err;
   // Clubs get renamed ("The Preserve at Ironhorse" is listed as "Ironhorse Country Club"), so when a name finds
   // nothing, try again with only its distinctive words, then its longest word (at most 2 more lookups).
   if (!id && !(a.d.courses || []).length) {
@@ -67,5 +96,5 @@ export async function courses(request, env, ctx) {
   const out = id ? shape(d.course || d) : { courses: (d.courses || []).slice(0, 15).map((c) => { const s = shape(c); delete s.tees; return s; }) };
   const res = json(out, 200, DAY);
   ctx?.waitUntil ? ctx.waitUntil(cache.put(key, res.clone())) : await cache.put(key, res.clone());
-  return res;
+  return withLib(res);
 }
