@@ -50,6 +50,9 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
 .step .val.set { border-style: solid; color: var(--ink); }
 .step .val.set.birdie, .step .val.set.eagle { border-color: var(--red); color: var(--red); border-radius: 50%; }
 .step .val.set.bogey, .step .val.set.double { border-color: var(--ink); }
+.aa { border: 1px solid rgba(255,255,255,.35); background: none; color: inherit; border-radius: 8px; min-width: 44px; min-height: 36px; font-weight: 700; flex: none; }
+.offline { background: #fff3cd; color: #5c4400; padding: 10px 16px; font-size: .9rem; line-height: 1.35; }
+.offline button { border: 1px solid #c9a227; background: #fff; color: #5c4400; border-radius: 8px; padding: 6px 12px; min-height: 36px; margin-left: 6px; font-weight: 600; }
 .pu { grid-column: 1 / -1; display: flex; justify-content: space-between; font-size: .78rem; color: var(--muted); }
 .pu button { border: 0; background: none; color: var(--muted); text-decoration: underline; padding: 12px 6px; margin: -12px -6px; min-height: 44px; font-size: .78rem; } /* a 44 pt target for a finger in a moving cart */
 .bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line); padding: 12px max(16px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); display: flex; gap: 10px; }
@@ -101,9 +104,10 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
 </head>
 <body>
 <header class="topbar">
-  <div class="top-row"><img data-brand="club" class="scorelogo" hidden alt=""><h1 id="evname">Scorecard</h1><span id="sync">Connecting…</span></div>
+  <div class="top-row"><img data-brand="club" class="scorelogo" hidden alt=""><h1 id="evname">Scorecard</h1><button id="textsize" class="aa" aria-label="Text size">Aa</button><span id="sync">Connecting…</span></div>
   <div class="teamtabs" id="tabs" hidden></div>
 </header>
+<div class="offline" id="offline" role="status" hidden><b>No signal.</b> <span id="offmsg">Your scores are saved on this phone and send by themselves when you’re back in range.</span> <button id="trynow">Try now</button></div>
 <div class="locked" id="locked" hidden>Scoring is closed. The results are final.</div>
 <nav class="strip" id="strip" aria-label="Holes"></nav>
 <main id="main"><div class="center"><h2>Loading</h2><p>Getting your scorecard.</p></div></main>
@@ -128,7 +132,7 @@ const KEY = `golf:${eventId()}:${code}`;
 const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(`${KEY}:${k}`)) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(`${KEY}:${k}`, JSON.stringify(v)); } catch {} } };
 let S = null, teams = store.get('teams', []), teamId = store.get('team', null), hole = store.get('hole', null);
 let pending = store.get('pending', []); // [{ team, p, h, v, at }] not yet saved on the server
-let online = false, sending = false, view = 'card';
+let online = false, sending = false, view = 'card', offSince = Date.now();
 // side games: this cart's own settings, kept on this phone
 let side = store.get('side', { skins: { on: false, amt: 5, net: true, carry: true }, nassau: { on: false, amt: 10, net: true, sides: {} }, birdies: { on: false, amt: 2, net: false } });
 const $ = (id) => document.getElementById(id);
@@ -171,9 +175,25 @@ async function send() {
   sending = false; syncLabel();
   if (pending.length) setTimeout(send, 5000);
 }
+setInterval(syncLabel, 5000); // the banner appears if scores have waited too long
 addEventListener('online', send);
 
+// text size (Aa): standard, large, larger; remembered on this phone
+const SIZES = ['100%', '115%', '130%'];
+let sizeAt = Math.max(0, SIZES.indexOf(store.get('textSize', '100%')));
+const applySize = () => { document.documentElement.style.fontSize = SIZES[sizeAt]; $('textsize').setAttribute('aria-label', `Text size: ${['standard', 'large', 'larger'][sizeAt]}`); };
+applySize();
+$('textsize').addEventListener('click', () => { sizeAt = (sizeAt + 1) % SIZES.length; store.set('textSize', SIZES[sizeAt]); applySize(); toast(['Standard text', 'Large text', 'Larger text'][sizeAt]); });
+$('trynow').addEventListener('click', () => { send(); toast('Trying again…'); });
+
 function syncLabel() {
+  // the banner: off the network, or scores still waiting after a while
+  const stuck = pending.length && pending[0].at < Date.now() - 15000;
+  // (a few seconds' grace: the link takes a moment to open, and a blip isn't worth a banner)
+  $('offline').hidden = !((!online && Date.now() - offSince > 4000) || stuck);
+  if (!$('offline').hidden) $('offmsg').textContent = pending.length
+    ? `${pending.length} score${pending.length === 1 ? '' : 's'} saved on this phone. They send by themselves when you’re back in range.`
+    : 'Your scores are saved on this phone and send by themselves when you’re back in range.';
   const el = $('sync');
   if (pending.length) { el.textContent = `${pending.length} waiting to send`; el.className = 'wait'; }
   else if (!online) { el.textContent = 'Offline · scores are kept'; el.className = 'wait'; }
@@ -374,7 +394,7 @@ async function start() {
     if (e.status === 404) { $('main').innerHTML = `<div class="center"><h2>Code not found</h2><p>${esc(e.message)}</p></div>`; return; }
     // no signal: carry on with what this phone already knows
   }
-  live((s) => { S = s; applyBrand(s); store.set('state', s); remember(s.name, code); render(); nudges(); phoneBanner(S, (r) => { location.href = `/g/${eventId()}${r.k === 'cam' || r.k === 'p3' ? `#hole-${r.hole}` : `#v=${r.k === 'contests' ? 'ct' : r.k === 'skins' ? 'sk' : 'lb'}`}`; }); }, (on) => { online = on; syncLabel(); if (on) send(); });
+  live((s) => { S = s; applyBrand(s); store.set('state', s); remember(s.name, code); render(); nudges(); phoneBanner(S, (r) => { location.href = `/g/${eventId()}${r.k === 'cam' || r.k === 'p3' ? `#hole-${r.hole}` : `#v=${r.k === 'contests' ? 'ct' : r.k === 'skins' ? 'sk' : 'lb'}`}`; }); }, (on) => { if (!on && online) offSince = Date.now(); online = on; syncLabel(); if (on) send(); });
   if (!S) { const saved = store.get('state', null); if (saved && teams.length) { S = saved; render(); } }
   send();
 }
