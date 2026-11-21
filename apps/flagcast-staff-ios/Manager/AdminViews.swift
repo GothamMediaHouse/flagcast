@@ -9,6 +9,9 @@ struct AdminHome: View {
         let waiting = admin.clubs.filter { $0.status == "pending" }.count
         CardPage(kicker: "Flagcast", title: "Admin", sub: "\(admin.clubs.count) clubs · \(admin.events.filter { !$0.hidden && !$0.archived }.count) tournaments") {
             CardBox {
+                NavigationLink { ScrollView { EventDayList().padding(16) }.background(FC.paper).navigationTitle("Event day") } label: {
+                    ListRow(icon: "sun.max.fill", iconColor: FC.flag, title: "Event day", sub: "Every club on today: TVs, cameras, carts scoring") { Chevron() }
+                }
                 NavigationLink { ClubsView() } label: {
                     ListRow(icon: "building.2.fill", title: "Clubs", sub: "Approve, tournaments left, people") {
                         if waiting > 0 { Text("\(waiting) waiting").font(.caption.weight(.bold)).padding(.horizontal, 8).padding(.vertical, 4).background(FC.flag, in: Capsule()).foregroundStyle(FC.onFlag) }

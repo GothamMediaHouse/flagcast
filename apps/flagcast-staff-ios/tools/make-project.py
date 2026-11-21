@@ -25,7 +25,7 @@ SHARED = [
     '../flagcast-mac/Shared/UI.swift', '../flagcast-mac/Shared/Geo.swift', '../flagcast-mac/Shared/CourseImages.swift',
     '../flagcast-mac/Shared/Desk/DeskDoc.swift', '../flagcast-mac/Shared/Desk/DeskNav.swift', '../flagcast-mac/Shared/Desk/ScreenLogic.swift',
     '../flagcast-mac/Shared/Admin/AdminModel.swift', '../flagcast-mac/Manager/AppModel.swift', '../flagcast-mac/Shared/AppleSignIn.swift',
-    '../flagcast-mac/Shared/Branding.swift', '../flagcast-mac/Shared/DayOf.swift',
+    '../flagcast-mac/Shared/Branding.swift', '../flagcast-mac/Shared/DayOf.swift', '../flagcast-mac/Shared/Admin/EventDay.swift',
 ]
 FONTS = ['../flagcast-mac/Shared/Fonts/BarlowCondensed-Bold.ttf', '../flagcast-mac/Shared/Fonts/BarlowCondensed-SemiBold.ttf']
 

@@ -246,6 +246,10 @@ struct AdminPage: View {
         Group {
             switch section {
             case .overview: AdminOverview()
+            case .today:
+                ScrollView { EventDayList().padding(20) }
+                    .safeAreaInset(edge: .top, spacing: 0) { AdminHeader(title: "Event day", sub: "Every club’s tournament on today, the ones needing a look first", search: .constant(""), prompt: "") { EmptyView() } }
+                    .background(FC.paper)
             case .signups: SignupsView()
             case .clubs: ClubsView()
             case .tournaments: TournamentsView()
