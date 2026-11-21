@@ -55,5 +55,5 @@ ID=$(security find-identity -v -p codesigning | grep -o '"Developer ID Applicati
 codesign --force --timestamp --sign "$ID" "$DMG"
 notarize "$DMG"; staple "$DMG"
 
-tools/feeds.sh "$APP_T"
+tools/feeds.sh "$APP_T" || echo "The update isn’t signed yet: double-click “Sign Mac app updates.command” (macOS asks to use the key once)."
 echo; echo "Ready: $NAME $VERSION in apps/flagcast-mac/$OUT"; ls -la "$OUT"
