@@ -556,7 +556,9 @@ export class FlagcastClubs extends DurableObject {
             const s = await this.golf(e.id, 'state');
             const scored = Object.values(s.scores || {}).reduce((n, pl) => n + Object.values(pl).reduce((m, arr) => m + arr.filter((v) => v != null).length, 0), 0);
             const online = Object.values(s.online || {}).reduce((n, v) => n + v, 0);
-            return { ...e, name: s.name || e.name, date: s.date || '', demo: !!s.brand?.marked, brand: s.brand || null, teams: (s.teams || []).length, scored, screens: (s.displays || []).length, online, locked: !!s.locked, replays: (s.replays || []).length,
+            const lasts = Object.values(s.lastAt || {}), soon = Date.now() - 20 * 60000;
+            return { ...e, name: s.name || e.name, date: s.date || '', demo: !!s.brand?.marked, brand: s.brand || null,
+              lastScore: lasts.length ? Math.max(...lasts) : 0, scoringNow: lasts.filter((a) => a > soon).length, teams: (s.teams || []).length, scored, screens: (s.displays || []).length, online, locked: !!s.locked, replays: (s.replays || []).length,
               // for screen control
               displays: (s.displays || []).map((d) => ({ id: d.id, name: d.name, where: d.where || '', group: d.group || '', online: (s.online || {})[d.id] || 0, force: s.live?.force?.[d.id] || null,
                 pages: (d.playlist || []).length, list: (d.playlist || []).map((x) => ({ k: x.k, fl: x.fl, hole: x.hole, sponsor: x.sponsor, secs: x.secs })) })),

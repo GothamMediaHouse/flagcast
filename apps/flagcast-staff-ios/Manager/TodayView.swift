@@ -61,7 +61,11 @@ private struct HomePage: View {
                 if model.me?.club?.canMake == true { Button { making = true } label: { Label("New", systemImage: "plus") }.buttonStyle(WhiteButton()) }
             }
         } content: {
-            if let doc { lead(doc); tiles(doc) }
+            if let doc {
+                lead(doc)
+                // on the day: the checks with their fixes (they cover what the status card shows on other days)
+                if DayOfChecks.isEventDay(doc) { DayOfChecks(doc: doc) { tabs.tab = .screens }.card(padding: 16) } else { tiles(doc) }
+            }
             else {
                 VStack(spacing: 10) {
                     Image(systemName: "flag.2.crossed").font(.system(size: 30)).foregroundStyle(FC.muted)

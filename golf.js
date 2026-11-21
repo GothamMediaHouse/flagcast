@@ -236,12 +236,15 @@ export class GolfEvent extends DurableObject {
 
     const teams = ev.teams.map(({ code, ...t }) => ({ ...t, players: t.players.map(({ ghin, ...p }) => p) })); // GHIN numbers stay with the desk
     const online = Object.fromEntries((ev.displays || []).map((d) => [d.id, this.ctx.getWebSockets(`d:${d.id}`).length]));
-    const scores = {};
+    const scores = {}, lastAt = {};
     for (const t of ev.teams) {
       const s = sc[t.id]; if (!s) continue;
       scores[t.id] = Object.fromEntries(Object.entries(s).map(([p, arr]) => [p, arr.map((x) => (x ? x.v : null))]));
+      // when each cart last entered a score (the Manager's "Day of" check and Admin's event-day view)
+      const at = Math.max(0, ...Object.values(s).flatMap((arr) => arr.map((x) => (x ? x.at || 0 : 0))));
+      if (at) lastAt[t.id] = at;
     }
-    return { ...rest, teams, scores, online, brand: brandFor(ev) };
+    return { ...rest, teams, scores, lastAt, online, brand: brandFor(ev) };
   }
 
   async broadcast() {
