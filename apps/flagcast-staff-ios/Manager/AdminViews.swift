@@ -143,6 +143,14 @@ private struct ClubDetail: View {
                 }
                 .padding(14)
             }
+            let live = admin.clubs.first { $0.id == club.id } ?? club
+            CardBox(title: "Branding") {
+                BrandingEditor(logo: logoURL(live.logo), accent: live.accent,
+                               forWhat: "\(club.name)’s logo shows on its TVs, live page and the players’ app instead of the Flagcast logo. The club can change it in its own settings too.",
+                               showPowered: true, powered: live.powered) { changes in await admin.brand(club.id, changes) }
+                    .id(live.logo + live.accent + (live.powered ? "p" : ""))
+                    .padding(14)
+            }
             let contact = [("person.fill", club.contact), ("phone.fill", club.phone), ("mappin.and.ellipse", club.city)].filter { !$0.1.isEmpty }
             if !contact.isEmpty {
                 CardBox(title: "Contact") {
@@ -221,7 +229,9 @@ private struct AdminTournaments: View {
                         ListRow(icon: "flag.fill", iconColor: e.locked || e.archived ? FC.muted : (e.online > 0 ? FC.ok : FC.primary), title: e.name,
                                 sub: [e.clubName, e.date, "\(e.teams) teams", e.screens > 0 ? "\(e.online)/\(e.screens) TVs on" : "", e.gone ? "Gone" : e.archived ? "Archived" : e.locked ? "Final" : e.hidden ? "Hidden" : ""].filter { !$0.isEmpty }.joined(separator: " · "),
                                 last: i == shown.count - 1) {
+                            if e.demo { DemoChip() }
                             Menu {
+                                Button(e.demo ? "Stop Demo (Show the Club’s Logo)" : "Mark as Demo (Show the Flagcast Logo)") { Task { await admin.act("demo", ["id": e.id, "on": !e.demo], done: e.demo ? "Shows the club’s logo again." : "Marked Demo: it shows the Flagcast logo.") } }
                                 Button(e.locked ? "Unlock Results" : "Lock Results") { Task { await admin.act("lock", ["id": e.id, "locked": !e.locked]) } }
                                 Button(e.archived ? "Unarchive" : "Archive") { Task { await admin.act("archive", ["id": e.id, "on": !e.archived]) } }
                                 Button(e.hidden ? "Show on the Club’s List" : "Hide from the Club’s List") { Task { await admin.act(e.hidden ? "unhide" : "hide", ["id": e.id]) } }

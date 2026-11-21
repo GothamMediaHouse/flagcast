@@ -36,6 +36,7 @@ struct SetupView: View {
             CardTitle("Tournament")
             field("Name") { TextField("", text: $doc.ev.name).textFieldStyle(.roundedBorder) }
             field("Club") { TextField("", text: $doc.ev.club).textFieldStyle(.roundedBorder) }
+            field("Logo") { TournamentLogoField(logo: $doc.ev.logo) }
             field("Date") { DayPicker(text: $doc.ev.date, label: false) }
             field("Format") {
                 Picker("", selection: $doc.ev.format.type) {

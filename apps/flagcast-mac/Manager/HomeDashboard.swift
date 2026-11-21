@@ -44,8 +44,12 @@ struct HomeDashboard: View {
             Button { adding = true } label: { Label("Add by link", systemImage: "link") }.buttonStyle(GlassButton())
             Button { making = true } label: { Label("New tournament", systemImage: "plus") }.buttonStyle(WhiteButton()).disabled(!(model.me?.club?.canMake ?? false))
         } title: {
+            // the club's own logo over the greeting, once it has one (Settings → Club Logo)
+            VStack(alignment: .leading, spacing: 10) {
+            if let u = logoURL(model.me?.club?.logo) { RemoteLogo(url: u).frame(width: 220, height: 48, alignment: .leading).shadow(color: .black.opacity(0.3), radius: 6) }
             HeroTitle(kicker: [model.me?.club?.name, model.me?.club?.city].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ").nilIfEmpty ?? "Flagcast Manager",
                       title: greeting, size: 64, sub: model.me?.club?.stateLine)
+            }
         } content: {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {

@@ -54,6 +54,8 @@ private struct HomePage: View {
     var body: some View {
         PhotoPage(image: doc?.picture.image, kicker: [model.me?.club?.name, model.me?.club?.city].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "),
                   title: greeting, height: 260) {
+            // the club's own logo, once it has one (Settings → Your club)
+            if let u = logoURL(model.me?.club?.logo) { RemoteLogo(url: u).frame(width: 160, height: 40, alignment: .leading).shadow(color: .black.opacity(0.3), radius: 6) }
             HStack(spacing: 8) {
                 Button { adding = true } label: { Label("Add by link", systemImage: "link") }.buttonStyle(WhiteButton())
                 if model.me?.club?.canMake == true { Button { making = true } label: { Label("New", systemImage: "plus") }.buttonStyle(WhiteButton()) }

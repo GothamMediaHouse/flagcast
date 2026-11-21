@@ -165,6 +165,12 @@ struct ClubInspector: View {
                 HStack { Spacer(); Button("Save Changes") { Task { await model.act("edit", ["club": club.id, "name": edit.name, "contact": edit.contact, "phone": edit.phone, "city": edit.city, "notes": notes], done: "Saved.") } }
                     .disabled(edit.name == club.name && edit.contact == club.contact && edit.phone == club.phone && edit.city == club.city && notes == club.notes) }
             } header: { HStack { Text(club.name); StatusPill(text: club.statusText, warn: club.status == "off") } }
+            SwiftUI.Section("Branding") {
+                BrandingEditor(logo: logoURL(club.logo), accent: club.accent,
+                               forWhat: "\(club.name)’s logo shows on its TVs, live page and the players’ app instead of the Flagcast logo. The club can change it in its own settings too.",
+                               showPowered: true, powered: club.powered) { changes in await model.brand(club.id, changes) }
+                    .id(club.id + club.logo + club.accent)
+            }
             SwiftUI.Section("Status and tournaments") {
                 HStack {
                     if club.status == "pending" { Button("Approve") { Task { await model.act("approve", ["club": club.id], done: "Approved. They have an email.") } }.buttonStyle(.borderedProminent) }
@@ -241,7 +247,7 @@ struct TournamentsView: View {
     }
     var body: some View {
         Table(shown, selection: $selection, sortOrder: $sort) {
-            TableColumn("Tournament", value: \.name) { e in VStack(alignment: .leading) { Text(e.name).fontWeight(.medium); Text(e.id.uppercased()).font(.caption.monospaced()).foregroundStyle(.secondary) } }.width(min: 180, ideal: 260)
+            TableColumn("Tournament", value: \.name) { e in VStack(alignment: .leading) { HStack(spacing: 6) { Text(e.name).fontWeight(.medium); if e.demo { DemoChip() } }; Text(e.id.uppercased()).font(.caption.monospaced()).foregroundStyle(.secondary) } }.width(min: 180, ideal: 260)
             TableColumn("Club", value: \.clubName) { e in Text(e.clubName) }.width(min: 120, ideal: 180)
             TableColumn("Date", value: \.date) { e in Text(e.date) }.width(90)
             TableColumn("Teams", value: \.teams) { e in Text("\(e.teams)").monospacedDigit() }.width(50)
@@ -275,6 +281,8 @@ struct TournamentsView: View {
         Button(e.archived ? "Unarchive" : "Archive") { Task { await model.act("archive", ["id": e.id, "on": !e.archived]) } }
         Button(e.hidden ? "Show on the Club’s List" : "Hide from the Club’s List") { Task { await model.act(e.hidden ? "unhide" : "hide", ["id": e.id]) } }
         Button("Move to Another Club…") { moving = e }
+        Divider()
+        Button(e.demo ? "Stop Demo (Show the Club’s Logo)" : "Mark as Demo (Show the Flagcast Logo)") { Task { await model.act("demo", ["id": e.id, "on": !e.demo], done: e.demo ? "Shows the club’s logo again." : "Marked Demo: it shows the Flagcast logo.") } }
     }
 }
 

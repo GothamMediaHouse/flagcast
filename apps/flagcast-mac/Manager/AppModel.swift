@@ -4,8 +4,9 @@ import Observation
 /// The club account as /golf/api/club/me returns it.
 struct ClubMe: Decodable {
     struct Club: Decodable { var id: String, name: String, status: String, credits: Int, city: String
-        init(from d: Decoder) throws { let c = try d.container(keyedBy: CodingKeys.self); id = c.str(.id); name = c.str(.name); status = c.str(.status); credits = c.int(.credits, 0); city = c.str(.city) }
-        enum CodingKeys: String, CodingKey { case id, name, status, credits, city }
+        var logo: String, accent: String   // branding: the logo's address on the server ('' = none yet: golfers see Flagcast's)
+        init(from d: Decoder) throws { let c = try d.container(keyedBy: CodingKeys.self); id = c.str(.id); name = c.str(.name); status = c.str(.status); credits = c.int(.credits, 0); city = c.str(.city); logo = c.str(.logo); accent = c.str(.accent) }
+        enum CodingKeys: String, CodingKey { case id, name, status, credits, city, logo, accent }
         var canMake: Bool { status == "active" && credits != 0 }
         var stateLine: String {
             status == "pending" ? "Waiting for Flagcast to approve your club. We’ll email you when it’s ready."
@@ -170,6 +171,10 @@ final class AppModel {
         write(); await refresh()
     }
     /// Set or change the password for the signed-in email.
+    /// The club's logo and colour (any of its people can change them): nil when saved, else the problem.
+    func brand(_ changes: [String: Any]) async -> String? {
+        do { _ = try await club("brand", changes); await refresh(); return nil } catch { return error.localizedDescription }
+    }
     func setPassword(_ password: String) async throws {
         try await club("setpass", ["password": password])
         await refresh()
