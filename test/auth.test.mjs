@@ -2,7 +2,7 @@
 //   node test/auth.test.mjs                         unit tests (auth.js), no server needed
 //   node test/auth.test.mjs http://127.0.0.1:8787   plus the club API on `npx wrangler dev` (local, no email key)
 import assert from 'node:assert/strict';
-import { hashPassword, checkPassword, passwordProblem, verifyAppleToken, appleKeys, resetAppleKeys, APPLE_ISS } from '../auth.js';
+import { hashPassword, checkPassword, passwordProblem, verifyAppleToken, appleKeys, resetAppleKeys, APPLE_ISS, verifyGoogleToken } from '../auth.js';
 
 let n = 0; const ok = (name) => console.log(`ok ${++n} - ${name}`);
 const b64url = (buf) => Buffer.from(buf).toString('base64url');
@@ -49,6 +49,17 @@ assert.deepEqual(await appleKeys(fake, now), keys); await appleKeys(fake, now + 
 await appleKeys(fake, now + 3700000); assert.equal(fetched, 2);
 ok('Apple’s keys are fetched once an hour');
 
+// ---- Google ID tokens, same made-up key ----
+const CID = '1234-test.apps.googleusercontent.com';
+const gGood = { iss: 'https://accounts.google.com', aud: CID, sub: '10987', email: 'Pro@Gmail.com', email_verified: true, exp: Math.floor(now / 1000) + 600 };
+assert.deepEqual(await verifyGoogleToken(await token(gGood), { keys, clientId: CID, now }), { sub: '10987', email: 'pro@gmail.com', emailVerified: true });
+assert.ok(await verifyGoogleToken(await token({ ...gGood, iss: 'accounts.google.com' }), { keys, clientId: CID, now }));
+await assert.rejects(verifyGoogleToken(await token({ ...gGood, aud: 'someone-else.apps.googleusercontent.com' }), { keys, clientId: CID, now }), /another app/);
+await assert.rejects(verifyGoogleToken(await token({ ...gGood, iss: APPLE_ISS }), { keys, clientId: CID, now }));
+await assert.rejects(verifyGoogleToken(await token(gGood), { keys, clientId: '', now }), /isn’t set up/);
+await assert.rejects(verifyGoogleToken(await token(good), { keys, clientId: CID, now }));
+ok('Google ID tokens: our client id and Google issuers only; off until GOOGLE_CLIENT_ID is set');
+
 // ---- the club API (local dev server) ----
 const BASE = process.argv[2];
 if (BASE) {
@@ -71,5 +82,8 @@ if (BASE) {
   r = await call('apple', { identityToken: await token(good) }); assert.equal(r.status, 401);
   r = await call('apple', { identityToken: 'junk' }); assert.equal(r.status, 401);
   ok('setpass needs a session; a token not signed by Apple is refused');
+  r = await call('config', {}); assert.equal(typeof r.j.google, 'string');
+  r = await call('google', { idToken: await token(gGood) }); assert.equal(r.status, 401);
+  ok('config tells the apps whether Google is on; a made-up Google token is refused');
 }
 console.log(`\n${n} passed`);

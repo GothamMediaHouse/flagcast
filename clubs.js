@@ -8,7 +8,9 @@
 //   POST /golf/api/club/verify    { email, code }                  → { token }
 //   POST /golf/api/club/login     { email, password }              → { token }   (after setting a password once)
 //   POST /golf/api/club/apple     { identityToken }                → { token }   Sign in with Apple (the Manager apps)
+//   POST /golf/api/club/google    { idToken }                      → { token }   Sign in with Google (GOOGLE_CLIENT_ID variable)
 //   POST /golf/api/club/setpass   { token, password }              sets or changes your password (signed in)
+//   POST /golf/api/club/config    {}                               → { google }   the Google client id, '' when it isn't set up
 //   POST /golf/api/club/me        { token }                        → { email, role, club, members, events }
 //   POST /golf/api/club/request   { token, name, contact, phone, city }   asks Flagcast for a club (pending)
 //   POST /golf/api/club/invite    { token, email }                 adds someone to your club
@@ -26,7 +28,7 @@
 // comes back in the answer (devCode) so the pages can be tried without email.
 import { DurableObject } from 'cloudflare:workers';
 import { SEED, slug } from './courselib.js';
-import { hashPassword, checkPassword, passwordProblem, verifyAppleToken, appleKeys } from './auth.js';
+import { hashPassword, checkPassword, passwordProblem, verifyAppleToken, appleKeys, verifyGoogleToken, googleKeys } from './auth.js';
 
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
 const EMAIL = /^[^\s@<>"',;]{1,64}@[^\s@<>"',;]{1,190}\.[a-z]{2,24}$/i;
@@ -80,7 +82,7 @@ export class FlagcastClubs extends DurableObject {
       CREATE TABLE IF NOT EXISTS accounts (email TEXT PRIMARY KEY, hash TEXT, salt TEXT, iter INTEGER, apple TEXT, updated INTEGER);
       CREATE TABLE IF NOT EXISTS fails (k TEXT PRIMARY KEY, n INTEGER, since INTEGER);`);
     // columns added after the first release
-    for (const q of ['ALTER TABLE clubs ADD COLUMN notes TEXT', 'ALTER TABLE events ADD COLUMN archived INTEGER DEFAULT 0', 'ALTER TABLE clubs ADD COLUMN course TEXT']) { try { this.sql.exec(q); } catch {} }
+    for (const q of ['ALTER TABLE accounts ADD COLUMN google TEXT', 'ALTER TABLE clubs ADD COLUMN notes TEXT', 'ALTER TABLE events ADD COLUMN archived INTEGER DEFAULT 0', 'ALTER TABLE clubs ADD COLUMN course TEXT']) { try { this.sql.exec(q); } catch {} }
     // the Flagcast course library (courselib.js): courses any club can pick in Find the course
     this.sql.exec('CREATE TABLE IF NOT EXISTS library (id TEXT PRIMARY KEY, name TEXT, city TEXT, state TEXT, data TEXT, club TEXT, updated INTEGER)');
     for (const c of SEED) if (!this.one('SELECT id FROM library WHERE id = ?', c.id)) this.libPut(c, '', 0);
@@ -239,10 +241,11 @@ export class FlagcastClubs extends DurableObject {
       const h = await hashPassword(b.password);
       const old = this.one('SELECT * FROM accounts WHERE email = ?', u.email);
       if (old) this.sql.exec('UPDATE accounts SET hash = ?, salt = ?, iter = ?, updated = ? WHERE email = ?', h.hash, h.salt, h.iter, now, u.email);
-      else this.sql.exec('INSERT INTO accounts (email, hash, salt, iter, apple, updated) VALUES (?, ?, ?, ?, ?, ?)', u.email, h.hash, h.salt, h.iter, '', now);
+      else this.sql.exec('INSERT INTO accounts (email, hash, salt, iter, apple, google, updated) VALUES (?, ?, ?, ?, ?, ?, ?)', u.email, h.hash, h.salt, h.iter, '', '', now);
       this.note(u.email, u.club?.id, old?.hash ? 'Changed password' : 'Set a password');
       return json({ ok: true });
     }
+    if (op === 'config') return json({ google: env.GOOGLE_CLIENT_ID || '' });
     if (op === 'apple') {
       let id;
       try { id = await verifyAppleToken(b.identityToken, { keys: await appleKeys() }); }
@@ -253,10 +256,24 @@ export class FlagcastClubs extends DurableObject {
         if (!id.email || !id.emailVerified) this.fail('Apple didn’t share an email. Sign in with an emailed code once, then Sign in with Apple works.', 401);
         a = this.one('SELECT * FROM accounts WHERE email = ?', id.email);
         if (a) this.sql.exec('UPDATE accounts SET apple = ?, updated = ? WHERE email = ?', id.sub, now, id.email);
-        else this.sql.exec('INSERT INTO accounts (email, hash, salt, iter, apple, updated) VALUES (?, ?, ?, ?, ?, ?)', id.email, '', '', 0, id.sub, now);
+        else this.sql.exec('INSERT INTO accounts (email, hash, salt, iter, apple, google, updated) VALUES (?, ?, ?, ?, ?, ?, ?)', id.email, '', '', 0, id.sub, '', now);
         a = { email: id.email };
       }
       return json({ token: this.session(a.email, 'Apple') });
+    }
+    if (op === 'google') {
+      let id;
+      try { id = await verifyGoogleToken(b.idToken, { keys: await googleKeys(), clientId: env.GOOGLE_CLIENT_ID }); }
+      catch (e) { this.fail(e.message === 'google-keys' ? 'Google didn’t answer. Try again in a minute.' : e.message, 401); }
+      let a = this.one('SELECT * FROM accounts WHERE google = ?', id.sub);
+      if (!a) {
+        if (!id.email || !id.emailVerified) this.fail('Google didn’t share a verified email. Sign in with an emailed code instead.', 401);
+        a = this.one('SELECT * FROM accounts WHERE email = ?', id.email);
+        if (a) this.sql.exec('UPDATE accounts SET google = ?, updated = ? WHERE email = ?', id.sub, now, id.email);
+        else this.sql.exec('INSERT INTO accounts (email, hash, salt, iter, apple, google, updated) VALUES (?, ?, ?, ?, ?, ?, ?)', id.email, '', '', 0, '', id.sub, now);
+        a = { email: id.email };
+      }
+      return json({ token: this.session(a.email, 'Google') });
     }
     if (op === 'signout') { this.sql.exec('DELETE FROM sessions WHERE token = ?', String(b.token || '')); return json({ ok: true }); }
     if (op === 'me') return json(this.me(this.who(b.token)));
@@ -464,8 +481,8 @@ export class FlagcastClubs extends DurableObject {
   mail(to, subject, text) { sendMail(this.env, to, subject, text).catch(() => {}); }
 
   me(u) {
-    const acct = this.one('SELECT hash, apple FROM accounts WHERE email = ?', u.email);
-    const out = { email: u.email, role: u.role, admin: adminEmail(this.env, u.email), password: !!acct?.hash, apple: !!acct?.apple, club: null, members: [], events: [] };
+    const acct = this.one('SELECT hash, apple, google FROM accounts WHERE email = ?', u.email);
+    const out = { email: u.email, role: u.role, admin: adminEmail(this.env, u.email), password: !!acct?.hash, apple: !!acct?.apple, google: !!acct?.google, club: null, members: [], events: [] };
     if (!u.club) return out;
     const { id, name, status, city, credits } = u.club;
     out.club = { id, name, status, city, credits };
