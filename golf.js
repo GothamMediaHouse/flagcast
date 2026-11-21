@@ -44,7 +44,7 @@ export async function golf(request, env) {
   if (request.method === 'OPTIONS' && url.pathname.startsWith('/golf/api/')) return preflight(request);
   // making a tournament and the club accounts go through the club directory (clubs.js)
   if (url.pathname === '/golf/api/new') return cors(request, await clubs(request, env, 'new'));
-  if ((m = url.pathname.match(/^\/golf\/api\/club\/(start|verify|me|request|invite|uninvite|hide|signout|admin)$/))) return cors(request, await clubs(request, env, m[1]));
+  if ((m = url.pathname.match(/^\/golf\/api\/club\/(start|verify|login|apple|setpass|me|request|invite|uninvite|hide|signout|admin)$/))) return cors(request, await clubs(request, env, m[1]));
   if ((m = url.pathname.match(/^\/golf\/api\/([a-z0-9]{8})\/(state|ws|cart|score|desk|pro|hit|where)$/))) {
     const stub = env.GOLF.get(env.GOLF.idFromName(m[1]));
     return cors(request, await stub.fetch(request));
