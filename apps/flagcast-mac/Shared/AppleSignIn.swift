@@ -26,3 +26,39 @@ struct AppleSignInButton: View {
         .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
+
+/// "Sign in with Google": the website's Google sign-in in a sign-in sheet (ASWebAuthenticationSession); the server
+/// hands the Flagcast session back on flagcastmanager://signin?token=…
+struct GoogleSignInButton: View {
+    var height: CGFloat = 46
+    var token: (String) -> Void
+    var failed: (String) -> Void
+    @Environment(\.webAuthenticationSession) private var session
+    var body: some View {
+        Button {
+            Task {
+                do {
+                    let url = URL(string: "\(Server.base.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")))/golf/signin/google/?app=1")!
+                    let back = try await session.authenticate(using: url, callbackURLScheme: "flagcastmanager", preferredBrowserSession: .ephemeral)
+                    let q = URLComponents(url: back, resolvingAgainstBaseURL: false)?.queryItems ?? []
+                    if let t = q.first(where: { $0.name == "token" })?.value, !t.isEmpty { token(t) }
+                    else { failed(q.first(where: { $0.name == "error" })?.value ?? "That Google sign-in didn’t work. Try again.") }
+                } catch {
+                    if (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin { return }
+                    failed(error.localizedDescription)
+                }
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Text("G").font(.system(size: 18, weight: .bold)).foregroundStyle(Color(red: 0.26, green: 0.52, blue: 0.96))
+                Text("Sign in with Google").font(.system(size: 16, weight: .semibold))
+            }
+            .foregroundStyle(Color(red: 0.12, green: 0.12, blue: 0.12))
+            .frame(maxWidth: .infinity, minHeight: height)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(red: 0.85, green: 0.85, blue: 0.85)))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}

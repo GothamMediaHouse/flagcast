@@ -20,7 +20,9 @@ FULL = {'Manager'}
 SHARED_IOS = ['Model/Models.swift', 'Model/Core.swift', 'Net/Server.swift', 'Net/EventFeed.swift']
 
 def settings(t, prod, bid, ver):
-    ent = '				CODE_SIGN_ENTITLEMENTS = Manager.entitlements;\n' if t == 'Manager' else ''
+    # Sign in with Apple needs a Developer ID provisioning profile for the Mac (made by hand in the developer account), so the Mac
+    # app signs in with Apple through the website for now and has no entitlement
+    ent = ''
     return f'''				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;

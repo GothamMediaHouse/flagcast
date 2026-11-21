@@ -153,6 +153,14 @@ final class AppModel {
         saved.token = Net.json(d)["token"] as? String
         write(); await refresh()
     }
+    /// Sign in with Google is switched on on the server (GOOGLE_CLIENT_ID set).
+    var googleOn = false
+    func loadConfig() async { googleOn = ((try? Net.json(await Net.post("/golf/api/club/config", [:])))?["google"] as? String ?? "") != "" }
+    /// A Flagcast session handed back by the website's sign-in (Google).
+    func use(token: String) async {
+        saved.token = token
+        write(); await refresh()
+    }
     /// Set or change the password for the signed-in email.
     func setPassword(_ password: String) async throws {
         try await club("setpass", ["password": password])

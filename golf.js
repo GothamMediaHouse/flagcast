@@ -44,7 +44,18 @@ export async function golf(request, env) {
   if (request.method === 'OPTIONS' && url.pathname.startsWith('/golf/api/')) return preflight(request);
   // making a tournament and the club accounts go through the club directory (clubs.js)
   if (url.pathname === '/golf/api/new') return cors(request, await clubs(request, env, 'new'));
-  if ((m = url.pathname.match(/^\/golf\/api\/club\/(start|verify|login|apple|setpass|me|request|invite|uninvite|hide|signout|admin)$/))) return cors(request, await clubs(request, env, m[1]));
+  if ((m = url.pathname.match(/^\/golf\/api\/club\/(start|verify|login|apple|google|config|setpass|me|request|invite|uninvite|hide|signout|admin)$/))) return cors(request, await clubs(request, env, m[1]));
+  // Sign in with Google from the Manager apps: Google posts the ID token here (form, with its double-submit CSRF
+  // cookie), and the app's sign-in sheet gets the Flagcast session back on flagcastmanager://signin
+  if (url.pathname === '/golf/api/club/google-app' && request.method === 'POST') {
+    const f = await request.formData().catch(() => null);
+    const cookie = (request.headers.get('Cookie') || '').match(/(?:^|;\s*)g_csrf_token=([^;]+)/)?.[1];
+    const back = (q) => Response.redirect(`flagcastmanager://signin?${q}`, 302);
+    if (!f || !cookie || f.get('g_csrf_token') !== cookie) return back('error=' + encodeURIComponent('That Google sign-in didn’t work. Try again.'));
+    const r = await clubs(new Request(request.url, { method: 'POST', body: JSON.stringify({ idToken: f.get('credential') }) }), env, 'google');
+    const j = await r.json().catch(() => ({}));
+    return back(j.token ? `token=${encodeURIComponent(j.token)}` : `error=${encodeURIComponent(j.error || 'That Google sign-in didn’t work.')}`);
+  }
   if ((m = url.pathname.match(/^\/golf\/api\/([a-z0-9]{8})\/(state|ws|cart|score|desk|pro|hit|where)$/))) {
     const stub = env.GOLF.get(env.GOLF.idFromName(m[1]));
     return cors(request, await stub.fetch(request));

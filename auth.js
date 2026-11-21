@@ -1,4 +1,4 @@
-// Sign-in helpers for club accounts (clubs.js): passwords and Sign in with Apple. No Worker-only imports, so the tests
+// Sign-in helpers for club accounts (clubs.js): passwords, Sign in with Apple and Sign in with Google. No Worker-only imports, so the tests
 // run them in Node (test/auth.test.mjs).
 
 // ---- passwords: PBKDF2-SHA256 (Workers' WebCrypto allows up to 100,000 iterations) ----
@@ -47,21 +47,42 @@ export function resetAppleKeys() { keyCache = { at: 0, keys: [] }; }
 
 /** Check an Apple identity token: signature against Apple's keys, issuer, audience, expiry. → { sub, email, emailVerified } */
 export async function verifyAppleToken(token, { keys, audiences = APPLE_AUDIENCES, now = Date.now() } = {}) {
+  return verifyJwt(token, { keys, audiences, issuers: [APPLE_ISS], now });
+}
+
+// ---- Sign in with Google: an ID token (JWT, RS256) from Google Identity Services, keys at GOOGLE_KEYS ----
+export const GOOGLE_KEYS = 'https://www.googleapis.com/oauth2/v3/certs';
+export const GOOGLE_ISS = ['accounts.google.com', 'https://accounts.google.com'];
+let gCache = { at: 0, keys: [] };
+export async function googleKeys(fetcher = fetch, now = Date.now()) {
+  if (gCache.keys.length && now - gCache.at < 3600000) return gCache.keys;
+  const r = await fetcher(GOOGLE_KEYS);
+  if (!r.ok) throw new Error('google-keys');
+  gCache = { at: now, keys: (await r.json()).keys || [] };
+  return gCache.keys;
+}
+/** Check a Google ID token for our client id (env.GOOGLE_CLIENT_ID). → { sub, email, emailVerified } */
+export async function verifyGoogleToken(token, { keys, clientId, now = Date.now() } = {}) {
+  if (!clientId) throw new Error('Google sign-in isn’t set up yet.');
+  return verifyJwt(token, { keys, audiences: [clientId], issuers: GOOGLE_ISS, now, who: 'Google' });
+}
+
+async function verifyJwt(token, { keys, audiences, issuers, now = Date.now(), who = 'Apple' }) {
   const parts = String(token || '').split('.');
-  if (parts.length !== 3) throw new Error('That Apple sign-in didn’t work. Try again.');
+  if (parts.length !== 3) throw new Error(`That ${who} sign-in didn’t work. Try again.`);
   let head, body;
   try { head = JSON.parse(new TextDecoder().decode(b64url(parts[0]))); body = JSON.parse(new TextDecoder().decode(b64url(parts[1]))); }
-  catch { throw new Error('That Apple sign-in didn’t work. Try again.'); }
-  if (head.alg !== 'RS256') throw new Error('That Apple sign-in didn’t work. Try again.');
+  catch { throw new Error(`That ${who} sign-in didn’t work. Try again.`); }
+  if (head.alg !== 'RS256') throw new Error(`That ${who} sign-in didn’t work. Try again.`);
   const jwk = (keys || []).find((k) => k.kid === head.kid);
-  if (!jwk) throw new Error('That Apple sign-in didn’t work. Try again.');
+  if (!jwk) throw new Error(`That ${who} sign-in didn’t work. Try again.`);
   const key = await crypto.subtle.importKey('jwk', { kty: jwk.kty, n: jwk.n, e: jwk.e, alg: 'RS256', ext: true }, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
   const ok = await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, b64url(parts[2]), enc.encode(`${parts[0]}.${parts[1]}`));
-  if (!ok) throw new Error('That Apple sign-in didn’t work. Try again.');
-  if (body.iss !== APPLE_ISS) throw new Error('That Apple sign-in didn’t work. Try again.');
+  if (!ok) throw new Error(`That ${who} sign-in didn’t work. Try again.`);
+  if (!issuers.includes(body.iss)) throw new Error(`That ${who} sign-in didn’t work. Try again.`);
   const aud = Array.isArray(body.aud) ? body.aud : [body.aud];
-  if (!aud.some((a) => audiences.includes(a))) throw new Error('That Apple sign-in is for another app.');
-  if (!body.exp || body.exp * 1000 < now - 60000) throw new Error('That Apple sign-in ran out. Try again.');
-  if (!body.sub) throw new Error('That Apple sign-in didn’t work. Try again.');
+  if (!aud.some((a) => audiences.includes(a))) throw new Error(`That ${who} sign-in is for another app.`);
+  if (!body.exp || body.exp * 1000 < now - 60000) throw new Error(`That ${who} sign-in ran out. Try again.`);
+  if (!body.sub) throw new Error(`That ${who} sign-in didn’t work. Try again.`);
   return { sub: String(body.sub), email: body.email ? String(body.email).toLowerCase() : '', emailVerified: body.email_verified === true || body.email_verified === 'true' };
 }

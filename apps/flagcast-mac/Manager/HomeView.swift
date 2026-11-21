@@ -44,6 +44,7 @@ struct HomeView: View {
             } header: { Text("Add a tournament you already have") } footer: { Text("Paste its desk link. It ends in a long key after a # sign.").foregroundStyle(.secondary) }
         }
             }
+        .task { await model.loadConfig() }
         .onChange(of: model.focusNew) { _, on in if on { focus = .new; model.focusNew = false } }
         .onChange(of: model.focusAdd) { _, on in if on { focus = .add; model.focusAdd = false } }
         .onAppear { if model.focusNew { focus = .new; model.focusNew = false } }
@@ -57,7 +58,7 @@ struct HomeView: View {
 
     @ViewBuilder private var signIn: some View {
         SwiftUI.Section {
-            AppleSignInButton(height: 40, token: { t in run { try await model.appleSignIn(t) } }, failed: { err = $0 })
+            if model.googleOn { GoogleSignInButton(height: 40, token: { t in run { await model.use(token: t) } }, failed: { err = $0 }) }
             if !useCode {
                 TextField("Email", text: $email, prompt: Text("you@yourclub.com")).textContentType(.username).focused($focus, equals: .email).onSubmit { focus = .password }
                 SecureField("Password", text: $password).textContentType(.password).focused($focus, equals: .password).onSubmit(login)
@@ -76,7 +77,7 @@ struct HomeView: View {
             }
             if let err { Text(err).foregroundStyle(.red).font(.callout) }
         } header: { Text("Sign in") } footer: {
-            Text("Sign in with Apple, or your email and password. First time? Use “Email Me a Code”, then set a password in Settings. Flagcast staff get Admin when they sign in.").foregroundStyle(.secondary)
+            Text("Your email and password\(model.googleOn ? ", or Google" : ""). First time? Use “Email Me a Code”, then set a password in Settings. Flagcast staff get Admin when they sign in.").foregroundStyle(.secondary)
         }
     }
 

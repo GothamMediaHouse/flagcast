@@ -20,6 +20,7 @@ struct SignInView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         CardTitle("Sign in")
                         AppleSignInButton(height: 50, token: { t in run { try await model.appleSignIn(t) } }, failed: { message = $0 })
+                        if model.googleOn { GoogleSignInButton(height: 50, token: { t in run { await model.use(token: t) } }, failed: { message = $0 }) }
                         HStack { Rectangle().fill(FC.line).frame(height: 1); Text("or").font(.caption).foregroundStyle(FC.muted); Rectangle().fill(FC.line).frame(height: 1) }
                         field("Email", $email).textContentType(useCode ? .emailAddress : .username).keyboardType(.emailAddress)
                         if !useCode {
@@ -52,6 +53,7 @@ struct SignInView: View {
         .ignoresSafeArea(edges: .top)
         .background(FC.paper)
         .sheet(isPresented: $passcode) { NavigationStack { AdminPasscodeView() } }
+        .task { await model.loadConfig() }
     }
     private func field(_ p: String, _ t: Binding<String>) -> some View {
         TextField(p, text: t).textInputAutocapitalization(.never).autocorrectionDisabled().padding(12).background(FC.paper2, in: RoundedRectangle(cornerRadius: 10))
