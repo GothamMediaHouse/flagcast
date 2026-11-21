@@ -38,6 +38,18 @@ enum OSM {
     }
 
     typealias XY = (x: Double, y: Double)
+    /// drop points within `tol` metres of the straight line between their neighbours (Douglas–Peucker), keeping the bends
+    static func simplify(_ p: [XY], _ tol: Double) -> [XY] {
+        guard p.count > 2, let a = p.first, let b = p.last else { return p }
+        let L = max(hypot(b.x - a.x, b.y - a.y), 1e-9)
+        var far = 0.0, at = 0
+        for i in 1..<(p.count - 1) {
+            let d = abs((b.x - a.x) * (a.y - p[i].y) - (a.x - p[i].x) * (b.y - a.y)) / L
+            if d > far { far = d; at = i }
+        }
+        if far <= tol { return [a, b] }
+        return Array(simplify(Array(p[...at]), tol).dropLast()) + simplify(Array(p[at...]), tol)
+    }
     struct Shape { var k: String; var name: String; var xy: [XY]; var c: XY }
     private static func d(_ a: XY, _ b: XY) -> Double { hypot(a.x - b.x, a.y - b.y) }
     private static func centroid(_ p: [XY]) -> XY {
@@ -104,7 +116,9 @@ enum OSM {
                 hz.append((Hazard(id: Ids.make(), k: z.k, n: String(label.prefix(40)), p: back(near.0), c: greenside && z.k == "bunker" ? nil : back(far.0)), near.1))
             }
             hz.sort { $0.1 < $1.1 }
-            out[n] = HoleMap(tee: back(tee), f: back(f), m: back(m), b: back(b), hz: Array(hz.prefix(10).map(\.0)))
+            // the bends between the tee and the green, so the flyover follows a dogleg
+            let bends = Array(simplify(line, 6).dropFirst().dropLast().prefix(10)).map(back)
+            out[n] = HoleMap(tee: back(tee), f: back(f), m: back(m), b: back(b), hz: Array(hz.prefix(10).map(\.0)), line: bends)
         }
         return Result(holes: out, found: out.keys.sorted(), unnumbered: unnumbered)
     }

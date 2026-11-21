@@ -122,6 +122,8 @@ export function cleanMap(m) {
   for (let n = 1; n <= 18; n++) {
     const h = m?.holes?.[n] || m?.holes?.[String(n)]; if (!h) continue;
     const o = { tee: pt(h.tee), f: pt(h.f), m: pt(h.m), b: pt(h.b),
+      // the hole's line between the tee and the green (doglegs): where the flyover and course view turn
+      line: (Array.isArray(h.line) ? h.line : []).slice(0, 12).map(pt).filter(Boolean),
       hz: (Array.isArray(h.hz) ? h.hz : []).slice(0, 12).map((z) => ({ id: clip(z.id, 8) || rand(5, 'abcdefghijkmnpqrstuvwxyz23456789'),
         k: HAZARDS.includes(z.k) ? z.k : 'other', n: clip(z.n, 40), p: pt(z.p), c: pt(z.c) })).filter((z) => z.p) };
     if (o.tee || o.f || o.m || o.b || o.hz.length) holes[n] = o;
