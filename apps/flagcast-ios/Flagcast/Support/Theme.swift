@@ -113,6 +113,37 @@ struct LivePill: View {
     }
 }
 
+/// The logo golfers see: the club's (from the server, kept in memory once loaded), or the Flagcast logo for demos and
+/// clubs that haven't added one. Club logos get a little more height: they're often taller than wide.
+struct BrandMark: View {
+    var brand: Brand
+    var height: CGFloat = 20
+    var body: some View {
+        if let u = brand.logoURL {
+            ClubLogo(url: u).frame(height: height * 1.8, alignment: .leading).frame(maxWidth: 200, alignment: .leading)
+                .accessibilityLabel(brand.club.isEmpty ? "Club logo" : brand.club)
+        } else {
+            Image("Logo").resizable().scaledToFit().frame(height: height).accessibilityLabel("Flagcast")
+        }
+    }
+}
+/// a club logo by address (PNG/JPEG/WebP; SVG is drawn by the web pages only, so it shows as text here)
+struct ClubLogo: View {
+    let url: URL
+    @State private var image: UIImage?
+    private static var cache: [URL: UIImage] = [:]
+    var body: some View {
+        Group {
+            if let image { Image(uiImage: image).resizable().scaledToFit() } else { Color.clear }
+        }
+        .task(id: url) {
+            if let c = Self.cache[url] { image = c; return }
+            guard let (d, _) = try? await URLSession.shared.data(from: url), let i = UIImage(data: d) else { return }
+            Self.cache[url] = i; image = i
+        }
+    }
+}
+
 /// The top of a page: the course photo (from the tournament's course map) with a dark fade, the logo, and the big
 /// white title at its bottom, as in Flagcast Manager. Plain green when the course isn't mapped.
 struct GreenHeader<Trailing: View>: View {
@@ -131,7 +162,8 @@ struct GreenHeader<Trailing: View>: View {
                                    .init(color: Color.fcScrim.opacity(0.85), location: 1)], startPoint: .top, endPoint: .bottom)
             HStack(alignment: .bottom, spacing: 12) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Image("Logo").resizable().scaledToFit().frame(height: 20).accessibilityLabel("Flagcast")
+                    BrandMark(brand: state?.brand ?? Brand(), height: 20)
+                    if state?.brand.powered == true { Text("POWERED BY FLAGCAST").font(.caption2.monospaced()).tracking(1).foregroundStyle(.white.opacity(0.7)) }
                     Text(title).font(FCType.display(34)).textCase(.uppercase).foregroundStyle(.white).lineLimit(2).minimumScaleFactor(0.6)
                     if !subtitle.isEmpty { Text(subtitle).font(.footnote.weight(.semibold)).foregroundStyle(.white.opacity(0.85)).lineLimit(2) }
                 }
