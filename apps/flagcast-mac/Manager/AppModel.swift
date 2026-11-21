@@ -58,6 +58,8 @@ final class AppModel {
     let admin = AdminModel()
     var adminSection: AdminSection?
     var adminRefs: [EventRef] = []
+    /// Settings → Show engineering tools (for people who aren't Flagcast admins)
+    var showEngineering = UserDefaults.standard.bool(forKey: "engineering.show") { didSet { UserDefaults.standard.set(showEngineering, forKey: "engineering.show") } }
     var isAdmin: Bool { (me?.admin ?? false) || !(admin.pass ?? "").isEmpty || forceAdmin }
     /// test builds' snapshots only
     var forceAdmin = false
@@ -68,6 +70,7 @@ final class AppModel {
 
     init() {
         nav.onRename = { [weak self] id, name, date in self?.noteName(id, name: name, date: date) }
+        nav.canEngineer = { [weak self] in (self?.isAdmin ?? false) || self?.showEngineering == true }
         admin.token = { [weak self] in self?.saved.token ?? "" }
         admin.onOpen = { [weak self] e in
             guard let self else { return }
