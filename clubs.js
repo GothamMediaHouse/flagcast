@@ -12,14 +12,14 @@
 //   POST /golf/api/club/uninvite  { token, email }
 //   POST /golf/api/club/hide      { token, id }                    takes a tournament off the club's list
 //   POST /golf/api/club/signout   { token }
-//   POST /golf/api/club/admin     { pass, op, … }   Flagcast Admin: list, approve, on, off, delete, create (a club + its owner),
+//   POST /golf/api/club/admin     { pass | token, op, … }   Flagcast Admin (passcode, or signed in with an ADMIN_EMAIL address): list, approve, on, off, delete, create (a club + its owner),
 //                                 credits (tournaments a club may make: a number, or -1 for unlimited), invite, uninvite,
 //                                 event (make a tournament for a club, no credit used), hide
 // Credits: a club makes tournaments while it has credits (each new one uses one); -1 means unlimited (a season deal).
 //   POST /golf/api/new            { token, name }  (a signed-in, approved club)  or  { pass, name, club? }  (Flagcast)
 //
 // Email goes out through Resend: RESEND_API_KEY secret and MAIL_FROM (e.g. "Flagcast <signin@flagcast.app>").
-// ADMIN_EMAIL (optional) gets a note when a club asks to join. On localhost with no RESEND_API_KEY the code
+// ADMIN_EMAIL (optional) gets a note when a club asks to join, and signing in with that address (or any in a comma list) unlocks Admin. On localhost with no RESEND_API_KEY the code
 // comes back in the answer (devCode) so the pages can be tried without email.
 import { DurableObject } from 'cloudflare:workers';
 import { SEED, slug } from './courselib.js';
@@ -40,6 +40,8 @@ function same(a, b) {
   return d === 0;
 }
 export const isAdmin = (env, pass) => !!env.GOLF_CREATE_PASS && same(pass, env.GOLF_CREATE_PASS);
+// Flagcast staff: the emails in ADMIN_EMAIL (comma-separated, set in the Cloudflare dashboard) get Admin when signed in
+export const adminEmail = (env, email) => !!email && String(env.ADMIN_EMAIL || '').toLowerCase().split(/[\s,]+/).filter(Boolean).includes(String(email).toLowerCase());
 
 async function sendMail(env, to, subject, text) {
   if (!env.RESEND_API_KEY) throw new Error('nomail');
@@ -89,6 +91,12 @@ export class FlagcastClubs extends DurableObject {
     const r = await this.env.GOLF.get(this.env.GOLF.idFromName(id)).fetch(new Request(`https://golf/${path}`, body ? { method: 'POST', body: JSON.stringify(body) } : {}));
     const j = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(j.error || 'That tournament didn’t answer.'), { status: r.status }); return j;
   }
+  // Admin: the passcode, or a sign-in whose email is in ADMIN_EMAIL
+  isStaff(b) {
+    if (isAdmin(this.env, b.pass)) return true;
+    if (!b.token) return false;
+    try { return adminEmail(this.env, this.who(b.token).email); } catch { return false; }
+  }
   one(q, ...a) { return this.sql.exec(q, ...a).toArray()[0] || null; }
   all(q, ...a) { return this.sql.exec(q, ...a).toArray(); }
 
@@ -127,7 +135,7 @@ export class FlagcastClubs extends DurableObject {
     }
     if (op === 'lib-save') { // from a tournament's desk: its course (scorecard, tees, location, hole map) goes in the library
       const e = this.one('SELECT * FROM events WHERE id = ?', clip(b.event, 8));
-      const admin = isAdmin(env, b.pass);
+      const admin = this.isStaff(b);
       if (!admin && !b.key) this.fail('This desk link is not right.', 403);
       if (!/^[a-z0-9]{8}$/.test(String(b.event || ''))) this.fail('Not found', 404);
       // the tournament itself checks the desk key
@@ -221,7 +229,7 @@ export class FlagcastClubs extends DurableObject {
       const name = clip(b.name, 80);
       let club = null;
       if (b.pass !== undefined && b.pass !== '') {
-        if (!isAdmin(env, b.pass) && !(local && !env.GOLF_CREATE_PASS)) this.fail('That passcode is not right.', 403);
+        if (!this.isStaff(b) && !(local && !env.GOLF_CREATE_PASS)) this.fail('That passcode is not right.', 403);
         if (b.club) club = this.one('SELECT * FROM clubs WHERE id = ?', clip(b.club, 10));
       } else if (b.token) {
         const u = this.who(b.token);
@@ -245,7 +253,7 @@ export class FlagcastClubs extends DurableObject {
       return json(j);
     }
     if (op === 'admin') {
-      if (!isAdmin(env, b.pass) && !(local && !env.GOLF_CREATE_PASS)) this.fail('That passcode is not right.', 403);
+      if (!this.isStaff(b) && !(local && !env.GOLF_CREATE_PASS)) this.fail('That passcode is not right.', 403);
       const cid = clip(b.club, 10), c = cid ? this.one('SELECT * FROM clubs WHERE id = ?', cid) : null;
       const need = () => { if (!c) this.fail('That club isn’t there any more.', 404); };
       let made = null;
@@ -388,7 +396,7 @@ export class FlagcastClubs extends DurableObject {
   mail(to, subject, text) { sendMail(this.env, to, subject, text).catch(() => {}); }
 
   me(u) {
-    const out = { email: u.email, role: u.role, club: null, members: [], events: [] };
+    const out = { email: u.email, role: u.role, admin: adminEmail(this.env, u.email), club: null, members: [], events: [] };
     if (!u.club) return out;
     const { id, name, status, city, credits } = u.club;
     out.club = { id, name, status, city, credits };
