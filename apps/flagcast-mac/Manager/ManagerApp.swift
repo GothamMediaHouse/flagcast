@@ -63,7 +63,11 @@ struct ManagerCommands: Commands {
             Button("Open Live Leaderboard") { if let d = model.current { NSWorkspace.shared.open(d.liveURL) } }.disabled(model.current == nil)
             Button("All Tournaments") { model.selection = nil }.keyboardShortcut("h", modifiers: [.command, .shift])
         }
-        CommandGroup(replacing: .help) { Button("Flagcast Help") { NSWorkspace.shared.open(URL(string: "https://flagcast.app")!) } }
+        CommandGroup(replacing: .help) {
+            Button("Flagcast Help") { NSWorkspace.shared.open(URL(string: "https://flagcast.app")!) }
+            Divider()
+            SettingsLink { Text("Flagcast Admin Passcode…") }
+        }
     }
 }
 

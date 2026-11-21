@@ -58,7 +58,7 @@ final class AppModel {
     let admin = AdminModel()
     var adminSection: AdminSection?
     var adminRefs: [EventRef] = []
-    var isAdmin: Bool { (me?.admin ?? false) || forceAdmin }
+    var isAdmin: Bool { (me?.admin ?? false) || !(admin.pass ?? "").isEmpty || forceAdmin }
     /// test builds' snapshots only
     var forceAdmin = false
     /// the sidebar's tournaments: the club's, then any opened from Admin
@@ -110,6 +110,7 @@ final class AppModel {
         }
     }
     func refresh() async {
+        if !(admin.pass ?? "").isEmpty { Task { try? await admin.refresh() } }
         guard signedIn else { me = nil; return }
         do {
             let d = try await Net.post("/golf/api/club/me", ["token": saved.token ?? ""])
