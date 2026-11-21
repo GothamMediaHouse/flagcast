@@ -234,7 +234,7 @@ struct CourseMapView: View {
                 for (k, v) in r.holes {
                     if all || doc.ev.map.holes[k]?.tee == nil { doc.ev.map.holes[k] = v; added += 1 }
                     // a hole you'd already placed keeps your tee and green, and gets OpenStreetMap's bends if it has none
-                    else if var cur = doc.ev.map.holes[k], cur.line.isEmpty, !v.line.isEmpty, let a = cur.tee, let b = v.tee, (Geo.yds(a, b) ?? 999) < 60 {
+                    else if var cur = doc.ev.map.holes[k], cur.line.isEmpty, !v.line.isEmpty, let a = cur.tee, let b = v.tee, yards(a, b) < 60 {
                         cur.line = v.line; doc.ev.map.holes[k] = cur; added += 1
                     }
                 }
