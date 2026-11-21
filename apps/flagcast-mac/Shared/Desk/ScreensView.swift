@@ -52,10 +52,11 @@ struct ScreensView: View {
             SwiftUI.Section {
                 if par3s.isEmpty { Text("This course has no par 3s.").foregroundStyle(.secondary) }
                 ForEach(par3s, id: \.n) { h in
-                    TextField("Hole \(h.n)", text: Binding(get: { doc.ev.cams[h.n] ?? "" }, set: { doc.ev.cams[h.n] = $0.isEmpty ? nil : $0 }), prompt: Text("https://… (.m3u8 or a web player link)"))
+                    let on = !(doc.live?.cams[h.n] ?? doc.ev.cams[h.n] ?? "").isEmpty
+                    LabeledContent("Hole \(h.n)") { Label(on ? "Camera set up" : "No camera", systemImage: on ? "video.fill" : "video.slash").foregroundStyle(on ? FC.ok : FC.muted) }
                 }
             } header: { Text("Par 3 cameras") } footer: {
-                Help("For each par 3, paste the camera’s https link: an HLS stream (.m3u8) or a web player link such as a VDO.Ninja view link. Leave it empty to show a drawing of the hole.")
+                Help("Cameras are set up by Flagcast. Pick “Par 3 camera” for a TV to show them; a hole without a camera shows a drawing of the hole.")
             }
             SwiftUI.Section {
                 HStack {
