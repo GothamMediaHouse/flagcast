@@ -4,13 +4,16 @@
 //
 //   node tools/demo-seed.mjs                      make it, or reset it to a fresh mid-round state (run again any time)
 //   node tools/demo-seed.mjs http://127.0.0.1:8787   the same on a local copy of the site
+//   --logo <file.png>   give the demo club this logo (white on see-through looks best): then the tournament isn't
+//                       marked Demo, so it shows the club's logo the way a real club's would
 //
 // Needs Flagcast Admin: it uses the sign-in saved by Flagcast Manager on this Mac (never printed or stored here).
 // Locally (wrangler dev with no passcode set) no sign-in is needed.
 import fs from 'node:fs';
 import os from 'node:os';
 
-const BASE = (process.argv[2] || 'https://flagcast.app').replace(/\/$/, '');
+const args = process.argv.slice(2), li = args.indexOf('--logo'), LOGO = li >= 0 ? args.splice(li, 2)[1] : '';
+const BASE = (args[0] || 'https://flagcast.app').replace(/\/$/, '');
 const CLUB = 'Flagcast Demo', NAME = 'Sample Member-Guest', COURSE_Q = 'torrey pines';
 const CAM = 'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8';
 const local = /127\.0\.0\.1|localhost/.test(BASE);
@@ -102,7 +105,8 @@ await admin({ op: 'cams', id, cams: Object.fromEntries(par3.map((h) => [h, CAM])
 for (const r of ev2.replays || []) await desk('replay', { remove: r.id });
 await desk('replay', { hole: par3[0], label: `${names[0]} to 4 feet`, url: CAM });
 await desk('replay', { hole: par3[1] || par3[0], label: `${names[13]} hits the pin`, url: CAM });
-await admin({ op: 'demo', id, on: true });
+if (LOGO) await admin({ op: 'brand', club: club.id, logo: 'data:image/png;base64,' + fs.readFileSync(LOGO).toString('base64') });
+await admin({ op: 'demo', id, on: !LOGO && !club.logo });
 
 console.log(`${NAME} (${id.toUpperCase()}) in ${CLUB} · ${courseName} · ${ev2.teams.length} teams · par 3s ${par3.join(', ')}`);
 console.log(`Live leaderboard: ${BASE}/g/${id}`);
