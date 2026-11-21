@@ -1,6 +1,6 @@
 // Cloudflare Stream Live for NDI cameras (stream.js), with the Stream API mocked.  node test/stream.test.mjs
 import assert from 'node:assert/strict';
-import { streamReady, liveInput, inputState, playbackURL } from '../stream.js';
+import { streamReady, liveInput, inputState, playbackURL, deleteInput } from '../stream.js';
 
 let n = 0; const ok = (name) => console.log(`ok ${++n} - ${name}`);
 const env = { CF_ACCOUNT_ID: 'acct123', CF_STREAM_TOKEN: 'tok-test' };
@@ -48,6 +48,20 @@ m.inputs.uid1.status = { current: { state: 'connected' } }; assert.equal(await i
 m.inputs.uid1.status = { current: { state: 'disconnected' } }; assert.equal(await inputState(env, m.fetcher, 'uid1'), 'disconnected');
 assert.equal(await inputState(env, m.fetcher, 'nope'), 'unknown');
 ok('upload health: connected / disconnected / unknown');
+
+// deleting: recordings first, then the input (mock: /videos lists two recordings)
+{
+  const calls = [];
+  const f = async (url, init = {}) => {
+    calls.push(`${init.method || 'GET'} ${url.replace(/^.*\/stream/, '')}`);
+    const res = (body) => ({ ok: true, status: 200, json: async () => ({ success: true, result: body }) });
+    if (url.endsWith('/live_inputs/uidX/videos')) return res([{ uid: 'v1' }, { uid: 'v2' }]);
+    return res(null);
+  };
+  assert.equal(await deleteInput(env, f, 'uidX'), 2);
+  assert.deepEqual(calls, ['GET /live_inputs/uidX/videos', 'DELETE /v1', 'DELETE /v2', 'DELETE /live_inputs/uidX']);
+}
+ok('removing a hole deletes its recordings and its live input');
 
 await assert.rejects(liveInput({ ...env, CF_ACCOUNT_ID: 'wrong' }, m.fetcher, { name: 'z' }), /not found/);
 ok('Stream errors come back as messages');
