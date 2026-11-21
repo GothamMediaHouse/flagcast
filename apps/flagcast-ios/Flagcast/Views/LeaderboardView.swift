@@ -20,10 +20,10 @@ struct LeaderboardScreen: View {
     var body: some View {
         VStack(spacing: 0) {
             if let s = feed.state {
-                GreenHeader(title: s.title, subtitle: [s.club, s.course.name != s.club ? s.course.name : "", s.date].filter { !$0.isEmpty }.joined(separator: " · "), state: s, height: 230) {
+                VStack(spacing: 0) {
+                GreenHeader(title: s.title, subtitle: [s.club, s.course.name != s.club ? s.course.name : "", s.dayText].filter { !$0.isEmpty }.joined(separator: " · "), state: s, height: 320) {
                     LivePill(online: feed.online)
                 }
-                .ignoresSafeArea(edges: .top)
                 if let f = s.flash, Date().timeIntervalSince1970 * 1000 - f.at < 30 * 60_000 {
                     Label(f.text, systemImage: "megaphone.fill").font(.subheadline.weight(.semibold))
                         .frame(maxWidth: .infinity).padding(.horizontal, 16).padding(.vertical, 10)
@@ -59,6 +59,9 @@ struct LeaderboardScreen: View {
                     }
                 }
                 .animation(.spring(duration: 0.35), value: s.live.phone)
+                }
+                // the photo runs up behind the status bar and the back button, with the tabs right under it
+                .ignoresSafeArea(edges: .top)
             } else if let m = feed.missing {
                 ContentUnavailableView("Not found", systemImage: "questionmark.circle", description: Text(m))
             } else {

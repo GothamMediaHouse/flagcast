@@ -332,6 +332,12 @@ struct EventState: Codable, Hashable {
         try c.encode(brand, forKey: .brand)
     }
 
+    /// "Sat, Nov 21" for the tournament's day (it's stored as 2026-11-21, a day where the club is)
+    var dayText: String {
+        let f = DateFormatter(); f.calendar = Calendar(identifier: .gregorian); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; f.timeZone = .current
+        guard let d = f.date(from: date) else { return date }
+        return d.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+    }
     /// The name shown at the top of pages: the screens title when the desk set one.
     var title: String { screens.title.isEmpty ? (name.isEmpty ? "Tournament" : name) : screens.title }
     func team(_ id: String?) -> Team? { teams.first { $0.id == id } }

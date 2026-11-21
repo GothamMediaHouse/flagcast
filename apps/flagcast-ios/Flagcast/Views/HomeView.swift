@@ -16,6 +16,7 @@ struct HomeView: View {
     @State private var recents: [Recent] = []
     @State private var pros: [ProSignIn] = []
     @State private var serverSheet = false
+    @State private var settings = false
     @FocusState private var focus: Field?
     enum Field { case event, cart, proEvent, pin }
 
@@ -50,7 +51,11 @@ struct HomeView: View {
             }
         }
         .sheet(isPresented: $serverSheet) { ServerSheet() }
+        .sheet(isPresented: $settings, onDismiss: { recents = Recents.all() }) { PlayerSettingsView() }
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { settings = true } label: { Image(systemName: "gearshape.fill") }.tint(.white).accessibilityLabel("Settings")
+            }
             // the PIN pad has no return key: put the form's button above the keyboard
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
