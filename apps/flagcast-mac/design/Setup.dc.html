@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Manager setup</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#123628}a:hover{color:#1c4a37}
+</style>
+</helmet>
+<div style="width: 1280px; height: 820px; display: flex; background: #f2f4ef; font-family: Inter, system-ui, sans-serif; color: #14201a; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 1px rgba(0,0,0,0.12)">
+<dc-import name="Sidebar" active="setup" hint-size="248px,820px"></dc-import>
+<main style="flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; overflow: hidden">
+<img src="img/course-aerial.jpg" alt="Aerial view of the course" style="position: absolute; top: 0; left: 0; width: 100%; height: 300px; object-fit: cover; object-position: center 40%">
+<div style="position: absolute; top: 0; left: 0; right: 0; height: 300px; background: linear-gradient(180deg, rgba(8,24,17,0.6) 0%, rgba(8,24,17,0.1) 40%, rgba(8,24,17,0.8) 100%)"></div>
+<header style="position: relative; height: 52px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 20px; color: #ffffff">
+<h1 style="margin: 0; font-size: 14px; font-weight: 600; opacity: 0.9">Setup</h1>
+<div style="flex: 1"></div>
+<span style="display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600"><span style="width: 7px; height: 7px; border-radius: 50%; background: #e8c547"></span>Unsaved changes</span>
+<button style="height: 30px; padding: 0 12px; border-radius: 7px; border: 1px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.16); backdrop-filter: blur(12px); font: 600 13px Inter, sans-serif; color: #ffffff; cursor: pointer">Find the course…</button>
+<button style="height: 30px; padding: 0 12px; border-radius: 7px; border: 1px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.16); backdrop-filter: blur(12px); font: 600 13px Inter, sans-serif; color: #ffffff; cursor: pointer">Map the holes</button>
+<button style="height: 30px; padding: 0 14px; border-radius: 7px; border: 0; background: #ffffff; color: #123628; font: 600 13px Inter, sans-serif; cursor: pointer">Save</button>
+</header>
+<div style="position: relative; height: 132px; flex: none; box-sizing: border-box; padding: 0 30px 20px; display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; color: #ffffff">
+<span style="font-size: 12px; font-weight: 700; letter-spacing: 1.4px; color: #e8c547">COURSE · WEST PALM BEACH, FL</span>
+<div style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 56px; line-height: 0.95; text-shadow: 0 2px 16px rgba(0,0,0,0.35)">The Preserve at Ironhorse</div>
+</div>
+<div style="position: relative; flex: 1; min-height: 0; padding: 0 20px 18px; display: flex; gap: 16px">
+<div style="width: 300px; flex: none; display: flex; flex-direction: column; gap: 14px">
+<section aria-labelledby="t-event" style="background: #ffffff; border-radius: 12px; box-shadow: 0 8px 30px rgba(8,24,17,0.18); padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+<h2 id="t-event" style="margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 1px; color: #56625a">TOURNAMENT</h2>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: #56625a">Name<input value="9 Hole" style="height: 32px; box-sizing: border-box; border: 1px solid #d3dacf; border-radius: 7px; padding: 0 10px; font: 500 14px Inter, sans-serif; color: #14201a"></label>
+<div style="display: flex; gap: 8px">
+<label style="flex: 1; display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: #56625a">Date<input value="Sat, Nov 21" style="height: 32px; box-sizing: border-box; border: 1px solid #d3dacf; border-radius: 7px; padding: 0 10px; font: 500 14px Inter, sans-serif; color: #14201a; width: 100%"></label>
+<label style="flex: 1; display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: #56625a">Shotgun<input value="8:30 AM" style="height: 32px; box-sizing: border-box; border: 1px solid #d3dacf; border-radius: 7px; padding: 0 10px; font: 500 14px Inter, sans-serif; color: #14201a; width: 100%"></label>
+</div>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: #56625a">Format<select style="height: 32px; border: 1px solid #d3dacf; border-radius: 7px; padding: 0 8px; font: 500 14px Inter, sans-serif; color: #14201a; background: #ffffff"><option>Two-person scramble</option></select></label>
+<div style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: #56625a">Holes
+<div role="group" aria-label="Holes" style="display: flex; background: #e6eae1; border-radius: 7px; padding: 2px">
+<button style="flex: 1; border: 0; height: 28px; border-radius: 6px; font: 600 12px Inter, sans-serif; background: transparent; color: #56625a; cursor: pointer">All 18</button>
+<button style="flex: 1; border: 0; height: 28px; border-radius: 6px; font: 600 12px Inter, sans-serif; background: #123628; color: #eef3ec; cursor: pointer">Front 9</button>
+<button style="flex: 1; border: 0; height: 28px; border-radius: 6px; font: 600 12px Inter, sans-serif; background: transparent; color: #56625a; cursor: pointer">Back 9</button>
+</div>
+</div>
+</section>
+<section aria-labelledby="t-tees" style="flex: 1; min-height: 0; background: #ffffff; border-radius: 12px; box-shadow: 0 8px 30px rgba(8,24,17,0.18); padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; overflow: hidden">
+<div style="display: flex; align-items: center"><h2 id="t-tees" style="margin: 0; flex: 1; font-size: 12px; font-weight: 700; letter-spacing: 1px; color: #56625a">TEES</h2><button style="border: 0; background: transparent; font: 600 12px Inter, sans-serif; color: #123628; cursor: pointer">+ Add tees</button></div>
+<div style="display: flex; font-size: 11px; font-weight: 700; color: #56625a; padding: 2px 0"><span style="flex: 1">Tees</span><span style="width: 52px; text-align: right">Rating</span><span style="width: 46px; text-align: right">Slope</span></div>
+<sc-for list="{{tees}}" as="t" hint-placeholder-count="8">
+<div style="display: flex; align-items: center; font-size: 13px; padding: 4px 0; border-top: 1px solid #eef1ea">
+<span style="width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; background: {{t.swatch}}; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.25)"></span>
+<span style="flex: 1; font-weight: 500">{{t.name}}</span>
+<span style="width: 52px; text-align: right">{{t.rating}}</span>
+<span style="width: 46px; text-align: right">{{t.slope}}</span>
+</div>
+</sc-for>
+</section>
+</div>
+<section aria-labelledby="t-course" style="flex: 1; min-width: 0; background: #ffffff; border-radius: 12px; box-shadow: 0 8px 30px rgba(8,24,17,0.18); overflow: hidden; display: flex; flex-direction: column">
+<div style="padding: 14px 18px 0"><h2 id="t-course" style="margin: 0; font-size: 12px; font-weight: 700; letter-spacing: 1px; color: #56625a">SCORECARD</h2></div>
+<div style="padding: 14px 18px; display: flex; flex-direction: column; gap: 14px">
+<sc-for list="{{nines}}" as="n" hint-placeholder-count="2">
+<div style="display: flex; flex-direction: column; gap: 4px; opacity: {{n.opacity}}">
+<div style="display: flex; align-items: center; gap: 8px"><span style="font-size: 12px; font-weight: 700; letter-spacing: 1px; color: #56625a">{{n.title}}</span><span style="font-size: 12px; color: #56625a">{{n.note}}</span></div>
+<div style="display: grid; grid-template-columns: 64px repeat(9, minmax(0, 1fr)) 64px; border: 1px solid #e6eae1; border-radius: 8px; overflow: hidden; font-size: 13px; text-align: center">
+<span style="padding: 7px 0; background: #123628; color: #eef3ec; font-weight: 700; text-align: left; padding-left: 10px">Hole</span>
+<sc-for list="{{n.holes}}" as="h" hint-placeholder-count="9"><span style="padding: 7px 0; background: #123628; color: #eef3ec; font-weight: 700">{{h.n}}</span></sc-for>
+<span style="padding: 7px 0; background: #123628; color: #eef3ec; font-weight: 700">{{n.label}}</span>
+<span style="padding: 7px 0 7px 10px; text-align: left; color: #56625a; font-weight: 600">Par</span>
+<sc-for list="{{n.holes}}" as="h" hint-placeholder-count="9"><span style="padding: 7px 0; font-weight: 700">{{h.par}}</span></sc-for>
+<span style="padding: 7px 0; font-weight: 700">{{n.par}}</span>
+<span style="padding: 7px 0 7px 10px; text-align: left; color: #56625a; font-weight: 600; background: #f7f8f4">Yards</span>
+<sc-for list="{{n.holes}}" as="h" hint-placeholder-count="9"><span style="padding: 7px 0; background: #f7f8f4">{{h.yds}}</span></sc-for>
+<span style="padding: 7px 0; background: #f7f8f4; font-weight: 600">{{n.yds}}</span>
+<span style="padding: 7px 0 7px 10px; text-align: left; color: #56625a; font-weight: 600">SI</span>
+<sc-for list="{{n.holes}}" as="h" hint-placeholder-count="9"><span style="padding: 7px 0; color: #56625a">{{h.hcp}}</span></sc-for>
+<span style="padding: 7px 0"></span>
+</div>
+</div>
+</sc-for>
+<p style="margin: 0; font-size: 12px; color: #56625a">Yards are from the White tees. Scorecard from the club; click any number to change it.</p>
+</div>
+</section>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":820}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const par = [4,4,3,4,5,5,3,4,4, 4,3,4,3,5,4,4,4,5];
+    const yds = [330,317,147,373,481,530,124,363,377, 379,146,355,184,476,342,324,383,482];
+    const hcp = [9,7,17,3,13,1,15,11,5, 6,14,12,10,8,16,18,4,2];
+    const nine = (from, title, label, note, opacity) => {
+      const holes = Array.from({ length: 9 }, (_, i) => ({ n: from + i + 1, par: par[from + i], yds: yds[from + i], hcp: hcp[from + i] }));
+      return { title, label, note, opacity, holes,
+        par: holes.reduce((a, h) => a + h.par, 0),
+        yds: holes.reduce((a, h) => a + h.yds, 0).toLocaleString('en-US') };
+    };
+    const tees = [
+      ['Black', '74.8', '144', '#1b1b1b'], ['Black/Blue', '73.4', '142', '#24406e'], ['Blue', '71.7', '139', '#2f5fb3'],
+      ['White', '70.0', '135', '#ffffff'], ['White/Green', '67.4', '127', '#b9d6bd'], ['Green', '66.2', '121', '#2f8a57'],
+      ['Green (women)', '70.9', '130', '#2f8a57'], ['Orange (women)', '67.8', '122', '#e07b2a']
+    ].map(([name, rating, slope, swatch]) => ({ name, rating, slope, swatch }));
+    return {
+      tees,
+      nines: [nine(0, 'FRONT 9', 'Out', '· in this round', '1'), nine(9, 'BACK 9', 'In', '· not in this round', '0.45')]
+    };
+  }
+}
+</script>
+</body>
+</html>

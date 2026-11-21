@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Manager sidebar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#eef3ec}a:hover{color:#ffffff}
+</style>
+</helmet>
+<nav aria-label="Tournaments" style="width: 248px; height: 820px; box-sizing: border-box; background: #123628; color: #eef3ec; font-family: Inter, system-ui, sans-serif; display: flex; flex-direction: column; padding: 14px 12px 12px; gap: 14px">
+<div style="display: flex; gap: 8px; padding: 2px 6px" aria-hidden="true">
+<span style="width: 12px; height: 12px; border-radius: 50%; background: #ff5f57"></span>
+<span style="width: 12px; height: 12px; border-radius: 50%; background: #febc2e"></span>
+<span style="width: 12px; height: 12px; border-radius: 50%; background: #28c840"></span>
+</div>
+<div style="display: flex; align-items: center; gap: 10px; padding: 4px 6px 2px">
+<img src="../../../public/golf/brand/mark.svg" alt="" style="width: 34px; height: 34px; border-radius: 8px; box-shadow: 0 0 0 1px rgba(238,243,236,0.18)">
+<div style="display: flex; flex-direction: column; line-height: 1">
+<span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 22px; letter-spacing: 0.5px">FLAGCAST</span>
+<span style="font-size: 11px; color: #a9bdb0; letter-spacing: 1.6px; font-weight: 600; margin-top: 3px">MANAGER</span>
+</div>
+</div>
+<label style="display: flex; align-items: center; gap: 8px; background: rgba(238,243,236,0.10); border-radius: 8px; padding: 7px 10px; font-size: 13px; color: #a9bdb0">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-4-4"></path></svg>
+<input type="search" placeholder="Find a team or player" aria-label="Find a team or player" style="all: unset; flex: 1; color: #eef3ec; font-size: 13px">
+</label>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<div style="font-size: 11px; font-weight: 700; letter-spacing: 1.2px; color: #a9bdb0; padding: 4px 8px">TOURNAMENTS</div>
+<div style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; font-size: 14px; font-weight: 600">
+<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#a9bdb0" stroke-width="3" aria-hidden="true"><path d="M6 9l6 6l6-6"></path></svg>
+<span style="flex: 1">9 Hole</span>
+<span style="font-size: 11px; font-weight: 700; color: #1a1a10; background: #e8c547; border-radius: 10px; padding: 2px 7px">LIVE</span>
+</div>
+<sc-for list="{{sections}}" as="s" hint-placeholder-count="11">
+<a href="{{s.href}}" style="display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 26px; border-radius: 7px; font-size: 13px; text-decoration: none; background: {{s.bg}}; color: {{s.fg}}; font-weight: {{s.weight}}">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{s.icon}}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{s.d}}"></path></svg>
+<span style="flex: 1">{{s.label}}</span>
+<span style="font-size: 11px; color: #a9bdb0">{{s.key}}</span>
+</a>
+</sc-for>
+<div style="display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 7px; font-size: 14px; color: #eef3ec; margin-top: 4px">
+<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#a9bdb0" stroke-width="3" aria-hidden="true"><path d="M9 6l6 6l-6 6"></path></svg>
+<span style="flex: 1">Member-Guest 2026</span>
+<span style="font-size: 12px; color: #a9bdb0">Jun 13</span>
+</div>
+</div>
+<div style="flex: 1"></div>
+<button style="all: unset; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px; font-size: 13px; font-weight: 600; color: #eef3ec; background: rgba(238,243,236,0.10); cursor: pointer">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+New tournament
+<span style="margin-left: auto; font-size: 11px; color: #a9bdb0">⌘N</span>
+</button>
+<div style="display: flex; align-items: center; gap: 10px; padding: 8px 6px 0; border-top: 1px solid rgba(238,243,236,0.14)">
+<span style="width: 28px; height: 28px; border-radius: 50%; background: #1c4a37; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700">YC</span>
+<div style="display: flex; flex-direction: column; line-height: 1.25">
+<span style="font-size: 13px; font-weight: 600">[Your club]</span>
+<span style="font-size: 11px; color: #a9bdb0">3 tournaments left</span>
+</div>
+</div>
+</nav>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"active":{"editor":"enum","options":["overview","setup","teams","scores","contests","screens","staff","links","report","map","groups"],"default":"overview"},"$preview":{"width":248,"height":820}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const a = this.props.active ?? 'overview';
+    const S = [
+      ['overview','Overview','⌘1','M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z','Main.dc.html'],
+      ['setup','Setup','⌘2','M12 8a4 4 0 1 0 0 8a4 4 0 1 0 0-8zM12 2v3M12 19v3M2 12h3M19 12h3','Setup.dc.html'],
+      ['teams','Teams','⌘3','M9 11a3 3 0 1 0 0-6a3 3 0 1 0 0 6zM3 20c0-3 3-5 6-5s6 2 6 5M16 5a3 3 0 0 1 0 6M18 15c2 .5 3 2.5 3 5','Teams.dc.html'],
+      ['scores','Scores','⌘4','M4 5h16M4 10h16M4 15h16M4 20h10','Scores.dc.html'],
+      ['contests','Contests','⌘5','M8 4h8v5a4 4 0 0 1-8 0zM12 13v4M8 21h8','#'],
+      ['screens','Screens & sponsors','⌘6','M3 5h18v11H3zM8 20h8M12 16v4','#'],
+      ['staff','Staff','⌘7','M12 12a4 4 0 1 0 0-8a4 4 0 1 0 0 8zM4 21c0-4 4-6 8-6s8 2 8 6','#'],
+      ['links','Links & cart cards','⌘8','M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1','#'],
+      ['report','Report','⌘9','M5 20V10M12 20V4M19 20v-7','#'],
+      ['map','Course map','⌘0','M9 4l-6 3v13l6-3l6 3l6-3V4l-6 3zM9 4v13M15 7v13','#'],
+      ['groups','Where the groups are','','M12 21s7-6 7-11a7 7 0 0 0-14 0c0 5 7 11 7 11zM12 12a2 2 0 1 0 0-4a2 2 0 1 0 0 4z','#']
+    ];
+    return {
+      sections: S.map(([id, label, key, d, href]) => ({
+        label, key, d, href,
+        bg: id === a ? '#eef3ec' : 'transparent',
+        fg: id === a ? '#123628' : '#dfe8e1',
+        icon: id === a ? '#123628' : '#a9bdb0',
+        weight: id === a ? '600' : '500'
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>
