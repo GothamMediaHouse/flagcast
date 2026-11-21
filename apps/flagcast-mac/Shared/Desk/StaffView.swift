@@ -1,7 +1,5 @@
 import SwiftUI
 
-let PAGE_NAMES: [(String, String)] = [("lb", "Leaderboard"), ("p3", "Par 3 camera"), ("cam", "One hole’s camera"), ("contests", "Contests"), ("skins", "Skins"),
-                                      ("fund", "Fundraising"), ("sponsors", "All sponsors"), ("sponsor", "One sponsor"), ("schedule", "Schedule")]
 
 /// Staff and playlists: golf pros' and marshals' PINs, the club's screens and what each plays, and the schedule.
 struct StaffView: View {

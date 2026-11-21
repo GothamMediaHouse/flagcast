@@ -273,35 +273,3 @@ struct ScreenWall: View {
     }
 }
 
-extension DeskDoc {
-    var pageChoices: PageChoices {
-        PageChoices(flights: ev.flights, p3: ev.course.holes.filter { $0.par == 3 }.map(\.n), holes: ev.course.holes.map(\.n),
-                    sponsors: ev.sponsors.map { ($0.id, $0.name.isEmpty ? "Sponsor" : $0.name) })
-    }
-    /// Screens → Engineering for this tournament
-    var engSource: EngSource {
-        let lv = live
-        return EngSource(
-            tvs: ev.displays.map { d in EngTV(id: d.id, name: d.name, place: d.place, group: d.group, online: lv?.online[d.id] ?? 0, force: lv?.live.force[d.id], playlist: d.playlist) },
-            choices: pageChoices,
-            url: { [boardURL] id in URL(string: "\(boardURL.absoluteString)?screen=\(id)") },
-            scenes: ev.scenes.map { ($0.id, $0.name) },
-            take: lv?.live.take, phone: lv?.live.phone, announcement: lv?.flash,
-            replays: (lv?.replays ?? ev.replays).map { ($0.id, "Hole \($0.hole) · \($0.label.isEmpty ? "Replay" : $0.label)") },
-            day: { [weak self] op, body, done in
-                guard let self else { return }
-                await self.day(op, body, done: done)
-                if op == "scene" { await self.refreshDay() }
-            },
-            playlist: { [weak self] id in
-                guard let self, self.ev.displays.contains(where: { $0.id == id }) else { return nil }
-                return Binding(get: { self.ev.displays.first { $0.id == id }?.playlist ?? [] },
-                               set: { v in if let i = self.ev.displays.firstIndex(where: { $0.id == id }) { self.ev.displays[i].playlist = v } })
-            },
-            group: { [weak self] id in
-                guard let self, self.ev.displays.contains(where: { $0.id == id }) else { return nil }
-                return Binding(get: { self.ev.displays.first { $0.id == id }?.group ?? "" },
-                               set: { v in if let i = self.ev.displays.firstIndex(where: { $0.id == id }) { self.ev.displays[i].group = v } })
-            })
-    }
-}

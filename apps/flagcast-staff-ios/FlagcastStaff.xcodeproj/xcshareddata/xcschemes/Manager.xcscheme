@@ -3,7 +3,7 @@
    <BuildAction parallelizeBuildables = "YES" buildImplicitDependencies = "YES">
       <BuildActionEntries>
          <BuildActionEntry buildForTesting = "YES" buildForRunning = "YES" buildForProfiling = "YES" buildForArchiving = "YES" buildForAnalyzing = "YES">
-            <BuildableReference BuildableIdentifier = "primary" BlueprintIdentifier = "DB286E70D34405202AEB7344" BuildableName = "Flagcast Manager.app" BlueprintName = "Manager" ReferencedContainer = "container:FlagcastStaff.xcodeproj"></BuildableReference>
+            <BuildableReference BuildableIdentifier = "primary" BlueprintIdentifier = "C0284E7C390F9DF70CFB46C2" BuildableName = "Flagcast Manager.app" BlueprintName = "Manager" ReferencedContainer = "container:FlagcastStaff.xcodeproj"></BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
@@ -11,7 +11,7 @@
    </TestAction>
    <LaunchAction buildConfiguration = "Debug" selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB" launchStyle = "0" useCustomWorkingDirectory = "NO" ignoresPersistentStateOnLaunch = "NO" debugDocumentVersioning = "YES" debugServiceExtension = "internal" allowLocationSimulation = "YES">
       <BuildableProductRunnable runnableDebuggingMode = "0">
-         <BuildableReference BuildableIdentifier = "primary" BlueprintIdentifier = "DB286E70D34405202AEB7344" BuildableName = "Flagcast Manager.app" BlueprintName = "Manager" ReferencedContainer = "container:FlagcastStaff.xcodeproj"></BuildableReference>
+         <BuildableReference BuildableIdentifier = "primary" BlueprintIdentifier = "C0284E7C390F9DF70CFB46C2" BuildableName = "Flagcast Manager.app" BlueprintName = "Manager" ReferencedContainer = "container:FlagcastStaff.xcodeproj"></BuildableReference>
       </BuildableProductRunnable>
       <CommandLineArguments>
          <CommandLineArgument argument = "-FlagcastServer http://localhost:8787" isEnabled = "NO">
