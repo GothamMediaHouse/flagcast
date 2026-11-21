@@ -1,5 +1,5 @@
 // The sample tournament for demos: "Sample Member-Guest" in the "Flagcast Demo" club, marked Demo (so it shows the
-// Flagcast logo). Made-up teams, sponsors as placeholders, scores part way through the round, contests, skins, a TV,
+// Flagcast logo). 40 made-up teams, sponsors as placeholders, scores part way through the round, contests, skins, a TV,
 // and par 3 cameras on Apple's public HLS test pattern with two saved replays.
 //
 //   node tools/demo-seed.mjs                      make it, or reset it to a fresh mid-round state (run again any time)
@@ -51,14 +51,20 @@ if (hit) {
 const par3 = holes.filter((h) => h.par === 3).map((h) => h.n), par5 = holes.filter((h) => h.par === 5).map((h) => h.n);
 
 // 3) the setup: made-up teams, placeholder sponsors, contests, a TV
-const teamsIn = [
-  ['The Birdie Hunters', ['Sam Ortiz', 'Dana Price']], ['Fairway Kings', ['Lee Novak', 'Chris Hale']], ['Grip It & Sip It', ['Pat Moreno', 'Jordan Blake']],
-  ['Sand Savers', ['Alex Kim', 'Robin Shaw']], ['Back Nine Bandits', ['Taylor Reed', 'Morgan Ash']], ['Eagle Eyes', ['Casey Lin', 'Jamie Cole']],
-  ['The Shankopotamus', ['Drew Park', 'Riley Stone']], ['Pin Seekers', ['Avery Hunt', 'Quinn Diaz']],
-];
+// 40 made-up teams of two (no real people): a shotgun start, two or three teams on every hole, four flights
+const FIRST = ['Sam', 'Dana', 'Lee', 'Chris', 'Pat', 'Jordan', 'Alex', 'Robin', 'Taylor', 'Morgan', 'Casey', 'Jamie', 'Drew', 'Riley', 'Avery', 'Quinn', 'Jesse', 'Reese', 'Cameron', 'Skyler',
+  'Parker', 'Rowan', 'Emerson', 'Hayden', 'Kendall', 'Logan', 'Peyton', 'Sage', 'Blake', 'Shawn'];
+const LAST = ['Ortiz', 'Price', 'Novak', 'Hale', 'Moreno', 'Blake', 'Kim', 'Shaw', 'Reed', 'Ash', 'Lin', 'Cole', 'Park', 'Stone', 'Hunt', 'Diaz', 'Webb', 'Fischer', 'Lowe', 'Barrett',
+  'Quill', 'Marsh', 'Doyle', 'Keane', 'Vance', 'Holt', 'Pryor', 'Wilde', 'Sutton', 'Grove', 'Tate', 'Rowe', 'Nash', 'Ellis', 'Frost', 'Lyle', 'Marsden', 'Oakes', 'Penn', 'Rudd'];
+const TEAMS = ['The Birdie Hunters', 'Fairway Kings', 'Grip It & Sip It', 'Sand Savers', 'Back Nine Bandits', 'Eagle Eyes', 'The Shankopotamus', 'Pin Seekers',
+  'Tee Time Titans', 'The Mulligans', 'Divot Diggers', 'Bogey Brothers', 'Short Game Sharks', 'The Wedge Issue', 'Putt Pirates', 'Fore Play',
+  'The Dogleggers', 'Chip Shots', 'Hole Lotta Fun', 'The Sandbaggers', 'Green Machine', 'Slice Squad', 'Par-Tee Animals', 'The Hookers & Slicers',
+  'Ace Ventura', 'Course Correction', 'Club Sandwich', 'The Fringe', 'Golden Tees', 'Water Hazards', 'Stick Figures', 'The Albatross',
+  'Lip Outs', 'Range Rovers', 'Bunker Busters', 'The Flagsticks', 'Rough Riders', 'Up & Downers', 'Grass Kickers', 'Two Putt Wonders'];
+const teamsIn = TEAMS.map((n, i) => [n, [0, 1].map((j) => `${FIRST[(i * 2 + j) % FIRST.length]} ${LAST[(i * 7 + j * 3) % LAST.length]}`)]);
 const got = await desk('get'); delete got.stats;
 const keepIds = new Map((got.teams || []).map((t) => [t.name, t.id]));
-const teams = teamsIn.map(([n, ps], i) => ({ id: keepIds.get(n), name: n, flight: i < 4 ? 'A' : 'B', start: [1, 1, 4, 7, 10, 10, 13, 16][i], cart: String(i + 1),
+const teams = teamsIn.map(([n, ps], i) => ({ id: keepIds.get(n), name: n, flight: 'ABCD'[Math.floor(i / 10)], start: (i % 18) + 1, cart: String(i + 1),
   players: ps.map((p, j) => ({ name: p, hcp: (i * 3 + j * 5) % 18 })) }));
 const sponsors = [
   { name: 'Your Title Sponsor', line: 'Title sponsor placeholder', spot: 'title' },
@@ -73,7 +79,7 @@ const contests = [
 ];
 const today = new Date().toISOString().slice(0, 10);
 await desk('save', { setup: { ...got, name: NAME, club: CLUB, date: today, course: { name: courseName, holes, tees, at },
-  format: { type: 'bestball', count: 1, allowance: 85, show: 'net' }, flights: ['A', 'B'], teams, sponsors, contests,
+  format: { type: 'bestball', count: 1, allowance: 85, show: 'net' }, flights: ['A', 'B', 'C', 'D'], teams, sponsors, contests,
   screens: { ...(got.screens || {}), title: NAME, ticker: 'Welcome to the Sample Member-Guest · a Flagcast demo tournament', seconds: 12, rows: 10, skins: true },
   displays: got.displays?.length ? got.displays : [{ name: 'Clubhouse bar', where: 'Over the bar', group: 'Clubhouse', playlist: [{ k: 'lb', secs: 14 }, { k: 'skins', secs: 10 }, { k: 'contests', secs: 10 }, { k: 'sponsors', secs: 8 }] }] } });
 
