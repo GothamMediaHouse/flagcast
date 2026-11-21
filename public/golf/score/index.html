@@ -12,7 +12,9 @@
 <style>
 body { min-height: 100vh; padding-bottom: env(safe-area-inset-bottom, 0px); }
 .top-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-.top-row h1 { font-size: 1.15rem; letter-spacing: .03em; }
+.top-row h1 { font-size: 1.15rem; letter-spacing: .03em; flex: 1; min-width: 0; }
+.scorelogo { height: 30px; width: auto; max-width: 110px; object-fit: contain; flex: none; }
+.has-club .topbar { border-bottom: 3px solid var(--club, transparent); }
 #sync { font-family: var(--f-mono); font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
 #sync.wait { color: var(--flag); }
 .teamtabs { display: flex; gap: 6px; margin-top: 10px; overflow-x: auto; }
@@ -99,7 +101,7 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
 </head>
 <body>
 <header class="topbar">
-  <div class="top-row"><h1 id="evname">Scorecard</h1><span id="sync">Connecting…</span></div>
+  <div class="top-row"><img data-brand="club" class="scorelogo" hidden alt=""><h1 id="evname">Scorecard</h1><span id="sync">Connecting…</span></div>
   <div class="teamtabs" id="tabs" hidden></div>
 </header>
 <div class="locked" id="locked" hidden>Scoring is closed. The results are final.</div>
@@ -113,6 +115,7 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
 <div class="nudge" id="nudge" role="alertdialog" aria-labelledby="nudgeH" hidden><div><span class="label">From the pro shop</span><h2 id="nudgeH">A note for your cart</h2><p id="nudgeText"></p><button class="btn primary" onclick="this.closest('.nudge').hidden=true">OK</button></div></div>
 <script type="module">
 import { phoneBanner } from '/golf/phonecast.js';
+import { applyBrand } from '/golf/brandmark.js';
 import { gpsCard } from '/golf/gpscard.js';
 import { onGps, yds, trackingOn } from '/golf/gps.js';
 import { leaderboard, playHoles, teamCard, strokesOn, playing, fmtPar, mark, contestLeader, fmtDist, sideGames } from '/golf/core.js';
@@ -371,7 +374,7 @@ async function start() {
     if (e.status === 404) { $('main').innerHTML = `<div class="center"><h2>Code not found</h2><p>${esc(e.message)}</p></div>`; return; }
     // no signal: carry on with what this phone already knows
   }
-  live((s) => { S = s; store.set('state', s); remember(s.name, code); render(); nudges(); phoneBanner(S, (r) => { location.href = `/g/${eventId()}${r.k === 'cam' || r.k === 'p3' ? `#hole-${r.hole}` : `#v=${r.k === 'contests' ? 'ct' : r.k === 'skins' ? 'sk' : 'lb'}`}`; }); }, (on) => { online = on; syncLabel(); if (on) send(); });
+  live((s) => { S = s; applyBrand(s); store.set('state', s); remember(s.name, code); render(); nudges(); phoneBanner(S, (r) => { location.href = `/g/${eventId()}${r.k === 'cam' || r.k === 'p3' ? `#hole-${r.hole}` : `#v=${r.k === 'contests' ? 'ct' : r.k === 'skins' ? 'sk' : 'lb'}`}`; }); }, (on) => { online = on; syncLabel(); if (on) send(); });
   if (!S) { const saved = store.get('state', null); if (saved && teams.length) { S = saved; render(); } }
   send();
 }
