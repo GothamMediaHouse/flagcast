@@ -30,7 +30,16 @@ export async function fetchGolf([s, w, n, e]) {
   return (await r.json()).elements || [];
 }
 
-// → { holes: { n: { tee, f, m, b, hz } }, found: [n…], unnumbered }
+// drop points that sit within `tol` metres of the straight line between their neighbours (Douglas–Peucker)
+export function simplify(p, tol) {
+  if (p.length < 3) return p.slice();
+  const [a, b] = [p[0], p[p.length - 1]], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  let far = 0, at = 0;
+  for (let i = 1; i < p.length - 1; i++) { const d = Math.abs((b[0] - a[0]) * (a[1] - p[i][1]) - (a[0] - p[i][0]) * (b[1] - a[1])) / L; if (d > far) { far = d; at = i; } }
+  return far <= tol ? [a, b] : [...simplify(p.slice(0, at + 1), tol).slice(0, -1), ...simplify(p.slice(at), tol)];
+}
+
+// → { holes: { n: { tee, f, m, b, line, hz } }, found: [n…], unnumbered }
 export function buildMap(elements, near) {
   const holesEl = elements.filter((x) => x.tags && x.tags.golf === 'hole' && x.geometry && x.geometry.length >= 2);
   const o = near || pts(holesEl[0] || elements[0] || { geometry: [{ lat: 0, lon: 0 }] })[0];
@@ -74,7 +83,9 @@ export function buildMap(elements, near) {
       hz.push({ k: z.k, n: label.slice(0, 40), p: F.back(near.p), c: greenside && z.k === 'bunker' ? null : F.back(far.p), a: near.a });
     }
     hz.sort((x, y) => x.a - y.a);
-    out[n] = { tee: F.back(tee), f: F.back(f), m: F.back(m), b: F.back(b), hz: hz.slice(0, 10).map(({ a, ...z }) => ({ id: Math.random().toString(36).slice(2, 7), ...z })) };
+    // the bends between the tee and the green, so the flyover follows a dogleg (at most 10, in order)
+    const bends = simplify(line, 6).slice(1, -1).slice(0, 10).map(F.back);
+    out[n] = { tee: F.back(tee), f: F.back(f), m: F.back(m), b: F.back(b), line: bends, hz: hz.slice(0, 10).map(({ a, ...z }) => ({ id: Math.random().toString(36).slice(2, 7), ...z })) };
   }
   return { holes: out, found: [...byRef.keys()].sort((a, b) => a - b), unnumbered };
 }

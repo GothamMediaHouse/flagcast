@@ -182,6 +182,6 @@ extension Display {
     init(id: String = Ids.make(), name: String, playlist: [PageRef] = [], place: String = "", group: String = "") { self.id = id; self.name = name; self.playlist = playlist; self.place = place; self.group = group }
 }
 extension HoleMap {
-    init(tee: GeoPoint? = nil, f: GeoPoint? = nil, m: GeoPoint? = nil, b: GeoPoint? = nil, hz: [Hazard] = []) { self.tee = tee; self.f = f; self.m = m; self.b = b; self.hz = hz }
+    init(tee: GeoPoint? = nil, f: GeoPoint? = nil, m: GeoPoint? = nil, b: GeoPoint? = nil, hz: [Hazard] = [], line: [GeoPoint] = []) { self.tee = tee; self.f = f; self.m = m; self.b = b; self.hz = hz; self.line = line }
 }
 extension ScheduleItem { init() { self.init(time: "", what: "") } }

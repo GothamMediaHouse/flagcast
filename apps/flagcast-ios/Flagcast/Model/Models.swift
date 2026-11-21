@@ -236,11 +236,13 @@ struct Hazard: Codable, Hashable, Identifiable {
 }
 struct HoleMap: Codable, Hashable {
     var tee: GeoPoint?, f: GeoPoint?, m: GeoPoint?, b: GeoPoint?, hz: [Hazard]
+    var line: [GeoPoint] = []   // the bends between the tee and the green (doglegs), in order
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         tee = try? c.decodeIfPresent(GeoPoint.self, forKey: .tee); f = try? c.decodeIfPresent(GeoPoint.self, forKey: .f)
         m = try? c.decodeIfPresent(GeoPoint.self, forKey: .m); b = try? c.decodeIfPresent(GeoPoint.self, forKey: .b)
         hz = c.list(.hz)
+        line = (try? c.decodeIfPresent([GeoPoint].self, forKey: .line)) ?? []
     }
 }
 struct CourseMap: Codable, Hashable {

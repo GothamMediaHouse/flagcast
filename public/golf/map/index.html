@@ -312,7 +312,8 @@ async function autoMap(all, btn) {
     let n = 0;
     for (const k of got.found) {
       const cur = MAP.holes[k];
-      if (!all && cur && cur.tee && middle(cur)) continue;
+      // a hole you'd already placed keeps your tee and green, and gets OpenStreetMap's bends if it has none
+      if (!all && cur && cur.tee && middle(cur)) { if (!(cur.line || []).length && got.holes[k].line?.length && yds(cur.tee, got.holes[k].tee) < 60) { cur.line = got.holes[k].line; n++; } continue; }
       MAP.holes[k] = got.holes[k]; n++;
     }
     const missing = Array.from({ length: 18 }, (_, i) => i + 1).filter((k) => !got.found.includes(k));
@@ -389,7 +390,7 @@ async function start() {
   $('evname').textContent = S.course?.name || S.club || S.name || 'Course map';
   document.title = `Course map · ${S.course?.name || S.name || 'Flagcast'}`;
   MAP.src = S.map?.src || '';
-  for (const [n, h] of Object.entries(S.map?.holes || {})) MAP.holes[n] = { tee: h.tee, f: h.f, m: h.m, b: h.b, hz: (h.hz || []).map((z) => ({ ...z })) };
+  for (const [n, h] of Object.entries(S.map?.holes || {})) MAP.holes[n] = { tee: h.tee, f: h.f, m: h.m, b: h.b, line: (h.line || []).slice(), hz: (h.hz || []).map((z) => ({ ...z })) };
   if (S.map?.at) $('saved').textContent = `Last saved ${new Date(S.map.at).toLocaleDateString([], { month: 'short', day: 'numeric' })}${S.map.by ? ` · ${S.map.by}` : ''}`;
   const first = Object.keys(MAP.holes).map(Number).sort((a, b) => a - b);
   // start on the first hole that isn't finished

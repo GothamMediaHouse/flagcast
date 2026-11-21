@@ -231,8 +231,12 @@ struct CourseMapView: View {
                     return
                 }
                 var added = 0
-                for (k, v) in r.holes where all || doc.ev.map.holes[k]?.tee == nil {
-                    doc.ev.map.holes[k] = v; added += 1
+                for (k, v) in r.holes {
+                    if all || doc.ev.map.holes[k]?.tee == nil { doc.ev.map.holes[k] = v; added += 1 }
+                    // a hole you'd already placed keeps your tee and green, and gets OpenStreetMap's bends if it has none
+                    else if var cur = doc.ev.map.holes[k], cur.line.isEmpty, !v.line.isEmpty, let a = cur.tee, let b = v.tee, (Geo.yds(a, b) ?? 999) < 60 {
+                        cur.line = v.line; doc.ev.map.holes[k] = cur; added += 1
+                    }
                 }
                 doc.ev.map.src = "osm"
                 note = "Filled in \(added) hole\(added == 1 ? "" : "s") (\(r.found.map(String.init).joined(separator: ", "))). Check each one and drag anything that’s off."
