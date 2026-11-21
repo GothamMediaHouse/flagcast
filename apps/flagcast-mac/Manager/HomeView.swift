@@ -140,6 +140,8 @@ struct SettingsView: View {
                 if model.signedIn { Button("Sign Out") { Task { await model.signOut() } } }
             }
             .formStyle(.grouped).tabItem { Label("Account", systemImage: "person.crop.circle") }
+            AdminPassSettings()
+                .formStyle(.grouped).tabItem { Label("Admin", systemImage: "key") }
             Form {
                 Toggle("Check for updates when Flagcast Manager opens", isOn: $autoCheck)
                 LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
@@ -147,6 +149,41 @@ struct SettingsView: View {
             }
             .formStyle(.grouped).tabItem { Label("Updates", systemImage: "arrow.down.circle") }
         }
-        .frame(width: 460, height: 260)
+        .frame(width: 480, height: 300)
+    }
+}
+
+/// Settings → Admin: the Flagcast Admin passcode. It opens the Admin section without an email sign-in.
+struct AdminPassSettings: View {
+    @Environment(AppModel.self) private var model
+    @State private var text = ""
+    @State private var busy = false
+    @State private var message: String?
+    var body: some View {
+        Form {
+            SwiftUI.Section {
+                if !(model.admin.pass ?? "").isEmpty {
+                    LabeledContent("Flagcast Admin", value: "Unlocked on this Mac")
+                    Button("Forget the Passcode") { model.admin.forget(); if model.adminSection != nil && !model.isAdmin { model.adminSection = nil }; message = nil }
+                } else {
+                    SecureField("Admin passcode", text: $text).onSubmit(unlock)
+                    HStack {
+                        Button("Unlock Admin", action: unlock).disabled(text.isEmpty || busy)
+                        if busy { ProgressView().controlSize(.small) }
+                    }
+                }
+            } footer: {
+                Text(message ?? "The passcode is kept in your Keychain. Admin shows in the sidebar.").font(.callout).foregroundStyle(.secondary)
+            }
+        }
+    }
+    private func unlock() {
+        guard !text.isEmpty else { return }
+        busy = true; message = nil
+        Task {
+            do { try await model.admin.unlock(text); text = ""; model.adminSection = .clubs; message = "Admin is unlocked." }
+            catch { message = error.localizedDescription }
+            busy = false
+        }
     }
 }

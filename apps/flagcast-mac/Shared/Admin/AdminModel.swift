@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import Observation
 
 
@@ -90,10 +91,25 @@ final class AdminModel {
     var newClub = false
     /// the Manager's sign-in token
     @ObservationIgnored var token: () -> String = { "" }
+    /// The Flagcast Admin passcode (the server's GOLF_CREATE_PASS), kept in the login Keychain. With it, Admin works
+    /// without signing in by email.
+    var pass: String? = Keychain.pass
     /// open a tournament in the Manager's desk
     @ObservationIgnored var onOpen: ((AdminEvent) -> Void)?
 
-    private func body(_ extra: [String: Any]) -> [String: Any] { var b = extra; b["token"] = token(); return b }
+    private func body(_ extra: [String: Any]) -> [String: Any] {
+        var b = extra; b["token"] = token()
+        if let pass, !pass.isEmpty { b["pass"] = pass }
+        return b
+    }
+    /// Try a passcode: kept in the Keychain if the server takes it.
+    func unlock(_ p: String) async throws {
+        let old = pass
+        pass = p.trimmingCharacters(in: .whitespacesAndNewlines)
+        do { try await refresh(); Keychain.pass = pass; await refreshEvents() }
+        catch { pass = old; throw error }
+    }
+    func forget() { pass = nil; Keychain.pass = nil; clubs = []; events = []; log = [] }
 
     @discardableResult
     func call(_ op: String?, _ extra: [String: Any] = [:]) async throws -> [String: Any] {
@@ -139,5 +155,23 @@ final class AdminModel {
     func open(_ id: String) {
         if let e = events.first(where: { $0.id == id }) { onOpen?(e); return }
         Task { await refreshEvents(); if let e = events.first(where: { $0.id == id }) { onOpen?(e) } }
+    }
+}
+
+/// The Admin passcode in the login Keychain (Flagcast Manager's own item; test builds keep their own).
+enum Keychain {
+    private static let service = Bundle.main.bundleIdentifier ?? "app.flagcast.manager", account = "admin-passcode"
+    static var pass: String? {
+        get {
+            var out: AnyObject?
+            let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account, kSecReturnData as String: true]
+            guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let d = out as? Data else { return nil }
+            return String(data: d, encoding: .utf8)
+        }
+        set {
+            let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
+            SecItemDelete(q as CFDictionary)
+            if let v = newValue, !v.isEmpty { var a = q; a[kSecValueData as String] = Data(v.utf8); SecItemAdd(a as CFDictionary, nil) }
+        }
     }
 }
