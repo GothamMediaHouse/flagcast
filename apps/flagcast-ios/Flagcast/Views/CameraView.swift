@@ -157,7 +157,7 @@ struct CameraBox: View {
                 if let title {
                     VStack(alignment: .leading, spacing: 0) {
                         Spacer()
-                        Text(title).font(.system(size: 30, weight: .heavy)).fontWidth(.condensed).textCase(.uppercase)
+                        Text(title).font(FCType.display(30)).textCase(.uppercase)
                         if let sub { Text(sub).font(.footnote.weight(.semibold)).opacity(0.85) }
                     }
                     .foregroundStyle(.white).shadow(color: .black.opacity(0.5), radius: 6, y: 1)
@@ -231,7 +231,7 @@ struct FullscreenCamera: View {
                     HStack(spacing: 10) {
                         Button { dismiss() } label: { Image(systemName: "xmark").font(.headline).frame(width: 44, height: 44).background(.black.opacity(0.55), in: Circle()) }
                             .accessibilityLabel("Close")
-                        Text("Hole \(hole)").font(.system(.title3, weight: .heavy)).fontWidth(.condensed).textCase(.uppercase)
+                        Text("Hole \(hole)").font(FCType.display(26)).textCase(.uppercase)
                         Text(cam.replay != nil ? "REPLAY" : "LIVE").font(.caption2.monospaced().weight(.semibold)).tracking(1)
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(cam.replay != nil ? Color(UIColor(hex: 0xe8c547)) : Color(UIColor(hex: 0xc8312b)))
@@ -325,7 +325,7 @@ private struct QuadTile: View {
             VideoPlayer(player: cam.player).allowsHitTesting(false)
             HStack(spacing: 6) {
                 Text("LIVE").font(.caption2.monospaced().weight(.semibold)).padding(.horizontal, 5).padding(.vertical, 1).background(Color(UIColor(hex: 0xc8312b)))
-                Text("Hole \(hole.n)").font(.subheadline.weight(.heavy)).fontWidth(.condensed).textCase(.uppercase)
+                Text("Hole \(hole.n)").font(FCType.display(19)).textCase(.uppercase)
                 if hole.yds > 0 { Text("\(hole.yds) yds").font(.caption.monospaced()).foregroundStyle(.white.opacity(0.75)) }
             }
             .foregroundStyle(.white).padding(8).background(LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom))
