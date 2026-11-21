@@ -148,7 +148,7 @@ function cleanSetup(s, old) {
     teams,
     screens: { title: clip(s.screens?.title, 80), ticker: clip(s.screens?.ticker, 300), seconds: num(s.screens?.seconds, 5, 60, 12),
       skins: !!s.screens?.skins, rows: num(s.screens?.rows, 5, 20, 10) },
-    cams: Object.fromEntries(Object.entries(s.cams || {}).filter(([h, u]) => num(h, 1, 18, 0) && /^https:\/\//.test(u || '')).map(([h, u]) => [Number(h), clip(u, 500)])),
+    cams: Object.fromEntries(Object.entries(s.cams || {}).filter(([h, u]) => Number.isInteger(Number(h)) && Number(h) >= 1 && Number(h) <= 18 && /^https:\/\//.test(u || '')).map(([h, u]) => [Number(h), clip(u, 500)])),
     // spot: where the sponsor shows (see SPOTS). holes: which holes, for hole, camera and contest spots
     sponsors: (Array.isArray(s.sponsors) ? s.sponsors : []).slice(0, 60).map((x) => {
       const holes = (Array.isArray(x.holes) ? x.holes : []).map(Number).filter((h) => h >= 1 && h <= 18);
@@ -257,6 +257,14 @@ export class GolfEvent extends DurableObject {
       if (!b.key || b.key !== ev.key) return json({ error: 'This desk link is not right. Open the link you were given when the tournament was made.' }, 403);
       return this.desk(b);
     }
+    // the par 3 camera links: only from Flagcast Admin (clubs.js admin op 'cams'). Never routed from the web
+    // (the worker only forwards state|ws|cart|score|desk|pro|hit|where), so only the directory object reaches it.
+    if (op === 'cams') {
+      ev.cams = cleanSetup({ cams: b.cams || {} }, ev).cams;
+      await this.ctx.storage.put('event', ev);
+      await this.broadcast();
+      return json({ ok: true, cams: ev.cams });
+    }
     if (op === 'pro') return this.pro(b);
     if (op === 'hit') return this.hit(b);
     if (op === 'where') return this.where(b);
@@ -307,6 +315,7 @@ export class GolfEvent extends DurableObject {
     if (DAY_OPS.has(b.op)) return this.dayOp(b, 'Desk');
     if (b.op === 'save') {
       const s = cleanSetup(b.setup || {}, ev);
+      s.cams = ev.cams || {}; // camera links are Flagcast staff's (op 'cams' from Admin): a desk key can't change them
       Object.assign(ev, s, { v: (ev.v || 0) + 1 });
       // scores of teams that were removed go too
       const keep = new Set(ev.teams.map((t) => t.id)), sc = await this.scores();

@@ -61,4 +61,22 @@ await desk('screen', { display: 'pro01', page: null });
 s = await state(id); assert.equal(s.live.force.pro01, undefined);
 ok('back to its playlist');
 
+// ---- par 3 camera links: Flagcast staff only ----
+{
+  const cur = await desk('get');
+  const p3 = cur.course.holes.find((h) => h.par === 3)?.n || 3;
+  await desk('save', { setup: { ...cur, cams: { [p3]: 'https://evil.example/club.m3u8' } } });
+  let st = await state(id);
+  assert.equal(st.cams[p3], undefined);
+  ok('a club desk save can’t set camera links');
+  // the admin op (local dev: no GOLF_CREATE_PASS, so the local passcode check lets it in)
+  const r = await post('/golf/api/club/admin', { pass: 'local', op: 'cams', id, cams: { [p3]: 'https://cams.example/hole.m3u8', 99: 'https://x', 0: 'https://y', [p3 === 1 ? 2 : 1]: 'http://not-https' } });
+  st = await state(id);
+  assert.equal(st.cams[p3], 'https://cams.example/hole.m3u8', JSON.stringify({ p3, r, cams: st.cams })); assert.equal(Object.keys(st.cams).length, 1);
+  ok('Admin sets camera links (https only, real holes)');
+  await desk('save', { setup: { ...(await desk('get')), cams: {} } });
+  st = await state(id); assert.equal(st.cams[p3], 'https://cams.example/hole.m3u8');
+  ok('a later club save keeps Flagcast’s camera links');
+}
+
 console.log(`\n${n} passed`);
