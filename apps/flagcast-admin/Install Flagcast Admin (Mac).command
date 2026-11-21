@@ -1,4 +1,5 @@
 #!/bin/bash
+echo; echo "Flagcast Admin is retired: Admin lives inside Flagcast Manager now. Build, install and publish Manager instead."; echo; read -n 1 -s -r -p "Press any key to close." 2>/dev/null; exit 1
 # One click: builds Flagcast Admin for this Mac (signed with your Developer ID and checked by Apple), puts it in
 # Applications in place of an older copy (the old one goes to the Trash) and opens it.
 cd "$(dirname "$0")" || exit 1

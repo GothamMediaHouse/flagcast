@@ -14,7 +14,8 @@ TEAM = 'C8KXPB4QNA'
 # (target, product name, bundle id, version, build, Info.plist)
 TARGETS = [
     ('Manager', 'Flagcast Manager', 'app.flagcast.manager', '2.4.0', '9', 'Manager-Info.plist'),
-    ('Admin', 'Flagcast Admin', 'app.flagcast.admin', '1.2.0', '4', 'Admin-Info.plist'),
+    # Flagcast Admin is retired (Admin lives inside Manager): no target, so it can't be built or sent to TestFlight.
+    # Its last build was 1.2.0 (4); the Admin/ folder stays for reference.
 ]
 FULL = {'Manager'}
 SHARED = [

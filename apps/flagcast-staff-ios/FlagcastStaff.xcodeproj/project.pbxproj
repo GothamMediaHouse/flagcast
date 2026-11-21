@@ -30,7 +30,6 @@
 
 /* Begin PBXFileReference section */
 		423BA520DEA3D9C00BA33862 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Flagcast Manager.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		E52280E7EEF8F1A03BECF789 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Flagcast Admin.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		DEF00A9DA6B263180206A661 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Models.swift; path = "../flagcast-ios/Flagcast/Model/Models.swift"; sourceTree = SOURCE_ROOT; };
 		CA114777E20763645FD5B2C0 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Core.swift; path = "../flagcast-ios/Flagcast/Model/Core.swift"; sourceTree = SOURCE_ROOT; };
 		15766DFE20ADC78B5CDA414E = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Server.swift; path = "../flagcast-ios/Flagcast/Net/Server.swift"; sourceTree = SOURCE_ROOT; };
@@ -56,11 +55,6 @@
 		B46DE96E854FDD1D4A0A0D2F = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Manager;
-			sourceTree = "<group>";
-		};
-		C102F80F20E09D84A4AE0659 = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Admin;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -105,33 +99,11 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		3C13D24C9D6137FF2B926165 = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		C274EAE938BF07B4EE70FF15 = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		329217E9AC74BEE354BE603B = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 
 		ACEC4E7546EEC76EB59BD252 = {
 			isa = PBXGroup;
 			children = (
 				B46DE96E854FDD1D4A0A0D2F,
-				C102F80F20E09D84A4AE0659,
 				B0C37AC81EF7C2990AED93A7,
 				1FCBB4530CB8837DD8BF4E1B,
 			);
@@ -167,7 +139,6 @@
 			isa = PBXGroup;
 			children = (
 				423BA520DEA3D9C00BA33862,
-				E52280E7EEF8F1A03BECF789,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -190,26 +161,6 @@
 			name = Manager;
 			productName = "Flagcast Manager";
 			productReference = 423BA520DEA3D9C00BA33862;
-			productType = "com.apple.product-type.application";
-		};
-		5BFFEDEDC2FB125119BAFC62 = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 85851D2D36C4EE11F02A24BC;
-			buildPhases = (
-				3C13D24C9D6137FF2B926165,
-				C274EAE938BF07B4EE70FF15,
-				329217E9AC74BEE354BE603B,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				C102F80F20E09D84A4AE0659,
-			);
-			name = Admin;
-			productName = "Flagcast Admin";
-			productReference = E52280E7EEF8F1A03BECF789;
 			productType = "com.apple.product-type.application";
 		};
 
@@ -235,7 +186,6 @@
 			projectRoot = "";
 			targets = (
 				C0284E7C390F9DF70CFB46C2,
-				5BFFEDEDC2FB125119BAFC62,
 			);
 		};
 		640DF9040EF8964E574BE213 /* Debug */ = {
@@ -330,60 +280,6 @@
 			};
 			name = Release;
 		};
-		C3DE3661F29EFF71954A5AD4 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
-				DEVELOPMENT_TEAM = C8KXPB4QNA;
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "Admin-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.2.0;
-				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.admin;
-				PRODUCT_NAME = "Flagcast Admin";
-				SDKROOT = iphoneos;
-				SUPPORTS_MACCATALYST = NO;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Debug;
-		};
-		86DA26B78D174BD6D0F5DE94 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
-				DEVELOPMENT_TEAM = C8KXPB4QNA;
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = "Admin-Info.plist";
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 1.2.0;
-				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.admin;
-				PRODUCT_NAME = "Flagcast Admin";
-				SDKROOT = iphoneos;
-				SUPPORTS_MACCATALYST = NO;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-			};
-			name = Release;
-		};
 		2A86A9EDF5AB2B73B8906800 = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -398,15 +294,6 @@
 			buildConfigurations = (
 				5EB27CEEB1A8A653E459B89E /* Debug */,
 				2F7A730D8D3D65BEC47FEA03 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		85851D2D36C4EE11F02A24BC = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				C3DE3661F29EFF71954A5AD4 /* Debug */,
-				86DA26B78D174BD6D0F5DE94 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
