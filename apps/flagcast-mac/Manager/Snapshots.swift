@@ -21,13 +21,14 @@ enum Snapshots {
             }
             // Admin (the test copy shows it; the local site lets any sign-in in)
             model.forceAdmin = true
+            model.adminMode = true
             for a in AdminSection.allCases { model.adminSection = a; try? await Task.sleep(for: .seconds(a == .clubs ? 5 : 3)); shot(dir, "admin-\(a.rawValue)") }
-            model.adminSection = nil
+            model.adminMode = false
             // dark mode
             NSApp.appearance = NSAppearance(named: .darkAqua)
             for s in [Section.overview, .setup, .teams, .scores] { model.section = s; try? await Task.sleep(for: .seconds(2.5)); shot(dir, "\(s.rawValue)-dark") }
             model.selection = nil; try? await Task.sleep(for: .seconds(2.5)); shot(dir, "home-dark")
-            model.adminSection = .clubs; try? await Task.sleep(for: .seconds(3)); shot(dir, "admin-clubs-dark")
+            model.adminMode = true; model.adminSection = .clubs; try? await Task.sleep(for: .seconds(3)); shot(dir, "admin-clubs-dark")
             NSApp.terminate(nil)
         }
     }

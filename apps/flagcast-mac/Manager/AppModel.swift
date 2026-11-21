@@ -3,9 +3,9 @@ import Observation
 
 /// The club account as /golf/api/club/me returns it.
 struct ClubMe: Decodable {
-    struct Club: Decodable { var id: String, name: String, status: String, credits: Int
-        init(from d: Decoder) throws { let c = try d.container(keyedBy: CodingKeys.self); id = c.str(.id); name = c.str(.name); status = c.str(.status); credits = c.int(.credits, 0) }
-        enum CodingKeys: String, CodingKey { case id, name, status, credits }
+    struct Club: Decodable { var id: String, name: String, status: String, credits: Int, city: String
+        init(from d: Decoder) throws { let c = try d.container(keyedBy: CodingKeys.self); id = c.str(.id); name = c.str(.name); status = c.str(.status); credits = c.int(.credits, 0); city = c.str(.city) }
+        enum CodingKeys: String, CodingKey { case id, name, status, credits, city }
         var canMake: Bool { status == "active" && credits != 0 }
         var stateLine: String {
             status == "pending" ? "Waiting for Flagcast to approve your club. We’ll email you when it’s ready."
@@ -60,6 +60,14 @@ final class AppModel {
     /// Admin, for Flagcast staff: which admin page shows (nil = a tournament or Home), and tournaments opened from it
     let admin = AdminModel()
     var adminSection: AdminSection?
+    /// Admin mode (Flagcast staff only): the red sidebar with Overview, Sign-ups, Clubs, Tournaments, Cameras…
+    var adminMode = UserDefaults.standard.bool(forKey: "admin.mode") { didSet { UserDefaults.standard.set(adminMode, forKey: "admin.mode"); adminSection = adminMode ? (adminSection ?? .overview) : nil } }
+    /// "Matthew" from the signed-in email (for the Home greeting)
+    var firstName: String {
+        guard let e = me?.email, let local = e.split(separator: "@").first else { return "" }
+        let w = local.split(whereSeparator: { ".-_+0123456789".contains($0) }).first.map(String.init) ?? ""
+        return w.prefix(1).uppercased() + w.dropFirst()
+    }
     var adminRefs: [EventRef] = []
     /// Settings → Show engineering tools (for people who aren't Flagcast admins)
     var showEngineering = UserDefaults.standard.bool(forKey: "engineering.show") { didSet { UserDefaults.standard.set(showEngineering, forKey: "engineering.show") } }
@@ -102,7 +110,7 @@ final class AppModel {
     /// Open any club's tournament from Admin (kept in the list until the app quits).
     func openAdmin(id: String, key: String, name: String, date: String? = nil, club: String? = nil) {
         if !shownEvents.contains(where: { $0.id == id }) { adminRefs.append(EventRef(id: id, key: key, name: name, date: date, club: club)) }
-        adminSection = nil; selection = id; section = .overview
+        adminMode = false; adminSection = nil; selection = id; section = .overview
     }
 
     // ---- the club account ----

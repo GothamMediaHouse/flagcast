@@ -189,7 +189,7 @@ struct AdminPassSettings: View {
             SwiftUI.Section {
                 if !(model.admin.pass ?? "").isEmpty {
                     LabeledContent("Flagcast Admin", value: "Unlocked on this Mac")
-                    Button("Forget the Passcode") { model.admin.forget(); if model.adminSection != nil && !model.isAdmin { model.adminSection = nil }; message = nil }
+                    Button("Forget the Passcode") { model.admin.forget(); if !model.isAdmin { model.adminMode = false }; message = nil }
                 } else {
                     SecureField("Admin passcode", text: $text).onSubmit(unlock)
                     HStack {
@@ -206,7 +206,7 @@ struct AdminPassSettings: View {
         guard !text.isEmpty else { return }
         busy = true; message = nil
         Task {
-            do { try await model.admin.unlock(text); text = ""; model.adminSection = .clubs; message = "Admin is unlocked." }
+            do { try await model.admin.unlock(text); text = ""; model.adminMode = true; message = "Admin is unlocked." }
             catch { message = error.localizedDescription }
             busy = false
         }
