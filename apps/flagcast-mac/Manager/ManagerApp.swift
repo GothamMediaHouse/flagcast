@@ -228,7 +228,7 @@ struct ManagerSidebar: View {
         return String(n.split(separator: " ").prefix(2).compactMap(\.first)).uppercased()
     }
     private var clubLine: String {
-        guard let c = model.me?.club else { return model.signedIn ? "Club not set up yet" : "to see your club’s tournaments" }
+        guard let c = model.me?.club else { return model.isAdmin ? "Flagcast admin" : model.signedIn ? "Club not set up yet" : "to see your club’s tournaments" }
         return c.credits < 0 ? "Unlimited tournaments" : "\(c.credits) tournament\(c.credits == 1 ? "" : "s") left"
     }
     private func isLive(_ e: EventRef) -> Bool { e.date == ISO8601DateFormatter.day.string(from: Date()) }
