@@ -29,6 +29,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { SEED, slug } from './courselib.js';
 import { hashPassword, checkPassword, passwordProblem, verifyAppleToken, appleKeys, verifyGoogleToken, googleKeys } from './auth.js';
+import { cleanLogo, cleanAccent, logoVersion } from './brand.js';
 import { streamReady, liveInput, inputState, deleteInput, listAll, deleteVideo } from './stream.js';
 
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
@@ -84,7 +85,8 @@ export class FlagcastClubs extends DurableObject {
       CREATE TABLE IF NOT EXISTS fails (k TEXT PRIMARY KEY, n INTEGER, since INTEGER);
       CREATE TABLE IF NOT EXISTS streams (event TEXT, hole INTEGER, uid TEXT, updated INTEGER, PRIMARY KEY (event, hole));`);
     // columns added after the first release
-    for (const q of ['ALTER TABLE accounts ADD COLUMN google TEXT', 'ALTER TABLE clubs ADD COLUMN notes TEXT', 'ALTER TABLE events ADD COLUMN archived INTEGER DEFAULT 0', 'ALTER TABLE clubs ADD COLUMN course TEXT']) { try { this.sql.exec(q); } catch {} }
+    for (const q of ['ALTER TABLE accounts ADD COLUMN google TEXT', 'ALTER TABLE clubs ADD COLUMN notes TEXT', 'ALTER TABLE events ADD COLUMN archived INTEGER DEFAULT 0', 'ALTER TABLE clubs ADD COLUMN course TEXT',
+      'ALTER TABLE clubs ADD COLUMN logo TEXT', 'ALTER TABLE clubs ADD COLUMN accent TEXT', 'ALTER TABLE clubs ADD COLUMN powered INTEGER DEFAULT 0']) { try { this.sql.exec(q); } catch {} }
     // the Flagcast course library (courselib.js): courses any club can pick in Find the course
     this.sql.exec('CREATE TABLE IF NOT EXISTS library (id TEXT PRIMARY KEY, name TEXT, city TEXT, state TEXT, data TEXT, club TEXT, updated INTEGER)');
     for (const c of SEED) if (!this.one('SELECT id FROM library WHERE id = ?', c.id)) this.libPut(c, '', 0);
@@ -107,6 +109,22 @@ export class FlagcastClubs extends DurableObject {
     if (isAdmin(this.env, b.pass)) return true;
     if (!b.token) return false;
     try { return adminEmail(this.env, this.who(b.token).email); } catch { return false; }
+  }
+  // club branding (brand.js): what its tournaments show instead of the Flagcast logo
+  brandOf(c) { return { logo: c?.logo || '', accent: c?.accent || '', powered: !!c?.powered }; }
+  logoURL(c) { return c?.logo ? `/golf/api/club/logo/${c.id}?v=${logoVersion(c.logo)}` : ''; }
+  async pushBrand(cid) {
+    const c = this.one('SELECT * FROM clubs WHERE id = ?', cid); if (!c) return 0;
+    const evs = this.all('SELECT id FROM events WHERE club = ?', cid);
+    await Promise.all(evs.map((e) => this.golf(e.id, 'brand', { club: this.brandOf(c) }).catch(() => {})));
+    return evs.length;
+  }
+  setBrand(cid, b) {
+    const c = this.one('SELECT * FROM clubs WHERE id = ?', cid); if (!c) this.fail('That club isn’t there any more.', 404);
+    let logo = c.logo || '';
+    if (b.logo !== undefined) { try { logo = cleanLogo(b.logo); } catch (e) { this.fail(e.message, e.status || 400); } }
+    const accent = b.accent !== undefined ? cleanAccent(b.accent) : (c.accent || '');
+    this.sql.exec('UPDATE clubs SET logo = ?, accent = ? WHERE id = ?', logo, accent, cid);
   }
   one(q, ...a) { return this.sql.exec(q, ...a).toArray()[0] || null; }
   all(q, ...a) { return this.sql.exec(q, ...a).toArray(); }
@@ -281,6 +299,15 @@ export class FlagcastClubs extends DurableObject {
     }
     if (op === 'signout') { this.sql.exec('DELETE FROM sessions WHERE token = ?', String(b.token || '')); return json({ ok: true }); }
     if (op === 'me') return json(this.me(this.who(b.token)));
+    // the club's logo and colour, from its own Manager app (any of its members)
+    if (op === 'brand') {
+      const u = this.who(b.token); if (!u.club) this.fail('Set up your club first.', 403);
+      this.setBrand(u.club.id, b);
+      const n = await this.pushBrand(u.club.id);
+      this.note(u.email, u.club.id, `Branding: ${b.logo === '' ? 'logo removed' : b.logo !== undefined ? 'new logo' : 'colour'}${n ? ` · ${n} tournaments` : ''}`);
+      return json(this.me(this.who(b.token)));
+    }
+    if (op === 'logo-get') return json({ logo: this.one('SELECT logo FROM clubs WHERE id = ?', clip(b.club, 10))?.logo || '' }); // golf.js serves it
     if (op === 'request') {
       const u = this.who(b.token);
       if (u.club) this.fail('You’re already part of a club.');
@@ -337,6 +364,7 @@ export class FlagcastClubs extends DurableObject {
         this.sql.exec('INSERT INTO events (id, club, key, name, created) VALUES (?, ?, ?, ?, ?)', id, club.id, j.key, name || 'New tournament', now);
         this.note(b.pass ? 'Flagcast' : this.who(b.token).email, club.id, `Made tournament ${name || 'New tournament'} (${id.toUpperCase()})`);
         if (!b.pass && club.credits > 0) this.sql.exec('UPDATE clubs SET credits = credits - 1 WHERE id = ?', club.id);
+        if (club.logo || club.accent) await this.golf(id, 'brand', { club: this.brandOf(club) }).catch(() => {});
       }
       return json(j);
     }
@@ -417,10 +445,18 @@ export class FlagcastClubs extends DurableObject {
         this.sql.exec('UPDATE members SET role = ? WHERE email = ?', b.role === 'owner' ? 'owner' : 'staff', email);
       }
       if (b.op === 'signout') this.sql.exec('DELETE FROM sessions WHERE email = ?', clip(b.email, 254).toLowerCase());
+      // a club's branding: logo, colour, and a small "Powered by Flagcast" (off unless Flagcast turns it on)
+      if (b.op === 'brand') {
+        need(); this.setBrand(cid, b);
+        if (b.powered !== undefined) this.sql.exec('UPDATE clubs SET powered = ? WHERE id = ?', b.powered ? 1 : 0, cid);
+        await this.pushBrand(cid);
+      }
       // one tournament: lock or reopen scoring, archive, move to another club, or add an old one by its desk link
       const evRow = b.id ? this.one('SELECT * FROM events WHERE id = ?', clip(b.id, 8)) : null;
-      if (['lock', 'archive', 'move'].includes(b.op) && !evRow) this.fail('That tournament isn’t on any club’s list.', 404);
+      if (['lock', 'archive', 'move', 'demo'].includes(b.op) && !evRow) this.fail('That tournament isn’t on any club’s list.', 404);
       if (b.op === 'lock') await this.golf(evRow.id, 'desk', { key: evRow.key, op: 'lock', locked: !!b.locked });
+      // Demo: the tournament shows the Flagcast logo whatever its club has (for showing Flagcast to a club)
+      if (b.op === 'demo') await this.golf(evRow.id, 'brand', { demo: !!b.on });
       if (b.op === 'archive') {
         this.sql.exec('UPDATE events SET archived = ? WHERE id = ?', b.on ? 1 : 0, evRow.id);
         if (b.on) await this.golf(evRow.id, 'desk', { key: evRow.key, op: 'lock', locked: true }).catch(() => {});
@@ -430,6 +466,7 @@ export class FlagcastClubs extends DurableObject {
         this.sql.exec('UPDATE events SET club = ? WHERE id = ?', to.id, evRow.id);
         const ev = await this.golf(evRow.id, 'desk', { key: evRow.key, op: 'get' });
         delete ev.stats; await this.golf(evRow.id, 'desk', { key: evRow.key, op: 'save', setup: { ...ev, club: to.name } }).catch(() => {});
+        await this.golf(evRow.id, 'brand', { club: this.brandOf(to) }).catch(() => {});
       }
       if (b.op === 'claim') {
         need();
@@ -440,6 +477,7 @@ export class FlagcastClubs extends DurableObject {
         const had = this.one('SELECT club FROM events WHERE id = ?', id);
         if (had && had.club !== cid) this.fail('That tournament belongs to another club. Use Move instead.');
         this.sql.exec('INSERT OR REPLACE INTO events (id, club, key, name, created, hidden, archived) VALUES (?, ?, ?, ?, ?, 0, 0)', id, cid, key, clip(ev.name, 80) || 'Tournament', ev.created || now);
+        await this.golf(id, 'brand', { club: this.brandOf(c) }).catch(() => {});
       }
       if (b.op && !['events', 'log', 'day', 'cams', 'stream', 'streams', 'unstream', 'streamlist'].includes(b.op)) this.note('Flagcast', cid || evRow?.club || '', `Admin: ${b.op}${b.email ? ` ${clip(b.email, 254)}` : ''}${evRow ? ` ${evRow.name}` : ''}${b.op === 'pay' ? ` $${num(b.amount, 0, 1e7, 0)}` : ''}`);
       // screen control for any club's tournament: the same day ops as the desk
@@ -518,7 +556,7 @@ export class FlagcastClubs extends DurableObject {
             const s = await this.golf(e.id, 'state');
             const scored = Object.values(s.scores || {}).reduce((n, pl) => n + Object.values(pl).reduce((m, arr) => m + arr.filter((v) => v != null).length, 0), 0);
             const online = Object.values(s.online || {}).reduce((n, v) => n + v, 0);
-            return { ...e, name: s.name || e.name, date: s.date || '', teams: (s.teams || []).length, scored, screens: (s.displays || []).length, online, locked: !!s.locked, replays: (s.replays || []).length,
+            return { ...e, name: s.name || e.name, date: s.date || '', demo: !!s.brand?.marked, brand: s.brand || null, teams: (s.teams || []).length, scored, screens: (s.displays || []).length, online, locked: !!s.locked, replays: (s.replays || []).length,
               // for screen control
               displays: (s.displays || []).map((d) => ({ id: d.id, name: d.name, where: d.where || '', group: d.group || '', online: (s.online || {})[d.id] || 0, force: s.live?.force?.[d.id] || null,
                 pages: (d.playlist || []).length, list: (d.playlist || []).map((x) => ({ k: x.k, fl: x.fl, hole: x.hole, sponsor: x.sponsor, secs: x.secs })) })),
@@ -530,8 +568,8 @@ export class FlagcastClubs extends DurableObject {
         return json({ events: out });
       }
       const seen = Object.fromEntries(this.all('SELECT email, MAX(seen) AS seen FROM sessions GROUP BY email').map((s) => [s.email, s.seen]));
-      const clubs = this.all('SELECT * FROM clubs ORDER BY (status = \'pending\') DESC, name COLLATE NOCASE').map((x) => ({
-        ...x, members: this.all('SELECT email, role, added FROM members WHERE club = ? ORDER BY role DESC, added', x.id).map((m) => ({ ...m, seen: seen[m.email] || 0 })),
+      const clubs = this.all('SELECT * FROM clubs ORDER BY (status = \'pending\') DESC, name COLLATE NOCASE').map(({ logo, ...x }) => ({
+        ...x, powered: !!x.powered, logo: this.logoURL({ id: x.id, logo }), members: this.all('SELECT email, role, added FROM members WHERE club = ? ORDER BY role DESC, added', x.id).map((m) => ({ ...m, seen: seen[m.email] || 0 })),
         events: this.all('SELECT id, key, name, created, hidden, archived FROM events WHERE club = ? ORDER BY created DESC', x.id),
         payments: this.all('SELECT * FROM payments WHERE club = ? ORDER BY at DESC', x.id),
       }));
@@ -547,7 +585,7 @@ export class FlagcastClubs extends DurableObject {
     const out = { email: u.email, role: u.role, admin: adminEmail(this.env, u.email), password: !!acct?.hash, apple: !!acct?.apple, google: !!acct?.google, club: null, members: [], events: [] };
     if (!u.club) return out;
     const { id, name, status, city, credits } = u.club;
-    out.club = { id, name, status, city, credits };
+    out.club = { id, name, status, city, credits, logo: this.logoURL(u.club), accent: u.club.accent || '' };
     out.members = this.all('SELECT email, role FROM members WHERE club = ? ORDER BY role DESC, added', id);
     out.events = this.all('SELECT id, key, name, created FROM events WHERE club = ? AND hidden = 0 AND archived = 0 ORDER BY created DESC', id);
     return out;
