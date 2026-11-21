@@ -177,7 +177,7 @@ extension Tee {
     init(id: String = Ids.make(), name: String, slope: Double, rating: Double, par: Int = 0) { self.id = id; self.name = name; self.slope = slope; self.rating = rating; self.par = par }
 }
 extension Display {
-    init(id: String = Ids.make(), name: String, playlist: [PageRef] = []) { self.id = id; self.name = name; self.playlist = playlist }
+    init(id: String = Ids.make(), name: String, playlist: [PageRef] = [], place: String = "", group: String = "") { self.id = id; self.name = name; self.playlist = playlist; self.place = place; self.group = group }
 }
 extension HoleMap {
     init(tee: GeoPoint? = nil, f: GeoPoint? = nil, m: GeoPoint? = nil, b: GeoPoint? = nil, hz: [Hazard] = []) { self.tee = tee; self.f = f; self.m = m; self.b = b; self.hz = hz }

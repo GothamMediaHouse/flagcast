@@ -13,15 +13,22 @@ struct ScreensView: View {
     @State private var flash = ""
     @State private var raised = ""
     @State private var replay = ReplayDraft()
+    @AppStorage("screens.tab") private var tab = "screens"
 
     private var par3s: [Hole] { doc.ev.course.holes.filter { $0.par == 3 } }
 
     var body: some View {
         DeskPage(doc: doc, section: .screens) {
+            PhotoSegments(options: [("Screens", "screens"), ("Settings & sponsors", "settings")], selection: $tab)
             Button("Open the board") { NSWorkspace.shared.open(doc.boardURL) }.buttonStyle(GlassButton())
         } title: {
-            HeroTitle(title: "Screens & sponsors", size: 52, sub: "What the big screens show", subBeside: true)
+            HeroTitle(title: "Screens & sponsors", size: 52, sub: tab == "screens" ? "Every TV at the club and what it shows" : "What the big screens show", subBeside: true)
         } content: {
+            if tab == "screens" { ScreenWall(doc: doc) } else { settings }
+        }
+    }
+
+    private var settings: some View {
             CardForm {
             SwiftUI.Section("Big screens") {
                 TextField("Title on the screens", text: $doc.ev.screens.title, prompt: Text("Uses the tournament name"))
@@ -87,7 +94,6 @@ struct ScreensView: View {
                 }
             }
             }
-        }
     }
     private func saveReplay(screens: Bool) {
         Task {
@@ -151,5 +157,105 @@ struct SponsorRow: View {
     private var logo: NSImage? {
         guard sponsor.logo.hasPrefix("data:image/"), let comma = sponsor.logo.firstIndex(of: ","), let d = Data(base64Encoded: String(sponsor.logo[sponsor.logo.index(after: comma)...])) else { return nil }
         return NSImage(data: d)
+    }
+}
+
+// MARK: - the screens wall
+
+/// Every screen at the club as a card: name, where it hangs and its group, what it shows now, Send now, and its playlist.
+struct ScreenWall: View {
+    @Bindable var doc: DeskDoc
+
+    private var choices: PageChoices {
+        PageChoices(flights: doc.ev.flights, p3: doc.ev.course.holes.filter { $0.par == 3 }.map(\.n), holes: doc.ev.course.holes.map(\.n),
+                    sponsors: doc.ev.sponsors.map { ($0.id, $0.name.isEmpty ? "Sponsor" : $0.name) })
+    }
+    private var groups: [String] {
+        var seen: [String] = []
+        for d in doc.ev.displays where !d.group.isEmpty && !seen.contains(where: { $0.caseInsensitiveCompare(d.group) == .orderedSame }) { seen.append(d.group) }
+        return seen
+    }
+    /// screens the server knows (saved): Send now only works for those
+    private var saved: Set<String> { Set((doc.live?.displays ?? []).map(\.id)) }
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                if !doc.ev.displays.isEmpty {
+                    SendToManyBar(groups: groups, choices: choices) { group, page, mins in
+                        let ids = group.map { g in doc.ev.displays.filter { $0.group.caseInsensitiveCompare(g) == .orderedSame && saved.contains($0.id) }.map(\.id) }
+                        send(ids.map { $0 as Any } ?? "*", page, mins, to: group.map { "the \($0) screens" } ?? "every screen")
+                    }
+                }
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 470, maximum: 760), spacing: 16, alignment: .top)], spacing: 16) {
+                    ForEach($doc.ev.displays) { $d in card($d) }
+                    addCard
+                }
+            }
+            .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 22)
+        }
+    }
+
+    private func card(_ d: Binding<Display>) -> some View {
+        let id = d.wrappedValue.id, isSaved = saved.contains(id)
+        return ScreenCard(name: d.wrappedValue.name, online: doc.live?.online[id] ?? 0, force: doc.live?.live.force[id], playlist: d.wrappedValue.playlist,
+                          url: URL(string: "\(doc.boardURL.absoluteString)?screen=\(id)"), choices: choices,
+                          send: { page, mins in
+                              if !isSaved { doc.flash("Save first, then you can send to this screen."); return }
+                              send(id, page, mins, to: d.wrappedValue.name.isEmpty ? "the screen" : d.wrappedValue.name)
+                          }) {
+            VStack(alignment: .leading, spacing: 4) {
+                TextField("Screen name", text: d.name, prompt: Text("Screen name")).textFieldStyle(.plain).font(FC.display(24))
+                HStack(spacing: 6) {
+                    Image(systemName: "mappin.and.ellipse").font(.system(size: 11)).foregroundStyle(FC.muted)
+                    TextField("Where", text: d.place, prompt: Text("Where it hangs, e.g. Clubhouse bar")).textFieldStyle(.plain).font(.system(size: 13))
+                    Image(systemName: "square.stack").font(.system(size: 11)).foregroundStyle(FC.muted)
+                    TextField("Group", text: d.group, prompt: Text("Group")).textFieldStyle(.plain).font(.system(size: 13)).frame(width: 110)
+                        .help("Screens with the same group (e.g. Clubhouse or Course) can be sent to together")
+                }
+            }
+        } details: {
+            Divider().overlay(FC.hairline)
+            PlaylistEditor(playlist: d.playlist, choices: choices,
+                           others: doc.ev.displays.filter { $0.id != id }.map { ($0.id, $0.name) },
+                           copyTo: { ids in
+                               let list = d.wrappedValue.playlist
+                               for i in doc.ev.displays.indices where ids.contains(doc.ev.displays[i].id) { doc.ev.displays[i].playlist = list }
+                               doc.flash("Copied. Save to put it on the screens.")
+                           })
+            HStack {
+                if !isSaved { Label("New: Save to switch it on", systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(FC.muted) }
+                Spacer()
+                Button(role: .destructive) { doc.ev.displays.removeAll { $0.id == id } } label: { Label("Remove Screen", systemImage: "trash") }
+                    .buttonStyle(.borderless).controlSize(.small)
+            }
+        }
+    }
+
+    private var addCard: some View {
+        Button {
+            let group = doc.ev.displays.last?.group ?? ""
+            doc.ev.displays.append(Display(name: "Screen \(doc.ev.displays.count + 1)", group: group))
+        } label: {
+            VStack(spacing: 8) {
+                Image(systemName: "plus.rectangle.on.rectangle").font(.system(size: 28))
+                Text("Add a Screen").font(.system(size: 14, weight: .semibold))
+                Text("Each TV or LED wall at the club. Open its link full screen on the TV.").font(.callout).foregroundStyle(FC.muted).multilineTextAlignment(.center)
+            }
+            .foregroundStyle(FC.link).padding(24).frame(maxWidth: .infinity, minHeight: 200)
+            .background(FC.card.opacity(0.6), in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(FC.line, style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// display: an id, a list of ids or "*"; page nil = back to the playlist
+    private func send(_ display: Any, _ page: PageRef?, _ mins: Int, to: String) {
+        if let ids = display as? [Any], ids.isEmpty { doc.flash("No saved screens in that group yet."); return }
+        var b: [String: Any] = ["display": display, "page": page.map { ["k": $0.k, "fl": $0.fl, "hole": $0.hole, "sponsor": $0.sponsor] as [String: Any] } ?? NSNull()]
+        if page != nil, mins > 0 { b["mins"] = mins }
+        let done = page == nil ? "Back to the playlist on \(to)." : mins > 0 ? "On \(to) for \(mins) minutes." : "On \(to) until you change it."
+        Task { await doc.day("screen", b, done: done) }
     }
 }

@@ -32,9 +32,12 @@ struct AdminClub: Decodable, Identifiable, Hashable {
 
 /// One tournament on any club's list, with how it's going (op "events").
 struct AdminEvent: Decodable, Identifiable, Hashable {
-    struct Disp: Decodable, Hashable, Identifiable { var id: String, name: String, online: Int, pages: Int, force: PageRef?
-        init(from d: Decoder) throws { let c = try d.container(keyedBy: CodingKeys.self); id = c.str(.id); name = c.str(.name); online = c.int(.online, 0); pages = c.int(.pages, 0); force = try? c.decodeIfPresent(PageRef.self, forKey: .force) }
-        enum CodingKeys: String, CodingKey { case id, name, online, pages, force }
+    struct Disp: Decodable, Hashable, Identifiable { var id: String, name: String, place: String, group: String, online: Int, pages: Int, force: PageRef?, list: [PageRef]
+        init(from d: Decoder) throws {
+            let c = try d.container(keyedBy: CodingKeys.self); id = c.str(.id); name = c.str(.name); place = c.str(.place); group = c.str(.group)
+            online = c.int(.online, 0); pages = c.int(.pages, 0); force = try? c.decodeIfPresent(PageRef.self, forKey: .force); list = c.list(.list)
+        }
+        enum CodingKeys: String, CodingKey { case id, name, place = "where", group, online, pages, force, list }
     }
     struct Named: Decodable, Hashable, Identifiable { var id: String, name: String
         init(from d: Decoder) throws { let c = try d.container(keyedBy: CodingKeys.self); id = c.str(.id); name = c.str(.name) }

@@ -374,7 +374,8 @@ export class FlagcastClubs extends DurableObject {
             const online = Object.values(s.online || {}).reduce((n, v) => n + v, 0);
             return { ...e, name: s.name || e.name, date: s.date || '', teams: (s.teams || []).length, scored, screens: (s.displays || []).length, online, locked: !!s.locked, replays: (s.replays || []).length,
               // for screen control
-              displays: (s.displays || []).map((d) => ({ id: d.id, name: d.name, online: (s.online || {})[d.id] || 0, force: s.live?.force?.[d.id] || null, pages: (d.playlist || []).length })),
+              displays: (s.displays || []).map((d) => ({ id: d.id, name: d.name, where: d.where || '', group: d.group || '', online: (s.online || {})[d.id] || 0, force: s.live?.force?.[d.id] || null,
+                pages: (d.playlist || []).length, list: (d.playlist || []).map((x) => ({ k: x.k, fl: x.fl, hole: x.hole, sponsor: x.sponsor, secs: x.secs })) })),
               p3: (s.course?.holes || []).filter((h) => h.par === 3).map((h) => h.n), sponsors: (s.sponsors || []).map((x) => ({ id: x.id, name: x.name })),
               replayList: (s.replays || []).slice(0, 12).map((r) => ({ id: r.id, hole: r.hole, label: r.label, at: r.at })), take: s.live?.take || null, flash: s.flash || null,
               phone: s.live?.phone || null, scenes: (s.scenes || []).map((x) => ({ id: x.id, name: x.name })), scene: s.live?.scene || '', flights: s.flights || [], fund: !!s.fund?.on, skins: !!s.screens?.skins };
