@@ -1,7 +1,7 @@
 {
   "name": "flagcast-admin",
   "productName": "Flagcast Admin",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Flagcast Admin: set up clubs, give them tournaments, approve and switch off clubs.",
   "main": "main.js",
   "author": "Flagcast",

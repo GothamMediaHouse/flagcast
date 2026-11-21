@@ -134,6 +134,7 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 <div class="toast" id="toast" hidden></div>
 
 <script type="module">
+import { fileToLogo } from "/golf/brandmark.js";
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const KEY = 'flagcast:admin-pass';
@@ -238,6 +239,17 @@ function clubDetail(c) {
       <div><button class="btn sm dark">Save details</button></div>
     </form>
 
+    <div class="sub">Branding</div>
+    <div class="row" style="align-items:center;gap:14px;flex-wrap:wrap">
+      <div style="background:#123628;border-radius:8px;width:170px;height:64px;display:grid;place-items:center;padding:6px">${c.logo ? `<img src="${esc(c.logo)}" alt="${esc(c.name)} logo" style="max-width:100%;max-height:100%;object-fit:contain">` : '<span style="color:#cfe0d4;font-size:12px;text-align:center">Flagcast logo<br>for now</span>'}</div>
+      <label class="btn sm" style="cursor:pointer">${c.logo ? 'Change logo…' : 'Choose logo…'}<input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" data-logo hidden></label>
+      ${c.logo ? '<button class="btn sm danger" data-nologo>Remove logo</button>' : ''}
+      <label class="row" style="gap:6px;margin:0">Club colour <input type="color" data-accent value="${esc(c.accent || '#1a6b3c')}" style="width:44px;padding:0;height:30px"></label>
+      <button class="btn sm" data-saveaccent>Save colour</button>${c.accent ? '<button class="btn sm" data-noaccent>No colour</button>' : ''}
+      <label class="row" style="gap:6px;margin:0"><input type="checkbox" data-powered ${c.powered ? 'checked' : ''} style="width:auto"> Show “Powered by Flagcast”</label>
+    </div>
+    <p class="help" style="margin:6px 0 0">The club’s logo shows on its TVs, live page and the players’ app instead of the Flagcast logo. With no logo, or on a tournament marked Demo, golfers see the Flagcast logo.</p>
+
     <div class="sub">Tournaments they can make · ${credText(c.credits)}</div>
     <div class="row"><button class="btn sm primary" data-pay>Record a payment…</button><button class="btn sm" data-cr="1">+1</button><button class="btn sm" data-cr="5">+5</button><button class="btn sm" data-cr="-1">−1</button><button class="btn sm" data-set="-1">Unlimited</button><button class="btn sm" data-set="0">None</button></div>
     ${c.payments.length ? `<table style="margin-top:8px">${c.payments.map((p) => `<tr><td>${date(p.at)}</td><td>${esc(p.what || 'Payment')}${p.note ? `<small>${esc(p.note)}</small>` : ''}</td><td class="num">${p.credits < 0 ? 'Unlimited' : p.credits ? `+${p.credits}` : ''}</td><td class="num"><b>${money(p.amount)}</b></td><td class="acts"><button class="btn sm danger" data-unpay="${p.id}" title="Remove this payment from the log">✕</button></td></tr>`).join('')}</table>` : ''}
@@ -264,12 +276,13 @@ function eventsView() {
   const list = events.filter((e) => !q || `${e.name} ${e.clubName} ${e.id}`.toLowerCase().includes(q));
   return `<div class="row" style="margin-bottom:10px"><input id="q" type="search" placeholder="Find a tournament or club" value="${esc(q)}"><button class="btn" data-reload>Refresh</button></div>
   <div class="box" style="padding:6px 12px"><table class="evt"><thead><tr><th>Tournament</th><th>Club</th><th class="num">Teams</th><th class="num">Scores</th><th class="num">Screens on</th><th>Scoring</th><th></th></tr></thead><tbody>
-  ${list.map((e) => e.gone ? `<tr><td>${esc(e.name)}<small>${e.id.toUpperCase()} · can’t reach it</small></td><td>${esc(e.clubName || '')}</td><td colspan="5"></td></tr>` : `<tr style="${e.archived ? 'opacity:.55' : ''}"><td><b>${esc(e.name)}</b><small>${e.id.toUpperCase()}${e.date ? ` · plays ${esc(e.date)}` : ''} · made ${date(e.created)}${e.archived ? ' · archived' : ''}${e.replays ? ` · ${e.replays} replays` : ''}</small></td><td>${esc(e.clubName || '')}</td>
+  ${list.map((e) => e.gone ? `<tr><td>${esc(e.name)}<small>${e.id.toUpperCase()} · can’t reach it</small></td><td>${esc(e.clubName || '')}</td><td colspan="5"></td></tr>` : `<tr style="${e.archived ? 'opacity:.55' : ''}"><td><b>${esc(e.name)}</b>${e.demo ? ' <span class="pill" style="background:#fff1d6;color:#9a5b00">DEMO</span>' : ''}<small>${e.id.toUpperCase()}${e.date ? ` · plays ${esc(e.date)}` : ''} · made ${date(e.created)}${e.archived ? ' · archived' : ''}${e.replays ? ` · ${e.replays} replays` : ''}</small></td><td>${esc(e.clubName || '')}</td>
     <td class="num">${e.teams}</td><td class="num">${e.scored}</td><td class="num">${e.screens ? `<span class="dot ${e.online ? 'on' : ''}"></span>${e.online}/${e.screens}` : '—'}</td>
     <td>${e.locked ? '<span class="pill gray">Final</span>' : '<span class="pill ok">Open</span>'}</td>
     <td class="acts"><a class="btn sm dark" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener">Desk</a><a class="btn sm" href="/g/${e.id}" target="_blank" rel="noopener">Live</a><a class="btn sm" href="/g/${e.id}/map#${e.key}&groups" target="_blank" rel="noopener">Groups</a>
       <button class="btn sm" data-lock="${e.id}" data-locked="${e.locked ? '' : '1'}">${e.locked ? 'Reopen scoring' : 'Close scoring'}</button>
-      <button class="btn sm" data-archive="${e.id}" data-on="${e.archived ? '' : '1'}">${e.archived ? 'Restore' : 'Archive'}</button></td></tr>`).join('') || '<tr><td colspan="7" class="empty">No tournaments yet.</td></tr>'}
+      <button class="btn sm" data-archive="${e.id}" data-on="${e.archived ? '' : '1'}">${e.archived ? 'Restore' : 'Archive'}</button>
+      <button class="btn sm" data-demo="${e.id}" data-on="${e.demo ? '' : '1'}" title="${e.demo ? 'Show the club’s logo again' : 'Show the Flagcast logo, whatever the club has'}">${e.demo ? 'Stop demo' : 'Mark demo'}</button></td></tr>`).join('') || '<tr><td colspan="7" class="empty">No tournaments yet.</td></tr>'}
   </tbody></table></div>`;
 }
 
@@ -379,6 +392,12 @@ $('view').addEventListener('input', (e) => { if (e.target.id === 'scrq') { scrQ 
   if (e.target.id === 'q') { q = e.target.value.trim().toLowerCase(); const pos = e.target.selectionStart; draw(); const n = $('q'); n.focus(); n.setSelectionRange(pos, pos); } });
 $('view').addEventListener('change', async (e) => {
   if (e.target.id === 'filter') { filter = e.target.value; draw(); return; }
+  const bclub = e.target.closest('[data-club]')?.dataset.club;
+  if (e.target.hasAttribute('data-logo') && e.target.files[0]) {
+    try { toast('Sending the logo…'); await admin({ op: 'brand', club: bclub, logo: await fileToLogo(e.target.files[0]) }); toast('Logo saved. Its tournaments show it now.'); } catch (x) { toast(x.message); }
+    return;
+  }
+  if (e.target.hasAttribute('data-powered')) { try { await admin({ op: 'brand', club: bclub, powered: e.target.checked }); toast('Saved.'); } catch (x) { toast(x.message); } return; }
   if (e.target.dataset.move) {
     const to = e.target.value; if (!to) return;
     if (!confirm(`Move this tournament to ${clubName(to)}? It leaves this club’s list.`)) { e.target.value = ''; return; }
@@ -409,7 +428,7 @@ $('view').addEventListener('click', async (e) => {
     } catch (x) { toast(x.message); }
     return;
   }
-  const el = e.target.closest('[data-open],[data-a],[data-cr],[data-set],[data-rm],[data-owner],[data-signout],[data-unpay],[data-pay],[data-archive],[data-lock],[data-unhide],[data-copy],[data-reload],[data-csv],[data-newclub]');
+  const el = e.target.closest('[data-open],[data-a],[data-cr],[data-set],[data-rm],[data-owner],[data-signout],[data-unpay],[data-pay],[data-archive],[data-lock],[data-unhide],[data-copy],[data-reload],[data-csv],[data-newclub],[data-nologo],[data-saveaccent],[data-noaccent],[data-demo]');
   if (!el) return;
   if (el.tagName === 'A' && el.dataset.open) e.preventDefault();
   const club = el.dataset.club || el.closest('[data-club]')?.dataset.club;
@@ -435,6 +454,10 @@ $('view').addEventListener('click', async (e) => {
       if (on && !confirm('Archive this tournament? It leaves the club’s list and scoring closes. You can restore it.')) return;
       await admin({ op: 'archive', id: el.dataset.archive, on }); if (tab === 'events') await loadEvents(); toast(on ? 'Archived.' : 'Restored.'); return;
     }
+    if (el.hasAttribute('data-nologo')) { if (confirm('Take the logo off? Its tournaments show the Flagcast logo until there’s a new one.')) { await admin({ op: 'brand', club, logo: '' }); toast('Logo removed.'); } return; }
+    if (el.hasAttribute('data-saveaccent')) { await admin({ op: 'brand', club, accent: el.closest('[data-club]').querySelector('[data-accent]').value }); toast('Colour saved.'); return; }
+    if (el.hasAttribute('data-noaccent')) { await admin({ op: 'brand', club, accent: '' }); toast('Colour removed.'); return; }
+    if (el.dataset.demo) { const on = !!el.dataset.on; await admin({ op: 'demo', id: el.dataset.demo, on }); await loadEvents(); toast(on ? 'Marked demo: it shows the Flagcast logo.' : 'Shows the club’s logo again.'); return; }
     if (el.dataset.lock) { await admin({ op: 'lock', id: el.dataset.lock, locked: !!el.dataset.locked }); await loadEvents(); toast(el.dataset.locked ? 'Scoring closed.' : 'Scoring open again.'); return; }
     if (el.dataset.copy) { await navigator.clipboard.writeText(el.dataset.copy); toast('Desk link copied. Keep it private.'); return; }
     if (el.hasAttribute('data-reload')) { if (tab === 'events' || tab === 'screens') { events = null; draw(); } else { logRows = null; draw(); } return; }

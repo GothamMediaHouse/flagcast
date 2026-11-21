@@ -80,7 +80,7 @@ const findEvent = (id) => allEvents().find((x) => x.id === id);
 handle('gl:list', () => ({ base: base(), events: allEvents(), signedIn: !!data.token }));
 // club account: sign in with an emailed code, then everything goes with the saved sign-in
 handle('gl:club', async (_e, op, body = {}) => {
-  if (!/^(start|verify|me|request|invite|uninvite|hide|signout|new)$/.test(op)) throw new Error('Not allowed');
+  if (!/^(start|verify|me|request|invite|uninvite|hide|signout|new|brand)$/.test(op)) throw new Error('Not allowed');
   if (op !== 'start' && op !== 'verify' && !data.token) throw new Error('Please sign in.');
   const r = await fetch(op === 'new' ? `${base()}/golf/api/new` : `${base()}/golf/api/club/${op}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, token: data.token }) });
   const j = await r.json().catch(() => ({}));

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: https:">
 <title>Flagcast Manager</title>
 <style>
 :root { --paper: #f2f4ef; --paper-2: #e6eae1; --card: #fff; --ink: #14201a; --muted: #56625a; --line: #d3dacf; --green: #123628; --green-2: #1c4a37; --on-green: #eef3ec; --on-green-muted: #a9bdb0; --flag: #e8c547; --red: #c8312b; }
@@ -97,6 +97,16 @@ input, select { font: inherit; color: var(--ink); background: var(--paper); bord
         <button class="btn primary" style="width:100%">Make tournament</button>
         <div class="err" id="nErr" hidden></div>
       </form>
+      <details class="people" id="brandBox"><summary>Club logo</summary>
+        <p class="help" style="margin:8px 0">Your logo shows on the TVs, the live page and the players’ app instead of the Flagcast logo.</p>
+        <div style="background:#123628;border-radius:8px;height:64px;display:grid;place-items:center;padding:6px;margin-bottom:8px"><img id="bLogo" alt="" style="max-width:100%;max-height:100%;object-fit:contain" hidden><span id="bNone" style="color:#cfe0d4;font-size:12px">Flagcast logo for now</span></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <label class="btn" style="cursor:pointer">Choose logo…<input type="file" id="bFile" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden></label>
+          <button class="btn" id="bRemove" type="button" hidden>Remove</button>
+          <label style="display:flex;gap:6px;align-items:center;margin:0">Colour <input type="color" id="bColor" style="width:40px;height:30px;padding:0"></label>
+          <button class="btn" id="bColorSave" type="button">Save colour</button>
+        </div>
+        <div class="err" id="bErr2" hidden></div></details>
       <details class="people"><summary>People in your club</summary><div id="members"></div>
         <form id="invForm" hidden style="display:flex;gap:6px;margin-top:8px"><input id="iEmail" type="email" required placeholder="name@yourclub.com"><button class="btn">Add</button></form>
         <div class="err" id="iErr" hidden></div></details>
@@ -139,9 +149,32 @@ async function account() {
     const owner = me.role === 'owner';
     $('members').innerHTML = me.members.map((m) => `<div class="mem"><span>${esc(m.email)}${m.role === 'owner' ? ' · owner' : ''}</span>${owner && m.role !== 'owner' ? `<a href="#" data-rm="${esc(m.email)}">Remove</a>` : ''}</div>`).join('');
     $('invForm').hidden = !owner;
+    const { base } = await gl.list();
+    $('bLogo').hidden = !c.logo; $('bNone').hidden = !!c.logo; if (c.logo) $('bLogo').src = base + c.logo;
+    $('bRemove').hidden = !c.logo; $('bColor').value = c.accent || '#1a6b3c';
   }
   await draw();
 }
+
+// club logo: any picture → a PNG under 280 KB (the same as the web Admin and the Mac and iPhone apps)
+async function fileToLogo(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error('That file isn’t a picture this app can read. Try a PNG.')); i.src = url; });
+    let side = 1000;
+    for (let k = 0; k < 6; k++) {
+      const w0 = img.naturalWidth || 1000, h0 = img.naturalHeight || 300, f = side / Math.max(w0, h0), s = /svg/i.test(file.type || file.name) ? f : Math.min(1, f);
+      const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(w0 * s)); c.height = Math.max(1, Math.round(h0 * s));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      const uri = c.toDataURL('image/png'); if (uri.length < 380000) return uri; side *= 0.8;
+    }
+    throw new Error('That picture is too detailed to use as a logo. Try a simpler PNG.');
+  } finally { URL.revokeObjectURL(url); }
+}
+async function brand(changes, done) { errBox('bErr2'); try { await gl.club('brand', changes); toast(done); await account(); } catch (x) { errBox('bErr2', x); } }
+$('bFile').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { await brand({ logo: await fileToLogo(f) }, 'Logo saved. Your tournaments show it now.'); } catch (x) { errBox('bErr2', x); } });
+$('bRemove').addEventListener('click', () => brand({ logo: '' }, 'Logo removed. Golfers see the Flagcast logo until there’s a new one.'));
+$('bColorSave').addEventListener('click', () => brand({ accent: $('bColor').value }, 'Colour saved.'));
 
 async function draw() {
   const { base, events } = await gl.list();
