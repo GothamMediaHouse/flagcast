@@ -83,12 +83,14 @@ struct ScoresView: View {
         .font(.system(size: 12, weight: .bold)).foregroundStyle(FC.onGreen)
         .padding(.horizontal, 14).frame(height: 40).background(FC.green)
     }
+    private var balls: Int { doc.ev.format.type == "bestball" ? max(1, doc.ev.format.count) : 1 }
     private var parRow: some View {
         HStack(spacing: 0) {
             Color.clear.frame(width: 44)
-            Text("Par").frame(minWidth: 170, maxWidth: .infinity, alignment: .leading)
-            ForEach(holes, id: \.n) { h in Text("\(h.par)").frame(width: cell) }
-            Color.clear.frame(width: 64); Text("\(holes.reduce(0) { $0 + $1.par })").frame(width: 64)
+            // two (or more) balls count on each hole: the team's par is par × that, so a 7 on a par 4 is a birdie
+            Text(balls > 1 ? "Team par (\(balls) balls)" : "Par").frame(minWidth: 170, maxWidth: .infinity, alignment: .leading)
+            ForEach(holes, id: \.n) { h in Text("\(h.par * balls)").frame(width: cell) }
+            Color.clear.frame(width: 64); Text("\(holes.reduce(0) { $0 + $1.par } * balls)").frame(width: 64)
         }
         .font(.system(size: 12, weight: .semibold)).foregroundStyle(FC.muted)
         .padding(.horizontal, 14).frame(height: 30).background(FC.paper2)
