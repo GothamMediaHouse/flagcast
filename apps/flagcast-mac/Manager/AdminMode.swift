@@ -309,8 +309,14 @@ private struct CameraCard: View {
     @Environment(AdminModel.self) private var admin
     let event: AdminEvent
     @State private var links: [Int: String] = [:]
+    @State private var useNDI: [Int: Bool] = [:]
+    @State private var picked: [Int: String] = [:]
     @State private var signal: [Int: Bool] = [:]
+    @State private var cloud: [Int: String]?
+    @State private var cloudProblem: String?
     @State private var saving = false
+    private var bridges: Bridges { Bridges.shared }
+    private var sources: NDISources { NDISources.shared }
     private var changed: Bool { links.filter { !$0.value.isEmpty } != event.cams }
 
     var body: some View {
@@ -320,19 +326,83 @@ private struct CameraCard: View {
                 Text(event.name).font(FC.display(26))
                 Text("\(event.clubName)\(event.date.isEmpty ? "" : " · \(event.date)")").font(.system(size: 13)).foregroundStyle(FC.muted)
                 Spacer()
-                Button { Task { saving = true; if await admin.saveCams(event.id, links) { await check() }; saving = false } } label: { saving ? AnyView(ProgressView().controlSize(.small)) : AnyView(Text("Save")) }
+                Button { Task { saving = true; if await admin.saveCams(event.id, links) { await check() }; saving = false } } label: { saving ? AnyView(ProgressView().controlSize(.small)) : AnyView(Text("Save Links")) }
                     .buttonStyle(GreenButton()).disabled(!changed || saving)
             }
-            ForEach(event.p3, id: \.self) { h in
-                HStack(spacing: 10) {
-                    Text("Hole \(h)").font(.system(size: 14, weight: .semibold)).frame(width: 64, alignment: .leading)
-                    TextField("https://… (.m3u8 or a web player link)", text: Binding(get: { links[h] ?? "" }, set: { links[h] = $0 })).textFieldStyle(.roundedBorder)
-                    dot(h)
+            ForEach(event.p3, id: \.self) { h in holeRow(h) }
+            if event.p3.contains(where: { useNDI[$0] == true }) {
+                VStack(alignment: .leading, spacing: 4) {
+                    if let tv = Bridges.tvURL(event.id) {
+                        HStack {
+                            Text("Clubhouse TVs on this network: open ").font(.system(size: 12)).foregroundStyle(FC.muted) + Text(tv).font(.system(size: 12, weight: .semibold).monospaced())
+                            Button("Copy") { copy(tv) }.buttonStyle(.link).font(.system(size: 12))
+                        }
+                    }
+                    Text(cloud == nil ? "Phones and replays: \(cloudProblem ?? "Cloudflare Stream isn’t set up yet, so NDI cameras show on the clubhouse TVs only.")" : "Phones and replays get it through Cloudflare Stream.")
+                        .font(.system(size: 12)).foregroundStyle(FC.muted)
+                    if let e = bridges.serverError { Text(e).font(.system(size: 12)).foregroundStyle(FC.red) }
+                    Text(NDI_NOTICE).font(.system(size: 10)).foregroundStyle(FC.muted)
                 }
             }
         }
         .padding(18).raisedCard()
-        .task(id: event.id) { links = event.cams; await check() }
+        .task(id: event.id) {
+            links = event.cams
+            for h in event.p3 { if let src = UserDefaults.standard.string(forKey: "ndi.\(event.id)-\(h)") { useNDI[h] = true; picked[h] = src } }
+            await check()
+            while !Task.isCancelled { cloud = await admin.streamHealth(event.id); try? await Task.sleep(for: .seconds(10)) }
+        }
+    }
+
+    @ViewBuilder private func holeRow(_ h: Int) -> some View {
+        let ndi = useNDI[h] ?? false, b = bridges.bridge(event.id, h)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 10) {
+                Text("Hole \(h)").font(.system(size: 14, weight: .semibold)).frame(width: 64, alignment: .leading)
+                Picker("", selection: Binding(get: { ndi }, set: { useNDI[h] = $0; if $0 { sources.watch() } })) { Text("Link").tag(false); Text("NDI® source").tag(true) }
+                    .pickerStyle(.segmented).labelsHidden().frame(width: 190)
+                if !ndi {
+                    TextField("https://… (.m3u8 or a web player link)", text: Binding(get: { links[h] ?? "" }, set: { links[h] = $0 })).textFieldStyle(.roundedBorder)
+                    dot(h)
+                } else if !sources.available {
+                    Text("Install the NDI runtime (ndi.video) on this Mac to receive NDI cameras.").font(.system(size: 12)).foregroundStyle(FC.red)
+                    Spacer()
+                } else {
+                    Picker("", selection: Binding(get: { picked[h] ?? "" }, set: { picked[h] = $0 })) {
+                        Text(sources.names.isEmpty ? "Looking for NDI sources…" : "Pick a source").tag("")
+                        ForEach(sources.names, id: \.self) { Text($0).tag($0) }
+                        if let p = picked[h], !p.isEmpty, !sources.names.contains(p) { Text("\(p) (not seen now)").tag(p) }
+                    }
+                    .labelsHidden()
+                    if b == nil {
+                        Button("Start") { Task { await start(h) } }.buttonStyle(GreenButton()).disabled((picked[h] ?? "").isEmpty)
+                    } else {
+                        Button("Stop") { bridges.stop(event: event.id, hole: h) }.buttonStyle(PlainCardButton())
+                    }
+                }
+            }
+            if ndi, let b {
+                HStack(spacing: 14) {
+                    Label(b.receiving ? "Live \(b.size)" : b.state, systemImage: "circle.fill").foregroundStyle(b.receiving ? FC.ok : FC.red)
+                    Label(Bridges.tvURL(event.id) == nil ? "No club network" : "Clubhouse TVs", systemImage: "tv").foregroundStyle(b.receiving ? FC.ok : FC.muted)
+                    if let up = b.uploading {
+                        let c = cloud?[h]
+                        Label(c == "connected" ? "Cloudflare: receiving" : up ? "Sending to Cloudflare" : "Cloudflare: not sending", systemImage: "icloud.and.arrow.up")
+                            .foregroundStyle(c == "connected" ? FC.ok : up ? FC.flag : FC.red)
+                    } else {
+                        Label("TVs only (no Cloudflare Stream)", systemImage: "icloud.slash").foregroundStyle(FC.muted)
+                    }
+                }
+                .font(.system(size: 12, weight: .semibold)).padding(.leading, 74)
+            }
+        }
+    }
+    private func start(_ h: Int) async {
+        guard let src = picked[h], !src.isEmpty else { return }
+        let target = await admin.streamTarget(event.id, h)
+        cloudProblem = target.problem
+        bridges.start(event: event.id, hole: h, source: src, rtmps: target.push)
+        if target.push != nil { await admin.refreshEvents() }
     }
     @ViewBuilder private func dot(_ h: Int) -> some View {
         let url = event.cams[h] ?? ""

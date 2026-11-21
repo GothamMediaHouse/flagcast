@@ -171,6 +171,22 @@ final class AdminModel {
             return true
         } catch { flash(error.localizedDescription); return false }
     }
+    /// An NDI camera's Cloudflare Stream input for one hole: the RTMPS address to push to (with its key), or nil when
+    /// Stream isn't set up on the server. The server also points the hole's camera link at the Stream playback.
+    func streamTarget(_ id: String, _ hole: Int) async -> (push: String?, problem: String?) {
+        do {
+            let j = try await call("stream", ["id": id, "hole": hole])
+            let r = j["rtmps"] as? [String: Any]
+            guard let url = r?["url"] as? String, let key = r?["streamKey"] as? String, !url.isEmpty, !key.isEmpty else { return (nil, "Cloudflare Stream gave no address.") }
+            return ((url.hasSuffix("/") ? url : url + "/") + key, nil)
+        } catch { return (nil, error.localizedDescription) }
+    }
+    /// Is each streamed hole's camera reaching Cloudflare? → [hole: "connected" | "disconnected" | "unknown"], nil = Stream not set up
+    func streamHealth(_ id: String) async -> [Int: String]? {
+        guard let j = try? await call("streams", ["id": id]), j["ready"] as? Bool == true else { return nil }
+        let h = j["holes"] as? [String: String] ?? [:]
+        return Dictionary(uniqueKeysWithValues: h.compactMap { k, v in Int(k).map { ($0, v) } })
+    }
     func flash(_ s: String) { notice = s; Task { try? await Task.sleep(for: .seconds(4)); if notice == s { notice = nil } } }
     func open(_ id: String) {
         if let e = events.first(where: { $0.id == id }) { onOpen?(e); return }

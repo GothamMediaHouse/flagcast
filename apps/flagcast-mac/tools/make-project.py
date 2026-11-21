@@ -12,7 +12,7 @@ def i(name): return hashlib.md5(('flagcast-mac:' + name).encode()).hexdigest()[:
 TEAM = 'C8KXPB4QNA'
 # (target, product name, bundle id, version, extra source folders)
 TARGETS = [
-    ('Manager', 'Flagcast Manager', 'app.flagcast.manager', '2.5.0'),
+    ('Manager', 'Flagcast Manager', 'app.flagcast.manager', '2.6.0'),
     ('Admin', 'Flagcast Admin', 'app.flagcast.admin', '2.1.0'),
 ]
 # Admin is retired (folded into Manager): its last version is only Admin/RetiredApp.swift, no shared code or updater
@@ -20,9 +20,9 @@ FULL = {'Manager'}
 SHARED_IOS = ['Model/Models.swift', 'Model/Core.swift', 'Net/Server.swift', 'Net/EventFeed.swift']
 
 def settings(t, prod, bid, ver):
-    # Sign in with Apple needs a Developer ID provisioning profile for the Mac (made by hand in the developer account), so the Mac
-    # app signs in with Apple through the website for now and has no entitlement
-    ent = ''
+    # Manager: load the NDI runtime installed on the Mac (NDI cameras). No Sign in with Apple on the Mac: it needs a
+    # Developer ID provisioning profile made by hand in the developer account.
+    ent = '				CODE_SIGN_ENTITLEMENTS = Manager.entitlements;\n' if t == 'Manager' else ''
     return f'''				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;

@@ -19,6 +19,7 @@ struct ManagerApp: App {
                     #if DEBUG
                     Snapshots.run(model)
                     SelfTest.run(model)
+                    NDISelfTest.run()
                     #endif
                 }
         }
@@ -33,6 +34,18 @@ struct ManagerApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ n: Notification) { Updates.shared.start() }
     func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { true }
+    /// NDI cameras stop when the app quits: say so first.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let n = MainActor.assumeIsolated { Bridges.shared.running.count }
+        guard n > 0 else { return .terminateNow }
+        let a = NSAlert()
+        a.messageText = "Stop \(n) NDI camera\(n == 1 ? "" : "s")?"
+        a.informativeText = "The clubhouse TVs and phones stop getting \(n == 1 ? "this camera" : "these cameras") when Flagcast Manager quits."
+        a.addButton(withTitle: "Keep Running"); a.addButton(withTitle: "Quit Anyway")
+        if a.runModal() == .alertFirstButtonReturn { return .terminateCancel }
+        MainActor.assumeIsolated { Bridges.shared.stopAll() }
+        return .terminateNow
+    }
 }
 
 struct ManagerCommands: Commands {
