@@ -82,6 +82,7 @@ p{margin:0}
 /* App section */
 .app-grid{display:grid;grid-template-columns:320px 1fr;gap:56px;align-items:center;margin-top:8px}
 .phone{width:300px;max-width:100%;margin:0 auto;background:#0a0f0c;border-radius:38px;padding:12px;box-shadow:0 30px 60px -24px rgba(0,0,0,.6)}
+.phone-shot{display:block;width:100%;border-radius:28px;aspect-ratio:9/17;object-fit:cover;object-position:top}
 .phone-in{background:#f7f8f4;color:#14201a;border-radius:28px;overflow:hidden}
 .ph-top{background:#123628;color:#eef3ec;padding:22px 16px 12px}
 .ph-top small{font-family:var(--f-mono);font-size:.66rem;letter-spacing:.12em;color:#a9bdb0;text-transform:uppercase}
@@ -248,20 +249,7 @@ p{margin:0}
 <section style="background:var(--paper-2)">
   <div class="wrap">
     <div class="app-grid">
-      <div class="phone" aria-label="Example scoring app screen">
-        <div class="phone-in">
-          <div class="ph-top"><small>Cart 14 · Shotgun start</small><b>Hole 7 · Par 3</b></div>
-          <div class="hole">
-            <div class="hole-row"><span>168 yds · Hdcp 15</span><span>Enter scores</span></div>
-            <div class="players">
-              <div class="pl"><span>J. Halloran</span><span class="step"><i>−</i><span class="sc birdie">2</span><i>+</i></span></div>
-              <div class="pl"><span>T. Nguyen</span><span class="step"><i>−</i><span class="sc">3</span><i>+</i></span></div>
-              <div class="pl"><span>R. Castillo (guest)</span><span class="step"><i>−</i><span class="sc bogey">4</span><i>+</i></span></div>
-            </div>
-          </div>
-          <div class="ph-cam"><span>LIVE</span><em>Hole 7 tee cam</em></div>
-        </div>
-      </div>
+      <div class="phone"><img class="phone-shot" src="/img/app-scorecard.jpg" alt="Entering scores for hole 7 in the Flagcast app"></div>
       <div>
         <span class="eyebrow">The app</span>
         <h2>Scoring that players actually use</h2>
