@@ -179,6 +179,7 @@ struct SettingsView: View {
             SwiftUI.Section("Account") {
                 LabeledContent("Signed in as", value: model.me?.email ?? "Not signed in")
                 if let c = model.me?.club { LabeledContent("Club", value: c.name) }
+                if model.signedIn { NavigationLink(model.me?.password == true ? "Change password" : "Set a password") { PasswordView() } }
                 if model.signedIn { Button("Sign Out", role: .destructive) { Task { await model.signOut() } } }
                 else { NavigationLink("Sign in with your club email") { SignInView() } }
             }
@@ -193,5 +194,30 @@ struct SettingsView: View {
         .scrollContentBackground(.hidden).background(FC.paper)
         .navigationTitle("Settings")
         .sheet(isPresented: $passcode) { NavigationStack { AdminPasscodeView() } }
+    }
+}
+
+/// Set or change the password: then sign in with email + password on any phone, iPad or Mac.
+struct PasswordView: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var pass = ""
+    @State private var again = ""
+    @State private var msg: String?
+    @State private var busy = false
+    var body: some View {
+        Form {
+            SwiftUI.Section {
+                SecureField("New password", text: $pass).textContentType(.newPassword)
+                SecureField("Type it again", text: $again).textContentType(.newPassword)
+            } footer: { Text(msg ?? "At least 10 characters. Your phone can suggest a strong one.") }
+            Button { save() } label: { if busy { ProgressView() } else { Text("Save Password") } }.disabled(pass.count < 10 || busy)
+        }
+        .navigationTitle(model.me?.password == true ? "Change password" : "Set a password")
+    }
+    private func save() {
+        guard pass == again else { msg = "The two don’t match."; return }
+        busy = true
+        Task { do { try await model.setPassword(pass); dismiss() } catch { msg = error.localizedDescription }; busy = false }
     }
 }

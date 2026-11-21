@@ -19,12 +19,15 @@ struct ClubMe: Decodable {
     var email: String, role: String, club: Club?, members: [Member], events: [Ev]
     /// Flagcast staff (an email in the server's ADMIN_EMAIL list): the Admin section shows
     var admin = false
+    /// a password is set (sign in with email + password), Sign in with Apple is linked
+    var password = false, apple = false
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         email = c.str(.email); role = c.str(.role); club = try? c.decodeIfPresent(Club.self, forKey: .club)
         members = c.list(.members); events = c.list(.events); admin = c.bool(.admin, false)
+        password = c.bool(.password, false); apple = c.bool(.apple, false)
     }
-    enum CodingKeys: String, CodingKey { case email, role, club, members, events, admin }
+    enum CodingKeys: String, CodingKey { case email, role, club, members, events, admin, password, apple }
     var isOwner: Bool { role == "owner" }
 }
 
@@ -136,6 +139,23 @@ final class AppModel {
         let d = try await Net.post("/golf/api/club/verify", ["email": email, "code": code])
         saved.token = Net.json(d)["token"] as? String
         write()
+        await refresh()
+    }
+    /// Email + password (set once in Settings after a code sign-in).
+    func login(_ email: String, _ password: String) async throws {
+        let d = try await Net.post("/golf/api/club/login", ["email": email, "password": password])
+        saved.token = Net.json(d)["token"] as? String
+        write(); await refresh()
+    }
+    /// Sign in with Apple: the identity token Apple gave the app.
+    func appleSignIn(_ identityToken: String) async throws {
+        let d = try await Net.post("/golf/api/club/apple", ["identityToken": identityToken])
+        saved.token = Net.json(d)["token"] as? String
+        write(); await refresh()
+    }
+    /// Set or change the password for the signed-in email.
+    func setPassword(_ password: String) async throws {
+        try await club("setpass", ["password": password])
         await refresh()
     }
     func signOut() async {

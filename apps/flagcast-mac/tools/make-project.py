@@ -12,7 +12,7 @@ def i(name): return hashlib.md5(('flagcast-mac:' + name).encode()).hexdigest()[:
 TEAM = 'C8KXPB4QNA'
 # (target, product name, bundle id, version, extra source folders)
 TARGETS = [
-    ('Manager', 'Flagcast Manager', 'app.flagcast.manager', '2.3.0'),
+    ('Manager', 'Flagcast Manager', 'app.flagcast.manager', '2.4.0'),
     ('Admin', 'Flagcast Admin', 'app.flagcast.admin', '2.1.0'),
 ]
 # Admin is retired (folded into Manager): its last version is only Admin/RetiredApp.swift, no shared code or updater
@@ -20,10 +20,11 @@ FULL = {'Manager'}
 SHARED_IOS = ['Model/Models.swift', 'Model/Core.swift', 'Net/Server.swift', 'Net/EventFeed.swift']
 
 def settings(t, prod, bid, ver):
+    ent = '				CODE_SIGN_ENTITLEMENTS = Manager.entitlements;\n' if t == 'Manager' else ''
     return f'''				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
+{ent}				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = {TEAM};
 				ENABLE_HARDENED_RUNTIME = YES;
