@@ -51,6 +51,7 @@ struct AdminEvent: Decodable, Identifiable, Hashable {
     }
     var id: String, key: String, name: String, club: String, clubName: String, date: String
     var created: Double, hidden: Bool, archived: Bool, gone: Bool, locked: Bool
+    var lastScore = 0.0, scoringNow = 0   // when a cart last scored (ms), and how many carts scored in the last 20 minutes
     var demo = false   // Admin marked it Demo: it shows the Flagcast logo whatever its club has
     var teams: Int, scored: Int, screens: Int, online: Int, replays: Int
     var displays: [Disp], p3: [Int], sponsors: [Named], replayList: [Rep], scenes: [Named], scene: String, flights: [String]
@@ -61,6 +62,7 @@ struct AdminEvent: Decodable, Identifiable, Hashable {
         let c = try d.container(keyedBy: CodingKeys.self)
         id = c.str(.id); key = c.str(.key); name = c.str(.name); club = c.str(.club); clubName = c.str(.clubName); date = c.str(.date)
         created = c.dbl(.created, 0); hidden = c.int(.hidden, 0) != 0; archived = c.int(.archived, 0) != 0; gone = c.bool(.gone, false); locked = c.bool(.locked, false); demo = c.bool(.demo, false)
+        lastScore = c.dbl(.lastScore, 0); scoringNow = c.int(.scoringNow, 0)
         teams = c.int(.teams, 0); scored = c.int(.scored, 0); screens = c.int(.screens, 0); online = c.int(.online, 0); replays = c.int(.replays, 0)
         displays = c.list(.displays); p3 = (try? c.decodeIfPresent([Int].self, forKey: .p3)) ?? []; sponsors = c.list(.sponsors); replayList = c.list(.replayList)
         scenes = c.list(.scenes); scene = c.str(.scene); flights = (try? c.decodeIfPresent([String].self, forKey: .flights)) ?? []
@@ -68,7 +70,7 @@ struct AdminEvent: Decodable, Identifiable, Hashable {
         let raw = (try? c.decodeIfPresent([String: String].self, forKey: .cams)) ?? [:]
         cams = Dictionary(uniqueKeysWithValues: raw.compactMap { k, v in Int(k).map { ($0, v) } })
     }
-    enum CodingKeys: String, CodingKey { case id, key, name, club, clubName, date, created, hidden, archived, gone, locked, demo, teams, scored, screens, online, replays, displays, p3, sponsors, replayList, scenes, scene, flights, take, flash, phone, cams }
+    enum CodingKeys: String, CodingKey { case id, key, name, club, clubName, date, created, hidden, archived, gone, locked, demo, lastScore, scoringNow, teams, scored, screens, online, replays, displays, p3, sponsors, replayList, scenes, scene, flights, take, flash, phone, cams }
     var isToday: Bool { date == ISO8601DateFormatter.day.string(from: Date()) }
     var ref: EventRef { EventRef(id: id, key: key, name: name, date: date, club: clubName) }
 }
@@ -81,13 +83,13 @@ struct LogLine: Decodable, Hashable, Identifiable {
 }
 
 enum AdminSection: String, CaseIterable, Identifiable {
-    case overview, signups, clubs, tournaments, cameras, screens, activity
+    case overview, today, signups, clubs, tournaments, cameras, screens, activity
     var id: String { rawValue }
     var title: String {
-        switch self { case .overview: "Overview"; case .signups: "Sign-ups"; case .clubs: "Clubs"; case .tournaments: "Tournaments"; case .cameras: "Cameras"; case .screens: "Screens & phones"; case .activity: "Activity" }
+        switch self { case .overview: "Overview"; case .today: "Event day"; case .signups: "Sign-ups"; case .clubs: "Clubs"; case .tournaments: "Tournaments"; case .cameras: "Cameras"; case .screens: "Screens & phones"; case .activity: "Activity" }
     }
     var icon: String {
-        switch self { case .overview: "square.grid.2x2"; case .signups: "person.badge.plus"; case .clubs: "building.2"; case .tournaments: "flag.2.crossed"; case .cameras: "video"; case .screens: "tv.and.mediabox"; case .activity: "list.bullet.rectangle" }
+        switch self { case .overview: "square.grid.2x2"; case .today: "sun.max"; case .signups: "person.badge.plus"; case .clubs: "building.2"; case .tournaments: "flag.2.crossed"; case .cameras: "video"; case .screens: "tv.and.mediabox"; case .activity: "list.bullet.rectangle" }
     }
 }
 
