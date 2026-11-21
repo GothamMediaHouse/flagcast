@@ -102,9 +102,28 @@ struct CartCard: View {
     }
 }
 
+/// Big print: one card a page, the cart number, team and start hole large enough to read from the seat of a cart.
+struct BigCartCard: View {
+    let team: DeskTeam, title: String, date: String, url: URL
+    var body: some View {
+        VStack(spacing: 18) {
+            Text(title + (date.isEmpty ? "" : " · \(date)")).font(.system(size: 14, weight: .semibold)).textCase(.uppercase).foregroundStyle(.gray)
+            Text("CART").font(.system(size: 18, weight: .bold, design: .monospaced)).tracking(6).foregroundStyle(.gray)
+            Text(team.cart.isEmpty ? "–" : team.cart).font(.system(size: 150, weight: .heavy)).minimumScaleFactor(0.4).lineLimit(1)
+            Text(team.displayName.isEmpty ? "Team" : team.displayName).font(.system(size: 40, weight: .heavy)).multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.5)
+            Text("Start on hole \(team.start)" + (team.flight.isEmpty ? "" : " · Flight \(team.flight)")).font(.system(size: 30, weight: .bold))
+            if let img = QR.image(url.absoluteString) { Image(nsImage: img).interpolation(.none).resizable().frame(width: 220, height: 220) }
+            Text(team.code).font(.system(size: 28, weight: .bold, design: .monospaced))
+            Text("Point your phone’s camera at the code to keep score. No app, no sign-in.").font(.system(size: 16)).multilineTextAlignment(.center)
+        }
+        .foregroundStyle(.black).padding(40).frame(width: 612, height: 792).background(.white)
+    }
+}
+
 struct CartCardsSheet: View {
     @Bindable var doc: DeskDoc
     @Environment(\.dismiss) private var dismiss
+    @State private var big = false
     private var teams: [DeskTeam] { doc.ev.teams.filter { !$0.code.isEmpty }.sorted { ($0.start, $0.displayName) < ($1.start, $1.displayName) } }
     private var title: String { doc.ev.screens.title.isEmpty ? doc.ev.name : doc.ev.screens.title }
 
@@ -112,8 +131,9 @@ struct CartCardsSheet: View {
         VStack(spacing: 0) {
             HStack {
                 Text("Cart cards").font(.title2.bold())
-                Text("\(teams.count) card\(teams.count == 1 ? "" : "s"), two per page").foregroundStyle(.secondary)
+                Text("\(teams.count) card\(teams.count == 1 ? "" : "s"), \(big ? "one" : "two") per page").foregroundStyle(.secondary)
                 Spacer()
+                Toggle("Big print", isOn: $big).toggleStyle(.checkbox).help("One card a page, with the cart number and start hole in large type")
                 Button("Close") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button { printCards() } label: { Label("Print…", systemImage: "printer") }.keyboardShortcut("p").buttonStyle(.borderedProminent).disabled(teams.isEmpty)
             }
@@ -133,12 +153,17 @@ struct CartCardsSheet: View {
 
     /// Print with the Mac's print dialog (or save as PDF from it): two cards to a US Letter page.
     private func printCards() {
-        let pages = stride(from: 0, to: teams.count, by: 2).map { Array(teams[$0..<min($0 + 2, teams.count)]) }
+        let per = big ? 1 : 2
+        let pages = stride(from: 0, to: teams.count, by: per).map { Array(teams[$0..<min($0 + per, teams.count)]) }
         let page = CGSize(width: 612, height: 792)
+        let big = self.big
         let content = VStack(spacing: 0) {
-            ForEach(Array(pages.enumerated()), id: \.offset) { _, two in
-                VStack(spacing: 40) { ForEach(two) { CartCard(team: $0, title: title, date: doc.ev.date, url: doc.cartURL($0.code)) } }
-                    .frame(width: page.width, height: page.height)
+            ForEach(Array(pages.enumerated()), id: \.offset) { _, set in
+                if big { ForEach(set) { BigCartCard(team: $0, title: title, date: doc.ev.date, url: doc.cartURL($0.code)) } }
+                else {
+                    VStack(spacing: 40) { ForEach(set) { CartCard(team: $0, title: title, date: doc.ev.date, url: doc.cartURL($0.code)) } }
+                        .frame(width: page.width, height: page.height)
+                }
             }
         }
         .background(.white).environment(\.colorScheme, .light)

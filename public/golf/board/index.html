@@ -84,6 +84,12 @@ header .pill { font-size: .9vw; padding: .2vw .7vw; }
 footer { display: flex; align-items: center; gap: 1.2vw; background: #07100c; border-top: 1px solid var(--rule); padding: 0 2.4vw; overflow: hidden; white-space: nowrap; font-size: 1.25vw; color: #c8d6cc; }
 footer .tag { background: #c8312b; color: #fff; font-family: var(--f-mono); font-size: .85vw; letter-spacing: .1em; padding: .2vw .6vw; border-radius: .2vw; }
 footer .run { overflow: hidden; flex: 1; }
+.phone { display: grid; grid-template-columns: auto 1fr; gap: 4vw; align-items: center; height: 100%; padding: 0 6vw; }
+.phone .qrbox { background: #fff; padding: 1.2vw; border-radius: 1vw; width: 30vw; height: 30vw; }
+.phone .qrbox svg { width: 100%; height: 100%; display: block; }
+.phone h2 { font-size: 6vw; line-height: .95; margin: .6vw 0 1.4vw; }
+.phone p { font-size: 1.9vw; color: var(--dim); max-width: 46vw; line-height: 1.35; margin: 0 0 2vw; }
+.phone .purl { font-family: var(--f-mono); font-size: 2.2vw; color: var(--flag); letter-spacing: .04em; }
 footer .brandlogo { height: 3vw; width: auto; max-width: 16vw; object-fit: contain; flex: none; }
 .has-club footer { border-top: .25vw solid var(--club, var(--rule)); }
 footer .powered { font-family: var(--f-mono); font-size: .75vw; letter-spacing: .08em; color: var(--dim); flex: none; }
@@ -132,6 +138,7 @@ header .tsp b { color: var(--txt); font-weight: 600; }
 </div>
 <div class="take" id="take" hidden></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
+<script src="/golf/qrcode.js"></script>
 <script type="module">
 import { leaderboard, holeStats, fmtPar, contestLeader, fmtDist, skins, FORMATS } from '/golf/core.js';
 import { live, esc, post } from '/golf/client.js';
@@ -189,7 +196,7 @@ function build() {
   forced = f ? `${f.k}|${f.at}` : '';
   if (f) { const one = pageSlides({ ...f, secs: 3600 }); if (one.length) return one; }
   const d = display();
-  if (d && d.playlist.length) { const out = d.playlist.flatMap(pageSlides); if (out.length) return out; }
+  if (d && d.playlist.length) { const out = d.playlist.flatMap(pageSlides); if (out.length) return withPhone(out); }
   const out = [], want = (k) => !only.length || only.includes(k);
   const stab = S.format.type === 'stableford', flights = q.get('flight') ? [q.get('flight')] : (S.flights.length > 1 ? S.flights : [null]);
   const rows = S.screens?.rows || 10;
@@ -206,7 +213,20 @@ function build() {
   if (want('fund') && S.fund?.on && !lockHole) out.push({ k: 'fund' });
   if (want('sponsors') && S.sponsors.length && !lockHole) out.push({ k: 'sponsors' });
   for (const sp of spot('slide')) if (want('sponsors') && !lockHole) out.push({ k: 'sponsor', sp });
-  return out.length ? out : [{ k: 'empty' }];
+  return out.length ? withPhone(out) : [{ k: 'empty' }];
+}
+// "Live scores on your phone": a big QR code once a cycle, after the leaderboard (off with ?qr=0, or on a one-hole TV)
+function withPhone(out) {
+  if (q.get('qr') === '0' || lockHole || !eventId || !out.some((x) => x.k === 'lb')) return out;
+  const at = out.map((x) => x.k).lastIndexOf('lb') + 1;
+  return [...out.slice(0, at), { k: 'phone', secs: 12 }, ...out.slice(at)];
+}
+const phoneURL = () => `${location.protocol === 'https:' ? location.origin : 'https://flagcast.app'}/g/${eventId}`;
+function phoneSlide() {
+  let svg = '';
+  try { const qr = qrcode(0, 'M'); qr.addData(phoneURL()); qr.make(); svg = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true }); } catch {}
+  return `<div class="phone"><div class="qrbox">${svg}</div><div class="ptext"><div class="sub">${esc(S.name)}</div><h2>Live scores on your phone</h2>
+    <p>Point your phone’s camera at the code. No app needed: the leaderboard, par 3 cameras and replays.</p><div class="purl">${esc(phoneURL().replace(/^https?:\/\//, ''))}</div></div></div>`;
 }
 
 function lbSlide(s) {
@@ -302,6 +322,7 @@ function draw(s) {
   if (s.k === 'sponsors') return sponsorsSlide();
   if (s.k === 'sponsor') return sponsorSlide(s);
   if (s.k === 'schedule') return scheduleSlide();
+  if (s.k === 'phone') return phoneSlide();
   return `<div class="empty">The leaderboard shows here as soon as the first scores come in.</div>`;
 }
 

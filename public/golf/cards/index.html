@@ -26,8 +26,24 @@ body { background: #e9ece6; color: var(--ink); }
 .card .code { text-align: center; font-family: var(--f-mono); font-size: 1rem; font-weight: 600; letter-spacing: .14em; margin-top: 4px; }
 .card .how { grid-column: 1 / -1; font-size: .82rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: .1in; }
 .card .how b { color: var(--ink); }
+/* Big print: one card a page, the cart number and start hole huge, for reading from the seat of a cart */
+.big .sheet { grid-template-columns: 1fr; max-width: 8.5in; }
+.big .card { grid-template-columns: 1fr; text-align: center; justify-items: center; min-height: 10in; padding: .5in; gap: .25in; }
+.big .card .cartno { font-family: var(--f-display); font-weight: 800; font-size: 2.2in; line-height: .9; }
+.big .card .cartlbl { font-family: var(--f-mono); font-size: 1rem; letter-spacing: .3em; color: var(--muted); }
+.big .card h2 { font-size: 3.2rem; }
+.big .card ul { font-size: 1.6rem; }
+.big .card .start { font-size: 2.6rem; }
+.big .card .qr svg { width: 3in; height: 3in; }
+.big .card .code { font-size: 1.8rem; }
+.big .card .how { font-size: 1.2rem; text-align: left; }
+.cartno, .cartlbl { display: none; }
+.big .cartno, .big .cartlbl { display: block; }
+.toggle { display: flex; gap: 8px; align-items: center; }
 @media print {
   @page { size: letter; margin: .25in; }
+  .big .sheet { grid-template-columns: 1fr; }
+  .big .card { min-height: 10.3in; break-after: page; }
   body { background: #fff; }
   .bar { display: none; }
   .sheet { grid-template-columns: 1fr 1fr; gap: 0; padding: 0; max-width: none; }
@@ -36,13 +52,18 @@ body { background: #e9ece6; color: var(--ink); }
 </style>
 </head>
 <body>
-<div class="bar"><div><h1 style="font-size:1.4rem">Cart cards</h1><p id="sub">Loading…</p></div><button class="btn primary" onclick="print()">Print</button></div>
+<div class="bar"><div><h1 style="font-size:1.4rem">Cart cards</h1><p id="sub">Loading…</p></div><div class="toggle"><label style="display:flex;gap:6px;align-items:center;color:var(--on-green)"><input type="checkbox" id="big" style="width:auto"> Big print (one a page)</label><button class="btn primary" onclick="print()">Print</button></div></div>
 <div class="sheet" id="sheet"></div>
 <script src="/golf/qrcode.js"></script>
 <script type="module">
 import { post, eventId, esc } from '/golf/client.js';
 const key = location.hash.slice(1).split('&')[0];
 const sheet = document.getElementById('sheet');
+// big print: four cards a page, or one big one (also with #…&big in the link)
+const bigBox = document.getElementById('big');
+const setBig = (on) => { document.body.classList.toggle('big', on); bigBox.checked = on; };
+setBig(location.hash.includes('&big'));
+bigBox.addEventListener('change', () => setBig(bigBox.checked));
 try {
   const ev = await post('desk', { key, op: 'get' });
   const title = ev.screens?.title || ev.name;
@@ -51,7 +72,7 @@ try {
     const url = `${location.origin}/g/${eventId()}/s/${t.code}`;
     const qr = qrcode(0, 'M'); qr.addData(url); qr.make();
     return `<div class="card"><div class="ev">${esc(title)}${ev.date ? ` · ${esc(ev.date)}` : ''}</div>
-      <div><h2>${esc(t.name || t.players.map((p) => p.name.split(' ').pop()).join(' / '))}</h2>
+      <div><div class="cartlbl">CART</div><div class="cartno">${esc(t.cart || '–')}</div><h2>${esc(t.name || t.players.map((p) => p.name.split(' ').pop()).join(' / '))}</h2>
       <ul>${t.players.map((p) => `<li>${esc(p.name)}</li>`).join('')}</ul>
       <div class="start">Start: hole ${t.start || 1}${t.flight ? ` · Flight ${esc(t.flight)}` : ''}</div></div>
       <div><div class="qr">${qr.createSvgTag({ cellSize: 4, margin: 0, scalable: true })}</div><div class="code">${esc(t.code)}</div></div>
