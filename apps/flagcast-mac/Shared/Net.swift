@@ -61,12 +61,15 @@ enum Net {
     // ---- courses ----
     struct FoundCourse: Decodable, Hashable, Identifiable {
         var id: String, name: String, city: String, state: String, at: LatLng?
+        /// one of Flagcast's own courses (set up by a club and shared), not the course database's
+        var library = false
         init(from d: Decoder) throws {
             let c = try d.container(keyedBy: CodingKeys.self)
             if let n = try? c.decode(Int.self, forKey: .id) { id = String(n) } else { id = c.str(.id) }
             name = c.str(.name); city = c.str(.city); state = c.str(.state); at = try? c.decodeIfPresent(LatLng.self, forKey: .at)
+            library = c.bool(.library, false) || id.hasPrefix("fc-")
         }
-        enum CodingKeys: String, CodingKey { case id, name, city, state, at }
+        enum CodingKeys: String, CodingKey { case id, name, city, state, at, library }
         var place: String { [city, state].filter { !$0.isEmpty }.joined(separator: ", ") }
     }
     struct FoundTee: Decodable, Hashable {
@@ -83,12 +86,19 @@ enum Net {
         var label: String { name + (women ? " (women)" : "") }
     }
     struct CourseCard: Decodable { var id: String, name: String, city: String, state: String, at: LatLng?, tees: [FoundTee]
+        /// a Flagcast library course, which can bring its hole map too
+        var library = false, map: CourseMap?
         init(from d: Decoder) throws {
             let c = try d.container(keyedBy: CodingKeys.self)
             if let n = try? c.decode(Int.self, forKey: .id) { id = String(n) } else { id = c.str(.id) }
             name = c.str(.name); city = c.str(.city); state = c.str(.state); at = try? c.decodeIfPresent(LatLng.self, forKey: .at); tees = c.list(.tees)
+            library = c.bool(.library, false) || id.hasPrefix("fc-"); map = try? c.decodeIfPresent(CourseMap.self, forKey: .map)
         }
-        enum CodingKeys: String, CodingKey { case id, name, city, state, at, tees }
+        enum CodingKeys: String, CodingKey { case id, name, city, state, at, tees, library, map }
+    }
+    /// Save a tournament's course (holes, tees, spot, map) to the Flagcast course list for every club → its id.
+    static func saveToLibrary(_ id: String, _ key: String) async throws -> String {
+        Net.json(try await post("/golf/api/courses/library", ["event": id, "key": key]))["id"] as? String ?? ""
     }
     static func findCourses(_ q: String) async throws -> [FoundCourse] {
         let d = try await get("/golf/api/courses?q=\(q.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")")
