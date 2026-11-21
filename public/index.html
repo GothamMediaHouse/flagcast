@@ -167,8 +167,8 @@ section{padding-block:88px}
 /* Book */
 .book{background:var(--green);color:var(--on-green)}
 .book-grid{display:grid;grid-template-columns:1fr 1.15fr;gap:56px;align-items:start}
-.book .lede{color:var(--on-green-muted)}
-.book dl{margin:32px 0 0;display:grid;gap:14px}
+.book .lede,.book .eyebrow{color:var(--on-green-muted)}
+.book dl{margin:32px 0 0;display:flex;flex-wrap:wrap;gap:14px 48px}
 .book dt{font:600 .72rem var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--on-green-muted)}
 .book dd{margin:2px 0 0;font-size:1.1rem}
 .book dd a{color:var(--on-green)}
@@ -178,6 +178,19 @@ form .full{grid-column:1/-1}
 form input,form select,form textarea{font:inherit;font-size:1rem;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:7px;padding:11px 12px;width:100%}
 form textarea{min-height:96px;resize:vertical}
 form .btn{justify-self:start}
+form small{font-weight:400}
+form h3{margin:0 0 4px;font-size:1.5rem;color:var(--ink)}
+form .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+form .send{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+form .send p{margin:0;font-size:.95rem;color:var(--muted)}
+form .send p.ok{color:#2f8a57;font-weight:600}
+form .send p.err{color:#c8312b;font-weight:600}
+form [aria-invalid="true"]{border-color:#c8312b}
+.next{list-style:none;counter-reset:n;margin:30px 0 0;padding:0;display:grid;gap:16px}
+.next li{counter-increment:n;display:grid;grid-template-columns:36px 1fr;column-gap:14px}
+.next li::before{content:counter(n);grid-row:span 2;width:36px;height:36px;border-radius:50%;background:var(--flag);color:#1a1a10;font:700 1.1rem var(--f-display);display:flex;align-items:center;justify-content:center}
+.next b{font:700 1.15rem var(--f-display);text-transform:uppercase;letter-spacing:.03em}
+.next span{color:var(--on-green-muted)}
 .sent{grid-column:1/-1;background:#e5f1e8;color:#1c4a37;border-radius:8px;padding:14px;font-weight:600;display:none}
 form.done .sent{display:block}
 
@@ -188,7 +201,7 @@ footer h4{font:700 1rem var(--f-display);letter-spacing:.08em;text-transform:upp
 footer ul{list-style:none;padding:0;margin:0;display:grid;gap:6px}
 footer a{text-decoration:none}
 footer a:hover{color:var(--on-green)}
-.legal{margin-top:28px;font:500 .72rem var(--f-mono);letter-spacing:.08em;text-transform:uppercase}
+footer .wrap.legal{display:block;margin-top:32px;padding-top:20px;border-top:1px solid rgba(244,241,230,.12);font:500 .72rem var(--f-mono);letter-spacing:.08em;text-transform:uppercase}
 
 @media (max-width:960px){
   .nav ul{display:none}
@@ -412,14 +425,35 @@ footer a:hover{color:var(--on-green)}
 </section>
 
 <section class="book" id="contact">
-  <div class="wrap" style="text-align:center;max-width:760px">
-    <span class="eyebrow" style="color:var(--on-green-muted)">Get in touch</span>
-    <h2>Put your tournament on the big screen</h2>
-    <p class="lede" style="margin-left:auto;margin-right:auto">Questions, dates or a quote: send us a note and we’ll get back to you.</p>
-    <dl style="display:flex;justify-content:center;gap:24px 56px;flex-wrap:wrap;text-align:left">
-      <div><dt>Email</dt><dd><a href="mailto:hello@flagcast.app">hello@flagcast.app</a></dd></div>
-      <div><dt>Where</dt><dd>We travel to tournaments anywhere in the US. Travel is quoted with your date.</dd></div>
-    </dl>
+  <div class="wrap book-grid">
+    <div>
+      <span class="eyebrow">Get in touch</span>
+      <h2>Put your tournament on the big screen</h2>
+      <p class="lede">Tell us about your day and we’ll come back with a camera plan for your course and a quote.</p>
+      <ol class="next">
+        <li><b>Send us your date</b><span>The club, the date and roughly how many players.</span></li>
+        <li><b>We plan it with you</b><span>A short call with you or your pro to pick the holes, screens and sponsors.</span></li>
+        <li><b>You get a quote</b><span>With a camera plan for your course. Travel is quoted with your date.</span></li>
+      </ol>
+      <dl>
+        <div><dt>Email</dt><dd><a href="mailto:hello@flagcast.app">hello@flagcast.app</a></dd></div>
+        <div><dt>Where</dt><dd>Tournaments anywhere in the US</dd></div>
+      </dl>
+    </div>
+    <form id="cform" novalidate>
+      <h3 class="full">Ask about your tournament</h3>
+      <label>Your name<input name="name" autocomplete="name" required></label>
+      <label>Club or course<input name="club" autocomplete="organization"></label>
+      <label>Email<input name="email" type="email" autocomplete="email" required></label>
+      <label><span>Phone <small>(optional)</small></span><input name="phone" type="tel" autocomplete="tel"></label>
+      <label>Type of event<select name="type"><option value="">Choose…</option><option>Member-guest</option><option>Charity outing</option><option>Club championship</option><option>Corporate day</option><option>Pro-am</option><option>Something else</option></select></label>
+      <label>Date<input name="date" type="date"></label>
+      <label><span>Players <small>(about)</small></span><input name="players" inputmode="numeric" placeholder="e.g. 120"></label>
+      <label>Package<select name="pkg"><option value="">Not sure yet</option><option>Par</option><option>Birdie</option><option>Eagle</option></select></label>
+      <label class="full">Anything else?<textarea name="message" placeholder="Par 3s you’d like covered, screens, sponsors, a charity total…"></textarea></label>
+      <label class="hp" aria-hidden="true">Website<input name="website" tabindex="-1" autocomplete="off"></label>
+      <div class="full send"><button class="btn primary" type="submit">Send</button><p id="cmsg" role="status" aria-live="polite"></p></div>
+    </form>
   </div>
 </section>
 
@@ -444,6 +478,17 @@ tabs.forEach((b,i)=>b.onclick=()=>show(i));show(0);
 const m=document.querySelector('.menu'),ul=document.getElementById('navlinks');
 m.onclick=()=>{const o=ul.classList.toggle('open');m.setAttribute('aria-expanded',o)};
 ul.querySelectorAll('a').forEach(a=>a.onclick=()=>{ul.classList.remove('open');m.setAttribute('aria-expanded',false)});
+const cf=document.getElementById('cform'),cm=document.getElementById('cmsg');
+cf.onsubmit=async(e)=>{e.preventDefault();const d=Object.fromEntries(new FormData(cf));cf.querySelectorAll('[aria-invalid]').forEach(x=>x.removeAttribute('aria-invalid'));
+ const bad=(n,t)=>{const el=cf.elements[n];if(el){el.setAttribute('aria-invalid','true');el.focus()}cm.className='err';cm.textContent=t};
+ if(!d.name.trim())return bad('name','Please add your name.');if(!/^\S+@\S+\.\S+$/.test(d.email.trim()))return bad('email','Please check your email address.');
+ if(!d.club.trim()&&!d.message.trim())return bad('club','Tell us the club, or add a note.');
+ const b=cf.querySelector('button');b.disabled=true;cm.className='';cm.textContent='Sending…';
+ try{const r=await fetch('/api/contact',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(d)});const j=await r.json().catch(()=>({}));
+  if(r.ok&&j.ok){cf.reset();cm.className='ok';cm.textContent='Thanks! We’ll be in touch soon.';}
+  else if(j.field){bad(j.field,j.error)}else throw 0;}
+ catch{cm.className='err';cm.innerHTML='That didn’t send. Please email <a href="mailto:hello@flagcast.app">hello@flagcast.app</a>.';}
+ b.disabled=false;};
 </script>
 </body>
 </html>
