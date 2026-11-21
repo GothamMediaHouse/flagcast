@@ -14,17 +14,20 @@ struct ScreensView: View {
     @State private var raised = ""
     @State private var replay = ReplayDraft()
     @AppStorage("screens.tab") private var tab = "screens"
+    @Environment(DeskNav.self) private var nav
 
     private var par3s: [Hole] { doc.ev.course.holes.filter { $0.par == 3 } }
 
     var body: some View {
         DeskPage(doc: doc, section: .screens) {
-            PhotoSegments(options: [("TVs", "screens"), ("Sponsors & more", "settings")], selection: $tab)
+            PhotoSegments(options: [("TVs", "screens"), ("Sponsors & more", "settings")] + (nav.canEngineer() ? [("Engineering", "eng")] : []),
+                          selection: Binding(get: { tab == "eng" && !nav.canEngineer() ? "screens" : tab }, set: { tab = $0 }))
             Button("Open the board") { NSWorkspace.shared.open(doc.boardURL) }.buttonStyle(GlassButton())
         } title: {
-            HeroTitle(title: "Screens & sponsors", size: 52, sub: tab == "screens" ? "The TVs at the club and what they show" : "Sponsors, cameras, announcements", subBeside: true)
+            HeroTitle(title: "Screens & sponsors", size: 52, sub: tab == "eng" ? "Every TV, routing, scenes and take-overs" : tab == "settings" ? "Sponsors, cameras, announcements" : "The TVs at the club and what they show", subBeside: true)
         } content: {
-            if tab == "screens" { ScreenWall(doc: doc) } else { settings }
+            if tab == "eng" && nav.canEngineer() { ScrollView { EngineeringView(src: doc.engSource).padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 22) } }
+            else if tab == "settings" { settings } else { ScreenWall(doc: doc) }
         }
     }
 
@@ -267,5 +270,38 @@ struct ScreenWall: View {
         if page != nil, mins > 0 { b["mins"] = mins }
         let done = page == nil ? "\(to.prefix(1).uppercased() + to.dropFirst()) is back to normal." : mins > 0 ? "On \(to) for \(mins) minutes." : "On \(to) until you switch back."
         Task { await doc.day("screen", b, done: done) }
+    }
+}
+
+extension DeskDoc {
+    var pageChoices: PageChoices {
+        PageChoices(flights: ev.flights, p3: ev.course.holes.filter { $0.par == 3 }.map(\.n), holes: ev.course.holes.map(\.n),
+                    sponsors: ev.sponsors.map { ($0.id, $0.name.isEmpty ? "Sponsor" : $0.name) })
+    }
+    /// Screens → Engineering for this tournament
+    var engSource: EngSource {
+        let lv = live
+        return EngSource(
+            tvs: ev.displays.map { d in EngTV(id: d.id, name: d.name, place: d.place, group: d.group, online: lv?.online[d.id] ?? 0, force: lv?.live.force[d.id], playlist: d.playlist) },
+            choices: pageChoices,
+            url: { [boardURL] id in URL(string: "\(boardURL.absoluteString)?screen=\(id)") },
+            scenes: ev.scenes.map { ($0.id, $0.name) },
+            take: lv?.live.take, phone: lv?.live.phone, announcement: lv?.flash,
+            replays: (lv?.replays ?? ev.replays).map { ($0.id, "Hole \($0.hole) · \($0.label.isEmpty ? "Replay" : $0.label)") },
+            day: { [weak self] op, body, done in
+                guard let self else { return }
+                await self.day(op, body, done: done)
+                if op == "scene" { await self.refreshDay() }
+            },
+            playlist: { [weak self] id in
+                guard let self, self.ev.displays.contains(where: { $0.id == id }) else { return nil }
+                return Binding(get: { self.ev.displays.first { $0.id == id }?.playlist ?? [] },
+                               set: { v in if let i = self.ev.displays.firstIndex(where: { $0.id == id }) { self.ev.displays[i].playlist = v } })
+            },
+            group: { [weak self] id in
+                guard let self, self.ev.displays.contains(where: { $0.id == id }) else { return nil }
+                return Binding(get: { self.ev.displays.first { $0.id == id }?.group ?? "" },
+                               set: { v in if let i = self.ev.displays.firstIndex(where: { $0.id == id }) { self.ev.displays[i].group = v } })
+            })
     }
 }

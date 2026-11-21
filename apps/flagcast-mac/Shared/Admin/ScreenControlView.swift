@@ -14,7 +14,44 @@ struct ScreenControlView: View {
     private var live: [AdminEvent] { model.events.filter { !$0.gone && !$0.archived && !$0.hidden }.sorted { ($0.online, $0.created) > ($1.online, $1.created) } }
     private var e: AdminEvent? { model.events.first { $0.id == eventId } ?? live.first }
 
+    @AppStorage("admin.screens.mode") private var mode = "eng"
+
     var body: some View {
+        Group {
+            if mode == "eng" {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Picker("Tournament", selection: Binding(get: { e?.id ?? "" }, set: { eventId = $0 })) {
+                            ForEach(live) { x in Text("\(x.name) · \(x.clubName)\(x.online > 0 ? " · \(x.online) TV\(x.online == 1 ? "" : "s") on" : "")").tag(x.id) }
+                        }
+                        .frame(maxWidth: 520)
+                        if let e { EngineeringView(src: engSource(e)) } else { Text("No tournaments right now.").foregroundStyle(FC.muted) }
+                    }
+                    .padding(20)
+                }
+            } else { simple }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            AdminHeader(title: "Screens & phones", sub: "Any club’s TVs and every player’s phone", search: .constant(""), prompt: "") {
+                PhotoSegments(options: [("Engineering", "eng"), ("Simple", "simple")], selection: $mode)
+                Button { Task { await model.refreshEvents() } } label: { Image(systemName: "arrow.clockwise") }.buttonStyle(PlainCardButton())
+            }
+        }
+        .background(FC.paper)
+        .task { while !Task.isCancelled { await model.refreshEvents(); try? await Task.sleep(for: .seconds(15)) } }
+    }
+
+    private func engSource(_ e: AdminEvent) -> EngSource {
+        EngSource(
+            tvs: e.displays.map { EngTV(id: $0.id, name: $0.name, place: $0.place, group: $0.group, online: $0.online, force: $0.force, playlist: $0.list) },
+            choices: choices(e),
+            url: { id in URL(string: "\(Server.base.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")))/g/\(e.id)/board?screen=\(id)") },
+            scenes: e.scenes.map { ($0.id, $0.name) }, currentScene: e.scene, take: e.take, phone: e.phone, announcement: e.flash,
+            replays: e.replayList.map { ($0.id, "Hole \($0.hole) · \($0.label.isEmpty ? "Replay" : $0.label)") },
+            day: { op, body, done in var b = body; b["op"] = op; await model.day(e.id, b, done: done) })
+    }
+
+    private var simple: some View {
         Form {
             SwiftUI.Section {
                 Picker("Tournament", selection: Binding(get: { e?.id ?? "" }, set: { eventId = $0 })) {
@@ -87,13 +124,6 @@ struct ScreenControlView: View {
         .scrollContentBackground(.hidden)
         .background(FC.card).clipShape(RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(FC.line))
         .padding(20)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            AdminHeader(title: "Screens & phones", sub: "Any club’s screens and every player’s phone", search: .constant(""), prompt: "") {
-                Button { Task { await model.refreshEvents() } } label: { Image(systemName: "arrow.clockwise") }.buttonStyle(PlainCardButton())
-            }
-        }
-        .background(FC.paper)
-        .task { while !Task.isCancelled { await model.refreshEvents(); try? await Task.sleep(for: .seconds(15)) } }
     }
     private func choices(_ e: AdminEvent) -> PageChoices { PageChoices(flights: e.flights, p3: e.p3, sponsors: e.sponsors.map { ($0.id, $0.name) }) }
     private func groups(_ e: AdminEvent) -> [String] {

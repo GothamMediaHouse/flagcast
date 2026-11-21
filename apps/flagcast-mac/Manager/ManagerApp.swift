@@ -47,6 +47,11 @@ struct ManagerCommands: Commands {
             Button("Revert to Saved") { model.current?.revert() }.disabled(!(model.current?.dirty ?? false))
         }
         CommandGroup(after: .appSettings) { Button("Check for Updates…") { Updates.shared.check() } }
+        CommandGroup(after: .toolbar) {
+            Button("Engineering") { UserDefaults.standard.set("eng", forKey: "screens.tab"); model.adminSection = nil; model.section = .screens }
+                .keyboardShortcut("e", modifiers: [.command, .option])
+                .disabled(model.selection == nil || !(model.isAdmin || model.showEngineering))
+        }
         CommandMenu("Tournament") {
             ForEach(Section.allCases) { s in
                 if let k = s.key { Button(s.title) { model.section = s }.keyboardShortcut(k, modifiers: .command).disabled(model.selection == nil) }
