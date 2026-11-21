@@ -76,18 +76,20 @@ struct AdminPasscodeView: View {
     @State private var busy = false
     @State private var message: String?
     var body: some View {
-        Form {
-            if !(model.admin.pass ?? "").isEmpty {
-                LabeledContent("Flagcast Admin", value: "Unlocked on this device")
-                Button("Forget the Passcode", role: .destructive) { model.admin.forget() }
-            } else {
-                SwiftUI.Section {
-                    SecureField("Admin passcode", text: $text).onSubmit(unlock)
-                    Button { unlock() } label: { if busy { ProgressView() } else { Text("Unlock Admin") } }.disabled(text.isEmpty || busy)
-                } footer: { Text(message ?? "The passcode is kept in this device’s Keychain. The Admin tab appears at the bottom.") }
+        CardPage(kicker: "Flagcast staff", title: "Admin passcode") {
+            VStack(alignment: .leading, spacing: 12) {
+                if !(model.admin.pass ?? "").isEmpty {
+                    Label("Admin is unlocked on this device", systemImage: "checkmark.seal.fill").font(.headline).foregroundStyle(FC.ok)
+                    Button("Forget the Passcode", role: .destructive) { model.admin.forget() }.buttonStyle(PlainCardButton(full: true))
+                } else {
+                    BoxField(placeholder: "Admin passcode", text: $text, secure: true).onSubmit(unlock)
+                    Button { unlock() } label: { if busy { ProgressView().tint(.white) } else { Text("Unlock Admin") } }.buttonStyle(GreenButton(full: true)).disabled(text.isEmpty || busy)
+                    Text(message ?? "Kept in this device’s Keychain. The Admin tab appears at the bottom. Signing in with your Flagcast admin email does the same.")
+                        .font(.footnote).foregroundStyle(message == nil ? FC.muted : FC.red)
+                }
             }
+            .card()
         }
-        .navigationTitle("Admin passcode").navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
     }
     private func unlock() {
@@ -110,40 +112,42 @@ struct TournamentPicker: View {
     @State private var message: String?
 
     var body: some View {
-        List {
-            if let c = model.me?.club {
-                SwiftUI.Section { LabeledContent(c.name, value: c.canMake ? (c.credits < 0 ? "Unlimited" : "\(c.credits) left") : "") } footer: { Text(c.stateLine) }
-            }
-            SwiftUI.Section("Tournaments") {
-                if model.shownEvents.isEmpty { Text(model.signedIn ? "No tournaments yet. Make one below." : "Sign in to see your club’s tournaments.").foregroundStyle(FC.muted) }
-                ForEach(model.shownEvents) { e in
+        CardPage(kicker: model.me?.club?.stateLine ?? (model.signedIn ? nil : "Not signed in"), title: "Tournaments", sub: model.me?.club?.name) {
+            CardBox {
+                if model.shownEvents.isEmpty {
+                    Text(model.signedIn ? "No tournaments yet. Make one below." : "Sign in to see your club’s tournaments.").foregroundStyle(FC.muted).padding(14)
+                }
+                ForEach(Array(model.shownEvents.enumerated()), id: \.element.id) { i, e in
                     Button { model.selection = e.id; if asSheet { dismiss() } } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(e.name.isEmpty ? "Tournament" : e.name).font(.headline).foregroundStyle(FC.ink)
-                                Text([e.date.flatMap(dayLine), e.club].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(FC.muted)
-                            }
-                            Spacer()
-                            if model.selection == e.id { Image(systemName: "checkmark").foregroundStyle(FC.primary) }
+                        ListRow(icon: model.selection == e.id ? "flag.fill" : "flag", iconColor: model.selection == e.id ? FC.primary : FC.muted,
+                                title: e.name.isEmpty ? "Tournament" : e.name,
+                                sub: [e.date.flatMap(dayLine), e.club].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "), last: i == model.shownEvents.count - 1) {
+                            if model.selection == e.id { Image(systemName: "checkmark").font(.headline).foregroundStyle(FC.primary) }
                         }
                     }
-                    .swipeActions { Button("Remove", role: .destructive) { Task { await model.remove(e.id) } } }
+                    .buttonStyle(.plain)
+                    .contextMenu { Button("Remove from this list", role: .destructive) { Task { await model.remove(e.id) } } }
                 }
             }
             if model.signedIn {
-                SwiftUI.Section {
-                    TextField("New tournament name", text: $name)
-                    Button { make() } label: { if making { ProgressView() } else { Text("Make a Tournament") } }
-                        .disabled(making || !(model.me?.club?.canMake ?? false))
-                } footer: { if let message { Text(message).foregroundStyle(FC.red) } }
+                CardBox(title: "New tournament") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        BoxField(placeholder: "Name, e.g. Member-Guest 2027", text: $name)
+                        Button { make() } label: { if making { ProgressView().tint(.white) } else { Text("Make a Tournament") } }
+                            .buttonStyle(GreenButton(full: true)).disabled(making || !(model.me?.club?.canMake ?? false))
+                        if let message { Text(message).font(.footnote).foregroundStyle(FC.red) }
+                    }
+                    .padding(14)
+                }
             }
-            SwiftUI.Section { NavigationLink("Add a tournament by its desk link") { AddByLinkView() } }
-            if !model.signedIn {
-                SwiftUI.Section { NavigationLink("Sign in with your club email") { SignInView() } }
+            CardBox {
+                NavigationLink { AddByLinkView() } label: { ListRow(icon: "link.badge.plus", iconColor: FC.ok, title: "Add by desk link", sub: "A tournament someone sent you", last: model.signedIn) { Chevron() } }.buttonStyle(.plain)
+                if !model.signedIn {
+                    NavigationLink { SignInView() } label: { ListRow(icon: "person.badge.plus", title: "Sign in", sub: "See your club’s tournaments", last: true) { Chevron() } }.buttonStyle(.plain)
+                }
             }
+            Help("Press and hold a tournament to take it off this list.")
         }
-        .scrollContentBackground(.hidden).background(FC.paper)
-        .navigationTitle("Tournaments")
         .toolbar { if asSheet { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } } }
         .refreshable { await model.refresh() }
     }
@@ -163,13 +167,15 @@ struct AddByLinkView: View {
     @State private var busy = false
     @State private var message: String?
     var body: some View {
-        Form {
-            SwiftUI.Section {
+        CardPage(kicker: "Tournaments", title: "Add by desk link") {
+            VStack(alignment: .leading, spacing: 12) {
                 TextField("https://flagcast.app/g/…/desk#…", text: $link, axis: .vertical).textInputAutocapitalization(.never).autocorrectionDisabled()
-                Button { add() } label: { if busy { ProgressView() } else { Text("Add Tournament") } }.disabled(link.isEmpty || busy)
-            } footer: { Text(message ?? "Paste the desk link the organizer sent you. It looks like …/g/abcd2345/desk#longkey") }
+                    .padding(12).background(FC.paper2, in: RoundedRectangle(cornerRadius: 10))
+                Button { add() } label: { if busy { ProgressView().tint(.white) } else { Text("Add Tournament") } }.buttonStyle(GreenButton(full: true)).disabled(link.isEmpty || busy)
+                Text(message ?? "Paste the desk link the organizer sent you. It looks like …/g/abcd2345/desk#longkey").font(.footnote).foregroundStyle(message == nil ? FC.muted : FC.red)
+            }
+            .card()
         }
-        .navigationTitle("Add by desk link")
     }
     private func add() {
         busy = true; message = nil

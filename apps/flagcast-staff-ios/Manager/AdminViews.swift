@@ -6,22 +6,26 @@ struct AdminHome: View {
     @Environment(AppModel.self) private var model
     @Environment(AdminModel.self) private var admin
     var body: some View {
-        List {
-            SwiftUI.Section {
-                NavigationLink { ClubsView() } label: { row("Clubs", "building.2", admin.clubs.filter { $0.status == "pending" }.count) }
-                NavigationLink { AdminTournaments() } label: { row("Tournaments", "flag.2.crossed", 0) }
-                NavigationLink { AdminScreens() } label: { row("TVs & phones", "tv.and.mediabox", 0) }
-                NavigationLink { AdminActivity() } label: { row("Activity", "list.bullet.rectangle", 0) }
-            } header: { Text("Flagcast Admin") }
-            SwiftUI.Section { NavigationLink { MoreView() } label: { Label("More: contests, details, links, settings", systemImage: "ellipsis.circle") } }
+        let waiting = admin.clubs.filter { $0.status == "pending" }.count
+        CardPage(kicker: "Flagcast", title: "Admin", sub: "\(admin.clubs.count) clubs · \(admin.events.filter { !$0.hidden && !$0.archived }.count) tournaments") {
+            CardBox {
+                NavigationLink { ClubsView() } label: {
+                    ListRow(icon: "building.2.fill", title: "Clubs", sub: "Approve, tournaments left, people") {
+                        if waiting > 0 { Text("\(waiting) waiting").font(.caption.weight(.bold)).padding(.horizontal, 8).padding(.vertical, 4).background(FC.flag, in: Capsule()).foregroundStyle(FC.onFlag) }
+                        Chevron()
+                    }
+                }
+                NavigationLink { AdminTournaments() } label: { ListRow(icon: "flag.2.crossed.fill", iconColor: FC.ok, title: "Tournaments", sub: "Every club’s, open one here") { Chevron() } }
+                NavigationLink { AdminScreens() } label: { ListRow(icon: "tv.and.mediabox.fill", iconColor: FC.blue, title: "TVs & phones", sub: "Any club’s TVs, take-overs, phones banner") { Chevron() } }
+                NavigationLink { AdminActivity() } label: { ListRow(icon: "list.bullet.rectangle.fill", iconColor: FC.muted, title: "Activity", sub: "Everything that happened", last: true) { Chevron() } }
+            }
+            CardBox {
+                NavigationLink { MoreView() } label: { ListRow(icon: "ellipsis.circle.fill", iconColor: FC.green2, title: "More", sub: "Contests, details, links, tournaments, settings", last: true) { Chevron() } }
+            }
         }
-        .scrollContentBackground(.hidden).background(FC.paper)
-        .navigationTitle("Admin")
-        .task { try? await admin.refresh() }
+        .buttonStyle(.plain)
+        .task { try? await admin.refresh(); await admin.refreshEvents() }
         .refreshable { try? await admin.refresh(); await admin.refreshEvents() }
-    }
-    private func row(_ t: String, _ icon: String, _ badge: Int) -> some View {
-        HStack { Label(t, systemImage: icon); Spacer(); if badge > 0 { Text("\(badge) waiting").font(.caption.weight(.bold)).padding(.horizontal, 7).padding(.vertical, 3).background(FC.flag, in: Capsule()).foregroundStyle(FC.onFlag) } }
     }
 }
 
@@ -63,7 +67,7 @@ struct ClubsView: View {
             .padding(16)
         }
         .background(FC.paper)
-        .navigationTitle("Clubs")
+        .navigationTitle("Clubs").toolbarBackground(FC.paper, for: .navigationBar)
         .searchable(text: $search, prompt: "Find a club")
         .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { adding = true } label: { Label("New club", systemImage: "plus") } } }
         .refreshable { try? await admin.refresh() }
@@ -116,43 +120,53 @@ private struct ClubDetail: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let club: AdminClub
+    @State private var image: UIImage?
     var body: some View {
-        Form {
-            SwiftUI.Section {
-                LabeledContent("Status", value: club.statusText)
-                if club.status == "pending" { Button("Approve") { Task { await admin.act("approve", ["club": club.id], done: "Approved. They have an email.") } } }
-                if club.status == "off" { Button("Switch On") { Task { await admin.act("on", ["club": club.id], done: "Switched on.") } } }
-                if club.status == "active" { Button("Switch Off", role: .destructive) { Task { await admin.act("off", ["club": club.id], done: "Switched off.") } } }
+        CardPage(image: image, kicker: club.statusText, title: club.name, sub: club.city.isEmpty ? nil : club.city) {
+            HStack(spacing: 8) {
+                if club.status == "pending" { Button("Approve") { Task { await admin.act("approve", ["club": club.id], done: "Approved. They have an email.") } }.buttonStyle(GreenButton(full: true)) }
+                if club.status == "off" { Button("Switch On") { Task { await admin.act("on", ["club": club.id], done: "Switched on.") } }.buttonStyle(GreenButton(full: true)) }
+                if club.status == "active" { Button("Switch Off", role: .destructive) { Task { await admin.act("off", ["club": club.id], done: "Switched off.") } }.buttonStyle(PlainCardButton(full: true)) }
             }
-            SwiftUI.Section("Tournaments left to make") {
-                HStack {
-                    Text(club.creditsText).font(FC.display(30))
-                    Spacer()
-                    Button("−1") { Task { await admin.act("credits", ["club": club.id, "add": -1]) } }.disabled(club.credits <= 0)
-                    Button("+1") { Task { await admin.act("credits", ["club": club.id, "add": 1]) } }.disabled(club.credits < 0)
-                    Button("+5") { Task { await admin.act("credits", ["club": club.id, "add": 5]) } }.disabled(club.credits < 0)
-                }
-                .buttonStyle(.bordered)
-                Button(club.credits < 0 ? "Set a Number" : "Make Unlimited") { Task { await admin.act("credits", ["club": club.id, "set": club.credits < 0 ? 0 : -1]) } }
-            }
-            SwiftUI.Section("Contact") {
-                if !club.contact.isEmpty { LabeledContent("Name", value: club.contact) }
-                if !club.phone.isEmpty { LabeledContent("Phone", value: club.phone) }
-                if !club.city.isEmpty { LabeledContent("Town", value: club.city) }
-            }
-            SwiftUI.Section("People") {
-                ForEach(club.members, id: \.email) { m in LabeledContent(m.email, value: m.role == "owner" ? "Owner" : "Staff") }
-            }
-            SwiftUI.Section("Tournaments") {
-                ForEach(club.events) { e in
-                    Button { model.openAdmin(id: e.id, key: e.key, name: e.name, club: club.name); dismiss() } label: {
-                        HStack { Text(e.name); Spacer(); if e.archived { Text("Archived").foregroundStyle(FC.muted) } else if e.hidden { Text("Hidden").foregroundStyle(FC.muted) } }
+            CardBox(title: "Tournaments left to make") {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text(club.creditsText).font(FC.display(40))
+                        Spacer()
+                        Button("−1") { Task { await admin.act("credits", ["club": club.id, "add": -1]) } }.buttonStyle(PlainCardButton()).disabled(club.credits <= 0)
+                        Button("+1") { Task { await admin.act("credits", ["club": club.id, "add": 1]) } }.buttonStyle(PlainCardButton()).disabled(club.credits < 0)
+                        Button("+5") { Task { await admin.act("credits", ["club": club.id, "add": 5]) } }.buttonStyle(PlainCardButton()).disabled(club.credits < 0)
                     }
+                    Button(club.credits < 0 ? "Set a Number Instead" : "Make Unlimited") { Task { await admin.act("credits", ["club": club.id, "set": club.credits < 0 ? 0 : -1]) } }
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(FC.link)
+                }
+                .padding(14)
+            }
+            let contact = [("person.fill", club.contact), ("phone.fill", club.phone), ("mappin.and.ellipse", club.city)].filter { !$0.1.isEmpty }
+            if !contact.isEmpty {
+                CardBox(title: "Contact") {
+                    ForEach(Array(contact.enumerated()), id: \.offset) { i, c in ListRow(icon: c.0, iconColor: FC.muted, title: c.1, last: i == contact.count - 1) }
+                }
+            }
+            CardBox(title: "People") {
+                if club.members.isEmpty { Text("Nobody yet.").foregroundStyle(FC.muted).padding(14) }
+                ForEach(Array(club.members.enumerated()), id: \.element.email) { i, m in
+                    ListRow(icon: m.role == "owner" ? "crown.fill" : "person.fill", iconColor: m.role == "owner" ? FC.flag.opacity(0.9) : FC.muted, title: m.email, sub: m.role == "owner" ? "Owner" : "Staff", last: i == club.members.count - 1)
+                }
+            }
+            CardBox(title: "Tournaments") {
+                if club.events.isEmpty { Text("None yet.").foregroundStyle(FC.muted).padding(14) }
+                ForEach(Array(club.events.enumerated()), id: \.element.id) { i, e in
+                    Button { model.openAdmin(id: e.id, key: e.key, name: e.name, club: club.name); dismiss() } label: {
+                        ListRow(icon: "flag.fill", iconColor: e.archived || e.hidden ? FC.muted : FC.primary, title: e.name, sub: e.archived ? "Archived" : e.hidden ? "Hidden" : "Open it", last: i == club.events.count - 1) { Chevron() }
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
-        .navigationTitle(club.name).navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        .overlay(alignment: .bottom) { NoticeBar(text: admin.notice).padding(.bottom, 10).animation(.snappy, value: admin.notice) }
+        .task(id: club.id) { image = await CourseImages.place([club.name, club.city].filter { !$0.isEmpty }.joined(separator: " "), key: club.id) }
     }
 }
 
@@ -166,22 +180,25 @@ private struct NewClub: View {
     @State private var city = ""
     @State private var credits = 1
     var body: some View {
-        Form {
-            SwiftUI.Section("Club") { TextField("Club name", text: $name); TextField("Town", text: $city) }
-            SwiftUI.Section { TextField("Owner’s email", text: $email).keyboardType(.emailAddress).textInputAutocapitalization(.never); TextField("Contact name", text: $contact); TextField("Phone", text: $phone).keyboardType(.phonePad) } header: { Text("Owner") } footer: { Text("They get an email with how to sign in.") }
-            SwiftUI.Section { Stepper("\(credits) tournament\(credits == 1 ? "" : "s")", value: $credits, in: 0...100) }
-        }
-        .navigationTitle("New club").navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Set Up") { Task { await admin.act("create", ["name": name, "email": email, "contact": contact, "phone": phone, "city": city, "credits": credits], done: "Club set up."); dismiss() } }.disabled(name.isEmpty)
+        CardPage(kicker: "Admin", title: "New club") {
+            CardBox(title: "Club") { VStack(spacing: 10) { BoxField(placeholder: "Club name", text: $name); BoxField(placeholder: "Town and state", text: $city) }.padding(14) }
+            CardBox(title: "Owner", footer: "They get an email with how to sign in.") {
+                VStack(spacing: 10) {
+                    BoxField(placeholder: "Owner’s email", text: $email).keyboardType(.emailAddress).textInputAutocapitalization(.never)
+                    BoxField(placeholder: "Contact name", text: $contact)
+                    BoxField(placeholder: "Phone", text: $phone).keyboardType(.phonePad)
+                }
+                .padding(14)
             }
+            CardBox(title: "Tournaments they can make") { Stepper("\(credits) tournament\(credits == 1 ? "" : "s")", value: $credits, in: 0...100).padding(14) }
+            Button("Set Up the Club") { Task { await admin.act("create", ["name": name, "email": email, "contact": contact, "phone": phone, "city": city, "credits": credits], done: "Club set up."); dismiss() } }
+                .buttonStyle(GreenButton(full: true)).disabled(name.isEmpty)
         }
+        .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
     }
 }
 
-/// Every tournament on every club's list: open it here, lock, archive, hide.
+/// Every tournament on every club's list: open it here; lock, archive, hide from its menu.
 private struct AdminTournaments: View {
     @Environment(AdminModel.self) private var admin
     @Environment(AppModel.self) private var model
@@ -193,25 +210,28 @@ private struct AdminTournaments: View {
             .sorted { $0.created > $1.created }
     }
     var body: some View {
-        List {
-            Toggle("Show hidden and archived", isOn: $showHidden)
-            ForEach(shown) { e in
-                Button { model.openAdmin(id: e.id, key: e.key, name: e.name, club: e.clubName) } label: {
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack { Text(e.name).font(.headline).foregroundStyle(FC.ink); Spacer(); Text(e.gone ? "Gone" : e.archived ? "Archived" : e.locked ? "Final" : e.hidden ? "Hidden" : "Open").font(.caption).foregroundStyle(FC.muted) }
-                        Text([e.clubName, e.date, "\(e.teams) teams", e.screens > 0 ? "\(e.online)/\(e.screens) TVs on" : ""].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(FC.muted)
+        CardPage(kicker: "Admin", title: "Tournaments", sub: "\(shown.count) shown") {
+            BoxField(placeholder: "Find a tournament or club", text: $search)
+            Toggle("Show hidden and archived", isOn: $showHidden).tint(FC.primary).padding(.horizontal, 4)
+            CardBox {
+                if shown.isEmpty { Text("No tournaments match.").foregroundStyle(FC.muted).padding(14) }
+                ForEach(Array(shown.enumerated()), id: \.element.id) { i, e in
+                    Button { model.openAdmin(id: e.id, key: e.key, name: e.name, club: e.clubName) } label: {
+                        ListRow(icon: "flag.fill", iconColor: e.locked || e.archived ? FC.muted : (e.online > 0 ? FC.ok : FC.primary), title: e.name,
+                                sub: [e.clubName, e.date, "\(e.teams) teams", e.screens > 0 ? "\(e.online)/\(e.screens) TVs on" : "", e.gone ? "Gone" : e.archived ? "Archived" : e.locked ? "Final" : e.hidden ? "Hidden" : ""].filter { !$0.isEmpty }.joined(separator: " · "),
+                                last: i == shown.count - 1) {
+                            Menu {
+                                Button(e.locked ? "Unlock Results" : "Lock Results") { Task { await admin.act("lock", ["id": e.id, "locked": !e.locked]) } }
+                                Button(e.archived ? "Unarchive" : "Archive") { Task { await admin.act("archive", ["id": e.id, "on": !e.archived]) } }
+                                Button(e.hidden ? "Show on the Club’s List" : "Hide from the Club’s List") { Task { await admin.act(e.hidden ? "unhide" : "hide", ["id": e.id]) } }
+                            } label: { Image(systemName: "ellipsis.circle").font(.title3).foregroundStyle(FC.link) }
+                        }
                     }
-                }
-                .swipeActions {
-                    Button(e.locked ? "Unlock" : "Lock") { Task { await admin.act("lock", ["id": e.id, "locked": !e.locked]) } }.tint(FC.blue)
-                    Button(e.archived ? "Unarchive" : "Archive") { Task { await admin.act("archive", ["id": e.id, "on": !e.archived]) } }.tint(FC.muted)
-                    Button(e.hidden ? "Show" : "Hide") { Task { await admin.act(e.hidden ? "unhide" : "hide", ["id": e.id]) } }
+                    .buttonStyle(.plain)
                 }
             }
         }
-        .scrollContentBackground(.hidden).background(FC.paper)
-        .navigationTitle("Tournaments")
-        .searchable(text: $search, prompt: "Find a tournament or club")
+        .overlay(alignment: .bottom) { NoticeBar(text: admin.notice).padding(.bottom, 10).animation(.snappy, value: admin.notice) }
         .task { await admin.refreshEvents() }
         .refreshable { await admin.refreshEvents() }
     }
@@ -253,15 +273,15 @@ private struct AdminScreens: View {
 private struct AdminActivity: View {
     @Environment(AdminModel.self) private var admin
     var body: some View {
-        List(admin.log) { l in
-            VStack(alignment: .leading, spacing: 2) {
-                Text(l.what).font(.subheadline)
-                Text([Date(timeIntervalSince1970: l.at / 1000).formatted(date: .abbreviated, time: .shortened), l.who, admin.clubs.first { $0.id == l.club }?.name ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.caption).foregroundStyle(FC.muted)
+        CardPage(kicker: "Admin", title: "Activity", sub: "Newest first") {
+            CardBox {
+                if admin.log.isEmpty { Text("Nothing yet.").foregroundStyle(FC.muted).padding(14) }
+                ForEach(Array(admin.log.prefix(200).enumerated()), id: \.element.id) { i, l in
+                    ListRow(title: l.what, sub: [Date(timeIntervalSince1970: l.at / 1000).formatted(date: .abbreviated, time: .shortened), l.who, admin.clubs.first { $0.id == l.club }?.name ?? ""].filter { !$0.isEmpty }.joined(separator: " · "),
+                            last: i == min(admin.log.count, 200) - 1)
+                }
             }
         }
-        .scrollContentBackground(.hidden).background(FC.paper)
-        .navigationTitle("Activity")
         .task { await admin.refreshLog() }
         .refreshable { await admin.refreshLog() }
     }
