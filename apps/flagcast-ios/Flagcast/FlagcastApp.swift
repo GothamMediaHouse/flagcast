@@ -4,12 +4,14 @@ import SwiftUI
 struct FlagcastApp: App {
     @State private var router = Router()
     @Environment(\.scenePhase) private var phase
+    @AppStorage("flagcast.textSize") private var textSize = TextSize.standard.rawValue
     init() { FCType.registerFonts() }
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(router)
+                .modifier(TextSizing(size: TextSize(rawValue: textSize)?.dynamic))
                 // cart cards and shared links: flagcast://g/<id>/s/<CODE>, or flagcast.app/g/… handed to the app
                 .onOpenURL { router.handle($0) }
                 .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { a in
@@ -51,5 +53,13 @@ struct RootView: View {
                 }
         }
         .tint(Color.accentColor)
+    }
+}
+
+/// Settings → Text size: at least this big (bigger if the iPhone's own setting is bigger)
+struct TextSizing: ViewModifier {
+    var size: DynamicTypeSize?
+    func body(content: Content) -> some View {
+        if let size { content.dynamicTypeSize(size...DynamicTypeSize.accessibility3) } else { content }
     }
 }
