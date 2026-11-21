@@ -5,22 +5,21 @@ import SwiftUI
 struct MoreView: View {
     @Environment(AppModel.self) private var model
     var body: some View {
-        List {
-            if let d = model.current {
-                SwiftUI.Section(d.ev.name.isEmpty ? "This tournament" : d.ev.name) {
-                    NavigationLink { ContestsView() } label: { Label("Contests", systemImage: "trophy") }
-                    NavigationLink { WithTournament { DetailsView(doc: $0) } } label: { Label("Tournament details", systemImage: "gearshape") }
-                    NavigationLink { WithTournament { StaffView(doc: $0) } } label: { Label("Golf pros and marshals", systemImage: "person.badge.key") }
-                    NavigationLink { WithTournament { LinksView(doc: $0) } } label: { Label("Links to share", systemImage: "link") }
+        CardPage(image: model.current?.picture.image, kicker: model.current.map { $0.ev.name.isEmpty ? "Tournament" : $0.ev.name }, title: "More") {
+            if model.current != nil {
+                CardBox(title: "This tournament") {
+                    NavigationLink { ContestsView() } label: { ListRow(icon: "trophy.fill", iconColor: FC.flag.opacity(0.9), title: "Contests", sub: "Closest to the pin, long drive") { Chevron() } }
+                    NavigationLink { WithTournament { DetailsView(doc: $0) } } label: { ListRow(icon: "gearshape.fill", title: "Tournament details", sub: "Name, date, holes, flights, ticker") { Chevron() } }
+                    NavigationLink { WithTournament { StaffView(doc: $0) } } label: { ListRow(icon: "person.badge.key.fill", iconColor: FC.blue, title: "Golf pros and marshals", sub: "Their PINs for the phone app") { Chevron() } }
+                    NavigationLink { WithTournament { LinksView(doc: $0) } } label: { ListRow(icon: "link", iconColor: FC.ok, title: "Links to share", sub: "Leaderboard, board, scorecards", last: true) { Chevron() } }
                 }
             }
-            SwiftUI.Section {
-                NavigationLink { TournamentPicker() } label: { Label("Tournaments", systemImage: "rectangle.stack") }
-                NavigationLink { SettingsView() } label: { Label("Settings", systemImage: "person.crop.circle") }
+            CardBox(title: "You") {
+                NavigationLink { TournamentPicker() } label: { ListRow(icon: "rectangle.stack.fill", title: "Tournaments", sub: "Switch, make a new one, add by link") { Chevron() } }
+                NavigationLink { SettingsView() } label: { ListRow(icon: "person.crop.circle.fill", iconColor: FC.muted, title: "Settings", sub: model.me?.email ?? "Not signed in", last: true) { Chevron() } }
             }
         }
-        .scrollContentBackground(.hidden).background(FC.paper)
-        .navigationTitle("More")
+        .buttonStyle(.plain)
     }
 }
 
@@ -95,28 +94,35 @@ private struct Results: View {
 struct DetailsView: View {
     @Bindable var doc: DeskDoc
     var body: some View {
-        Form {
-            SwiftUI.Section("Tournament") {
-                TextField("Name", text: $doc.ev.name)
-                DatePicker("Date", selection: Binding(get: { ISO8601DateFormatter.day.date(from: doc.ev.date) ?? Date() }, set: { doc.ev.date = ISO8601DateFormatter.day.string(from: $0) }), displayedComponents: .date)
-                TextField("Club", text: $doc.ev.club)
-                LabeledContent("Course", value: doc.ev.course.name.isEmpty ? "Set on the Mac" : doc.ev.course.name)
-            }
-            SwiftUI.Section {
-                Picker("Holes", selection: $doc.ev.format.nine) { Text("18 holes").tag(""); Text("Front 9").tag("front"); Text("Back 9").tag("back") }
-                if !doc.ev.format.isStableford {
-                    Picker("Leaderboard shows", selection: $doc.ev.format.show) { Text("Net").tag("net"); Text("Gross").tag("gross") }
+        CardPage(image: doc.picture.image, kicker: doc.ev.name, title: "Details") {
+            CardBox(title: "Tournament") {
+                VStack(alignment: .leading, spacing: 10) {
+                    BoxField(placeholder: "Name", text: $doc.ev.name)
+                    DatePicker("Date", selection: Binding(get: { ISO8601DateFormatter.day.date(from: doc.ev.date) ?? Date() }, set: { doc.ev.date = ISO8601DateFormatter.day.string(from: $0) }), displayedComponents: .date)
+                    BoxField(placeholder: "Club", text: $doc.ev.club)
+                    HStack { Text("Course").foregroundStyle(FC.muted); Spacer(); Text(doc.ev.course.name.isEmpty ? "Set on the Mac" : doc.ev.course.name) }
                 }
-                TextField("Flights (comma between)", text: Binding(get: { doc.ev.flights.joined(separator: ", ") },
+                .padding(14)
+            }
+            CardBox(title: "Format", footer: "The course, tees, format and course map are set in Flagcast Manager on the Mac.") {
+                VStack(alignment: .leading, spacing: 12) {
+                    Picker("Holes", selection: $doc.ev.format.nine) { Text("18 holes").tag(""); Text("Front 9").tag("front"); Text("Back 9").tag("back") }.pickerStyle(.segmented)
+                    if !doc.ev.format.isStableford {
+                        Picker("Leaderboard shows", selection: $doc.ev.format.show) { Text("Net").tag("net"); Text("Gross").tag("gross") }.pickerStyle(.segmented)
+                    }
+                    BoxField(placeholder: "Flights, with a comma between (A, B)", text: Binding(get: { doc.ev.flights.joined(separator: ", ") },
                                                                     set: { doc.ev.flights = $0.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty } }))
-            } header: { Text("Format") } footer: { Text("The course, tees, format and course map are set in Flagcast Manager on the Mac.") }
-            SwiftUI.Section("On the TVs") {
-                TextField("Ticker along the bottom", text: $doc.ev.screens.ticker, axis: .vertical)
-                Toggle("Show gross skins", isOn: $doc.ev.screens.skins)
+                }
+                .padding(14)
+            }
+            CardBox(title: "On the TVs") {
+                VStack(alignment: .leading, spacing: 12) {
+                    TextField("Ticker along the bottom", text: $doc.ev.screens.ticker, axis: .vertical).padding(12).background(FC.paper2, in: RoundedRectangle(cornerRadius: 10))
+                    Toggle("Show gross skins", isOn: $doc.ev.screens.skins).tint(FC.primary)
+                }
+                .padding(14)
             }
         }
-        .scrollContentBackground(.hidden).background(FC.paper)
-        .navigationTitle("Tournament details")
     }
 }
 
@@ -124,22 +130,27 @@ struct DetailsView: View {
 struct StaffView: View {
     @Bindable var doc: DeskDoc
     var body: some View {
-        Form {
-            SwiftUI.Section {
+        CardPage(image: doc.picture.image, kicker: doc.ev.name, title: "Pros & marshals") {
+            CardBox(footer: "A golf pro can fix scores, switch the TVs and nudge a cart. A marshal can only post contest results. PINs are 4 to 8 digits.") {
+                if doc.ev.pins.isEmpty { Text("Nobody yet.").foregroundStyle(FC.muted).padding(14) }
                 ForEach($doc.ev.pins) { $p in
-                    HStack {
-                        Image(systemName: p.role == "marshal" ? "flag" : "person.badge.key").foregroundStyle(FC.muted).frame(width: 22)
-                        TextField("Name", text: $p.name)
-                        TextField("PIN", text: Binding(get: { p.pin }, set: { p.pin = String($0.filter(\.isNumber).prefix(8)) })).keyboardType(.numberPad).font(.body.monospaced()).frame(width: 80)
+                    HStack(spacing: 10) {
+                        Image(systemName: p.role == "marshal" ? "flag.fill" : "person.badge.key.fill").foregroundStyle(.white)
+                            .frame(width: 32, height: 32).background(p.role == "marshal" ? FC.flag.opacity(0.9) : FC.blue, in: RoundedRectangle(cornerRadius: 8))
+                        TextField("Name", text: $p.name).font(.system(size: 16, weight: .semibold))
+                        TextField("PIN", text: Binding(get: { p.pin }, set: { p.pin = String($0.filter(\.isNumber).prefix(8)) })).keyboardType(.numberPad)
+                            .font(.body.monospaced()).multilineTextAlignment(.center).frame(width: 84).padding(8).background(FC.paper2, in: RoundedRectangle(cornerRadius: 8))
+                        Button(role: .destructive) { let id = p.id; doc.ev.pins.removeAll { $0.id == id } } label: { Image(systemName: "minus.circle.fill").foregroundStyle(FC.red) }
                     }
-                    .swipeActions { Button("Remove", role: .destructive) { let id = p.id; doc.ev.pins.removeAll { $0.id == id } } }
+                    .padding(.horizontal, 14).frame(minHeight: 58)
+                    .overlay(alignment: .bottom) { Rectangle().fill(FC.hairline).frame(height: 1).padding(.leading, 58) }
                 }
-                Button { add("pro") } label: { Label("Add a Golf Pro", systemImage: "plus") }
-                Button { add("marshal") } label: { Label("Add a Marshal", systemImage: "plus") }
-            } footer: { Text("A golf pro can fix scores, switch the TVs and nudge a cart. A marshal can only post contest results. PINs are 4 to 8 digits.") }
+            }
+            HStack(spacing: 8) {
+                Button { add("pro") } label: { Label("Golf Pro", systemImage: "plus") }.buttonStyle(PlainCardButton(full: true))
+                Button { add("marshal") } label: { Label("Marshal", systemImage: "plus") }.buttonStyle(PlainCardButton(full: true))
+            }
         }
-        .scrollContentBackground(.hidden).background(FC.paper)
-        .navigationTitle("Pros and marshals")
     }
     private func add(_ role: String) {
         doc.ev.pins.append(StaffPin(name: role == "pro" ? "Golf pro" : "Marshal \(doc.ev.pins.filter { $0.role == "marshal" }.count + 1)", role: role, pin: String(format: "%04d", Int.random(in: 1000...9999))))
@@ -150,23 +161,27 @@ struct StaffView: View {
 struct LinksView: View {
     let doc: DeskDoc
     var body: some View {
-        List {
-            SwiftUI.Section("For everyone") {
-                link("Live leaderboard", doc.liveURL, "Players and guests on their phones")
-                link("The board", doc.boardURL, "Open on a TV (or set up each TV on the Screens tab)")
+        CardPage(image: doc.picture.image, kicker: doc.ev.name, title: "Links") {
+            CardBox(title: "For everyone") {
+                link("Live leaderboard", doc.liveURL, "Players and guests, on their phones", "list.number", FC.ok)
+                link("The board", doc.boardURL, "For a TV (or set up each TV on Screens)", "tv.fill", FC.green2, last: true)
             }
-            SwiftUI.Section { link("Desk link", doc.deskURL, "Anyone with it can change this tournament") } header: { Text("Organizers only") }
-            SwiftUI.Section("Team scorecards") {
-                ForEach(doc.ev.teams.filter { !$0.code.isEmpty }) { t in link(t.displayName.isEmpty ? "Team" : t.displayName, doc.cartURL(t.code), "Cart code \(t.code.uppercased())") }
+            CardBox(title: "Organizers only", footer: "Anyone with the desk link can change this tournament.") {
+                link("Desk link", doc.deskURL, "Opens this tournament’s desk", "key.fill", FC.red, last: true)
+            }
+            let teams = doc.ev.teams.filter { !$0.code.isEmpty }
+            if !teams.isEmpty {
+                CardBox(title: "Team scorecards") {
+                    ForEach(Array(teams.enumerated()), id: \.element.id) { i, t in
+                        link(t.displayName.isEmpty ? "Team" : t.displayName, doc.cartURL(t.code), "Cart code \(t.code.uppercased())", "square.and.pencil", FC.primary, last: i == teams.count - 1)
+                    }
+                }
             }
         }
-        .scrollContentBackground(.hidden).background(FC.paper)
-        .navigationTitle("Links")
     }
-    private func link(_ t: String, _ u: URL, _ sub: String) -> some View {
-        ShareLink(item: u) {
-            VStack(alignment: .leading, spacing: 2) { Text(t).foregroundStyle(FC.ink); Text(sub).font(.caption).foregroundStyle(FC.muted) }
-        }
+    private func link(_ t: String, _ u: URL, _ sub: String, _ icon: String, _ color: Color, last: Bool = false) -> some View {
+        ShareLink(item: u) { ListRow(icon: icon, iconColor: color, title: t, sub: sub, last: last) { Image(systemName: "square.and.arrow.up").foregroundStyle(FC.link) } }
+            .buttonStyle(.plain)
     }
 }
 
@@ -175,24 +190,29 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var passcode = false
     var body: some View {
-        Form {
-            SwiftUI.Section("Account") {
-                LabeledContent("Signed in as", value: model.me?.email ?? "Not signed in")
-                if let c = model.me?.club { LabeledContent("Club", value: c.name) }
-                if model.signedIn { NavigationLink(model.me?.password == true ? "Change password" : "Set a password") { PasswordView() } }
-                if model.signedIn { Button("Sign Out", role: .destructive) { Task { await model.signOut() } } }
-                else { NavigationLink("Sign in with your club email") { SignInView() } }
+        CardPage(kicker: model.me?.club?.name ?? "Flagcast Manager", title: "Settings", sub: model.me?.email) {
+            CardBox(title: "Account") {
+                ListRow(icon: "person.crop.circle.fill", iconColor: FC.muted, title: model.me?.email ?? "Not signed in", sub: model.isAdmin ? "Flagcast admin" : model.me?.club?.name)
+                if model.signedIn {
+                    NavigationLink { PasswordView() } label: { ListRow(icon: "key.fill", title: model.me?.password == true ? "Change password" : "Set a password", sub: "Then sign in with your email and password") { Chevron() } }
+                        .buttonStyle(.plain)
+                    Button { Task { await model.signOut() } } label: { ListRow(icon: "rectangle.portrait.and.arrow.right", iconColor: FC.red, title: "Sign Out", last: true) }.buttonStyle(.plain)
+                } else {
+                    NavigationLink { SignInView() } label: { ListRow(icon: "person.badge.plus", title: "Sign in", last: true) { Chevron() } }.buttonStyle(.plain)
+                }
             }
-            SwiftUI.Section {
-                Button(!(model.admin.pass ?? "").isEmpty ? "Admin passcode: unlocked" : "Flagcast admin passcode…") { passcode = true }
-            } footer: { Text("Flagcast staff: the passcode adds the Admin tab without an email sign-in.") }
-            SwiftUI.Section {
-                Toggle("Show engineering tools", isOn: Binding(get: { model.showEngineering }, set: { model.showEngineering = $0 }))
-            } footer: { Text(model.isAdmin ? "You’re a Flagcast admin, so Engineering is always on." : "Adds Engineering to the Screens tab: every TV in one grid, switching several at once, take-overs. Club staff don’t need it.") }
-            SwiftUI.Section { LabeledContent("Version", value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))") }
+            CardBox(title: "Tools", footer: model.isAdmin ? "You’re a Flagcast admin, so Engineering is always on." : "Engineering adds every TV in one grid, switching several at once, and take-overs to the Screens tab. Club staff don’t need it.") {
+                ListRow(icon: "slider.horizontal.3", iconColor: FC.blue, title: "Show engineering tools") {
+                    Toggle("", isOn: Binding(get: { model.showEngineering }, set: { model.showEngineering = $0 })).labelsHidden().tint(FC.primary)
+                }
+                Button { passcode = true } label: {
+                    ListRow(icon: "lock.shield.fill", iconColor: FC.green2, title: "Flagcast admin passcode", sub: !(model.admin.pass ?? "").isEmpty ? "Unlocked on this phone" : "For Flagcast staff without a sign-in", last: true) { Chevron() }
+                }
+                .buttonStyle(.plain)
+            }
+            Text("Flagcast Manager \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
+                .font(.footnote).foregroundStyle(FC.muted).frame(maxWidth: .infinity)
         }
-        .scrollContentBackground(.hidden).background(FC.paper)
-        .navigationTitle("Settings")
         .sheet(isPresented: $passcode) { NavigationStack { AdminPasscodeView() } }
     }
 }
@@ -206,14 +226,15 @@ struct PasswordView: View {
     @State private var msg: String?
     @State private var busy = false
     var body: some View {
-        Form {
-            SwiftUI.Section {
-                SecureField("New password", text: $pass).textContentType(.newPassword)
-                SecureField("Type it again", text: $again).textContentType(.newPassword)
-            } footer: { Text(msg ?? "At least 10 characters. Your phone can suggest a strong one.") }
-            Button { save() } label: { if busy { ProgressView() } else { Text("Save Password") } }.disabled(pass.count < 10 || busy)
+        CardPage(kicker: model.me?.email, title: model.me?.password == true ? "New password" : "Set a password") {
+            VStack(alignment: .leading, spacing: 12) {
+                BoxField(placeholder: "New password", text: $pass, secure: true).textContentType(.newPassword)
+                BoxField(placeholder: "Type it again", text: $again, secure: true).textContentType(.newPassword)
+                Button { save() } label: { if busy { ProgressView().tint(.white) } else { Text("Save Password") } }.buttonStyle(GreenButton(full: true)).disabled(pass.count < 10 || busy)
+                Text(msg ?? "At least 10 characters. Your phone can suggest a strong one.").font(.footnote).foregroundStyle(msg == nil ? FC.muted : FC.red)
+            }
+            .card()
         }
-        .navigationTitle(model.me?.password == true ? "Change password" : "Set a password")
     }
     private func save() {
         guard pass == again else { msg = "The two don’t match."; return }

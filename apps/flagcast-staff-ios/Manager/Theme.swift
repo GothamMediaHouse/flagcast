@@ -199,3 +199,82 @@ struct NoticeBar: View {
         }
     }
 }
+
+// MARK: - card pages (More, Settings, Admin lists): the same look as the tournament tabs
+
+/// A page with the photo (or green) header, its title at the bottom, and solid cards below.
+struct CardPage<Content: View>: View {
+    var image: UIImage? = nil
+    var kicker: String? = nil
+    var title: String
+    var sub: String? = nil
+    var height: CGFloat = 190
+    @ViewBuilder var content: Content
+    var body: some View {
+        PhotoPage(image: image, kicker: kicker, title: title, sub: sub, height: height) { EmptyView() } content: { content }
+            .navigationTitle("").navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// A titled white card holding rows.
+struct CardBox<Content: View>: View {
+    var title: String? = nil
+    var footer: String? = nil
+    @ViewBuilder var content: Content
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let title { CardTitle(title).padding(.leading, 4) }
+            VStack(alignment: .leading, spacing: 0) { content }
+                .background(FC.card, in: RoundedRectangle(cornerRadius: 14))
+                .shadow(color: FC.scrim.opacity(0.10), radius: 10, y: 4)
+            if let footer { Help(footer).padding(.horizontal, 4) }
+        }
+    }
+}
+
+/// One row in a card: icon, title and a line under it, something on the right, a hairline under it.
+struct ListRow<Trailing: View>: View {
+    var icon: String? = nil
+    var iconColor: Color = FC.primary
+    var title: String
+    var sub: String? = nil
+    var last = false
+    @ViewBuilder var trailing: Trailing
+    var body: some View {
+        HStack(spacing: 12) {
+            if let icon {
+                Image(systemName: icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                    .frame(width: 32, height: 32).background(iconColor, in: RoundedRectangle(cornerRadius: 8))
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 16, weight: .semibold)).foregroundStyle(FC.ink)
+                if let sub, !sub.isEmpty { Text(sub).font(.footnote).foregroundStyle(FC.muted).lineLimit(2) }
+            }
+            Spacer(minLength: 8)
+            trailing
+        }
+        .padding(.horizontal, 14).frame(minHeight: 58)
+        .contentShape(Rectangle())
+        .overlay(alignment: .bottom) { if !last { Rectangle().fill(FC.hairline).frame(height: 1).padding(.leading, icon == nil ? 14 : 58) } }
+    }
+}
+extension ListRow where Trailing == EmptyView {
+    init(icon: String? = nil, iconColor: Color = FC.primary, title: String, sub: String? = nil, last: Bool = false) {
+        self.init(icon: icon, iconColor: iconColor, title: title, sub: sub, last: last) { EmptyView() }
+    }
+}
+/// The chevron for rows that open a page.
+struct Chevron: View { var body: some View { Image(systemName: "chevron.right").font(.footnote.weight(.bold)).foregroundStyle(FC.muted) } }
+
+/// A text box on a card: paper background, rounded.
+struct BoxField: View {
+    var placeholder: String
+    @Binding var text: String
+    var secure = false
+    var body: some View {
+        Group {
+            if secure { SecureField(placeholder, text: $text) } else { TextField(placeholder, text: $text) }
+        }
+        .padding(12).background(FC.paper2, in: RoundedRectangle(cornerRadius: 10))
+    }
+}

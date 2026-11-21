@@ -13,7 +13,7 @@ def i(name): return hashlib.md5(('flagcast-staff-ios:' + name).encode()).hexdige
 TEAM = 'C8KXPB4QNA'
 # (target, product name, bundle id, version, build, Info.plist)
 TARGETS = [
-    ('Manager', 'Flagcast Manager', 'app.flagcast.manager', '2.1.0', '5', 'Manager-Info.plist'),
+    ('Manager', 'Flagcast Manager', 'app.flagcast.manager', '2.1.0', '6', 'Manager-Info.plist'),
     ('Admin', 'Flagcast Admin', 'app.flagcast.admin', '1.1.0', '3', 'Admin-Info.plist'),
 ]
 FULL = {'Manager'}
