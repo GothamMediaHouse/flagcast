@@ -211,9 +211,10 @@ final class CameraBridge: Identifiable {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: ffmpeg)
         let fpsS = String(format: "%.3f", fps), gop = "\(max(1, Int(fps.rounded())))"
-        let hls = "[f=hls:hls_time=1:hls_list_size=8:hls_flags=delete_segments+independent_segments+omit_endlist+program_date_time:hls_segment_filename=\(dir.path)/s%05d.ts]\(dir.path)/index.m3u8"
+        // each output gets its own queue (use_fifo), so a slow or failing upload never holds up the TVs' copy or the camera
+        let hls = "[f=hls:use_fifo=1:hls_time=1:hls_list_size=8:hls_flags=delete_segments+independent_segments+omit_endlist+program_date_time:hls_segment_filename=\(dir.path)/s%05d.ts]\(dir.path)/index.m3u8"
         var outs = [hls]
-        if let rtmps { outs.append("[f=flv:onfail=ignore]\(rtmps)") }
+        if let rtmps { outs.append("[f=flv:onfail=ignore:use_fifo=1:fifo_options=drop_pkts_on_overflow=1\\:attempt_recovery=1\\:recovery_wait_time=2\\:queue_size=120]\(rtmps)") }
         p.arguments = ["-hide_banner", "-loglevel", "warning", "-stats", "-stats_period", "5",
                        "-thread_queue_size", "64", "-f", "rawvideo", "-pix_fmt", uyvy ? "uyvy422" : "bgra", "-s", "\(w)x\(h)", "-framerate", fpsS, "-i", "pipe:0",
                        "-re", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",     // silent sound, at real speed (Stream wants audio)

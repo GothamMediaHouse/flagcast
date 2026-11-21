@@ -72,10 +72,16 @@ enum NDISelfTest {
             NDISources.shared.watch()
             for _ in 0..<20 where NDISources.shared.names.isEmpty { try? await Task.sleep(for: .seconds(1)) }
             log("sources: \(NDISources.shared.names)")
-            guard let src = NDISources.shared.names.first else { log("FAIL no NDI source"); NSApp.terminate(nil); return }
-            Bridges.shared.start(event: "selftest", hole: 3, source: src, rtmps: nil)
-            try? await Task.sleep(for: .seconds(12))
-            let b = Bridges.shared.bridge("selftest", 3)
+            let want = ProcessInfo.processInfo.environment["FLAGCAST_NDI_SOURCE"] ?? ""
+            for _ in 0..<10 where !want.isEmpty && !NDISources.shared.names.contains(where: { $0.contains(want) }) { try? await Task.sleep(for: .seconds(1)) }
+            guard let src = NDISources.shared.names.first(where: { want.isEmpty || $0.contains(want) }) ?? NDISources.shared.names.first else { log("FAIL no NDI source"); NSApp.terminate(nil); return }
+            let env = ProcessInfo.processInfo.environment
+            let ev = env["FLAGCAST_NDI_EVENT"] ?? "selftest", hole = Int(env["FLAGCAST_NDI_HOLE"] ?? "") ?? 3
+            log("using: \(src)")
+            Bridges.shared.start(event: ev, hole: hole, source: src, rtmps: env["FLAGCAST_NDI_RTMPS"])
+            try? await Task.sleep(for: .seconds(Double(env["FLAGCAST_NDI_SECS"] ?? "") ?? 12))
+            if let b = Bridges.shared.bridge(ev, hole) { log("upload: \(b.uploading.map { $0 ? "sending" : "not sending" } ?? "off")") }
+            let b = Bridges.shared.bridge(ev, hole)
             log("bridge: receiving=\(b?.receiving ?? false) size=\(b?.size ?? "") state=\(b?.state ?? "")")
             let files = (try? FileManager.default.contentsOfDirectory(atPath: b?.dir.path ?? "")) ?? []
             log("hls files: \(files.sorted().prefix(6))")
@@ -83,8 +89,8 @@ enum NDISelfTest {
                 guard let (d, r) = try? await URLSession.shared.data(from: URL(string: "http://127.0.0.1:\(LOCAL_PORT)\(path)")!) else { return (0, "") }
                 return ((r as? HTTPURLResponse)?.statusCode ?? 0, String(decoding: d.prefix(120), as: UTF8.self))
             }
-            log("index.json: \(await get("/local-cams/selftest/index.json"))")
-            let pl = await get("/local-cams/selftest/3/index.m3u8"); log("playlist: \(pl.0) \(pl.1.replacingOccurrences(of: "\n", with: " | "))")
+            log("index.json: \(await get("/local-cams/\(ev)/index.json"))")
+            let pl = await get("/local-cams/\(ev)/\(hole)/index.m3u8"); log("playlist: \(pl.0) \(pl.1.replacingOccurrences(of: "\n", with: " | "))")
             let page = await get("/golf/"); log("proxied /golf/: \(page.0) \(page.1.prefix(40))")
             let api = await get("/golf/api/courses?q=ironhorse"); log("proxied api: \(api.0) \(api.1.prefix(60))")
             Bridges.shared.stopAll()
