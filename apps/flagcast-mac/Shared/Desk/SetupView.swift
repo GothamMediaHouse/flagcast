@@ -91,6 +91,9 @@ struct SetupView: View {
     private var scorecard: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack { CardTitle("Scorecard"); Spacer()
+                Button("Save to the Flagcast course list") { saveToList() }.buttonStyle(.plain).font(.system(size: 12, weight: .semibold)).foregroundStyle(FC.link)
+                    .help("Share this course’s holes, tees and map so any club can pick it in Find the course").disabled(doc.ev.course.name.isEmpty)
+                Text("·").foregroundStyle(FC.muted)
                 Button("Fill a standard par 72") { doc.ev.course.holes = Core.defaultHoles() }.buttonStyle(.plain).font(.system(size: 12, weight: .semibold)).foregroundStyle(FC.link) }
             nine("FRONT 9", 0..<9, playing: doc.ev.format.nine != "back")
             nine("BACK 9", 9..<18, playing: doc.ev.format.nine != "front")
@@ -134,6 +137,14 @@ struct SetupView: View {
                 .frame(width: 56, height: 32).background(FC.head)
         }
         .overlay(alignment: .top) { Rectangle().fill(FC.hairline).frame(height: 1) }
+    }
+
+    private func saveToList() {
+        Task {
+            if doc.dirty { await doc.save() }
+            do { _ = try await Net.saveToLibrary(doc.id, doc.key); doc.flash("Saved to the Flagcast course list. Any club can pick \(doc.ev.course.name) in Find the course.") }
+            catch { doc.flash(error.localizedDescription) }
+        }
     }
 
     // ---- right, below: the rest of the format ----
@@ -253,7 +264,7 @@ struct FindCourseSheet: View {
             if busy { ProgressView().frame(maxWidth: .infinity) }
             if let msg { Text(msg).foregroundStyle(.secondary) }
             if let k = card {
-                Text(k.name).font(.headline)
+                HStack { Text(k.name).font(.headline); if k.library { FlagcastTag() } }
                 if !k.city.isEmpty { Text([k.city, k.state].filter { !$0.isEmpty }.joined(separator: ", ")).foregroundStyle(.secondary) }
                 Text("Which tees does the field play? The holes come from these; every set of tees is added for handicaps.").foregroundStyle(.secondary)
                 List(k.tees.filter { !$0.holes.isEmpty }, id: \.self) { t in
@@ -267,7 +278,7 @@ struct FindCourseSheet: View {
                 Button("‹ Back to the results") { self.card = nil }.buttonStyle(.link)
             } else if !found.isEmpty {
                 List(found) { c in
-                    Button { pick(c) } label: { HStack { Text(c.name).fontWeight(.medium); Spacer(); Text(c.place).foregroundStyle(.secondary) }.contentShape(Rectangle()) }.buttonStyle(.plain)
+                    Button { pick(c) } label: { HStack { Text(c.name).fontWeight(.medium); if c.library { FlagcastTag() }; Spacer(); Text(c.place).foregroundStyle(.secondary) }.contentShape(Rectangle()) }.buttonStyle(.plain)
                 }
                 .frame(minHeight: 220)
             }
@@ -278,6 +289,10 @@ struct FindCourseSheet: View {
     }
     private func use(_ k: Net.CourseCard, _ t: Net.FoundTee) {
         doc.ev.fill(from: k, tee: t)
+        if let m = k.map, !m.holes.isEmpty, doc.ev.map.holes.isEmpty, let obj = try? Net.object(m) {
+            doc.ev.map = m
+            Task { await doc.day("map", ["map": obj]) }
+        }
         let nine = t.holes.count <= 9 ? " (a 9-hole card: holes 1–9)" : ""
         doc.flash("Filled in from \(t.label) tees\(nine). Check against the club’s scorecard, then Save.")
         dismiss()
@@ -303,5 +318,13 @@ struct FindCourseSheet: View {
             do { let k = try await Net.course(c.id); if k.tees.allSatisfy({ $0.holes.isEmpty }) { msg = "That course has no scorecard in the lookup. Type the numbers from the club’s card." } else { card = k } }
             catch { msg = error.localizedDescription }
         }
+    }
+}
+
+/// The "Flagcast" tag on a course from Flagcast's own course list.
+struct FlagcastTag: View {
+    var body: some View {
+        Text("FLAGCAST").font(.system(size: 10, weight: .bold)).tracking(0.8).foregroundStyle(FC.onGreen)
+            .padding(.horizontal, 6).padding(.vertical, 2).background(FC.green, in: RoundedRectangle(cornerRadius: 4))
     }
 }
