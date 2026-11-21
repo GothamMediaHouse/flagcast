@@ -16,7 +16,12 @@ struct LinksView: View {
     }
 
     var body: some View {
-        Form {
+        DeskPage(doc: doc, section: .links) {
+            Button { printing = true } label: { Label("Print cart cards", systemImage: "printer") }.buttonStyle(GlassButton())
+        } title: {
+            HeroTitle(title: "Links & cart cards", size: 52, sub: "Pages to share and cards to print", subBeside: true)
+        } content: {
+            CardForm {
             SwiftUI.Section("Links") {
                 ForEach(links, id: \.0) { name, help, url, secret in
                     HStack(alignment: .firstTextBaseline) {
@@ -52,8 +57,8 @@ struct LinksView: View {
                     }
                 }
             }
+            }
         }
-        .formStyle(.grouped)
         .sheet(isPresented: $printing) { CartCardsSheet(doc: doc) }
     }
 }

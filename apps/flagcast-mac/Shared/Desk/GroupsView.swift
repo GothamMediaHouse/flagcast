@@ -13,6 +13,10 @@ struct GroupsView: View {
     struct Group: Identifiable, Hashable { var id: String; var name: String; var start: Int; var hole: Int; var at: GeoPoint; var acc: Double; var t: Double }
 
     var body: some View {
+        VStack(spacing: 0) {
+        MapHeader(title: "Where the groups are", sub: "\(groups.count) group\(groups.count == 1 ? "" : "s") on the course") {
+            Toggle(isOn: $threeD) { Label("3D", systemImage: "view.3d") }.toggleStyle(.button).buttonStyle(GlassButton())
+        }
         HStack(spacing: 0) {
             Map(position: $camera, selection: $picked) {
                 ForEach(doc.ev.map.holes.keys.sorted(), id: \.self) { n in
@@ -44,7 +48,7 @@ struct GroupsView: View {
             }
             .frame(width: 300)
         }
-        .toolbar { ToolbarItem { Toggle(isOn: $threeD) { Label("3D", systemImage: "view.3d") } } }
+        }
         .task {
             while !Task.isCancelled {
                 await load()

@@ -17,12 +17,14 @@ struct ClubMe: Decodable {
     struct Member: Decodable, Hashable { var email: String, role: String }
     struct Ev: Decodable { var id: String, key: String, name: String, created: Double? }
     var email: String, role: String, club: Club?, members: [Member], events: [Ev]
+    /// Flagcast staff (an email in the server's ADMIN_EMAIL list): the Admin section shows
+    var admin = false
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         email = c.str(.email); role = c.str(.role); club = try? c.decodeIfPresent(Club.self, forKey: .club)
-        members = c.list(.members); events = c.list(.events)
+        members = c.list(.members); events = c.list(.events); admin = c.bool(.admin, false)
     }
-    enum CodingKeys: String, CodingKey { case email, role, club, members, events }
+    enum CodingKeys: String, CodingKey { case email, role, club, members, events, admin }
     var isOwner: Bool { role == "owner" }
 }
 
@@ -52,11 +54,26 @@ final class AppModel {
     var error: String?
     /// ⌘N and “Add by desk link” put the cursor in those boxes on the Home page.
     var focusNew = false
+    /// Admin, for Flagcast staff: which admin page shows (nil = a tournament or Home), and tournaments opened from it
+    let admin = AdminModel()
+    var adminSection: AdminSection?
+    var adminRefs: [EventRef] = []
+    var isAdmin: Bool { (me?.admin ?? false) || forceAdmin }
+    /// test builds' snapshots only
+    var forceAdmin = false
+    /// the sidebar's tournaments: the club's, then any opened from Admin
+    var shownEvents: [EventRef] { events + adminRefs.filter { r in !events.contains { $0.id == r.id } } }
     var focusAdd = false
     var signedIn: Bool { !(saved.token ?? "").isEmpty }
 
     init() {
         nav.onRename = { [weak self] id, name, date in self?.noteName(id, name: name, date: date) }
+        admin.token = { [weak self] in self?.saved.token ?? "" }
+        admin.onOpen = { [weak self] e in
+            guard let self else { return }
+            if !self.shownEvents.contains(where: { $0.id == e.id }) { self.adminRefs.append(EventRef(id: e.id, key: e.key, name: e.name, date: e.date, club: e.clubName)) }
+            self.adminSection = nil; self.selection = e.id; self.section = .overview
+        }
         if let d = try? Data(contentsOf: file), let s = try? JSONDecoder().decode(Saved.self, from: d) { saved = s }
         listEvents()
     }
@@ -74,7 +91,7 @@ final class AppModel {
 
     func doc(_ id: String) -> DeskDoc? {
         if let d = docs[id] { return d }
-        guard let e = events.first(where: { $0.id == id }) else { return nil }
+        guard let e = shownEvents.first(where: { $0.id == id }) else { return nil }
         let d = DeskDoc(ref: e); docs[id] = d
         return d
     }
@@ -100,6 +117,7 @@ final class AppModel {
             me = m
             saved.clubEvents = m.events.map { e in EventRef(id: e.id, key: e.key, name: e.name, date: saved.clubEvents?.first { $0.id == e.id }?.date, added: e.created) }
             write(); listEvents()
+            if m.admin { Task { try? await admin.refresh() } }
         } catch let e as APIError where e.status == 401 {
             saved.token = nil; saved.clubEvents = []; write(); listEvents(); me = nil
         } catch { self.error = error.localizedDescription }

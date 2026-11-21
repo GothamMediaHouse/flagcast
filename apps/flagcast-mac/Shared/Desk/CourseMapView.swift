@@ -25,8 +25,11 @@ struct CourseMapView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            holeStrip
-            Divider()
+            MapHeader(title: "Course map", sub: doc.ev.course.name.isEmpty ? doc.ev.name : doc.ev.course.name) {
+                Text(saving ? "Saving…" : "Saves as you go").font(.system(size: 12, weight: .semibold)).foregroundStyle(FC.onGreenMuted)
+                Toggle(isOn: $threeD) { Label("3D", systemImage: "view.3d") }.toggleStyle(.button).buttonStyle(GlassButton()).help("Show the course in 3D where Apple has it")
+            }
+            holeStrip.background(FC.green).environment(\.colorScheme, .dark)
             MapReader { proxy in
                 Map(position: $camera, interactionModes: .all) {
                     // the other holes, faint, to find your way around
@@ -66,12 +69,6 @@ struct CourseMapView: View {
             }
         }
         .inspector(isPresented: .constant(true)) { inspector.inspectorColumnWidth(min: 300, ideal: 340, max: 420) }
-        .toolbar {
-            ToolbarItemGroup {
-                Toggle(isOn: $threeD) { Label("3D", systemImage: "view.3d") }.help("Show the course in 3D where Apple has it")
-                Text(saving ? "Saving…" : "Saves as you go").foregroundStyle(.secondary).font(.callout)
-            }
-        }
         .onAppear { hole = firstOpenHole(); fit() }
         .onChange(of: hole) { _, _ in fit() }
         .onChange(of: threeD) { _, _ in fit() }
