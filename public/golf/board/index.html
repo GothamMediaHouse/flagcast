@@ -172,9 +172,17 @@ function pageSlides(it) {
   return [{ k: it.k, secs }];
 }
 
+// what the Manager or a pro sent to this screen, unless it was sent for a while (Send now for 5 or 15 minutes) and that's over
+function activeForce() {
+  const f = screenId && S.live?.force?.[screenId];
+  return f && !(f.until && Date.now() >= f.until) ? f : null;
+}
+// a timed send ends on its own: back to the playlist without waiting for the next change
+setInterval(() => { if (S && forced && !activeForce()) { idx = -1; advance(); } }, 5000);
+
 function build() {
   // a pro or the Manager switched this screen to one page
-  const f = screenId && S.live?.force?.[screenId];
+  const f = activeForce();
   forced = f ? `${f.k}|${f.at}` : '';
   if (f) { const one = pageSlides({ ...f, secs: 3600 }); if (one.length) return one; }
   const d = display();

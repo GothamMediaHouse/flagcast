@@ -157,6 +157,7 @@ function cleanSetup(s, old) {
     // each TV or LED wall at the club and what it plays (a board page opened with ?screen=<id>)
     displays: (Array.isArray(s.displays) ? s.displays : []).slice(0, 20).map((d) => ({
       id: /^[a-z0-9]{3,12}$/.test(d.id || '') ? d.id : rand(5, 'abcdefghijkmnpqrstuvwxyz23456789'), name: clip(d.name, 40),
+      where: clip(d.where, 40), group: clip(d.group, 24), // where it hangs ("Clubhouse bar") and a group to send to together ("Clubhouse")
       playlist: (Array.isArray(d.playlist) ? d.playlist : []).slice(0, 30).filter((x) => PAGE_KINDS.includes(x.k)).map((x) => ({
         k: x.k, fl: clip(x.fl, 12), hole: num(x.hole, 0, 18, 0), sponsor: clip(x.sponsor, 12), secs: num(x.secs, 4, 300, 12) })),
     })),
@@ -325,6 +326,8 @@ export class GolfEvent extends DurableObject {
   async dayOp(b, by) {
     const ev = this.ev, now = Date.now();
     ev.live = ev.live || { force: {}, take: null };
+    // a timed send (Send now for 5 or 15 minutes) is over: the screen is back on its playlist
+    for (const [id, f] of Object.entries(ev.live.force || {})) if (f && f.until && f.until <= now) delete ev.live.force[id];
     if (b.op === 'stats') return json({ stats: await this.getStats(), log: ev.log || [] });
     if (b.op === 'groups') {
       if (!trackingOn(ev)) {
@@ -366,14 +369,16 @@ export class GolfEvent extends DurableObject {
       const ids = b.display === '*' ? all : want.filter((x) => all.includes(x));
       if (!ids.length && !want.includes('phones')) return json({ error: 'No such screen' }, 404);
       for (const id of ids) {
-        if (b.page && PAGE_KINDS.includes(b.page.k)) ev.live.force[id] = { k: b.page.k, fl: clip(b.page.fl, 12), hole: num(b.page.hole, 0, 18, 0), sponsor: clip(b.page.sponsor, 12), at: now };
+        // mins (optional): only for that long, then back to its playlist (the board watches `until` itself)
+        const mins = num(b.mins, 0, 600, 0);
+        if (b.page && PAGE_KINDS.includes(b.page.k)) ev.live.force[id] = { k: b.page.k, fl: clip(b.page.fl, 12), hole: num(b.page.hole, 0, 18, 0), sponsor: clip(b.page.sponsor, 12), at: now, ...(mins ? { until: now + mins * 60000 } : {}) };
         else delete ev.live.force[id];
       }
     } else if (b.op === 'scene') { // saved routings: save what every screen shows now, put one back, or delete one
       ev.scenes = ev.scenes || [];
       if (b.save) {
         const name = clip(b.save, 40).trim(); if (!name) return json({ error: 'Name the scene' }, 400);
-        const map = Object.fromEntries((ev.displays || []).map((d) => [d.id, ev.live.force[d.id] ? { ...ev.live.force[d.id], at: undefined } : null]));
+        const map = Object.fromEntries((ev.displays || []).map((d) => [d.id, ev.live.force[d.id] ? { ...ev.live.force[d.id], at: undefined, until: undefined } : null]));
         ev.scenes = [...ev.scenes.filter((s) => s.name.toLowerCase() !== name.toLowerCase()), { id: rand(6, 'abcdefghijkmnpqrstuvwxyz23456789'), name, map }].slice(-20);
       } else if (b.remove) ev.scenes = ev.scenes.filter((s) => s.id !== b.remove);
       else if (b.apply) {
