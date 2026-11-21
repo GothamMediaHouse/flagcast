@@ -13,8 +13,8 @@ def i(name): return hashlib.md5(('flagcast-staff-ios:' + name).encode()).hexdige
 TEAM = 'C8KXPB4QNA'
 # (target, product name, bundle id, version, build, Info.plist)
 TARGETS = [
-    ('Manager', 'Flagcast Manager', 'app.flagcast.manager', '2.3.0', '8', 'Manager-Info.plist'),
-    ('Admin', 'Flagcast Admin', 'app.flagcast.admin', '1.1.0', '3', 'Admin-Info.plist'),
+    ('Manager', 'Flagcast Manager', 'app.flagcast.manager', '2.4.0', '9', 'Manager-Info.plist'),
+    ('Admin', 'Flagcast Admin', 'app.flagcast.admin', '1.2.0', '4', 'Admin-Info.plist'),
 ]
 FULL = {'Manager'}
 SHARED = [
@@ -24,6 +24,7 @@ SHARED = [
     '../flagcast-mac/Shared/UI.swift', '../flagcast-mac/Shared/Geo.swift', '../flagcast-mac/Shared/CourseImages.swift',
     '../flagcast-mac/Shared/Desk/DeskDoc.swift', '../flagcast-mac/Shared/Desk/DeskNav.swift', '../flagcast-mac/Shared/Desk/ScreenLogic.swift',
     '../flagcast-mac/Shared/Admin/AdminModel.swift', '../flagcast-mac/Manager/AppModel.swift', '../flagcast-mac/Shared/AppleSignIn.swift',
+    '../flagcast-mac/Shared/Branding.swift',
 ]
 FONTS = ['../flagcast-mac/Shared/Fonts/BarlowCondensed-Bold.ttf', '../flagcast-mac/Shared/Fonts/BarlowCondensed-SemiBold.ttf']
 

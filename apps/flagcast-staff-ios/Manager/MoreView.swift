@@ -201,6 +201,14 @@ struct SettingsView: View {
                     NavigationLink { SignInView() } label: { ListRow(icon: "person.badge.plus", title: "Sign in", last: true) { Chevron() } }.buttonStyle(.plain)
                 }
             }
+            if let c = model.me?.club {
+                CardBox(title: "Your club") {
+                    NavigationLink { ClubLogoView() } label: {
+                        ListRow(icon: "photo.fill", iconColor: FC.green2, title: "Club logo and colour", sub: c.logo.isEmpty ? "Not set yet: golfers see the Flagcast logo" : "Shows on the TVs, live page and players’ app", last: true) { Chevron() }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
             CardBox(title: "Flagcast staff") {
                 Button { passcode = true } label: {
                     ListRow(icon: "lock.shield.fill", iconColor: FC.green2, title: "Flagcast admin passcode", sub: !(model.admin.pass ?? "").isEmpty ? "Unlocked on this phone" : "For Flagcast staff without a sign-in", last: true) { Chevron() }
@@ -211,6 +219,19 @@ struct SettingsView: View {
                 .font(.footnote).foregroundStyle(FC.muted).frame(maxWidth: .infinity)
         }
         .sheet(isPresented: $passcode) { NavigationStack { AdminPasscodeView() } }
+    }
+}
+
+/// The club's logo and colour (Settings → Your club): they show to golfers and on the TVs instead of the Flagcast logo.
+struct ClubLogoView: View {
+    @Environment(AppModel.self) private var model
+    var body: some View {
+        Form {
+            if let c = model.me?.club {
+                SwiftUI.Section { BrandingEditor(logo: logoURL(c.logo), accent: c.accent) { changes in await model.brand(changes) }.id(c.logo + c.accent) }
+            }
+        }
+        .navigationTitle("Club logo")
     }
 }
 

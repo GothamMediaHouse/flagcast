@@ -159,6 +159,10 @@ struct SettingsView: View {
                 }
             }
             .formStyle(.grouped).tabItem { Label("Account", systemImage: "person.crop.circle") }
+            if let c = model.me?.club {
+                Form { BrandingEditor(logo: logoURL(c.logo), accent: c.accent) { changes in await model.brand(changes) }.id(c.logo + c.accent) }
+                    .formStyle(.grouped).tabItem { Label("Club Logo", systemImage: "photo") }
+            }
             AdminPassSettings()
                 .formStyle(.grouped).tabItem { Label("Admin", systemImage: "key") }
             Form {

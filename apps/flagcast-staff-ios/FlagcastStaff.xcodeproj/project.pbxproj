@@ -23,6 +23,7 @@
 		B8E1480F886B1DBDD3CB05E4 = {isa = PBXBuildFile; fileRef = 21C26F226881C80BCAC6FBEC; };
 		25D11A59641C9ED381AAC5F2 = {isa = PBXBuildFile; fileRef = 0E8BD471F8B2F04B31D90F63; };
 		B905603D4E4014D1F52C0C03 = {isa = PBXBuildFile; fileRef = 5821F4E446BC121536A5619F; };
+		B931FD2C98E409C12E1EBD92 = {isa = PBXBuildFile; fileRef = A38EFC18BA2501B0B74E8497; };
 		C24C43B25E9CE97C05F1003B = {isa = PBXBuildFile; fileRef = 114899359BB15ED7EB36B371; };
 		8662ED94914FC53C12B47FD4 = {isa = PBXBuildFile; fileRef = 77C6E0EA06822F88CEE86CA2; };
 /* End PBXBuildFile section */
@@ -46,6 +47,7 @@
 		21C26F226881C80BCAC6FBEC = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AdminModel.swift; path = "../flagcast-mac/Shared/Admin/AdminModel.swift"; sourceTree = SOURCE_ROOT; };
 		0E8BD471F8B2F04B31D90F63 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppModel.swift; path = "../flagcast-mac/Manager/AppModel.swift"; sourceTree = SOURCE_ROOT; };
 		5821F4E446BC121536A5619F = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppleSignIn.swift; path = "../flagcast-mac/Shared/AppleSignIn.swift"; sourceTree = SOURCE_ROOT; };
+		A38EFC18BA2501B0B74E8497 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Branding.swift; path = "../flagcast-mac/Shared/Branding.swift"; sourceTree = SOURCE_ROOT; };
 		114899359BB15ED7EB36B371 = {isa = PBXFileReference; lastKnownFileType = file; name = BarlowCondensed-Bold.ttf; path = "../flagcast-mac/Shared/Fonts/BarlowCondensed-Bold.ttf"; sourceTree = SOURCE_ROOT; };
 		77C6E0EA06822F88CEE86CA2 = {isa = PBXFileReference; lastKnownFileType = file; name = BarlowCondensed-SemiBold.ttf; path = "../flagcast-mac/Shared/Fonts/BarlowCondensed-SemiBold.ttf"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
@@ -83,6 +85,7 @@
 				B8E1480F886B1DBDD3CB05E4,
 				25D11A59641C9ED381AAC5F2,
 				B905603D4E4014D1F52C0C03,
+				B931FD2C98E409C12E1EBD92,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -153,6 +156,7 @@
 				21C26F226881C80BCAC6FBEC,
 				0E8BD471F8B2F04B31D90F63,
 				5821F4E446BC121536A5619F,
+				A38EFC18BA2501B0B74E8497,
 				114899359BB15ED7EB36B371,
 				77C6E0EA06822F88CEE86CA2,
 			);
@@ -277,7 +281,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CODE_SIGN_ENTITLEMENTS = Manager.entitlements;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_TEAM = C8KXPB4QNA;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -287,7 +291,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.3.0;
+				MARKETING_VERSION = 2.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.manager;
 				PRODUCT_NAME = "Flagcast Manager";
 				SDKROOT = iphoneos;
@@ -305,7 +309,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CODE_SIGN_ENTITLEMENTS = Manager.entitlements;
-				CURRENT_PROJECT_VERSION = 8;
+				CURRENT_PROJECT_VERSION = 9;
 				DEVELOPMENT_TEAM = C8KXPB4QNA;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -315,7 +319,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.3.0;
+				MARKETING_VERSION = 2.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.manager;
 				PRODUCT_NAME = "Flagcast Manager";
 				SDKROOT = iphoneos;
@@ -332,7 +336,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = C8KXPB4QNA;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -342,7 +346,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.admin;
 				PRODUCT_NAME = "Flagcast Admin";
 				SDKROOT = iphoneos;
@@ -359,7 +363,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 3;
+				CURRENT_PROJECT_VERSION = 4;
 				DEVELOPMENT_TEAM = C8KXPB4QNA;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -369,7 +373,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.admin;
 				PRODUCT_NAME = "Flagcast Admin";
 				SDKROOT = iphoneos;

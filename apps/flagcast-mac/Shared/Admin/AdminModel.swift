@@ -18,13 +18,15 @@ struct AdminClub: Decodable, Identifiable, Hashable {
     }
     var id: String, name: String, contact: String, phone: String, city: String, status: String, notes: String, by: String
     var created: Double, credits: Int
+    var logo: String, accent: String, powered: Bool   // branding: logo is its address on the server ('' = none, Flagcast's shows)
     var members: [Member], events: [Ev], payments: [Payment]
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         id = c.str(.id); name = c.str(.name); contact = c.str(.contact); phone = c.str(.phone); city = c.str(.city); status = c.str(.status); notes = c.str(.notes); by = c.str(.by)
         created = c.dbl(.created, 0); credits = c.int(.credits, 0); members = c.list(.members); events = c.list(.events); payments = c.list(.payments)
+        logo = c.str(.logo); accent = c.str(.accent); powered = c.bool(.powered, false)
     }
-    enum CodingKeys: String, CodingKey { case id, name, contact, phone, city, status, notes, by, created, credits, members, events, payments }
+    enum CodingKeys: String, CodingKey { case id, name, contact, phone, city, status, notes, by, created, credits, members, events, payments, logo, accent, powered }
     var creditsText: String { credits < 0 ? "Unlimited" : "\(credits)" }
     var statusText: String { status == "active" ? "Active" : status == "pending" ? "Waiting" : "Off" }
     var paid: Double { payments.reduce(0) { $0 + $1.amount } }
@@ -49,6 +51,7 @@ struct AdminEvent: Decodable, Identifiable, Hashable {
     }
     var id: String, key: String, name: String, club: String, clubName: String, date: String
     var created: Double, hidden: Bool, archived: Bool, gone: Bool, locked: Bool
+    var demo = false   // Admin marked it Demo: it shows the Flagcast logo whatever its club has
     var teams: Int, scored: Int, screens: Int, online: Int, replays: Int
     var displays: [Disp], p3: [Int], sponsors: [Named], replayList: [Rep], scenes: [Named], scene: String, flights: [String]
     var take: Take?, flash: Flash?, phone: PhoneRoute?
@@ -57,7 +60,7 @@ struct AdminEvent: Decodable, Identifiable, Hashable {
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         id = c.str(.id); key = c.str(.key); name = c.str(.name); club = c.str(.club); clubName = c.str(.clubName); date = c.str(.date)
-        created = c.dbl(.created, 0); hidden = c.int(.hidden, 0) != 0; archived = c.int(.archived, 0) != 0; gone = c.bool(.gone, false); locked = c.bool(.locked, false)
+        created = c.dbl(.created, 0); hidden = c.int(.hidden, 0) != 0; archived = c.int(.archived, 0) != 0; gone = c.bool(.gone, false); locked = c.bool(.locked, false); demo = c.bool(.demo, false)
         teams = c.int(.teams, 0); scored = c.int(.scored, 0); screens = c.int(.screens, 0); online = c.int(.online, 0); replays = c.int(.replays, 0)
         displays = c.list(.displays); p3 = (try? c.decodeIfPresent([Int].self, forKey: .p3)) ?? []; sponsors = c.list(.sponsors); replayList = c.list(.replayList)
         scenes = c.list(.scenes); scene = c.str(.scene); flights = (try? c.decodeIfPresent([String].self, forKey: .flights)) ?? []
@@ -65,7 +68,7 @@ struct AdminEvent: Decodable, Identifiable, Hashable {
         let raw = (try? c.decodeIfPresent([String: String].self, forKey: .cams)) ?? [:]
         cams = Dictionary(uniqueKeysWithValues: raw.compactMap { k, v in Int(k).map { ($0, v) } })
     }
-    enum CodingKeys: String, CodingKey { case id, key, name, club, clubName, date, created, hidden, archived, gone, locked, teams, scored, screens, online, replays, displays, p3, sponsors, replayList, scenes, scene, flights, take, flash, phone, cams }
+    enum CodingKeys: String, CodingKey { case id, key, name, club, clubName, date, created, hidden, archived, gone, locked, demo, teams, scored, screens, online, replays, displays, p3, sponsors, replayList, scenes, scene, flights, take, flash, phone, cams }
     var isToday: Bool { date == ISO8601DateFormatter.day.string(from: Date()) }
     var ref: EventRef { EventRef(id: id, key: key, name: name, date: date, club: clubName) }
 }
@@ -154,9 +157,14 @@ final class AdminModel {
         do {
             try await call(op, extra)
             try await refresh()
-            if ["lock", "archive", "move", "hide", "unhide", "event", "claim"].contains(op) { await refreshEvents() }
+            if ["lock", "archive", "move", "hide", "unhide", "event", "claim", "demo"].contains(op) { await refreshEvents() }
             if let done { flash(done) }
         } catch { flash(error.localizedDescription) }
+    }
+    /// A club's branding (logo, accent, powered): nil when saved, else what went wrong (for the branding editor).
+    func brand(_ club: String, _ changes: [String: Any]) async -> String? {
+        do { var b = changes; b["club"] = club; try await call("brand", b); try await refresh(); return nil }
+        catch { return error.localizedDescription }
     }
     /// Screens and phones for one tournament: screen, take, flash or scene (op "day").
     func day(_ event: String, _ d: [String: Any], done: String? = nil) async {
