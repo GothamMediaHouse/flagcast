@@ -27,7 +27,7 @@ struct CourseMapView: View {
         VStack(spacing: 0) {
             MapHeader(title: "Course map", sub: doc.ev.course.name.isEmpty ? doc.ev.name : doc.ev.course.name) {
                 Text(saving ? "Saving…" : "Saves as you go").font(.system(size: 12, weight: .semibold)).foregroundStyle(FC.onGreenMuted)
-                Toggle(isOn: $threeD) { Label("3D", systemImage: "view.3d") }.toggleStyle(.button).buttonStyle(GlassButton()).help("Show the course in 3D where Apple has it")
+                Toggle(isOn: $threeD) { Label("3D", systemImage: "cube") }.toggleStyle(.button).buttonStyle(GlassButton()).help("Show the course in 3D where Apple has it")
             }
             holeStrip.background(FC.green).environment(\.colorScheme, .dark)
             MapReader { proxy in

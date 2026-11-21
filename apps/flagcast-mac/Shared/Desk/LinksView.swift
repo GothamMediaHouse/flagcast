@@ -39,7 +39,7 @@ struct LinksView: View {
             }
             SwiftUI.Section {
                 LabeledContent("Tournament code") { Text(doc.id.uppercased()).font(.title2.monospaced().weight(.semibold)).textSelection(.enabled) }
-            } footer: { Help("Golf pros and marshals sign in to the Flagcast phone app with this code and their PIN (Staff and Playlists).") }
+            } footer: { Help("Golf pros and marshals sign in to the Flagcast phone app with this code and their PIN. Add them and their PINs on the Staff page.") }
             SwiftUI.Section {
                 HStack {
                     Text("One card per team with its QR code. Players scan it to open their scorecard: no app to download.").foregroundStyle(.secondary)

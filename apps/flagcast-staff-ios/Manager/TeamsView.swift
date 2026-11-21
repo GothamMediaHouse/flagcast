@@ -24,6 +24,8 @@ private struct TeamsPage: View {
         PhotoPage(image: doc.picture.image, kicker: "\(doc.ev.teams.count) teams · \(doc.ev.teams.reduce(0) { $0 + $1.players.count }) players", title: "Teams", height: 220) {
             EmptyView()
         } content: {
+            // a search box in the page (the system one sat on top of the photo header's words)
+            if doc.ev.teams.count > 6 { BoxField(placeholder: "Find a team or player", text: $search) }
             if doc.ev.flights.count > 1 {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) { ForEach([""] + doc.ev.flights, id: \.self) { f in chip(f.isEmpty ? "All" : "Flight \(f)", on: flight == f) { flight = f } } }
@@ -42,7 +44,6 @@ private struct TeamsPage: View {
             }
             Button { addTeam() } label: { Label("Add a Team", systemImage: "plus") }.buttonStyle(GreenButton(full: true))
         }
-        .searchable(text: $search, prompt: "Find a team or player")
         .sheet(item: Binding(get: { editing.map { EditID(id: $0) } }, set: { editing = $0?.id })) { e in
             if let i = doc.ev.teams.firstIndex(where: { $0.id == e.id }) {
                 NavigationStack { TeamEditor(team: $doc.ev.teams[i], doc: doc, remove: { doc.ev.teams.removeAll { $0.id == e.id }; editing = nil }) }

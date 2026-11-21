@@ -15,7 +15,7 @@ struct GroupsView: View {
     var body: some View {
         VStack(spacing: 0) {
         MapHeader(title: "Where the groups are", sub: "\(groups.count) group\(groups.count == 1 ? "" : "s") on the course") {
-            Toggle(isOn: $threeD) { Label("3D", systemImage: "view.3d") }.toggleStyle(.button).buttonStyle(GlassButton())
+            Toggle(isOn: $threeD) { Label("3D", systemImage: "cube") }.toggleStyle(.button).buttonStyle(GlassButton())
         }
         HStack(spacing: 0) {
             Map(position: $camera, selection: $picked) {

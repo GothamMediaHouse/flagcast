@@ -31,7 +31,7 @@ const admin = (b) => post('/golf/api/club/admin', { token, ...b });
 // 1) the demo club and its sample tournament (found again on later runs)
 let { clubs } = await admin({});
 let club = clubs.find((c) => c.name === CLUB);
-if (!club) { await admin({ op: 'create', name: CLUB, city: 'Demo', credits: 0 }); ({ clubs } = await admin({})); club = clubs.find((c) => c.name === CLUB); }
+if (!club) { await admin({ op: 'create', name: CLUB, credits: 0 }); ({ clubs } = await admin({})); club = clubs.find((c) => c.name === CLUB); }
 if (club.status !== 'active') await admin({ op: 'on', club: club.id });
 let ev = club.events.find((e) => e.name === NAME && !e.archived);
 if (!ev) { const j = await admin({ op: 'event', club: club.id, name: NAME }); ev = { id: j.made.id, key: j.made.key }; }

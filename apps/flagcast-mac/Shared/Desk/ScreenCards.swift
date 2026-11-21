@@ -133,9 +133,14 @@ struct ScreenPreview: View {
                 }
             }
             .padding(8)
+            if !online { Color.black.opacity(0.45) }
+        }
+        // off: a small tag in the corner (it used to sit on top of the picture's own words)
+        .overlay(alignment: .topLeading) {
             if !online {
-                Color.black.opacity(0.45)
-                Text("TV NOT ON").font(.system(size: 10, weight: .bold)).tracking(1).foregroundStyle(.white)
+                Text("OFF").font(.system(size: 9, weight: .heavy)).tracking(1).foregroundStyle(.white)
+                    .padding(.horizontal, 6).padding(.vertical, 2).background(Color.black.opacity(0.6), in: Capsule()).padding(6)
+                    .accessibilityLabel("This TV isn’t on")
             }
         }
         .foregroundStyle(FC.onGreen)

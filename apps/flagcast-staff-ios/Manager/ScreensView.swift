@@ -161,7 +161,15 @@ private struct Preview: View {
                 }
             }
             .padding(6)
-            if !online { Color.black.opacity(0.45); Text("NOT ON").font(.system(size: 9, weight: .bold)).tracking(1).foregroundStyle(.white) }
+            if !online { Color.black.opacity(0.45) }
+        }
+        // off: a small tag in the corner, not on top of the picture's own words
+        .overlay(alignment: .topLeading) {
+            if !online {
+                Text("OFF").font(.system(size: 8, weight: .heavy)).tracking(1).foregroundStyle(.white)
+                    .padding(.horizontal, 5).padding(.vertical, 2).background(Color.black.opacity(0.6), in: Capsule()).padding(5)
+                    .accessibilityLabel("This TV isn’t on")
+            }
         }
         .foregroundStyle(FC.onGreen).frame(width: 116, height: 70).clipShape(RoundedRectangle(cornerRadius: 9))
     }
