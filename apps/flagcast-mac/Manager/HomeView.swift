@@ -6,6 +6,8 @@ struct HomeView: View {
     @State private var email = ""
     @State private var code = ""
     @State private var sent = false
+    @State private var useCode = false
+    @State private var password = ""
     @State private var busy = false
     @State private var err: String?
     @State private var newName = ""
@@ -18,7 +20,7 @@ struct HomeView: View {
     @State private var inviteErr: String?
     @FocusState private var focus: Field?
     @State private var picture: CoursePicture?
-    enum Field { case email, code, new, add }
+    enum Field { case email, code, password, new, add }
 
     var body: some View {
         PhotoPage(image: picture?.image, height: 290, section: "Home", titleHeight: 186) {
@@ -55,16 +57,27 @@ struct HomeView: View {
 
     @ViewBuilder private var signIn: some View {
         SwiftUI.Section {
-            if !sent {
+            AppleSignInButton(height: 40, token: { t in run { try await model.appleSignIn(t) } }, failed: { err = $0 })
+            if !useCode {
+                TextField("Email", text: $email, prompt: Text("you@yourclub.com")).textContentType(.username).focused($focus, equals: .email).onSubmit { focus = .password }
+                SecureField("Password", text: $password).textContentType(.password).focused($focus, equals: .password).onSubmit(login)
+                HStack {
+                    Button("Email Me a Code Instead") { useCode = true; err = nil }.buttonStyle(.link)
+                    Spacer()
+                    Button("Sign In", action: login).buttonStyle(.borderedProminent).disabled(email.isEmpty || password.isEmpty || busy)
+                }
+            } else if !sent {
                 TextField("Email", text: $email, prompt: Text("you@yourclub.com")).textContentType(.emailAddress).focused($focus, equals: .email).onSubmit(start)
-                HStack { Spacer(); Button("Email Me a Code", action: start).buttonStyle(.borderedProminent).disabled(email.isEmpty || busy) }
+                HStack { Button("Use a Password") { useCode = false; err = nil }.buttonStyle(.link); Spacer(); Button("Email Me a Code", action: start).buttonStyle(.borderedProminent).disabled(email.isEmpty || busy) }
             } else {
                 Text("We sent a 6-digit code to \(email). It works for 15 minutes.").foregroundStyle(.secondary)
                 TextField("Code", text: $code, prompt: Text("123456")).font(.title3.monospaced()).focused($focus, equals: .code).onSubmit(verify)
                 HStack { Button("Use a Different Email") { sent = false; code = "" }; Spacer(); Button("Sign In", action: verify).buttonStyle(.borderedProminent).disabled(code.count < 6 || busy) }
             }
             if let err { Text(err).foregroundStyle(.red).font(.callout) }
-        } header: { Text("Sign in") } footer: { Text("Use your club email. No password: we email you a code. New to Flagcast? Sign in, then set up your club.").foregroundStyle(.secondary) }
+        } header: { Text("Sign in") } footer: {
+            Text("Sign in with Apple, or your email and password. First time? Use “Email Me a Code”, then set a password in Settings. Flagcast staff get Admin when they sign in.").foregroundStyle(.secondary)
+        }
     }
 
     @ViewBuilder private var requestClub: some View {
@@ -113,6 +126,8 @@ struct HomeView: View {
         } header: { Text("People who can run your club’s tournaments") }
     }
 
+    private func run(_ f: @escaping () async throws -> Void) { busy = true; err = nil; Task { defer { busy = false }; do { try await f() } catch { err = error.localizedDescription } } }
+    private func login() { run { try await model.login(email.trimmingCharacters(in: .whitespaces), password); password = "" } }
     private func start() { busy = true; err = nil; Task { defer { busy = false }; do { let dev = try await model.startSignIn(email.trimmingCharacters(in: .whitespaces)); sent = true; code = dev ?? ""; focus = .code } catch { err = error.localizedDescription } } }
     private func verify() { busy = true; err = nil; Task { defer { busy = false }; do { try await model.verify(email.trimmingCharacters(in: .whitespaces), code); sent = false; code = "" } catch { err = error.localizedDescription } } }
     private func make() { newErr = nil; Task { do { try await model.create(newName.trimmingCharacters(in: .whitespaces)); newName = "" } catch { newErr = error.localizedDescription } } }
@@ -137,7 +152,10 @@ struct SettingsView: View {
             Form {
                 LabeledContent("Signed in as", value: model.me?.email ?? "Not signed in")
                 if let c = model.me?.club { LabeledContent("Club", value: c.name) }
-                if model.signedIn { Button("Sign Out") { Task { await model.signOut() } } }
+                if model.signedIn {
+                    PasswordSetter()
+                    Button("Sign Out") { Task { await model.signOut() } }
+                }
             }
             .formStyle(.grouped).tabItem { Label("Account", systemImage: "person.crop.circle") }
             AdminPassSettings()
@@ -155,7 +173,7 @@ struct SettingsView: View {
             }
             .formStyle(.grouped).tabItem { Label("Updates", systemImage: "arrow.down.circle") }
         }
-        .frame(width: 480, height: 300)
+        .frame(width: 500, height: 360)
     }
 }
 
@@ -191,5 +209,29 @@ struct AdminPassSettings: View {
             catch { message = error.localizedDescription }
             busy = false
         }
+    }
+}
+
+/// Settings → Account: set or change the password (then sign in with email + password on any device).
+struct PasswordSetter: View {
+    @Environment(AppModel.self) private var model
+    @State private var pass = ""
+    @State private var again = ""
+    @State private var msg: String?
+    @State private var busy = false
+    var body: some View {
+        SecureField(model.me?.password == true ? "New password" : "Set a password", text: $pass).textContentType(.newPassword)
+        SecureField("Type it again", text: $again).textContentType(.newPassword)
+        HStack {
+            if let msg { Text(msg).font(.callout).foregroundStyle(.secondary) }
+            Spacer()
+            Button(model.me?.password == true ? "Change Password" : "Set Password") {
+                guard pass == again else { msg = "The two don’t match."; return }
+                busy = true
+                Task { do { try await model.setPassword(pass); pass = ""; again = ""; msg = "Saved. Sign in with your email and this password." } catch { msg = error.localizedDescription }; busy = false }
+            }
+            .disabled(pass.count < 10 || busy)
+        }
+        Text("At least 10 characters.").font(.caption).foregroundStyle(.secondary)
     }
 }

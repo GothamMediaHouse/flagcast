@@ -1,10 +1,12 @@
 import SwiftUI
 
-/// Sign in with the club's email (a code comes by email), or with the Flagcast admin passcode.
+/// Sign in: Sign in with Apple (Face ID), email + password, or an emailed code (the first time).
 struct SignInView: View {
     @Environment(AppModel.self) private var model
     @State private var email = ""
+    @State private var password = ""
     @State private var code = ""
+    @State private var useCode = false
     @State private var sent = false
     @State private var busy = false
     @State private var message: String?
@@ -13,27 +15,34 @@ struct SignInView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                PhotoHeader(image: nil, kicker: "Flagcast", title: "Run your tournament", sub: "Teams, live scores and the TVs, from your phone.", height: 300)
+                PhotoHeader(image: nil, kicker: "Flagcast", title: "Run your tournament", sub: "Teams, live scores and the TVs, from your phone.", height: 280)
                 VStack(alignment: .leading, spacing: 14) {
                     VStack(alignment: .leading, spacing: 12) {
                         CardTitle("Sign in")
-                        if !sent {
-                            TextField("Your club email", text: $email).textContentType(.emailAddress).keyboardType(.emailAddress)
-                                .textInputAutocapitalization(.never).autocorrectionDisabled().padding(12).background(FC.paper2, in: RoundedRectangle(cornerRadius: 10))
-                            Button { start() } label: { if busy { ProgressView().tint(.white) } else { Text("Email Me a Code") } }
-                                .buttonStyle(GreenButton(full: true)).disabled(!email.contains("@") || busy)
+                        AppleSignInButton(height: 50, token: { t in run { try await model.appleSignIn(t) } }, failed: { message = $0 })
+                        HStack { Rectangle().fill(FC.line).frame(height: 1); Text("or").font(.caption).foregroundStyle(FC.muted); Rectangle().fill(FC.line).frame(height: 1) }
+                        field("Email", $email).textContentType(useCode ? .emailAddress : .username).keyboardType(.emailAddress)
+                        if !useCode {
+                            SecureField("Password", text: $password).textContentType(.password).padding(12).background(FC.paper2, in: RoundedRectangle(cornerRadius: 10))
+                            Button { run { try await model.login(email.trimmingCharacters(in: .whitespaces), password); password = "" } } label: { label("Sign In") }
+                                .buttonStyle(GreenButton(full: true)).disabled(!email.contains("@") || password.isEmpty || busy)
+                            Button("First time? Email me a code instead") { useCode = true; message = nil }.font(.subheadline).foregroundStyle(FC.link)
+                        } else if !sent {
+                            Button { start() } label: { label("Email Me a Code") }.buttonStyle(GreenButton(full: true)).disabled(!email.contains("@") || busy)
+                            Button("Use a password") { useCode = false; message = nil }.font(.subheadline).foregroundStyle(FC.link)
                         } else {
                             Text("We sent a code to \(email).").font(.subheadline).foregroundStyle(FC.muted)
                             TextField("6-digit code", text: $code).keyboardType(.numberPad).textContentType(.oneTimeCode).font(FC.display(30))
                                 .padding(12).background(FC.paper2, in: RoundedRectangle(cornerRadius: 10))
-                            Button { verify() } label: { if busy { ProgressView().tint(.white) } else { Text("Sign In") } }
+                            Button { run { try await model.verify(email.trimmingCharacters(in: .whitespaces), code.trimmingCharacters(in: .whitespaces)) } } label: { label("Sign In") }
                                 .buttonStyle(GreenButton(full: true)).disabled(code.count < 4 || busy)
                             Button("Use a different email") { sent = false; code = "" }.font(.subheadline).foregroundStyle(FC.link)
                         }
                         if let message { Text(message).font(.footnote).foregroundStyle(FC.red) }
                     }
                     .card()
-                    Button("Flagcast admin? Use the admin passcode") { passcode = true }.font(.subheadline).foregroundStyle(FC.link).frame(maxWidth: .infinity)
+                    Help("After your first sign-in with a code, set a password in Settings, or just use Sign in with Apple. Flagcast staff get the Admin tab.")
+                    Button("Flagcast admin passcode") { passcode = true }.font(.footnote).foregroundStyle(FC.muted).frame(maxWidth: .infinity)
                     NavigationLink("Have a desk link? Add a tournament without signing in") { AddByLinkView() }
                         .font(.subheadline).foregroundStyle(FC.link).frame(maxWidth: .infinity)
                 }
@@ -44,21 +53,16 @@ struct SignInView: View {
         .background(FC.paper)
         .sheet(isPresented: $passcode) { NavigationStack { AdminPasscodeView() } }
     }
-    private func start() {
-        busy = true; message = nil
-        Task {
-            do { let dev = try await model.startSignIn(email.trimmingCharacters(in: .whitespaces)); sent = true; if let dev { code = dev } }
-            catch { message = error.localizedDescription }
-            busy = false
-        }
+    private func field(_ p: String, _ t: Binding<String>) -> some View {
+        TextField(p, text: t).textInputAutocapitalization(.never).autocorrectionDisabled().padding(12).background(FC.paper2, in: RoundedRectangle(cornerRadius: 10))
     }
-    private func verify() {
+    @ViewBuilder private func label(_ t: String) -> some View { if busy { ProgressView().tint(.white) } else { Text(t) } }
+    private func run(_ f: @escaping () async throws -> Void) {
         busy = true; message = nil
-        Task {
-            do { try await model.verify(email.trimmingCharacters(in: .whitespaces), code.trimmingCharacters(in: .whitespaces)) }
-            catch { message = error.localizedDescription }
-            busy = false
-        }
+        Task { do { try await f() } catch { message = error.localizedDescription }; busy = false }
+    }
+    private func start() {
+        run { let dev = try await model.startSignIn(email.trimmingCharacters(in: .whitespaces)); sent = true; if let dev { code = dev } }
     }
 }
 

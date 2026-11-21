@@ -13,7 +13,7 @@ def i(name): return hashlib.md5(('flagcast-staff-ios:' + name).encode()).hexdige
 TEAM = 'C8KXPB4QNA'
 # (target, product name, bundle id, version, build, Info.plist)
 TARGETS = [
-    ('Manager', 'Flagcast Manager', 'app.flagcast.manager', '2.0.0', '3', 'Manager-Info.plist'),
+    ('Manager', 'Flagcast Manager', 'app.flagcast.manager', '2.1.0', '4', 'Manager-Info.plist'),
     ('Admin', 'Flagcast Admin', 'app.flagcast.admin', '1.1.0', '3', 'Admin-Info.plist'),
 ]
 FULL = {'Manager'}
@@ -23,15 +23,16 @@ SHARED = [
     '../flagcast-mac/Shared/Net.swift', '../flagcast-mac/Shared/Desk.swift', '../flagcast-mac/Shared/Route.swift',
     '../flagcast-mac/Shared/UI.swift', '../flagcast-mac/Shared/Geo.swift', '../flagcast-mac/Shared/CourseImages.swift',
     '../flagcast-mac/Shared/Desk/DeskDoc.swift', '../flagcast-mac/Shared/Desk/DeskNav.swift', '../flagcast-mac/Shared/Desk/ScreenLogic.swift',
-    '../flagcast-mac/Shared/Admin/AdminModel.swift', '../flagcast-mac/Manager/AppModel.swift',
+    '../flagcast-mac/Shared/Admin/AdminModel.swift', '../flagcast-mac/Manager/AppModel.swift', '../flagcast-mac/Shared/AppleSignIn.swift',
 ]
 FONTS = ['../flagcast-mac/Shared/Fonts/BarlowCondensed-Bold.ttf', '../flagcast-mac/Shared/Fonts/BarlowCondensed-SemiBold.ttf']
 
 def settings(t, prod, bid, ver, build, plist):
+    ent = '				CODE_SIGN_ENTITLEMENTS = Manager.entitlements;\n' if t == 'Manager' else ''
     return f'''				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = {build};
+{ent}				CURRENT_PROJECT_VERSION = {build};
 				DEVELOPMENT_TEAM = {TEAM};
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
