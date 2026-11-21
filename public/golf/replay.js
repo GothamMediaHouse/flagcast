@@ -3,6 +3,9 @@
 // camera's own recording window (an HLS stream with DVR, ideally with EXT-X-PROGRAM-DATE-TIME) is played back
 // from `back` seconds before the mark was made.
 const isHls = (u) => /\.m3u8(\?|$)/.test(u || '');
+// Flagcast's NDI cameras (Cloudflare Stream, served by the worker) make a clip of any moment of the broadcast:
+// <cam>?from=<ms>&len=<s>. Other cameras are rewound to the moment instead.
+const clipCam = (u) => /\/golf\/api\/cam\/[0-9a-f]{32}\/video\.m3u8$/.test(u || '');
 
 // put a stream or clip into a <video>; returns the hls.js player when one is used
 export function attach(video, src, { live = true } = {}) {
@@ -76,6 +79,17 @@ export async function playReplay(video, r, camUrl, onEnd) {
       return { ok: true };
     }
     if (!isHls(camUrl)) return { ok: false, reason: 'This camera can’t be replayed.' };
+    if (clipCam(camUrl)) {
+      const back = r.back || 25, src = `${camUrl}?from=${Math.round(r.at - back * 1000)}&len=${back + 6}`;
+      const chk = await fetch(src, { cache: 'no-store' }).catch(() => null);
+      if (!chk || !chk.ok) return { ok: false, reason: (chk && (await chk.json().catch(() => null))?.error) || 'The replay didn’t load. Try again.' };
+      attach(video, src, { live: false });
+      let ended = false; const end = () => { if (!ended) { ended = true; clearTimeout(video._stop); onEnd && onEnd(); } };
+      video.onended = end;
+      await once(video, 'loadeddata'); video.currentTime = 0; await video.play().catch(() => {});
+      video._stop = setTimeout(end, (back + 8) * 1000); // a clip still being made ends when its last seconds arrive
+      return { ok: true };
+    }
     const hls = attach(video, camUrl, { live: true });
     await once(video, 'loadedmetadata');
     if (hls) await new Promise((res) => (hls.levels?.[0]?.details ? res() : hls.once(Hls.Events.LEVEL_LOADED, () => res())));

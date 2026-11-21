@@ -17,6 +17,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { defaultHoles, courseHcp } from './public/golf/core.js';
 import { trackingOn } from './public/golf/gps.js';
 import { clubs } from './clubs.js';
+import { camPlaylist } from './stream.js';
 
 const ID = /^[a-z0-9]{8}$/;
 const CODE = /^[A-HJ-NP-Z2-9]{6}$/;
@@ -38,6 +39,17 @@ const preflight = (request) => new Response(null, { status: 204, headers: {
 
 const PAGES = { '': '/golf/live/', board: '/golf/board/', desk: '/golf/desk/', cards: '/golf/cards/', map: '/golf/map/' };
 
+// which live inputs are Flagcast's cameras, remembered for a while so playlist reloads (every 2 s per viewer) don't
+// all go to the directory
+const camOK = new Map();
+async function isCam(env, uid) {
+  const c = camOK.get(uid); if (c && Date.now() - c.at < (c.ok ? 600e3 : 30e3)) return c.ok;
+  const r = await env.CLUBS.get(env.CLUBS.idFromName('directory')).fetch(new Request('https://clubs/streamok', { method: 'POST', body: JSON.stringify({ uid }) }));
+  const ok = !!(await r.json().catch(() => ({}))).ok;
+  if (camOK.size > 500) camOK.clear();
+  camOK.set(uid, { ok, at: Date.now() }); return ok;
+}
+
 export async function golf(request, env) {
   const url = new URL(request.url);
   let m;
@@ -55,6 +67,13 @@ export async function golf(request, env) {
     const r = await clubs(new Request(request.url, { method: 'POST', body: JSON.stringify({ idToken: f.get('credential') }) }), env, 'google');
     const j = await r.json().catch(() => ({}));
     return back(j.token ? `token=${encodeURIComponent(j.token)}` : `error=${encodeURIComponent(j.error || 'That Google sign-in didn’t work.')}`);
+  }
+  // NDI cameras on Cloudflare Stream: Flagcast's own HLS for them, with a rewind window and replay clips (stream.js).
+  // Only for live inputs Flagcast made (the directory's streams table), so this can't relay anyone else's video.
+  if ((m = url.pathname.match(/^\/golf\/api\/cam\/([0-9a-f]{32})\/(video|[va][0-9]{1,12})\.m3u8$/))) {
+    if (request.method !== 'GET' && request.method !== 'HEAD') return json({ error: 'Use GET' }, 405);
+    if (!(await isCam(env, m[1]))) return json({ error: 'There is no Flagcast camera at this address.' }, 404);
+    return camPlaylist(fetch, m[1], m[2], url.searchParams);
   }
   if ((m = url.pathname.match(/^\/golf\/api\/([a-z0-9]{8})\/(state|ws|cart|score|desk|pro|hit|where)$/))) {
     const stub = env.GOLF.get(env.GOLF.idFromName(m[1]));

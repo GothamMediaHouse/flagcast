@@ -161,6 +161,8 @@ export class FlagcastClubs extends DurableObject {
   async route(op, b, local) {
     const env = this.env, now = Date.now();
     // the course library (only reached from courses.js, never straight from the web)
+    // is this live input one of Flagcast's cameras? (golf.js, before serving its playlists; never from the web)
+    if (op === 'streamok') return json({ ok: !!this.one('SELECT hole FROM streams WHERE uid = ?', clip(b.uid, 40)) });
     if (op === 'lib-search') {
       const words = clip(b.q, 80).toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 1).slice(0, 5);
       if (!words.length) return json({ courses: [] });
