@@ -154,7 +154,7 @@ table.t .n { width: 64px; }
   <h3>Announcement</h3>
   <div class="row" style="margin-top:0"><input id="flash" placeholder="Shotgun start in 10 minutes" style="max-width:520px"><button class="btn dark" id="flashGo">Show on every screen now</button></div>
   <h3>Par 3 cameras</h3>
-  <p class="help">For each par 3, paste the camera’s https link: an HLS stream (.m3u8, for example from a streaming encoder or a cellular bonding unit) or a web player link such as a VDO.Ninja view link. Leave it empty to show a drawing of the hole.</p>
+  <p class="help">Cameras are set up by Flagcast. Pick “Par 3 camera” for a screen and it shows the hole’s camera (or a drawing of the hole when there isn’t one).</p>
   <div class="grid" id="cams" style="margin-top:10px"></div>
   <h3>Par 3 replays</h3>
   <p class="help">Players watch replays on their phones (under each par 3 on the live leaderboard), and you can put one on every screen. Save replay plays the hole’s camera back from 25 seconds before you press it, so the camera’s HLS link must keep a recording window (DVR). Or paste a clip link (.mp4 or .m3u8), for example from a replay system. Golf pros and marshals can save replays from the Flagcast app too.</p>
@@ -394,7 +394,7 @@ function readTables() {
     const c = EV.contests[box.dataset.c]; if (!c) continue;
     c.hole = Number(box.querySelector('[data-ck="hole"]').value) || 1; c.label = box.querySelector('[data-ck="label"]').value.trim(); c.sponsor = box.querySelector('[data-ck="sponsor"]').value.trim();
   }
-  for (const inp of document.querySelectorAll('#cams input')) { const h = inp.dataset.h; if (inp.value.trim()) EV.cams[h] = inp.value.trim(); else delete EV.cams[h]; }
+  // camera links are Flagcast's (Admin): the desk doesn't change them
   for (const row of document.querySelectorAll('.sponsor')) {
     const s = EV.sponsors[row.dataset.s]; if (!s) continue;
     s.name = row.querySelector('[data-sk="name"]').value.trim(); s.line = row.querySelector('[data-sk="line"]').value.trim();
@@ -450,7 +450,7 @@ $('addLd').onclick = () => { readTables(); const p5 = EV.course.holes.find((h) =
 // ---- screens: cameras, sponsors, fund, announcements ----
 function drawCams() {
   const p3 = EV.course.holes.filter((h) => h.par === 3);
-  $('cams').innerHTML = p3.map((h) => `<label class="f">Hole ${h.n} camera<input data-h="${h.n}" value="${esc(EV.cams[h.n] || '')}" placeholder="https://"></label>`).join('') || '<p class="help">This course has no par 3s set.</p>';
+  $('cams').innerHTML = p3.map((h) => `<div class="f"><b>Hole ${h.n}</b> · ${EV.cams[h.n] ? 'Camera set up' : 'No camera'}</div>`).join('') || '<p class="help">This course has no par 3s set.</p>';
 }
 const SPOT_NAMES = { title: 'Title sponsor (every screen)', leaderboard: 'Leaderboard sponsor', hole: 'Hole sponsor', cam: 'Par 3 camera sponsor', contest: 'Contest sponsor', turn: 'At the turn', ace: 'Hole in one sponsor', slide: 'Own slide on the screens' };
 function drawSponsors() {

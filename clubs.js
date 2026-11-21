@@ -437,7 +437,7 @@ export class FlagcastClubs extends DurableObject {
         if (had && had.club !== cid) this.fail('That tournament belongs to another club. Use Move instead.');
         this.sql.exec('INSERT OR REPLACE INTO events (id, club, key, name, created, hidden, archived) VALUES (?, ?, ?, ?, ?, 0, 0)', id, cid, key, clip(ev.name, 80) || 'Tournament', ev.created || now);
       }
-      if (b.op && !['events', 'log', 'day'].includes(b.op)) this.note('Flagcast', cid || evRow?.club || '', `Admin: ${b.op}${b.email ? ` ${clip(b.email, 254)}` : ''}${evRow ? ` ${evRow.name}` : ''}${b.op === 'pay' ? ` $${num(b.amount, 0, 1e7, 0)}` : ''}`);
+      if (b.op && !['events', 'log', 'day', 'cams'].includes(b.op)) this.note('Flagcast', cid || evRow?.club || '', `Admin: ${b.op}${b.email ? ` ${clip(b.email, 254)}` : ''}${evRow ? ` ${evRow.name}` : ''}${b.op === 'pay' ? ` $${num(b.amount, 0, 1e7, 0)}` : ''}`);
       // screen control for any club's tournament: the same day ops as the desk
       if (b.op === 'day') {
         const row = this.one('SELECT * FROM events WHERE id = ?', clip(b.id, 8)); if (!row) this.fail('That tournament isn’t on any club’s list.', 404);
@@ -446,6 +446,14 @@ export class FlagcastClubs extends DurableObject {
         await this.golf(row.id, 'desk', { ...d, key: row.key });
         this.note('Flagcast', row.club, `Admin screens: ${d.op}${d.kind ? ` ${d.kind}` : ''}${d.page ? ` ${d.page.k}${d.page.hole ? ` ${d.page.hole}` : ''}` : d.op === 'screen' ? ' playlist' : ''}${d.display ? ` → ${Array.isArray(d.display) ? d.display.join(', ') : d.display}` : ''} · ${row.name}`);
         return json({ ok: true });
+      }
+      // the par 3 camera links for any club's tournament (club desks can't change them)
+      if (b.op === 'cams') {
+        const tid = String(b.id || '').toLowerCase(); if (!/^[a-z0-9]{8}$/.test(tid)) this.fail('Pick a tournament.');
+        const row = this.one('SELECT * FROM events WHERE id = ?', tid); // Flagcast can also set up a tournament no club owns yet
+        const j = await this.golf(tid, 'cams', { cams: b.cams || {} });
+        this.note('Flagcast', row?.club || '', `Admin cameras: ${Object.keys(j.cams || {}).length ? Object.keys(j.cams).map((h) => `hole ${h}`).join(', ') : 'none'} · ${row?.name || tid.toUpperCase()}`);
+        return json({ ok: true, cams: j.cams });
       }
       if (b.op === 'log') return json({ log: this.all('SELECT * FROM log ORDER BY n DESC LIMIT 400') });
       if (b.op === 'events') {
@@ -460,7 +468,7 @@ export class FlagcastClubs extends DurableObject {
               // for screen control
               displays: (s.displays || []).map((d) => ({ id: d.id, name: d.name, where: d.where || '', group: d.group || '', online: (s.online || {})[d.id] || 0, force: s.live?.force?.[d.id] || null,
                 pages: (d.playlist || []).length, list: (d.playlist || []).map((x) => ({ k: x.k, fl: x.fl, hole: x.hole, sponsor: x.sponsor, secs: x.secs })) })),
-              p3: (s.course?.holes || []).filter((h) => h.par === 3).map((h) => h.n), sponsors: (s.sponsors || []).map((x) => ({ id: x.id, name: x.name })),
+              p3: (s.course?.holes || []).filter((h) => h.par === 3).map((h) => h.n), cams: s.cams || {}, sponsors: (s.sponsors || []).map((x) => ({ id: x.id, name: x.name })),
               replayList: (s.replays || []).slice(0, 12).map((r) => ({ id: r.id, hole: r.hole, label: r.label, at: r.at })), take: s.live?.take || null, flash: s.flash || null,
               phone: s.live?.phone || null, scenes: (s.scenes || []).map((x) => ({ id: x.id, name: x.name })), scene: s.live?.scene || '', flights: s.flights || [], fund: !!s.fund?.on, skins: !!s.screens?.skins };
           } catch { return { ...e, gone: true }; }
