@@ -17,6 +17,7 @@ Settings on the live worker (Cloudflare → Workers → flagcast → Settings �
 - `GOLF_CREATE_PASS` (secret): the Flagcast admin passcode. It opens `/golf/admin/` and the Admin app.
 - `RESEND_API_KEY` (secret) and `MAIL_FROM` (e.g. `Flagcast <signin@flagcast.app>`, a domain verified in Resend): sign-in codes and club emails.
 - `ADMIN_EMAIL` (optional): gets a note when a club asks to join.
+- `CONTACT_TO` (optional): where the website's contact form goes (comma list); hello@flagcast.app when unset. Uses the same Resend key, with Reply-To set to the sender.
 
 On localhost with none of these, sign-in codes come back on screen and the admin page opens without a passcode.
 
