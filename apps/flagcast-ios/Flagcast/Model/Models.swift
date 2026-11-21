@@ -170,6 +170,19 @@ struct Fund: Codable, Hashable {
 }
 
 struct Flash: Codable, Hashable { var text: String; var at: Double }
+/// Club branding (brand.js on the server): the club's logo shows instead of the Flagcast logo. `logo` is an address on
+/// the server ('' = Flagcast's: no club logo yet, or a tournament Admin marked Demo).
+struct Brand: Codable, Hashable {
+    var logo = "", accent = "", club = ""
+    var demo = true, powered = false
+    init() {}
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        logo = c.str(.logo); accent = c.str(.accent); club = c.str(.club); demo = c.bool(.demo, true); powered = c.bool(.powered, false)
+    }
+    /// the club logo's full address, or nil for the Flagcast logo
+    var logoURL: URL? { demo || logo.isEmpty ? nil : URL(string: logo, relativeTo: Server.base)?.absoluteURL }
+}
 struct News: Codable, Hashable { var text: String; var at: Double; var by: String? }
 struct Nudge: Codable, Hashable { var team: String; var text: String; var at: Double }
 struct Ace: Codable, Hashable { var hole: Int; var name: String; var team: String; var at: Double }
@@ -274,10 +287,11 @@ struct EventState: Codable, Hashable {
     var map = CourseMap()
     var scores: Scores = [:]
     var online: [String: Int] = [:]
+    var brand = Brand()
 
     enum CodingKeys: String, CodingKey {
         case id, name, club, date, course, format, sideGames, flights, teams, screens, cams, sponsors, schedule, displays, fund, contests
-        case locked, aces, flash, news, nudges, live, replays, map, scores, online
+        case locked, aces, flash, news, nudges, live, replays, map, scores, online, brand
     }
     init() {}
     init(from d: Decoder) throws {
@@ -303,6 +317,7 @@ struct EventState: Codable, Hashable {
         map = (try? c.decodeIfPresent(CourseMap.self, forKey: .map)) ?? CourseMap()
         scores = (try? c.decodeIfPresent(Scores.self, forKey: .scores)) ?? [:]
         online = (try? c.decodeIfPresent([String: Int].self, forKey: .online)) ?? [:]
+        brand = (try? c.decodeIfPresent(Brand.self, forKey: .brand)) ?? Brand()
     }
     func encode(to e: Encoder) throws {
         var c = e.container(keyedBy: CodingKeys.self)
@@ -314,6 +329,7 @@ struct EventState: Codable, Hashable {
         try c.encode(fund, forKey: .fund); try c.encode(contests, forKey: .contests); try c.encode(locked, forKey: .locked)
         try c.encode(aces, forKey: .aces); try c.encodeIfPresent(flash, forKey: .flash); try c.encode(news, forKey: .news)
         try c.encode(nudges, forKey: .nudges); try c.encode(live, forKey: .live); try c.encode(replays, forKey: .replays); try c.encode(map, forKey: .map); try c.encode(scores, forKey: .scores); try c.encode(online, forKey: .online)
+        try c.encode(brand, forKey: .brand)
     }
 
     /// The name shown at the top of pages: the screens title when the desk set one.

@@ -37,6 +37,14 @@ struct ScorecardScreen: View {
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) { syncPill }
+            // the club's logo in the bar when it has one; the tournament's name otherwise
+            ToolbarItem(placement: .principal) {
+                if let u = model.state?.brand.logoURL {
+                    ClubLogo(url: u).frame(width: 180, height: 30).accessibilityLabel(model.state?.title ?? "Scorecard")
+                } else {
+                    Text(model.state?.title ?? "Scorecard").font(.headline).foregroundStyle(.white).lineLimit(1)
+                }
+            }
         }
         .onAppear {
             model.start()
