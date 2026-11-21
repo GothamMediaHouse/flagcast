@@ -1,4 +1,5 @@
 #!/bin/bash
+echo; echo "Flagcast Admin is retired: Admin lives inside Flagcast Manager now. Build, install and publish Manager instead."; echo; read -n 1 -s -r -p "Press any key to close." 2>/dev/null; exit 1
 # Puts Flagcast Admin online: a GitHub release admin-v<version> on this repository's GitHub with
 #   Mac (native app, apps/flagcast-mac: tools/release.sh Admin):   the universal .dmg, the .zip, appcast.xml, latest-mac.yml
 #   Windows (this folder, Electron: npx electron-builder --win):   the Setup .exe, its .blockmap, latest.yml

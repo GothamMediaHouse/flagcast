@@ -1,4 +1,5 @@
 #!/bin/bash
+echo; echo "Flagcast Admin is retired: Admin lives inside Flagcast Manager now. Build, install and publish Manager instead."; echo; read -n 1 -s -r -p "Press any key to close." 2>/dev/null; exit 1
 # Builds Flagcast Admin for Mac (one app for Apple silicon and Intel, signed and notarized by Apple) and Windows. It's only for Flagcast, not for clubs.
 # The finished files land in the dist folder next to this script; "Publish Flagcast Admin.command" puts them online.
 cd "$(dirname "$0")" || exit 1

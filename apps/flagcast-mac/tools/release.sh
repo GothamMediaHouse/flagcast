@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds a native Mac app for release: tools/release.sh Manager   (or Admin)
+# Builds a native Mac app for release: tools/release.sh Manager   (Admin is retired)
 #   one universal app (Apple silicon + Intel), signed with the Developer ID and notarized by Apple, then in
 #   build/release/<App>/:
 #     Flagcast-<App>-<version>-universal.dmg          what flagcast.app/download hands out (signed, notarized, stapled)
@@ -8,6 +8,7 @@
 #     latest-mac.yml                                  the feed the older Electron version reads, so it updates to this one
 # Needs: Xcode, the "Developer ID Application" certificate, APPLE_KEYCHAIN_PROFILE (notarytool keychain profile) and the
 # Sparkle update key in the keychain ("Set up Mac app updates.command", once).
+[ "$1" = "Admin" ] && { echo "Flagcast Admin is retired: Admin lives inside Flagcast Manager now. Release Manager instead."; exit 1; }
 set -e
 cd "$(dirname "$0")/.."
 APP_T="${1:-Manager}"; LOWER=$(echo "$APP_T" | tr '[:upper:]' '[:lower:]')

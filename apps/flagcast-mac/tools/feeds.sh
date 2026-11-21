@@ -1,8 +1,9 @@
 #!/bin/bash
-# The update feeds for a built release: tools/feeds.sh Manager   (or Admin)
+# The update feeds for a built release: tools/feeds.sh Manager   (Admin is retired)
 #   appcast.xml     the Sparkle feed the native app reads, the .zip signed with the update key (Keychain, account "flagcast")
 #   latest-mac.yml  the feed the older (Electron) app reads, so it updates to the native one
 # The first time, macOS asks to let sign_update use the key: click Always Allow.
+[ "$1" = "Admin" ] && { echo "Flagcast Admin is retired: Admin lives inside Flagcast Manager now. Release Manager instead."; exit 1; }
 set -e
 cd "$(dirname "$0")/.."
 APP_T="${1:-Manager}"; LOWER=$(echo "$APP_T" | tr '[:upper:]' '[:lower:]')
