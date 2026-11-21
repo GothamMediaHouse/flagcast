@@ -18,6 +18,7 @@ import { defaultHoles, courseHcp } from './public/golf/core.js';
 import { trackingOn } from './public/golf/gps.js';
 import { clubs } from './clubs.js';
 import { camPlaylist } from './stream.js';
+import { brandFor, logoOf, cleanLogo, decodeLogo } from './brand.js';
 
 const ID = /^[a-z0-9]{8}$/;
 const CODE = /^[A-HJ-NP-Z2-9]{6}$/;
@@ -56,7 +57,15 @@ export async function golf(request, env) {
   if (request.method === 'OPTIONS' && url.pathname.startsWith('/golf/api/')) return preflight(request);
   // making a tournament and the club accounts go through the club directory (clubs.js)
   if (url.pathname === '/golf/api/new') return cors(request, await clubs(request, env, 'new'));
-  if ((m = url.pathname.match(/^\/golf\/api\/club\/(start|verify|login|apple|google|config|setpass|me|request|invite|uninvite|hide|signout|admin)$/))) return cors(request, await clubs(request, env, m[1]));
+  if ((m = url.pathname.match(/^\/golf\/api\/club\/(start|verify|login|apple|google|config|setpass|me|request|invite|uninvite|hide|signout|admin|brand)$/))) return cors(request, await clubs(request, env, m[1]));
+  // a club's logo, for the Manager apps and Admin (its tournaments serve their own at /golf/api/<id>/logo)
+  if ((m = url.pathname.match(/^\/golf\/api\/club\/logo\/([a-z0-9]{4,10})$/)) && request.method === 'GET') {
+    const r = await env.CLUBS.get(env.CLUBS.idFromName('directory')).fetch(new Request(`https://clubs/logo-get`, { method: 'POST', body: JSON.stringify({ club: m[1] }) }));
+    const j = await r.json().catch(() => ({})); const l = decodeLogo(j.logo);
+    if (!l) return json({ error: 'This club has no logo yet.' }, 404);
+    return new Response(l.bytes, { headers: { 'Content-Type': l.type, 'Cache-Control': 'public, max-age=86400', 'Access-Control-Allow-Origin': '*',
+      'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; img-src data:" } });
+  }
   // Sign in with Google from the Manager apps: Google posts the ID token here (form, with its double-submit CSRF
   // cookie), and the app's sign-in sheet gets the Flagcast session back on flagcastmanager://signin
   if (url.pathname === '/golf/api/club/google-app' && request.method === 'POST') {
@@ -75,7 +84,7 @@ export async function golf(request, env) {
     if (!(await isCam(env, m[1]))) return json({ error: 'There is no Flagcast camera at this address.' }, 404);
     return camPlaylist(fetch, m[1], m[2], url.searchParams);
   }
-  if ((m = url.pathname.match(/^\/golf\/api\/([a-z0-9]{8})\/(state|ws|cart|score|desk|pro|hit|where)$/))) {
+  if ((m = url.pathname.match(/^\/golf\/api\/([a-z0-9]{8})\/(state|ws|cart|score|desk|pro|hit|where|logo)$/))) {
     const stub = env.GOLF.get(env.GOLF.idFromName(m[1]));
     return cors(request, await stub.fetch(request));
   }
@@ -221,7 +230,8 @@ export class GolfEvent extends DurableObject {
   // what anyone can see: the setup without the cart codes or the desk key
   async publicState() {
     const ev = await this.load(), sc = await this.scores();
-    const { key, pins, log, ...rest } = ev;
+    const { key, pins, log, logo, clubBrand, demo, ...rest } = ev; // logos go by address (op 'logo'), not in the state
+
     const teams = ev.teams.map(({ code, ...t }) => ({ ...t, players: t.players.map(({ ghin, ...p }) => p) })); // GHIN numbers stay with the desk
     const online = Object.fromEntries((ev.displays || []).map((d) => [d.id, this.ctx.getWebSockets(`d:${d.id}`).length]));
     const scores = {};
@@ -229,7 +239,7 @@ export class GolfEvent extends DurableObject {
       const s = sc[t.id]; if (!s) continue;
       scores[t.id] = Object.fromEntries(Object.entries(s).map(([p, arr]) => [p, arr.map((x) => (x ? x.v : null))]));
     }
-    return { ...rest, teams, scores, online };
+    return { ...rest, teams, scores, online, brand: brandFor(ev) };
   }
 
   async broadcast() {
@@ -253,6 +263,12 @@ export class GolfEvent extends DurableObject {
     if (!ev) return json({ error: 'There is no tournament at this address.' }, 404);
     const op = url.pathname.split('/').pop();
     if (op === 'state') return json(await this.publicState());
+    // the logo golfers and the TVs see (the tournament's own, else its club's); none when it shows Flagcast's
+    if (op === 'logo') {
+      const l = logoOf(ev); if (!l) return json({ error: 'This tournament shows the Flagcast logo.' }, 404);
+      return new Response(l.bytes, { headers: { 'Content-Type': l.type, 'Cache-Control': 'public, max-age=86400', 'Access-Control-Allow-Origin': '*',
+        'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; img-src data:" } });
+    }
     if (op === 'ws') {
       if (request.headers.get('Upgrade') !== 'websocket') return new Response('Use a WebSocket', { status: 426 });
       if (this.ctx.getWebSockets().length > 900) return new Response('Too many viewers', { status: 503 });
@@ -277,7 +293,16 @@ export class GolfEvent extends DurableObject {
       return this.desk(b);
     }
     // the par 3 camera links: only from Flagcast Admin (clubs.js admin op 'cams'). Never routed from the web
-    // (the worker only forwards state|ws|cart|score|desk|pro|hit|where), so only the directory object reaches it.
+    // (the worker only forwards state|ws|cart|score|desk|pro|hit|where|logo), so only the directory object reaches it.
+    // the club's branding, from the club directory (clubs.js) when it changes or the tournament is made or moved,
+    // and Admin's Demo switch (Flagcast's logo whatever the club has). Never routed from the web.
+    if (op === 'brand') {
+      if (b.club !== undefined) ev.clubBrand = { logo: b.club?.logo || '', accent: b.club?.accent || '', powered: !!b.club?.powered };
+      if (b.demo !== undefined) ev.demo = !!b.demo;
+      await this.ctx.storage.put('event', ev);
+      await this.broadcast();
+      return json({ ok: true, brand: brandFor(ev) });
+    }
     if (op === 'cams') {
       ev.cams = cleanSetup({ cams: b.cams || {} }, ev).cams;
       await this.ctx.storage.put('event', ev);
@@ -333,8 +358,12 @@ export class GolfEvent extends DurableObject {
     if (b.op === 'get') return json({ ...ev, stats: await this.getStats() });
     if (DAY_OPS.has(b.op)) return this.dayOp(b, 'Desk');
     if (b.op === 'save') {
+      // the tournament's own logo (instead of the club's): '' takes it off; left out, it stays as it is
+      let logo = ev.logo || '';
+      if (b.setup?.logo !== undefined) { try { logo = cleanLogo(b.setup.logo); } catch (e) { return json({ error: e.message }, e.status || 400); } }
       const s = cleanSetup(b.setup || {}, ev);
-      s.cams = ev.cams || {}; // camera links are Flagcast staff's (op 'cams' from Admin): a desk key can't change them
+      s.cams = ev.cams || {};
+      s.logo = logo; // camera links are Flagcast staff's (op 'cams' from Admin): a desk key can't change them
       Object.assign(ev, s, { v: (ev.v || 0) + 1 });
       // scores of teams that were removed go too
       const keep = new Set(ev.teams.map((t) => t.id)), sc = await this.scores();
