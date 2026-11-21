@@ -4,41 +4,6 @@ import SwiftUI
 // override and time left, and a routing matrix (TVs × pages) to switch several at once; then scenes, take-overs,
 // the phones banner, the announcement, and each TV's page list in full. The simple cards stay the default for club staff.
 
-/// One TV as Engineering sees it.
-struct EngTV: Identifiable, Hashable {
-    var id: String, name: String, place: String, group: String, online: Int, force: PageRef?, playlist: [PageRef]
-}
-
-/// What Engineering reads and how it changes things, for the desk (one tournament) or Admin (any club's).
-struct EngSource {
-    var tvs: [EngTV]
-    var choices: PageChoices
-    var url: (String) -> URL?
-    var scenes: [(id: String, name: String)]
-    var currentScene = ""
-    var take: Take?
-    var phone: PhoneRoute?
-    var announcement: Flash?
-    var replays: [(id: String, label: String)] = []
-    /// a day change (op "screen", "scene", "take", "flash"), with the line to show when it's done
-    var day: (_ op: String, _ body: [String: Any], _ done: String?) async -> Void
-    /// the desk can edit each TV's pages and group in place (saved with Save); Admin can't
-    var playlist: ((String) -> Binding<[PageRef]>?)? = nil
-    var group: ((String) -> Binding<String>?)? = nil
-}
-
-/// The routing matrix's columns: "Normal" (its own pages) and each page a TV can be switched to.
-private struct EngRoute: Identifiable, Hashable {
-    var id: String, title: String, page: PageRef?
-    func matches(_ f: PageRef?) -> Bool {
-        guard let f, f.isOn else { return page == nil }
-        guard let page else { return false }
-        return f.k == page.k && f.fl == page.fl && f.hole == page.hole && f.sponsor == page.sponsor
-    }
-}
-
-func pageDict(_ p: PageRef?) -> Any { p.map { ["k": $0.k, "fl": $0.fl, "hole": $0.hole, "sponsor": $0.sponsor] as [String: Any] } ?? NSNull() }
-
 struct EngineeringView: View {
     var src: EngSource
     @State private var selected: Set<String> = []

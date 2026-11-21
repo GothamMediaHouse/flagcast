@@ -72,11 +72,7 @@ final class AppModel {
         nav.onRename = { [weak self] id, name, date in self?.noteName(id, name: name, date: date) }
         nav.canEngineer = { [weak self] in (self?.isAdmin ?? false) || self?.showEngineering == true }
         admin.token = { [weak self] in self?.saved.token ?? "" }
-        admin.onOpen = { [weak self] e in
-            guard let self else { return }
-            if !self.shownEvents.contains(where: { $0.id == e.id }) { self.adminRefs.append(EventRef(id: e.id, key: e.key, name: e.name, date: e.date, club: e.clubName)) }
-            self.adminSection = nil; self.selection = e.id; self.section = .overview
-        }
+        admin.onOpen = { [weak self] e in self?.openAdmin(id: e.id, key: e.key, name: e.name, date: e.date, club: e.clubName) }
         if let d = try? Data(contentsOf: file), let s = try? JSONDecoder().decode(Saved.self, from: d) { saved = s }
         listEvents()
     }
@@ -99,6 +95,12 @@ final class AppModel {
         return d
     }
     var current: DeskDoc? { selection.flatMap(doc) }
+
+    /// Open any club's tournament from Admin (kept in the list until the app quits).
+    func openAdmin(id: String, key: String, name: String, date: String? = nil, club: String? = nil) {
+        if !shownEvents.contains(where: { $0.id == id }) { adminRefs.append(EventRef(id: id, key: key, name: name, date: date, club: club)) }
+        adminSection = nil; selection = id; section = .overview
+    }
 
     // ---- the club account ----
     @discardableResult

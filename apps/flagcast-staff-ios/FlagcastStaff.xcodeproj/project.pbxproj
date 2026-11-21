@@ -6,67 +6,114 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		FD3452E636E8513CA11B6577 = {isa = PBXBuildFile; fileRef = DEF00A9DA6B263180206A661; };
+		113C35D27B019403E9AD4512 = {isa = PBXBuildFile; fileRef = CA114777E20763645FD5B2C0; };
+		8C75BD33FF681B48C43F24C0 = {isa = PBXBuildFile; fileRef = 15766DFE20ADC78B5CDA414E; };
+		5858EBD1C4C6DABBBC67D5F7 = {isa = PBXBuildFile; fileRef = 64698F11968CA58CC2350EF1; };
+		5EE21885F66E33A0B170041B = {isa = PBXBuildFile; fileRef = 493518DC3996BFE4DF6B0729; };
+		38BE8D6F3B3585A62C59CE37 = {isa = PBXBuildFile; fileRef = DAD049E4E24344C8C2C0656D; };
+		86C3F242A64F014E4112E816 = {isa = PBXBuildFile; fileRef = FB592F4151A8D2ED7789FFFC; };
+		FE75074FAB8E20B4F2D74B13 = {isa = PBXBuildFile; fileRef = 39617C42E7A2953968F1D777; };
+		805E2950FAC620909301303F = {isa = PBXBuildFile; fileRef = 66440A695AB688617D17AB5B; };
+		6A489AB2511C58948C0810EF = {isa = PBXBuildFile; fileRef = 64A83AAD604F9A1373F33EB7; };
+		F697E0FB7DC0DE3DC075C06E = {isa = PBXBuildFile; fileRef = 4CD1D7E21F4F7B9649C7C4E3; };
+		5F1C6D380C45DCC113EAB87C = {isa = PBXBuildFile; fileRef = E163E89EF65BCF47DF9334BF; };
+		D4B4AD17526243C648AA952A = {isa = PBXBuildFile; fileRef = 4457B8067AAE1AAEF2F89E9B; };
+		B8E1480F886B1DBDD3CB05E4 = {isa = PBXBuildFile; fileRef = 21C26F226881C80BCAC6FBEC; };
+		25D11A59641C9ED381AAC5F2 = {isa = PBXBuildFile; fileRef = 0E8BD471F8B2F04B31D90F63; };
+		C24C43B25E9CE97C05F1003B = {isa = PBXBuildFile; fileRef = 114899359BB15ED7EB36B371; };
+		8662ED94914FC53C12B47FD4 = {isa = PBXBuildFile; fileRef = 77C6E0EA06822F88CEE86CA2; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
-		0BA4EB149F28194350479116 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Flagcast Manager.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		8663FE6E6BC6B032B001D569 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Manager-Info.plist"; sourceTree = "<group>"; };
-		96DD9AE71EDA99D5DFAC4100 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Flagcast Admin.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		41EE10D9F45B9D7AE28BB95A = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Admin-Info.plist"; sourceTree = "<group>"; };
+		423BA520DEA3D9C00BA33862 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Flagcast Manager.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		E52280E7EEF8F1A03BECF789 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Flagcast Admin.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		DEF00A9DA6B263180206A661 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Models.swift; path = "../flagcast-ios/Flagcast/Model/Models.swift"; sourceTree = SOURCE_ROOT; };
+		CA114777E20763645FD5B2C0 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Core.swift; path = "../flagcast-ios/Flagcast/Model/Core.swift"; sourceTree = SOURCE_ROOT; };
+		15766DFE20ADC78B5CDA414E = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Server.swift; path = "../flagcast-ios/Flagcast/Net/Server.swift"; sourceTree = SOURCE_ROOT; };
+		64698F11968CA58CC2350EF1 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = EventFeed.swift; path = "../flagcast-ios/Flagcast/Net/EventFeed.swift"; sourceTree = SOURCE_ROOT; };
+		493518DC3996BFE4DF6B0729 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Net.swift; path = "../flagcast-mac/Shared/Net.swift"; sourceTree = SOURCE_ROOT; };
+		DAD049E4E24344C8C2C0656D = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Desk.swift; path = "../flagcast-mac/Shared/Desk.swift"; sourceTree = SOURCE_ROOT; };
+		FB592F4151A8D2ED7789FFFC = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Route.swift; path = "../flagcast-mac/Shared/Route.swift"; sourceTree = SOURCE_ROOT; };
+		39617C42E7A2953968F1D777 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = UI.swift; path = "../flagcast-mac/Shared/UI.swift"; sourceTree = SOURCE_ROOT; };
+		66440A695AB688617D17AB5B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Geo.swift; path = "../flagcast-mac/Shared/Geo.swift"; sourceTree = SOURCE_ROOT; };
+		64A83AAD604F9A1373F33EB7 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CourseImages.swift; path = "../flagcast-mac/Shared/CourseImages.swift"; sourceTree = SOURCE_ROOT; };
+		4CD1D7E21F4F7B9649C7C4E3 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DeskDoc.swift; path = "../flagcast-mac/Shared/Desk/DeskDoc.swift"; sourceTree = SOURCE_ROOT; };
+		E163E89EF65BCF47DF9334BF = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DeskNav.swift; path = "../flagcast-mac/Shared/Desk/DeskNav.swift"; sourceTree = SOURCE_ROOT; };
+		4457B8067AAE1AAEF2F89E9B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ScreenLogic.swift; path = "../flagcast-mac/Shared/Desk/ScreenLogic.swift"; sourceTree = SOURCE_ROOT; };
+		21C26F226881C80BCAC6FBEC = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AdminModel.swift; path = "../flagcast-mac/Shared/Admin/AdminModel.swift"; sourceTree = SOURCE_ROOT; };
+		0E8BD471F8B2F04B31D90F63 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppModel.swift; path = "../flagcast-mac/Manager/AppModel.swift"; sourceTree = SOURCE_ROOT; };
+		114899359BB15ED7EB36B371 = {isa = PBXFileReference; lastKnownFileType = file; name = BarlowCondensed-Bold.ttf; path = "../flagcast-mac/Shared/Fonts/BarlowCondensed-Bold.ttf"; sourceTree = SOURCE_ROOT; };
+		77C6E0EA06822F88CEE86CA2 = {isa = PBXFileReference; lastKnownFileType = file; name = BarlowCondensed-SemiBold.ttf; path = "../flagcast-mac/Shared/Fonts/BarlowCondensed-SemiBold.ttf"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		EB1AE74EA98E84C65C083FB6 = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Shared;
-			sourceTree = "<group>";
-		};
-		50F4FEBA64CF5F09BB07CC8C = {
+		B46DE96E854FDD1D4A0A0D2F = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Manager;
 			sourceTree = "<group>";
 		};
-		A7E06F9F10DCFA18DE12411A = {
+		C102F80F20E09D84A4AE0659 = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Admin;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
-		BE49EBEEBE1DAB0546F4E1A1 = {
+		84B50AA99C2E2FD268FAE542 = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FD3452E636E8513CA11B6577,
+				113C35D27B019403E9AD4512,
+				8C75BD33FF681B48C43F24C0,
+				5858EBD1C4C6DABBBC67D5F7,
+				5EE21885F66E33A0B170041B,
+				38BE8D6F3B3585A62C59CE37,
+				86C3F242A64F014E4112E816,
+				FE75074FAB8E20B4F2D74B13,
+				805E2950FAC620909301303F,
+				6A489AB2511C58948C0810EF,
+				F697E0FB7DC0DE3DC075C06E,
+				5F1C6D380C45DCC113EAB87C,
+				D4B4AD17526243C648AA952A,
+				B8E1480F886B1DBDD3CB05E4,
+				25D11A59641C9ED381AAC5F2,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		D609334B8D3A76AF3FFD5370 = {
+		9B5E8A9F4F5EE92E51AD9FFF = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		A975EDD3C8D7F3F61C669616 = {
+		498336DE08794EB2D9525DAD = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C24C43B25E9CE97C05F1003B,
+				8662ED94914FC53C12B47FD4,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		761A6EA2FDFDAAD6C19CA083 = {
+		3C13D24C9D6137FF2B926165 = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		F8A916AAF588B4E74DFAF950 = {
+		C274EAE938BF07B4EE70FF15 = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		BBA592876FC0724AA6E75385 = {
+		329217E9AC74BEE354BE603B = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -74,96 +121,116 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 
-		A25322BB60D9DEA0F6056D93 = {
+		ACEC4E7546EEC76EB59BD252 = {
 			isa = PBXGroup;
 			children = (
-				EB1AE74EA98E84C65C083FB6,
-				50F4FEBA64CF5F09BB07CC8C,
-				A7E06F9F10DCFA18DE12411A,
-				8663FE6E6BC6B032B001D569,
-				41EE10D9F45B9D7AE28BB95A,
-				3000CFD8FAEAE6DEE06B6D71,
+				B46DE96E854FDD1D4A0A0D2F,
+				C102F80F20E09D84A4AE0659,
+				B0C37AC81EF7C2990AED93A7,
+				1FCBB4530CB8837DD8BF4E1B,
 			);
 			sourceTree = "<group>";
 		};
-		3000CFD8FAEAE6DEE06B6D71 = {
+		B0C37AC81EF7C2990AED93A7 = {
 			isa = PBXGroup;
 			children = (
-				0BA4EB149F28194350479116,
-				96DD9AE71EDA99D5DFAC4100,
+				DEF00A9DA6B263180206A661,
+				CA114777E20763645FD5B2C0,
+				15766DFE20ADC78B5CDA414E,
+				64698F11968CA58CC2350EF1,
+				493518DC3996BFE4DF6B0729,
+				DAD049E4E24344C8C2C0656D,
+				FB592F4151A8D2ED7789FFFC,
+				39617C42E7A2953968F1D777,
+				66440A695AB688617D17AB5B,
+				64A83AAD604F9A1373F33EB7,
+				4CD1D7E21F4F7B9649C7C4E3,
+				E163E89EF65BCF47DF9334BF,
+				4457B8067AAE1AAEF2F89E9B,
+				21C26F226881C80BCAC6FBEC,
+				0E8BD471F8B2F04B31D90F63,
+				114899359BB15ED7EB36B371,
+				77C6E0EA06822F88CEE86CA2,
+			);
+			name = "Shared with the iPhone and Mac apps";
+			sourceTree = "<group>";
+		};
+		1FCBB4530CB8837DD8BF4E1B = {
+			isa = PBXGroup;
+			children = (
+				423BA520DEA3D9C00BA33862,
+				E52280E7EEF8F1A03BECF789,
 			);
 			name = Products;
 			sourceTree = "<group>";
 		};
-		DB286E70D34405202AEB7344 = {
+		C0284E7C390F9DF70CFB46C2 = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = CFADF3BD60FB2D395E28CC1F;
+			buildConfigurationList = CFAC6786E1B6DCF5FD71D3FD;
 			buildPhases = (
-				BE49EBEEBE1DAB0546F4E1A1,
-				D609334B8D3A76AF3FFD5370,
-				A975EDD3C8D7F3F61C669616,
+				84B50AA99C2E2FD268FAE542,
+				9B5E8A9F4F5EE92E51AD9FFF,
+				498336DE08794EB2D9525DAD,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				EB1AE74EA98E84C65C083FB6,
-				50F4FEBA64CF5F09BB07CC8C,
+				B46DE96E854FDD1D4A0A0D2F,
 			);
 			name = Manager;
 			productName = "Flagcast Manager";
-			productReference = 0BA4EB149F28194350479116;
+			productReference = 423BA520DEA3D9C00BA33862;
 			productType = "com.apple.product-type.application";
 		};
-		5BD71769F682320E10E921C9 = {
+		5BFFEDEDC2FB125119BAFC62 = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = EC13FDFBD33D7981E202E9BA;
+			buildConfigurationList = 85851D2D36C4EE11F02A24BC;
 			buildPhases = (
-				761A6EA2FDFDAAD6C19CA083,
-				F8A916AAF588B4E74DFAF950,
-				BBA592876FC0724AA6E75385,
+				3C13D24C9D6137FF2B926165,
+				C274EAE938BF07B4EE70FF15,
+				329217E9AC74BEE354BE603B,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				EB1AE74EA98E84C65C083FB6,
-				A7E06F9F10DCFA18DE12411A,
+				C102F80F20E09D84A4AE0659,
 			);
 			name = Admin;
 			productName = "Flagcast Admin";
-			productReference = 96DD9AE71EDA99D5DFAC4100;
+			productReference = E52280E7EEF8F1A03BECF789;
 			productType = "com.apple.product-type.application";
 		};
 
-		CEDD15C3A1A3E04A33D4809B = {
+		5961221B02C6E16AAC64844A = {
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 2700;
 				LastUpgradeCheck = 2700;
 			};
-			buildConfigurationList = 1C616BA8C1E36C69AC62FFAF;
+			buildConfigurationList = 2A86A9EDF5AB2B73B8906800;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
 				Base,
 			);
-			mainGroup = A25322BB60D9DEA0F6056D93;
+			mainGroup = ACEC4E7546EEC76EB59BD252;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
-			productRefGroup = 3000CFD8FAEAE6DEE06B6D71;
+			productRefGroup = 1FCBB4530CB8837DD8BF4E1B;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				DB286E70D34405202AEB7344,
-				5BD71769F682320E10E921C9,
+				C0284E7C390F9DF70CFB46C2,
+				5BFFEDEDC2FB125119BAFC62,
 			);
 		};
-		DA28781D46135C99EB770856 /* Debug */ = {
+		640DF9040EF8964E574BE213 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -182,7 +249,7 @@
 			};
 			name = Debug;
 		};
-		4D1547E3B2EAD66C472B480D /* Release */ = {
+		AB0D217318ED2E14AB49F18A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
@@ -193,18 +260,19 @@
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				SDKROOT = iphoneos;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ONLY_ACTIVE_ARCH = NO;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;
 		};
-		54940A5A00A1EC63B45B957F /* Debug */ = {
+		5EB27CEEB1A8A653E459B89E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = C8KXPB4QNA;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -214,25 +282,24 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.manager;
 				PRODUCT_NAME = "Flagcast Manager";
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
-		0230DAC49D2259B252A9B225 /* Release */ = {
+		2F7A730D8D3D65BEC47FEA03 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = C8KXPB4QNA;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -242,25 +309,24 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 2.0.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.manager;
 				PRODUCT_NAME = "Flagcast Manager";
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
-		A3CC808DA76C66D4933EEBA3 /* Debug */ = {
+		C3DE3661F29EFF71954A5AD4 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = C8KXPB4QNA;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -270,25 +336,24 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.admin;
 				PRODUCT_NAME = "Flagcast Admin";
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
-		5F0F6C335FC27D0541D324EC /* Release */ = {
+		86DA26B78D174BD6D0F5DE94 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 3;
 				DEVELOPMENT_TEAM = C8KXPB4QNA;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -298,45 +363,44 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.admin;
 				PRODUCT_NAME = "Flagcast Admin";
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SDKROOT = iphoneos;
 				SUPPORTS_MACCATALYST = NO;
-				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
-				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
-		1C616BA8C1E36C69AC62FFAF = {
+		2A86A9EDF5AB2B73B8906800 = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				DA28781D46135C99EB770856 /* Debug */,
-				4D1547E3B2EAD66C472B480D /* Release */,
+				640DF9040EF8964E574BE213 /* Debug */,
+				AB0D217318ED2E14AB49F18A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		CFADF3BD60FB2D395E28CC1F = {
+		CFAC6786E1B6DCF5FD71D3FD = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				54940A5A00A1EC63B45B957F /* Debug */,
-				0230DAC49D2259B252A9B225 /* Release */,
+				5EB27CEEB1A8A653E459B89E /* Debug */,
+				2F7A730D8D3D65BEC47FEA03 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		EC13FDFBD33D7981E202E9BA = {
+		85851D2D36C4EE11F02A24BC = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				A3CC808DA76C66D4933EEBA3 /* Debug */,
-				5F0F6C335FC27D0541D324EC /* Release */,
+				C3DE3661F29EFF71954A5AD4 /* Debug */,
+				86DA26B78D174BD6D0F5DE94 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
 	};
-	rootObject = CEDD15C3A1A3E04A33D4809B;
+	rootObject = 5961221B02C6E16AAC64844A;
 }

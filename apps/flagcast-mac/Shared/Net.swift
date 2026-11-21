@@ -11,7 +11,11 @@ enum Net {
         let c = URLSessionConfiguration.default
         c.timeoutIntervalForRequest = 20
         c.requestCachePolicy = .reloadIgnoringLocalCacheData
+        #if os(macOS)
         c.httpAdditionalHeaders = ["User-Agent": "FlagcastMac/2.0"]
+        #else
+        c.httpAdditionalHeaders = ["User-Agent": "FlagcastManager-iOS/2.0"]
+        #endif
         return URLSession(configuration: c)
     }()
 
@@ -30,7 +34,7 @@ enum Net {
     private static func send(_ req: URLRequest) async throws -> Data {
         let data: Data, r: URLResponse
         do { (data, r) = try await session.data(for: req) }
-        catch { throw APIError(status: 0, message: "Can’t reach Flagcast. Check this Mac’s internet connection.") }
+        catch { throw APIError(status: 0, message: "Can’t reach Flagcast. Check the internet connection.") }
         if let h = r as? HTTPURLResponse, !(200..<300).contains(h.statusCode) {
             let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
             throw APIError(status: h.statusCode, message: msg ?? "The server answered \(h.statusCode).")
