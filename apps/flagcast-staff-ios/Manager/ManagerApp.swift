@@ -22,29 +22,37 @@ struct ManagerApp: App {
 /// Which tab shows.
 enum Tab: String, Hashable { case today, teams, scores, screens, more, admin }
 
+/// The tab bar's selection, so Home's buttons can jump to Scores, Screens or Teams.
+@MainActor @Observable final class Tabs { var tab: Tab = .today }
+
 struct RootView: View {
     @Environment(AppModel.self) private var model
-    @State private var tab: Tab = .today
+    @State private var tabs = Tabs()
+    private var tab: Tab { tabs.tab }
 
     var body: some View {
         Group {
             if !model.signedIn && model.events.isEmpty && !model.isAdmin {
                 NavigationStack { SignInView() }
+            } else if model.signedIn, model.me != nil, model.me?.club == nil, !model.isAdmin, model.events.isEmpty {
+                NavigationStack { WelcomeView() }
             } else {
-                tabs
+                tabView
             }
         }
+        .environment(tabs)
         .alert("Flagcast", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
             Button("OK") { model.error = nil }
         } message: { Text(model.error ?? "") }
         .onAppear { if model.selection == nil { model.selection = model.shownEvents.first?.id } }
-        .onChange(of: model.selection) { _, _ in if tab == .admin || tab == .more { tab = .today } }
+        .onChange(of: model.selection) { _, _ in if tab == .admin || tab == .more { tabs.tab = .today } }
         .onChange(of: model.events.count) { _, _ in if model.selection == nil { model.selection = model.shownEvents.first?.id } }
     }
 
-    @ViewBuilder private var tabs: some View {
-        let tv = TabView(selection: $tab) {
-            NavigationStack { TodayView() }.tabItem { Label("Today", systemImage: "flag.fill") }.tag(Tab.today)
+    @ViewBuilder private var tabView: some View {
+        @Bindable var tabs = tabs
+        let tv = TabView(selection: $tabs.tab) {
+            NavigationStack { TodayView() }.tabItem { Label("Home", systemImage: "house.fill") }.tag(Tab.today)
             NavigationStack { TeamsView() }.tabItem { Label("Teams", systemImage: "person.3.fill") }.tag(Tab.teams)
             NavigationStack { ScoresView() }.tabItem { Label("Scores", systemImage: "list.number") }.tag(Tab.scores)
             NavigationStack { ScreensView() }.tabItem { Label("Screens", systemImage: "tv.fill") }.tag(Tab.screens)

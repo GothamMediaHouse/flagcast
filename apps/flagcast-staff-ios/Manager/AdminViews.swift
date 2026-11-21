@@ -16,6 +16,7 @@ struct AdminHome: View {
                     }
                 }
                 NavigationLink { AdminTournaments() } label: { ListRow(icon: "flag.2.crossed.fill", iconColor: FC.ok, title: "Tournaments", sub: "Every club’s, open one here") { Chevron() } }
+                NavigationLink { AdminCameras() } label: { ListRow(icon: "video.fill", iconColor: FC.red, title: "Cameras", sub: "Par 3 camera links for every tournament") { Chevron() } }
                 NavigationLink { AdminScreens() } label: { ListRow(icon: "tv.and.mediabox.fill", iconColor: FC.blue, title: "TVs & phones", sub: "Any club’s TVs, take-overs, phones banner") { Chevron() } }
                 NavigationLink { AdminActivity() } label: { ListRow(icon: "list.bullet.rectangle.fill", iconColor: FC.muted, title: "Activity", sub: "Everything that happened", last: true) { Chevron() } }
             }
@@ -284,5 +285,73 @@ private struct AdminActivity: View {
         }
         .task { await admin.refreshLog() }
         .refreshable { await admin.refreshLog() }
+    }
+}
+
+/// Every open tournament's par 3s with a camera link per hole. Only Flagcast sets these; clubs pick "Par 3 camera"
+/// for a TV and see the status.
+private struct AdminCameras: View {
+    @Environment(AdminModel.self) private var admin
+    @State private var search = ""
+    private var shown: [AdminEvent] {
+        let q = search.lowercased()
+        return admin.events.filter { !$0.gone && !$0.archived && !$0.hidden && !$0.p3.isEmpty && (q.isEmpty || $0.name.lowercased().contains(q) || $0.clubName.lowercased().contains(q)) }
+            .sorted { ($0.isToday ? 0 : 1, $1.created) < ($1.isToday ? 0 : 1, $0.created) }
+    }
+    var body: some View {
+        CardPage(kicker: "Admin", title: "Cameras", sub: "Par 3 camera links") {
+            BoxField(placeholder: "Find a tournament or club", text: $search)
+            Help("Paste each par 3’s https link: an HLS stream (.m3u8) or a web player link (VDO.Ninja view link). Replays need an HLS link that keeps a recording window (DVR). Clubs see “Cameras are set up by Flagcast”.")
+            if shown.isEmpty { Text(admin.events.isEmpty ? "Loading tournaments…" : "No open tournaments with par 3s.").foregroundStyle(FC.muted).card() }
+            ForEach(shown) { e in CamCard(event: e).id(e.id + e.cams.description) }
+        }
+        .overlay(alignment: .bottom) { NoticeBar(text: admin.notice).padding(.bottom, 10).animation(.snappy, value: admin.notice) }
+        .task { await admin.refreshEvents() }
+        .refreshable { await admin.refreshEvents() }
+    }
+}
+
+private struct CamCard: View {
+    @Environment(AdminModel.self) private var admin
+    let event: AdminEvent
+    @State private var links: [Int: String] = [:]
+    @State private var signal: [Int: Bool] = [:]
+    @State private var saving = false
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                if event.isToday && !event.locked { LiveChip() }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(event.name).font(FC.display(24)).lineLimit(1)
+                    Text([event.clubName, event.date].filter { !$0.isEmpty }.joined(separator: " · ")).font(.caption).foregroundStyle(FC.muted)
+                }
+            }
+            ForEach(event.p3, id: \.self) { h in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack { Text("Hole \(h)").font(.subheadline.weight(.semibold)); Spacer(); status(h) }
+                    TextField("https://…", text: Binding(get: { links[h] ?? "" }, set: { links[h] = $0 })).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                        .padding(10).background(FC.paper2, in: RoundedRectangle(cornerRadius: 9))
+                }
+            }
+            Button { Task { saving = true; if await admin.saveCams(event.id, links) { await check() }; saving = false } } label: { if saving { ProgressView().tint(.white) } else { Text("Save Cameras") } }
+                .buttonStyle(GreenButton(full: true)).disabled(saving || links.filter { !$0.value.isEmpty } == event.cams)
+        }
+        .card()
+        .task(id: event.id) { links = event.cams; await check() }
+    }
+    @ViewBuilder private func status(_ h: Int) -> some View {
+        let u = event.cams[h] ?? ""
+        if u.isEmpty { Text("No camera").font(.caption).foregroundStyle(FC.muted) }
+        else if !u.lowercased().contains(".m3u8") { Text("Web player").font(.caption).foregroundStyle(FC.muted) }
+        else if let ok = signal[h] { Label(ok ? "Live" : "No signal", systemImage: "circle.fill").font(.caption.weight(.semibold)).foregroundStyle(ok ? FC.ok : FC.red) }
+        else { ProgressView().controlSize(.small) }
+    }
+    private func check() async {
+        for (h, u) in event.cams where u.lowercased().contains(".m3u8") {
+            guard let url = URL(string: u) else { continue }
+            var req = URLRequest(url: url); req.timeoutInterval = 6
+            let ok = await ((try? URLSession.shared.data(for: req)).map { d, r in (r as? HTTPURLResponse)?.statusCode == 200 && String(decoding: d.prefix(64), as: UTF8.self).contains("#EXTM3U") }) ?? false
+            signal[h] = ok
+        }
     }
 }
