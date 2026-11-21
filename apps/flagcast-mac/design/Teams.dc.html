@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Manager teams</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#123628}a:hover{color:#1c4a37}
+</style>
+</helmet>
+<div style="width: 1280px; height: 820px; display: flex; background: #f2f4ef; font-family: Inter, system-ui, sans-serif; color: #14201a; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 1px rgba(0,0,0,0.12)">
+<dc-import name="Sidebar" active="teams" hint-size="248px,820px"></dc-import>
+<main style="flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; overflow: hidden">
+<img src="img/course-sunset.jpg" alt="Fairway at sunrise" style="position: absolute; top: 0; left: 0; width: 100%; height: 200px; object-fit: cover; object-position: center 60%">
+<div style="position: absolute; top: 0; left: 0; right: 0; height: 200px; background: linear-gradient(180deg, rgba(8,24,17,0.55) 0%, rgba(8,24,17,0.1) 45%, rgba(8,24,17,0.7) 100%)"></div>
+<header style="position: relative; height: 52px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 20px; color: #ffffff">
+<h1 style="margin: 0; font-size: 14px; font-weight: 600; opacity: 0.9">Teams</h1>
+<div style="flex: 1"></div>
+<div role="group" aria-label="Flight" style="display: flex; background: rgba(255,255,255,0.85); border-radius: 7px; padding: 2px; backdrop-filter: blur(12px)">
+<sc-for list="{{flights}}" as="f" hint-placeholder-count="5">
+<button style="border: 0; height: 26px; padding: 0 11px; border-radius: 6px; font: 600 12px Inter, sans-serif; cursor: pointer; background: {{f.bg}}; color: {{f.fg}}; box-shadow: {{f.shadow}}">{{f.label}}</button>
+</sc-for>
+</div>
+<button style="display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 7px; border: 1px solid #d3dacf; background: #ffffff; font: 600 13px Inter, sans-serif; color: #14201a; cursor: pointer">Import from a spreadsheet</button>
+<button style="display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 14px; border-radius: 7px; border: 0; background: #123628; color: #eef3ec; font: 600 13px Inter, sans-serif; cursor: pointer">
+<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>Add team</button>
+</header>
+<div style="position: relative; height: 92px; flex: none; box-sizing: border-box; padding: 0 30px 16px; display: flex; align-items: flex-end; gap: 14px; color: #ffffff">
+<div style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 52px; line-height: 0.95; text-shadow: 0 2px 16px rgba(0,0,0,0.35)">Teams</div>
+<span style="font-size: 14px; margin-bottom: 6px; text-shadow: 0 1px 8px rgba(0,0,0,0.5)">12 teams · 48 players · 4 flights</span>
+</div>
+<div style="position: relative; flex: 1; min-height: 0; display: flex; gap: 16px; padding: 0 20px 18px">
+<section style="flex: 1; min-width: 0; overflow: hidden; border-radius: 12px; box-shadow: 0 8px 30px rgba(8,24,17,0.18)">
+<div style="background: #ffffff; border: 1px solid #d3dacf; border-radius: 12px; overflow: hidden">
+<div style="display: grid; grid-template-columns: 40px minmax(0, 2.2fr) 70px 70px 80px 90px minmax(0, 1fr); gap: 0 12px; padding: 10px 16px; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; color: #56625a; background: #f7f8f4; border-bottom: 1px solid #e6eae1">
+<span>#</span><span>TEAM</span><span>FLIGHT</span><span>HCP</span><span>CART</span><span>STARTS</span><span>CARD</span>
+</div>
+<sc-for list="{{teams}}" as="t" hint-placeholder-count="12">
+<div style="display: grid; grid-template-columns: 40px minmax(0, 2.2fr) 70px 70px 80px 90px minmax(0, 1fr); gap: 0 12px; align-items: center; padding: 0 16px; height: 44px; font-size: 13px; border-bottom: 1px solid #eef1ea; background: {{t.bg}}; color: {{t.fg}}">
+<span style="font-weight: 700; color: {{t.dim}}">{{t.n}}</span>
+<span style="display: flex; flex-direction: column; line-height: 1.25; min-width: 0"><span style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{t.name}}</span><span style="font-size: 11px; color: {{t.dim}}">{{t.players}}</span></span>
+<span>{{t.flight}}</span>
+<span>{{t.hcp}}</span>
+<span>{{t.cart}}</span>
+<span>Hole {{t.start}}</span>
+<span style="display: flex; align-items: center; gap: 6px; font-weight: 600; color: {{t.statusColor}}"><span style="width: 7px; height: 7px; border-radius: 50%; background: {{t.statusColor}}"></span>{{t.status}}</span>
+</div>
+</sc-for>
+</div>
+</section>
+<aside aria-label="Team details" style="width: 330px; flex: none; background: #ffffff; border-radius: 12px; box-shadow: 0 8px 30px rgba(8,24,17,0.18); display: flex; flex-direction: column; overflow: hidden">
+<div style="position: relative; height: 150px; flex: none; background: #123628">
+<img src="img/course-green.jpg" alt="Green with bunkers" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover">
+<div style="position: absolute; inset: 0; background: linear-gradient(0deg, rgba(11,34,25,0.9) 0%, rgba(11,34,25,0.1) 75%)"></div>
+<div style="position: absolute; left: 18px; right: 18px; bottom: 12px; color: #eef3ec">
+<div style="font-size: 11px; font-weight: 700; letter-spacing: 1.2px; color: #e8c547">TEAM 1 · FLIGHT A · CART 1A</div>
+<div style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 30px; line-height: 1.05">Nguyen / Halloran</div>
+</div>
+</div>
+<div style="padding: 16px 18px; display: flex; flex-direction: column; gap: 14px; overflow: hidden">
+<sc-for list="{{players}}" as="p" hint-placeholder-count="2">
+<div style="border: 1px solid #e6eae1; border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="width: 32px; height: 32px; border-radius: 50%; background: #e6eae1; color: #123628; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700">{{p.initials}}</span>
+<div style="flex: 1; display: flex; flex-direction: column; line-height: 1.25"><span style="font-weight: 700; font-size: 14px">{{p.name}}</span><span style="font-size: 12px; color: #56625a">GHIN {{p.ghin}}</span></div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+<label style="display: flex; flex-direction: column; gap: 3px; font-size: 11px; font-weight: 600; color: #56625a">Index<input value="{{p.index}}" style="height: 28px; box-sizing: border-box; border: 1px solid #d3dacf; border-radius: 6px; padding: 0 8px; font: 500 13px Inter, sans-serif; color: #14201a"></label>
+<label style="display: flex; flex-direction: column; gap: 3px; font-size: 11px; font-weight: 600; color: #56625a">Tees<select style="height: 28px; border: 1px solid #d3dacf; border-radius: 6px; padding: 0 6px; font: 500 13px Inter, sans-serif; color: #14201a; background: #ffffff"><option>{{p.tees}}</option></select></label>
+<div style="display: flex; flex-direction: column; gap: 3px; font-size: 11px; font-weight: 600; color: #56625a">Course hcp<span style="height: 28px; display: flex; align-items: center; font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 700; color: #123628">{{p.ch}}</span></div>
+</div>
+</div>
+</sc-for>
+<div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px">
+<div style="display: flex"><span style="flex: 1; color: #56625a">Starting hole</span><span style="font-weight: 600">Hole 1</span></div>
+<div style="display: flex"><span style="flex: 1; color: #56625a">Scorer</span><span style="font-weight: 600">David Nguyen (phone)</span></div>
+<div style="display: flex"><span style="flex: 1; color: #56625a">Cart PIN</span><span style="font-weight: 600; font-family: 'IBM Plex Mono', monospace">4 2 7 1</span></div>
+</div>
+<div style="display: flex; gap: 8px">
+<button style="flex: 1; height: 32px; border-radius: 7px; border: 1px solid #d3dacf; background: #ffffff; font: 600 13px Inter, sans-serif; color: #14201a; cursor: pointer">Print cart card</button>
+<button style="flex: 1; height: 32px; border-radius: 7px; border: 1px solid #d3dacf; background: #ffffff; font: 600 13px Inter, sans-serif; color: #14201a; cursor: pointer">Open scorecard</button>
+</div>
+</div>
+</aside>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":820}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const flight = this.state?.flight ?? 'All';
+    const rows = [
+      ['Nguyen / Halloran', 'D. Nguyen · M. Halloran', 'A', '8.4', '1A', 1, 'Scoring'],
+      ['Ortiz / Brennan', 'L. Ortiz · K. Brennan', 'A', '9.1', '2A', 2, 'Scoring'],
+      ['Patel / Morrow', 'R. Patel · J. Morrow', 'A', '11.0', '3A', 3, 'Scoring'],
+      ['Castillo / Reed', 'A. Castillo · T. Reed', 'B', '13.6', '4A', 4, 'Scoring'],
+      ['Walsh / Okafor', 'S. Walsh · E. Okafor', 'B', '14.2', '5A', 5, 'Scoring'],
+      ['Kim / Delgado', 'J. Kim · M. Delgado', 'B', '15.8', '6A', 6, 'Scoring'],
+      ['Fischer / Grant', 'H. Fischer · C. Grant', 'C', '17.3', '7A', 7, 'Not started'],
+      ['Romero / Shaw', 'P. Romero · B. Shaw', 'C', '18.0', '8A', 8, 'Not started'],
+      ['Lindqvist / Bose', 'E. Lindqvist · A. Bose', 'C', '19.4', '9A', 9, 'Not started'],
+      ['Moore / Ito', 'G. Moore · Y. Ito', 'D', '21.7', '1B', 1, 'Not started'],
+      ['Hayes / Mensah', 'L. Hayes · K. Mensah', 'D', '22.5', '2B', 2, 'No phone'],
+      ['Ward / Novak', 'C. Ward · I. Novak', 'D', '24.0', '3B', 3, 'Not started']
+    ];
+    const sc = { 'Scoring': '#2f8a57', 'Not started': '#56625a', 'No phone': '#b7791f' };
+    return {
+      flights: ['All', 'A', 'B', 'C', 'D'].map((f) => ({ label: f === 'All' ? 'All flights' : 'Flight ' + f,
+        bg: f === flight ? '#ffffff' : 'transparent', fg: f === flight ? '#123628' : '#56625a',
+        shadow: f === flight ? '0 1px 2px rgba(0,0,0,0.12)' : 'none' })),
+      teams: rows.map(([name, players, fl, hcp, cart, start, status], i) => ({
+        n: i + 1, name, players, flight: fl, hcp, cart, start, status, statusColor: sc[status],
+        bg: i === 0 ? '#123628' : 'transparent', fg: i === 0 ? '#eef3ec' : '#14201a', dim: i === 0 ? '#a9bdb0' : '#56625a'
+      })),
+      players: [
+        { name: 'David Nguyen', initials: 'DN', ghin: '1234567', index: '7.9', tees: 'White · 70.0 / 135', ch: '8' },
+        { name: 'Mark Halloran', initials: 'MH', ghin: '7654321', index: '8.8', tees: 'White · 70.0 / 135', ch: '9' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

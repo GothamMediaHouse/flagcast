@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Manager overview</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#123628}a:hover{color:#1c4a37}
+</style>
+</helmet>
+<div style="width: 1280px; height: 820px; display: flex; background: #f2f4ef; font-family: Inter, system-ui, sans-serif; color: #14201a; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 1px rgba(0,0,0,0.12)">
+<dc-import name="Sidebar" active="overview" hint-size="248px,820px"></dc-import>
+<main style="flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; overflow: hidden">
+<img src="img/course-wide.jpg" alt="Fairway at the course" style="position: absolute; top: 0; left: 0; width: 100%; height: 430px; object-fit: cover; object-position: center 55%">
+<div style="position: absolute; top: 0; left: 0; right: 0; height: 430px; background: linear-gradient(180deg, rgba(8,24,17,0.55) 0%, rgba(8,24,17,0.05) 30%, rgba(8,24,17,0.15) 55%, rgba(8,24,17,0.8) 100%)"></div>
+<header style="position: relative; height: 52px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 20px; color: #ffffff">
+<h1 style="margin: 0; font-size: 14px; font-weight: 600; opacity: 0.9">Overview</h1>
+<div style="flex: 1"></div>
+<span style="display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600"><span style="width: 7px; height: 7px; border-radius: 50%; background: #7be0a4"></span>Saved</span>
+<button style="height: 30px; padding: 0 12px; border-radius: 7px; border: 1px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.16); backdrop-filter: blur(12px); font: 600 13px Inter, sans-serif; color: #ffffff; cursor: pointer">Open the board</button>
+<button style="height: 30px; padding: 0 12px; border-radius: 7px; border: 1px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.16); backdrop-filter: blur(12px); font: 600 13px Inter, sans-serif; color: #ffffff; cursor: pointer">Lock scores</button>
+<button style="height: 30px; padding: 0 14px; border-radius: 7px; border: 0; background: #ffffff; color: #123628; font: 600 13px Inter, sans-serif; cursor: pointer">Save</button>
+</header>
+<section style="position: relative; height: 270px; flex: none; box-sizing: border-box; padding: 0 32px 26px; display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; color: #ffffff">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="font-size: 11px; font-weight: 700; color: #1a1a10; background: #e8c547; border-radius: 4px; padding: 3px 7px; letter-spacing: 0.8px">LIVE</span>
+<span style="font-size: 12px; font-weight: 600; letter-spacing: 1.4px; text-shadow: 0 1px 8px rgba(0,0,0,0.4)">SAT NOV 21 · SHOTGUN 8:30 AM</span>
+</div>
+<div style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 76px; line-height: 0.92; letter-spacing: 0.5px; text-shadow: 0 2px 18px rgba(0,0,0,0.35)">9 Hole</div>
+<div style="font-size: 16px; text-shadow: 0 1px 8px rgba(0,0,0,0.5)">The Preserve at Ironhorse · Front 9 · Par 36 · White tees 3,042 yds</div>
+</section>
+<div style="position: relative; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin: 0 24px; background: rgba(255,255,255,0.25); border-radius: 12px; overflow: hidden; flex: none; backdrop-filter: blur(20px)">
+<sc-for list="{{stats}}" as="s" hint-placeholder-count="4">
+<div style="background: rgba(255,255,255,0.86); padding: 14px 18px; display: flex; flex-direction: column; gap: 3px">
+<span style="font-size: 12px; font-weight: 600; color: #56625a">{{s.label}}</span>
+<span style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 34px; line-height: 1; color: {{s.color}}">{{s.value}}</span>
+<span style="font-size: 12px; color: #56625a">{{s.sub}}</span>
+</div>
+</sc-for>
+</div>
+<div style="position: relative; flex: 1; min-height: 0; display: flex; gap: 16px; padding: 18px 24px 22px">
+<section style="flex: 1.35; background: #ffffff; border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 0 0 1px #d3dacf">
+<div style="display: flex; align-items: center; padding: 12px 16px">
+<h2 style="margin: 0; font-size: 14px; font-weight: 700; flex: 1">Leaderboard</h2>
+<a href="Scores.dc.html" style="font-size: 13px; font-weight: 600; text-decoration: none">All scores ›</a>
+</div>
+<sc-for list="{{board}}" as="r" hint-placeholder-count="5">
+<div style="display: flex; align-items: center; gap: 12px; padding: 7px 16px; border-top: 1px solid #eef1ea; font-size: 14px">
+<span style="width: 26px; font-weight: 700; color: #56625a">{{r.pos}}</span>
+<span style="flex: 1; font-weight: 600">{{r.team}}</span>
+<span style="width: 60px; font-size: 12px; color: #56625a">{{r.thru}}</span>
+<span style="width: 44px; text-align: right; font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 22px; color: {{r.color}}">{{r.score}}</span>
+</div>
+</sc-for>
+</section>
+<section style="flex: 1; min-width: 0; position: relative; border-radius: 12px; overflow: hidden; background: #123628">
+<img src="img/course-flag.jpg" alt="Flag on the 7th green" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover">
+<div style="position: absolute; inset: 0; background: linear-gradient(0deg, rgba(8,24,17,0.88) 0%, rgba(8,24,17,0) 65%)"></div>
+<div style="position: absolute; left: 18px; right: 18px; bottom: 16px; color: #ffffff; display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 11px; font-weight: 700; letter-spacing: 1.2px; color: #e8c547">CLOSEST TO THE PIN · HOLE 7</span>
+<span style="font-family: 'Barlow Condensed', sans-serif; font-size: 30px; font-weight: 700; line-height: 1">Nguyen / Halloran</span>
+<span style="font-size: 13px; color: #dfe8e1">6 ft 2 in · presented by [Hole 7 sponsor]</span>
+</div>
+</section>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":820}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const col = (s) => s.startsWith('−') ? '#c8312b' : (s === 'E' ? '#14201a' : '#1f5aa6');
+    const board = [
+      ['1', 'Nguyen / Halloran', 'Thru 7', '−5'],
+      ['2', 'Ortiz / Brennan', 'Thru 6', '−3'],
+      ['T3', 'Patel / Morrow', 'Thru 7', '−2'],
+      ['T3', 'Castillo / Reed', 'Thru 5', '−2'],
+      ['5', 'Walsh / Okafor', 'Thru 6', 'E']
+    ].map(([pos, team, thru, score]) => ({ pos, team, thru, score, color: col(score) }));
+    return {
+      board,
+      stats: [
+        { label: 'Teams', value: '12', sub: '48 players · 4 flights', color: '#14201a' },
+        { label: 'On the course', value: '6 / 12', sub: 'groups scoring now', color: '#14201a' },
+        { label: 'Leader', value: '−5', sub: 'Nguyen / Halloran · thru 7', color: '#c8312b' },
+        { label: 'Screens', value: '2 / 2', sub: 'Tent TV, Pro shop', color: '#2f8a57' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

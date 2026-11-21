@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Manager scores</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&amp;family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#123628}a:hover{color:#1c4a37}
+</style>
+</helmet>
+<div style="width: 1280px; height: 820px; display: flex; background: #f2f4ef; font-family: Inter, system-ui, sans-serif; color: #14201a; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 1px rgba(0,0,0,0.12)">
+<dc-import name="Sidebar" active="scores" hint-size="248px,820px"></dc-import>
+<main style="flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; overflow: hidden">
+<img src="img/course-green.jpg" alt="Green with bunkers" style="position: absolute; top: 0; left: 0; width: 100%; height: 250px; object-fit: cover; object-position: center 45%">
+<div style="position: absolute; top: 0; left: 0; right: 0; height: 250px; background: linear-gradient(180deg, rgba(8,24,17,0.6) 0%, rgba(8,24,17,0.1) 40%, rgba(8,24,17,0.75) 100%)"></div>
+<header style="position: relative; height: 52px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 20px; color: #ffffff">
+<h1 style="margin: 0; font-size: 14px; font-weight: 600; opacity: 0.9">Scores</h1>
+<div style="flex: 1"></div>
+<div role="group" aria-label="Scoring" style="display: flex; background: rgba(255,255,255,0.18); border-radius: 7px; padding: 2px; backdrop-filter: blur(12px)">
+<button style="border: 0; height: 26px; padding: 0 12px; border-radius: 6px; font: 600 12px Inter, sans-serif; background: #ffffff; color: #123628; cursor: pointer">Net</button>
+<button style="border: 0; height: 26px; padding: 0 12px; border-radius: 6px; font: 600 12px Inter, sans-serif; background: transparent; color: #ffffff; cursor: pointer">Gross</button>
+</div>
+<button style="height: 30px; padding: 0 12px; border-radius: 7px; border: 1px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.16); backdrop-filter: blur(12px); font: 600 13px Inter, sans-serif; color: #ffffff; cursor: pointer">Export</button>
+<button style="height: 30px; padding: 0 14px; border-radius: 7px; border: 0; background: #ffffff; color: #123628; font: 600 13px Inter, sans-serif; cursor: pointer">Lock scores</button>
+</header>
+<div style="position: relative; height: 118px; flex: none; box-sizing: border-box; padding: 0 30px 18px; display: flex; align-items: flex-end; gap: 16px; color: #ffffff">
+<div style="font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 56px; line-height: 0.95; text-shadow: 0 2px 16px rgba(0,0,0,0.35)">Live scores</div>
+<span style="display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; letter-spacing: 1px; margin-bottom: 8px"><span style="width: 8px; height: 8px; border-radius: 50%; background: #ff6b60"></span>FROM THE CARTS · 6 OF 12 SCORING</span>
+</div>
+<div style="position: relative; flex: 1; min-height: 0; padding: 4px 20px 18px; display: flex; flex-direction: column; gap: 14px">
+<div style="background: #ffffff; border: 1px solid #d3dacf; border-radius: 12px; overflow: hidden">
+<div style="display: grid; grid-template-columns: 44px minmax(0, 1fr) repeat(9, 52px) 64px 64px; align-items: center; height: 40px; padding: 0 14px; background: #123628; color: #eef3ec; font-size: 12px; font-weight: 700">
+<span>POS</span><span>TEAM</span>
+<sc-for list="{{holes}}" as="h" hint-placeholder-count="9"><span style="text-align: center">{{h.n}}</span></sc-for>
+<span style="text-align: center">THRU</span><span style="text-align: center">TOTAL</span>
+</div>
+<div style="display: grid; grid-template-columns: 44px minmax(0, 1fr) repeat(9, 52px) 64px 64px; align-items: center; height: 30px; padding: 0 14px; background: #e6eae1; color: #56625a; font-size: 12px; font-weight: 600">
+<span></span><span>Par</span>
+<sc-for list="{{holes}}" as="h" hint-placeholder-count="9"><span style="text-align: center">{{h.par}}</span></sc-for>
+<span></span><span style="text-align: center">36</span>
+</div>
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="10">
+<div style="display: grid; grid-template-columns: 44px minmax(0, 1fr) repeat(9, 52px) 64px 64px; align-items: center; height: 44px; padding: 0 14px; border-bottom: 1px solid #eef1ea; font-size: 14px">
+<span style="font-weight: 700; color: #56625a">{{r.pos}}</span>
+<span style="font-weight: 600">{{r.team}}</span>
+<sc-for list="{{r.cells}}" as="c" hint-placeholder-count="9">
+<span style="display: flex; justify-content: center"><button aria-label="Edit score" style="width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font: 700 15px Inter, sans-serif; cursor: pointer; padding: 0; background: {{c.bg}}; color: {{c.fg}}; border: {{c.border}}; border-radius: {{c.radius}}">{{c.v}}</button></span>
+</sc-for>
+<span style="text-align: center; font-size: 13px; color: #56625a">{{r.thru}}</span>
+<span style="text-align: center; font-family: 'Barlow Condensed', sans-serif; font-size: 24px; font-weight: 700; color: {{r.color}}">{{r.total}}</span>
+</div>
+</sc-for>
+</div>
+<div style="display: flex; gap: 18px; align-items: center; font-size: 12px; color: #56625a">
+<span style="display: flex; align-items: center; gap: 6px"><span style="width: 18px; height: 18px; border-radius: 50%; background: #c8312b"></span>Eagle or better</span>
+<span style="display: flex; align-items: center; gap: 6px"><span style="width: 18px; height: 18px; border-radius: 50%; border: 2px solid #c8312b; box-sizing: border-box"></span>Birdie</span>
+<span style="display: flex; align-items: center; gap: 6px"><span style="width: 18px; height: 18px; border: 2px solid #1f5aa6; box-sizing: border-box"></span>Bogey</span>
+<span style="display: flex; align-items: center; gap: 6px"><span style="width: 18px; height: 18px; background: #1f5aa6"></span>Double or worse</span>
+<span style="margin-left: auto">Click any score to fix it. Changes go to the board and phones right away.</span>
+</div>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":820}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const par = [4, 4, 3, 4, 5, 5, 3, 4, 4];
+    const cell = (v, i) => {
+      if (v == null) return { v: '', bg: 'transparent', fg: '#14201a', border: '1px dashed #d3dacf', radius: '6px' };
+      const d = v - par[i];
+      if (d <= -2) return { v, bg: '#c8312b', fg: '#ffffff', border: '0', radius: '50%' };
+      if (d === -1) return { v, bg: '#ffffff', fg: '#c8312b', border: '2px solid #c8312b', radius: '50%' };
+      if (d === 1) return { v, bg: '#ffffff', fg: '#1f5aa6', border: '2px solid #1f5aa6', radius: '3px' };
+      if (d >= 2) return { v, bg: '#1f5aa6', fg: '#ffffff', border: '0', radius: '3px' };
+      return { v, bg: 'transparent', fg: '#14201a', border: '0', radius: '6px' };
+    };
+    const data = [
+      ['1', 'Nguyen / Halloran', [3, 4, 2, 4, 4, 4, 2, null, null]],
+      ['2', 'Ortiz / Brennan', [4, 3, 3, 4, 4, 4, null, null, null]],
+      ['T3', 'Patel / Morrow', [4, 4, 3, 3, 5, 4, 3, null, null]],
+      ['T3', 'Castillo / Reed', [4, 3, 3, 3, 5, null, null, null, null]],
+      ['5', 'Walsh / Okafor', [4, 4, 3, 5, 4, 5, null, null, null]],
+      ['6', 'Kim / Delgado', [5, 4, 3, 4, null, null, null, null, null]],
+      ['–', 'Fischer / Grant', [null, null, null, null, null, null, null, null, null]],
+      ['–', 'Romero / Shaw', [null, null, null, null, null, null, null, null, null]]
+    ];
+    const rows = data.map(([pos, team, s]) => {
+      const played = s.filter((v) => v != null);
+      const tot = played.reduce((a, v, i) => a + v - par[i], 0);
+      const total = played.length ? (tot === 0 ? 'E' : (tot < 0 ? '−' + (-tot) : '+' + tot)) : '–';
+      return { pos, team, cells: s.map(cell), thru: played.length || '–', total,
+        color: tot < 0 ? '#c8312b' : (tot > 0 ? '#1f5aa6' : '#14201a') };
+    });
+    return { holes: par.map((p, i) => ({ n: i + 1, par: p })), rows };
+  }
+}
+</script>
+</body>
+</html>
