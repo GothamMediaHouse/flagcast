@@ -1,5 +1,7 @@
 import SwiftUI
 import UIKit
+import CoreText
+import MapKit
 
 /// Flagcast's colours (the same tokens as public/golf/golf.css), with the dark-mode values the website uses.
 extension Color {
@@ -21,6 +23,9 @@ extension Color {
     static let fcOnGreenMuted = dyn(0xa9bdb0, 0xa3b8aa)
     static let fcOK = dyn(0x2f8a57, 0x5cc48a)
     static let fcWarn = dyn(0xb7791f, 0xe0a64a)
+    /// main buttons: the flag green (a lighter green in dark mode), as in Flagcast Manager
+    static let fcPrimary = dyn(0x123628, 0x2f8a57)
+    static let fcScrim = Color(UIColor(hex: 0x081811))
 }
 
 extension UIColor {
@@ -29,19 +34,35 @@ extension UIColor {
     }
 }
 
+/// Barlow Condensed (bundled, OFL): the Flagcast titles and big numbers, as in Flagcast Manager.
+enum FCType {
+    static func display(_ size: CGFloat, _ weight: Font.Weight = .bold) -> Font {
+        .custom(weight == .bold ? "BarlowCondensed-Bold" : "BarlowCondensed-SemiBold", size: size)
+    }
+    static func registerFonts() {
+        for name in ["BarlowCondensed-Bold", "BarlowCondensed-SemiBold"] {
+            if let u = Bundle.main.url(forResource: name, withExtension: "ttf") { CTFontManagerRegisterFontsForURL(u as CFURL, .process, nil) }
+        }
+    }
+    static func size(_ s: Font.TextStyle) -> CGFloat {
+        switch s { case .largeTitle: 44; case .title: 36; case .title2: 30; case .title3: 26; case .headline: 22; case .subheadline: 19; default: 22 }
+    }
+}
+
 extension View {
-    /// Headings: heavy, condensed, upper case, like the website's Barlow Condensed.
+    /// Headings: Barlow Condensed, upper case (the Manager and website look).
     func fcHeading(_ style: Font.TextStyle = .title2) -> some View {
-        font(.system(style, weight: .heavy)).fontWidth(.condensed).textCase(.uppercase)
+        font(FCType.display(FCType.size(style))).textCase(.uppercase)
     }
     /// Small upper-case labels in monospace, like the website's .label.
     func fcLabel() -> some View {
         font(.caption2.monospaced().weight(.medium)).tracking(1.2).textCase(.uppercase).foregroundStyle(Color.fcMuted)
     }
+    /// A solid white card with a soft shadow (no see-through panels).
     func fcCard(padding: CGFloat = 16) -> some View {
         self.padding(padding)
             .background(Color.fcCard, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.fcLine, lineWidth: 1))
+            .shadow(color: Color(UIColor(hex: 0x081811)).opacity(0.10), radius: 10, y: 4)
     }
 }
 
@@ -53,7 +74,7 @@ struct FCButton: ButtonStyle {
     @Environment(\.isEnabled) private var enabled
     func makeBody(configuration: Configuration) -> some View {
         let (bg, fg, border): (Color, Color, Color) = switch kind {
-        case .primary: (.fcFlag, .fcOnFlag, .fcFlag)
+        case .primary: (.fcPrimary, .white, .fcPrimary)
         case .dark: (.fcGreen, .fcOnGreen, .fcGreen)
         case .plain: (.fcCard, .fcInk, .fcLine)
         case .danger: (.fcCard, .fcRed, .fcLine)
@@ -92,24 +113,77 @@ struct LivePill: View {
     }
 }
 
-/// The green bar at the top of a page, with the logo.
+/// The top of a page: the course photo (from the tournament's course map) with a dark fade, the logo, and the big
+/// white title at its bottom, as in Flagcast Manager. Plain green when the course isn't mapped.
 struct GreenHeader<Trailing: View>: View {
     var title: String
     var subtitle: String = ""
+    var state: EventState? = nil
+    var height: CGFloat = 170
     @ViewBuilder var trailing: Trailing
+    @State private var photo: UIImage?
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Image("Logo").resizable().scaledToFit().frame(height: 22).accessibilityLabel("Flagcast")
-                Text(title).fcHeading(.title2).foregroundStyle(Color.fcOnGreen).lineLimit(2)
-                if !subtitle.isEmpty { Text(subtitle).fcLabel().foregroundStyle(Color.fcOnGreenMuted) }
+        ZStack(alignment: .bottomLeading) {
+            LinearGradient(colors: [Color.fcGreen2, Color.fcGreen], startPoint: .topLeading, endPoint: .bottomTrailing)
+                .overlay { if let photo { Image(uiImage: photo).resizable().aspectRatio(contentMode: .fill).transition(.opacity) } }
+                .clipped()
+            LinearGradient(stops: [.init(color: Color.fcScrim.opacity(0.45), location: 0), .init(color: Color.fcScrim.opacity(0.1), location: 0.4),
+                                   .init(color: Color.fcScrim.opacity(0.85), location: 1)], startPoint: .top, endPoint: .bottom)
+            HStack(alignment: .bottom, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Image("Logo").resizable().scaledToFit().frame(height: 20).accessibilityLabel("Flagcast")
+                    Text(title).font(FCType.display(34)).textCase(.uppercase).foregroundStyle(.white).lineLimit(2).minimumScaleFactor(0.6)
+                    if !subtitle.isEmpty { Text(subtitle).font(.footnote.weight(.semibold)).foregroundStyle(.white.opacity(0.85)).lineLimit(2) }
+                }
+                .shadow(color: .black.opacity(0.35), radius: 6, y: 1)
+                Spacer(minLength: 8)
+                trailing
             }
-            Spacer(minLength: 8)
-            trailing
+            .padding(.horizontal, 16).padding(.bottom, 14)
         }
-        .padding(.horizontal, 16).padding(.top, 6).padding(.bottom, 14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.fcGreen)
+        .frame(height: photo == nil ? max(110, height - 50) : height)
+        .frame(maxWidth: .infinity)
+        .clipped()
+        .animation(.easeOut(duration: 0.4), value: photo != nil)
+        .task(id: state?.id) { if let state { photo = await CoursePhoto.course(state) } }
+    }
+}
+
+/// Apple Maps satellite pictures of the tournament's own course and holes (no stock photos), made once and kept.
+@MainActor
+enum CoursePhoto {
+    private static var memory: [String: UIImage] = [:]
+    static func course(_ s: EventState) async -> UIImage? {
+        let pts = s.map.holes.values.flatMap { [$0.tee, $0.m ?? $0.f].compactMap { $0 } }
+        guard pts.count >= 2 else { return nil }
+        let lats = pts.map(\.lat), lngs = pts.map(\.lng)
+        let c = CLLocationCoordinate2D(latitude: (lats.min()! + lats.max()!) / 2, longitude: (lngs.min()! + lngs.max()!) / 2)
+        let span = max(700, max((lats.max()! - lats.min()!) * 111_000, (lngs.max()! - lngs.min()!) * 111_000 * cos(c.latitude * .pi / 180)) * 1.15)
+        return await snap("course-\(s.id)-\(Int(c.latitude * 1e4))-\(Int(c.longitude * 1e4))", MKMapCamera(lookingAtCenter: c, fromDistance: span * 1.25, pitch: 0, heading: 0), CGSize(width: 1200, height: 600))
+    }
+    /// One hole, tee at the bottom and green at the top.
+    static func hole(_ s: EventState, _ n: Int) async -> UIImage? {
+        guard let h = s.map.holes[n], let t = h.tee, let g = h.m ?? h.f else { return nil }
+        let c = CLLocationCoordinate2D(latitude: (t.lat + g.lat) / 2, longitude: (t.lng + g.lng) / 2)
+        let d = CLLocation(latitude: t.lat, longitude: t.lng).distance(from: CLLocation(latitude: g.lat, longitude: g.lng))
+        let rad = Double.pi / 180, dl = (g.lng - t.lng) * rad
+        let brg = atan2(sin(dl) * cos(g.lat * rad), cos(t.lat * rad) * sin(g.lat * rad) - sin(t.lat * rad) * cos(g.lat * rad) * cos(dl)) / rad
+        return await snap("hole-\(s.id)-\(n)-\(Int(t.lat * 1e5))-\(Int(g.lat * 1e5))", MKMapCamera(lookingAtCenter: c, fromDistance: max(260, d * 1.7), pitch: 0, heading: (brg + 360).truncatingRemainder(dividingBy: 360)), CGSize(width: 900, height: 500))
+    }
+    private static func snap(_ key: String, _ cam: MKMapCamera, _ size: CGSize) async -> UIImage? {
+        if let m = memory[key] { return m }
+        let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("course-photos")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let file = dir.appendingPathComponent(key + ".jpg")
+        if let d = try? Data(contentsOf: file), let i = UIImage(data: d) { memory[key] = i; return i }
+        let o = MKMapSnapshotter.Options()
+        o.camera = cam; o.size = size
+        o.preferredConfiguration = MKImageryMapConfiguration(elevationStyle: .flat)
+        o.traitCollection = UITraitCollection(userInterfaceStyle: .light)
+        guard let shot = try? await MKMapSnapshotter(options: o).start() else { return nil }
+        memory[key] = shot.image
+        if let j = shot.image.jpegData(compressionQuality: 0.8) { try? j.write(to: file, options: .atomic) }
+        return shot.image
     }
 }
 

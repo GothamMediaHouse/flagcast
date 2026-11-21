@@ -6,6 +6,11 @@
 //
 //   POST /golf/api/club/start     { email }                        sends a sign-in code
 //   POST /golf/api/club/verify    { email, code }                  → { token }
+//   POST /golf/api/club/login     { email, password }              → { token }   (after setting a password once)
+//   POST /golf/api/club/apple     { identityToken }                → { token }   Sign in with Apple (the Manager apps)
+//   POST /golf/api/club/google    { idToken }                      → { token }   Sign in with Google (GOOGLE_CLIENT_ID variable)
+//   POST /golf/api/club/setpass   { token, password }              sets or changes your password (signed in)
+//   POST /golf/api/club/config    {}                               → { google }   the Google client id, '' when it isn't set up
 //   POST /golf/api/club/me        { token }                        → { email, role, club, members, events }
 //   POST /golf/api/club/request   { token, name, contact, phone, city }   asks Flagcast for a club (pending)
 //   POST /golf/api/club/invite    { token, email }                 adds someone to your club
@@ -23,6 +28,8 @@
 // comes back in the answer (devCode) so the pages can be tried without email.
 import { DurableObject } from 'cloudflare:workers';
 import { SEED, slug } from './courselib.js';
+import { hashPassword, checkPassword, passwordProblem, verifyAppleToken, appleKeys, verifyGoogleToken, googleKeys } from './auth.js';
+import { streamReady, liveInput, inputState } from './stream.js';
 
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
 const EMAIL = /^[^\s@<>"',;]{1,64}@[^\s@<>"',;]{1,190}\.[a-z]{2,24}$/i;
@@ -57,7 +64,8 @@ export async function clubs(request, env, op) {
   if (request.method !== 'POST') return json({ error: 'Use POST' }, 405);
   const local = /^(localhost|127\.0\.0\.1)$/.test(new URL(request.url).hostname);
   const stub = env.CLUBS.get(env.CLUBS.idFromName('directory'));
-  return stub.fetch(new Request(`https://clubs/${op}?local=${local ? 1 : 0}`, { method: 'POST', body: await request.text() }));
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  return stub.fetch(new Request(`https://clubs/${op}?local=${local ? 1 : 0}&ip=${encodeURIComponent(ip)}`, { method: 'POST', body: await request.text() }));
 }
 
 export class FlagcastClubs extends DurableObject {
@@ -71,9 +79,12 @@ export class FlagcastClubs extends DurableObject {
       CREATE TABLE IF NOT EXISTS sessions (token TEXT PRIMARY KEY, email TEXT, created INTEGER, seen INTEGER);
       CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, club TEXT, key TEXT, name TEXT, created INTEGER, hidden INTEGER DEFAULT 0);
       CREATE TABLE IF NOT EXISTS payments (id TEXT PRIMARY KEY, club TEXT, amount REAL, credits INTEGER, what TEXT, note TEXT, at INTEGER);
-      CREATE TABLE IF NOT EXISTS log (n INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, who TEXT, club TEXT, what TEXT);`);
+      CREATE TABLE IF NOT EXISTS log (n INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, who TEXT, club TEXT, what TEXT);
+      CREATE TABLE IF NOT EXISTS accounts (email TEXT PRIMARY KEY, hash TEXT, salt TEXT, iter INTEGER, apple TEXT, updated INTEGER);
+      CREATE TABLE IF NOT EXISTS fails (k TEXT PRIMARY KEY, n INTEGER, since INTEGER);
+      CREATE TABLE IF NOT EXISTS streams (event TEXT, hole INTEGER, uid TEXT, updated INTEGER, PRIMARY KEY (event, hole));`);
     // columns added after the first release
-    for (const q of ['ALTER TABLE clubs ADD COLUMN notes TEXT', 'ALTER TABLE events ADD COLUMN archived INTEGER DEFAULT 0', 'ALTER TABLE clubs ADD COLUMN course TEXT']) { try { this.sql.exec(q); } catch {} }
+    for (const q of ['ALTER TABLE accounts ADD COLUMN google TEXT', 'ALTER TABLE clubs ADD COLUMN notes TEXT', 'ALTER TABLE events ADD COLUMN archived INTEGER DEFAULT 0', 'ALTER TABLE clubs ADD COLUMN course TEXT']) { try { this.sql.exec(q); } catch {} }
     // the Flagcast course library (courselib.js): courses any club can pick in Find the course
     this.sql.exec('CREATE TABLE IF NOT EXISTS library (id TEXT PRIMARY KEY, name TEXT, city TEXT, state TEXT, data TEXT, club TEXT, updated INTEGER)');
     for (const c of SEED) if (!this.one('SELECT id FROM library WHERE id = ?', c.id)) this.libPut(c, '', 0);
@@ -103,6 +114,7 @@ export class FlagcastClubs extends DurableObject {
   async fetch(request) {
     const url = new URL(request.url), op = url.pathname.slice(1), local = url.searchParams.get('local') === '1';
     let b = {}; try { b = JSON.parse(await request.text() || '{}'); } catch {}
+    this.ip = url.searchParams.get('ip') || '';
     try { return await this.route(op, b, local); }
     catch (e) { return json({ error: e.status ? e.message : 'Something went wrong. Try again.' }, e.status || 500); }
   }
@@ -116,6 +128,32 @@ export class FlagcastClubs extends DurableObject {
     return { email: s.email, role: m?.role || null, club };
   }
   fail(msg, status = 400) { throw Object.assign(new Error(msg), { status }); }
+
+  // a new session for a signed-in email (code, password or Apple)
+  session(email, how) {
+    const now = Date.now(), token = rand(40, 'abcdefghijkmnpqrstuvwxyz23456789ABCDEFGHJKLMNPQRSTUVWXYZ');
+    this.sql.exec('INSERT INTO sessions (token, email, created, seen) VALUES (?, ?, ?, ?)', token, email, now, now);
+    this.note(email, this.one('SELECT club FROM members WHERE email = ?', email)?.club, `Signed in${how ? ` (${how})` : ''}`);
+    this.sql.exec('DELETE FROM sessions WHERE created < ?', now - SESSION_DAYS * DAY);
+    return token;
+  }
+  // failed password sign-ins: 5 per email and 30 per network in 15 minutes, then a wait
+  tooMany(keys) {
+    const now = Date.now();
+    for (const [k, max] of keys) {
+      const f = this.one('SELECT * FROM fails WHERE k = ?', k);
+      if (f && now - f.since < 15 * 60000 && f.n >= max) this.fail('Too many tries. Wait 15 minutes, or sign in with an emailed code.', 429);
+    }
+  }
+  failed(keys) {
+    const now = Date.now();
+    for (const [k] of keys) {
+      const f = this.one('SELECT * FROM fails WHERE k = ?', k);
+      if (!f || now - f.since >= 15 * 60000) this.sql.exec('INSERT OR REPLACE INTO fails (k, n, since) VALUES (?, 1, ?)', k, now);
+      else this.sql.exec('UPDATE fails SET n = n + 1 WHERE k = ?', k);
+    }
+    this.sql.exec('DELETE FROM fails WHERE since < ?', now - DAY);
+  }
 
   // the club's course map (hole GPS) for a new tournament
   courseOf(club) { try { return club?.course ? JSON.parse(club.course) : null; } catch { return null; } }
@@ -185,11 +223,59 @@ export class FlagcastClubs extends DurableObject {
       if (c.tries >= 5) { this.sql.exec('DELETE FROM codes WHERE email = ?', email); this.fail('Too many tries. Ask for a new code.'); }
       if (!same(code, c.code)) { this.sql.exec('UPDATE codes SET tries = tries + 1 WHERE email = ?', email); this.fail('That code isn’t right.'); }
       this.sql.exec('DELETE FROM codes WHERE email = ?', email);
-      const token = rand(40, 'abcdefghijkmnpqrstuvwxyz23456789ABCDEFGHJKLMNPQRSTUVWXYZ');
-      this.sql.exec('INSERT INTO sessions (token, email, created, seen) VALUES (?, ?, ?, ?)', token, email, now, now);
-      this.note(email, this.one('SELECT club FROM members WHERE email = ?', email)?.club, 'Signed in');
-      this.sql.exec('DELETE FROM sessions WHERE created < ?', now - SESSION_DAYS * DAY);
-      return json({ token });
+      return json({ token: this.session(email) });
+    }
+    if (op === 'login') {
+      const email = clip(b.email, 254).toLowerCase(), keys = [[`e:${email}`, 5], [`ip:${this.ip}`, 30]];
+      if (!EMAIL.test(email)) this.fail('Type a full email address.');
+      this.tooMany(keys);
+      const a = this.one('SELECT * FROM accounts WHERE email = ?', email);
+      if (!a || !a.hash || !(await checkPassword(b.password, a))) {
+        this.failed(keys);
+        this.fail(a && a.hash ? 'That password isn’t right.' : 'There’s no password for that email yet. Sign in with an emailed code, then set one in Settings.', 401);
+      }
+      this.sql.exec('DELETE FROM fails WHERE k = ?', `e:${email}`);
+      return json({ token: this.session(email, 'password') });
+    }
+    if (op === 'setpass') {
+      const u = this.who(b.token), problem = passwordProblem(b.password);
+      if (problem) this.fail(problem);
+      const h = await hashPassword(b.password);
+      const old = this.one('SELECT * FROM accounts WHERE email = ?', u.email);
+      if (old) this.sql.exec('UPDATE accounts SET hash = ?, salt = ?, iter = ?, updated = ? WHERE email = ?', h.hash, h.salt, h.iter, now, u.email);
+      else this.sql.exec('INSERT INTO accounts (email, hash, salt, iter, apple, google, updated) VALUES (?, ?, ?, ?, ?, ?, ?)', u.email, h.hash, h.salt, h.iter, '', '', now);
+      this.note(u.email, u.club?.id, old?.hash ? 'Changed password' : 'Set a password');
+      return json({ ok: true });
+    }
+    if (op === 'config') return json({ google: env.GOOGLE_CLIENT_ID || '' });
+    if (op === 'apple') {
+      let id;
+      try { id = await verifyAppleToken(b.identityToken, { keys: await appleKeys() }); }
+      catch (e) { this.fail(e.message === 'apple-keys' ? 'Apple didn’t answer. Try again in a minute.' : e.message, 401); }
+      // the account linked to this Apple ID, or the verified email Apple shares (linked from now on)
+      let a = this.one('SELECT * FROM accounts WHERE apple = ?', id.sub);
+      if (!a) {
+        if (!id.email || !id.emailVerified) this.fail('Apple didn’t share an email. Sign in with an emailed code once, then Sign in with Apple works.', 401);
+        a = this.one('SELECT * FROM accounts WHERE email = ?', id.email);
+        if (a) this.sql.exec('UPDATE accounts SET apple = ?, updated = ? WHERE email = ?', id.sub, now, id.email);
+        else this.sql.exec('INSERT INTO accounts (email, hash, salt, iter, apple, google, updated) VALUES (?, ?, ?, ?, ?, ?, ?)', id.email, '', '', 0, id.sub, '', now);
+        a = { email: id.email };
+      }
+      return json({ token: this.session(a.email, 'Apple') });
+    }
+    if (op === 'google') {
+      let id;
+      try { id = await verifyGoogleToken(b.idToken, { keys: await googleKeys(), clientId: env.GOOGLE_CLIENT_ID }); }
+      catch (e) { this.fail(e.message === 'google-keys' ? 'Google didn’t answer. Try again in a minute.' : e.message, 401); }
+      let a = this.one('SELECT * FROM accounts WHERE google = ?', id.sub);
+      if (!a) {
+        if (!id.email || !id.emailVerified) this.fail('Google didn’t share a verified email. Sign in with an emailed code instead.', 401);
+        a = this.one('SELECT * FROM accounts WHERE email = ?', id.email);
+        if (a) this.sql.exec('UPDATE accounts SET google = ?, updated = ? WHERE email = ?', id.sub, now, id.email);
+        else this.sql.exec('INSERT INTO accounts (email, hash, salt, iter, apple, google, updated) VALUES (?, ?, ?, ?, ?, ?, ?)', id.email, '', '', 0, '', id.sub, now);
+        a = { email: id.email };
+      }
+      return json({ token: this.session(a.email, 'Google') });
     }
     if (op === 'signout') { this.sql.exec('DELETE FROM sessions WHERE token = ?', String(b.token || '')); return json({ ok: true }); }
     if (op === 'me') return json(this.me(this.who(b.token)));
@@ -353,7 +439,7 @@ export class FlagcastClubs extends DurableObject {
         if (had && had.club !== cid) this.fail('That tournament belongs to another club. Use Move instead.');
         this.sql.exec('INSERT OR REPLACE INTO events (id, club, key, name, created, hidden, archived) VALUES (?, ?, ?, ?, ?, 0, 0)', id, cid, key, clip(ev.name, 80) || 'Tournament', ev.created || now);
       }
-      if (b.op && !['events', 'log', 'day'].includes(b.op)) this.note('Flagcast', cid || evRow?.club || '', `Admin: ${b.op}${b.email ? ` ${clip(b.email, 254)}` : ''}${evRow ? ` ${evRow.name}` : ''}${b.op === 'pay' ? ` $${num(b.amount, 0, 1e7, 0)}` : ''}`);
+      if (b.op && !['events', 'log', 'day', 'cams', 'stream', 'streams'].includes(b.op)) this.note('Flagcast', cid || evRow?.club || '', `Admin: ${b.op}${b.email ? ` ${clip(b.email, 254)}` : ''}${evRow ? ` ${evRow.name}` : ''}${b.op === 'pay' ? ` $${num(b.amount, 0, 1e7, 0)}` : ''}`);
       // screen control for any club's tournament: the same day ops as the desk
       if (b.op === 'day') {
         const row = this.one('SELECT * FROM events WHERE id = ?', clip(b.id, 8)); if (!row) this.fail('That tournament isn’t on any club’s list.', 404);
@@ -362,6 +448,36 @@ export class FlagcastClubs extends DurableObject {
         await this.golf(row.id, 'desk', { ...d, key: row.key });
         this.note('Flagcast', row.club, `Admin screens: ${d.op}${d.kind ? ` ${d.kind}` : ''}${d.page ? ` ${d.page.k}${d.page.hole ? ` ${d.page.hole}` : ''}` : d.op === 'screen' ? ' playlist' : ''}${d.display ? ` → ${Array.isArray(d.display) ? d.display.join(', ') : d.display}` : ''} · ${row.name}`);
         return json({ ok: true });
+      }
+      // the par 3 camera links for any club's tournament (club desks can't change them)
+      if (b.op === 'cams') {
+        const tid = String(b.id || '').toLowerCase(); if (!/^[a-z0-9]{8}$/.test(tid)) this.fail('Pick a tournament.');
+        const row = this.one('SELECT * FROM events WHERE id = ?', tid); // Flagcast can also set up a tournament no club owns yet
+        const j = await this.golf(tid, 'cams', { cams: b.cams || {} });
+        this.note('Flagcast', row?.club || '', `Admin cameras: ${Object.keys(j.cams || {}).length ? Object.keys(j.cams).map((h) => `hole ${h}`).join(', ') : 'none'} · ${row?.name || tid.toUpperCase()}`);
+        return json({ ok: true, cams: j.cams });
+      }
+      // NDI cameras sent to Cloudflare Stream by the Mac: the hole's live input (made once, reused) for the Mac to push
+      // to, and the hole's camera link set to its playback address so phones, the live page and replays use it
+      if (b.op === 'stream') {
+        if (!streamReady(env)) this.fail('Cloudflare Stream isn’t set up yet: add CF_ACCOUNT_ID and CF_STREAM_TOKEN to the flagcast worker.', 409);
+        const tid = String(b.id || '').toLowerCase(), hole = num(b.hole, 1, 18, 0);
+        if (!/^[a-z0-9]{8}$/.test(tid) || !hole) this.fail('Pick a tournament and a hole.');
+        const st = await this.golf(tid, 'state');
+        const old = this.one('SELECT uid FROM streams WHERE event = ? AND hole = ?', tid, hole);
+        const input = await liveInput(env, fetch, { uid: old?.uid, name: `${clip(st.name, 80)} · hole ${hole}` }).catch((e) => this.fail(e.message, 502));
+        this.sql.exec('INSERT OR REPLACE INTO streams (event, hole, uid, updated) VALUES (?, ?, ?, ?)', tid, hole, input.uid, now);
+        if ((st.cams || {})[hole] !== input.playback) await this.golf(tid, 'cams', { cams: { ...(st.cams || {}), [hole]: input.playback } });
+        if (!old) this.note('Flagcast', this.one('SELECT club FROM events WHERE id = ?', tid)?.club || '', `Admin cameras: hole ${hole} streams from NDI · ${clip(st.name, 80)}`);
+        return json({ ok: true, hole, uid: input.uid, rtmps: input.rtmps, playback: input.playback });
+      }
+      // is each streamed hole's camera sending? → { holes: { 7: 'connected' } }
+      if (b.op === 'streams') {
+        const tid = String(b.id || '').toLowerCase();
+        if (!streamReady(env)) return json({ ready: false, holes: {} });
+        const rows = this.all('SELECT hole, uid FROM streams WHERE event = ?', tid);
+        const holes = Object.fromEntries(await Promise.all(rows.map(async (r) => [r.hole, await inputState(env, fetch, r.uid)])));
+        return json({ ready: true, holes });
       }
       if (b.op === 'log') return json({ log: this.all('SELECT * FROM log ORDER BY n DESC LIMIT 400') });
       if (b.op === 'events') {
@@ -374,8 +490,9 @@ export class FlagcastClubs extends DurableObject {
             const online = Object.values(s.online || {}).reduce((n, v) => n + v, 0);
             return { ...e, name: s.name || e.name, date: s.date || '', teams: (s.teams || []).length, scored, screens: (s.displays || []).length, online, locked: !!s.locked, replays: (s.replays || []).length,
               // for screen control
-              displays: (s.displays || []).map((d) => ({ id: d.id, name: d.name, online: (s.online || {})[d.id] || 0, force: s.live?.force?.[d.id] || null, pages: (d.playlist || []).length })),
-              p3: (s.course?.holes || []).filter((h) => h.par === 3).map((h) => h.n), sponsors: (s.sponsors || []).map((x) => ({ id: x.id, name: x.name })),
+              displays: (s.displays || []).map((d) => ({ id: d.id, name: d.name, where: d.where || '', group: d.group || '', online: (s.online || {})[d.id] || 0, force: s.live?.force?.[d.id] || null,
+                pages: (d.playlist || []).length, list: (d.playlist || []).map((x) => ({ k: x.k, fl: x.fl, hole: x.hole, sponsor: x.sponsor, secs: x.secs })) })),
+              p3: (s.course?.holes || []).filter((h) => h.par === 3).map((h) => h.n), cams: s.cams || {}, sponsors: (s.sponsors || []).map((x) => ({ id: x.id, name: x.name })),
               replayList: (s.replays || []).slice(0, 12).map((r) => ({ id: r.id, hole: r.hole, label: r.label, at: r.at })), take: s.live?.take || null, flash: s.flash || null,
               phone: s.live?.phone || null, scenes: (s.scenes || []).map((x) => ({ id: x.id, name: x.name })), scene: s.live?.scene || '', flights: s.flights || [], fund: !!s.fund?.on, skins: !!s.screens?.skins };
           } catch { return { ...e, gone: true }; }
@@ -396,7 +513,8 @@ export class FlagcastClubs extends DurableObject {
   mail(to, subject, text) { sendMail(this.env, to, subject, text).catch(() => {}); }
 
   me(u) {
-    const out = { email: u.email, role: u.role, admin: adminEmail(this.env, u.email), club: null, members: [], events: [] };
+    const acct = this.one('SELECT hash, apple, google FROM accounts WHERE email = ?', u.email);
+    const out = { email: u.email, role: u.role, admin: adminEmail(this.env, u.email), password: !!acct?.hash, apple: !!acct?.apple, google: !!acct?.google, club: null, members: [], events: [] };
     if (!u.club) return out;
     const { id, name, status, city, credits } = u.club;
     out.club = { id, name, status, city, credits };

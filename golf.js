@@ -44,7 +44,18 @@ export async function golf(request, env) {
   if (request.method === 'OPTIONS' && url.pathname.startsWith('/golf/api/')) return preflight(request);
   // making a tournament and the club accounts go through the club directory (clubs.js)
   if (url.pathname === '/golf/api/new') return cors(request, await clubs(request, env, 'new'));
-  if ((m = url.pathname.match(/^\/golf\/api\/club\/(start|verify|me|request|invite|uninvite|hide|signout|admin)$/))) return cors(request, await clubs(request, env, m[1]));
+  if ((m = url.pathname.match(/^\/golf\/api\/club\/(start|verify|login|apple|google|config|setpass|me|request|invite|uninvite|hide|signout|admin)$/))) return cors(request, await clubs(request, env, m[1]));
+  // Sign in with Google from the Manager apps: Google posts the ID token here (form, with its double-submit CSRF
+  // cookie), and the app's sign-in sheet gets the Flagcast session back on flagcastmanager://signin
+  if (url.pathname === '/golf/api/club/google-app' && request.method === 'POST') {
+    const f = await request.formData().catch(() => null);
+    const cookie = (request.headers.get('Cookie') || '').match(/(?:^|;\s*)g_csrf_token=([^;]+)/)?.[1];
+    const back = (q) => Response.redirect(`flagcastmanager://signin?${q}`, 302);
+    if (!f || !cookie || f.get('g_csrf_token') !== cookie) return back('error=' + encodeURIComponent('That Google sign-in didn’t work. Try again.'));
+    const r = await clubs(new Request(request.url, { method: 'POST', body: JSON.stringify({ idToken: f.get('credential') }) }), env, 'google');
+    const j = await r.json().catch(() => ({}));
+    return back(j.token ? `token=${encodeURIComponent(j.token)}` : `error=${encodeURIComponent(j.error || 'That Google sign-in didn’t work.')}`);
+  }
   if ((m = url.pathname.match(/^\/golf\/api\/([a-z0-9]{8})\/(state|ws|cart|score|desk|pro|hit|where)$/))) {
     const stub = env.GOLF.get(env.GOLF.idFromName(m[1]));
     return cors(request, await stub.fetch(request));
@@ -137,7 +148,7 @@ function cleanSetup(s, old) {
     teams,
     screens: { title: clip(s.screens?.title, 80), ticker: clip(s.screens?.ticker, 300), seconds: num(s.screens?.seconds, 5, 60, 12),
       skins: !!s.screens?.skins, rows: num(s.screens?.rows, 5, 20, 10) },
-    cams: Object.fromEntries(Object.entries(s.cams || {}).filter(([h, u]) => num(h, 1, 18, 0) && /^https:\/\//.test(u || '')).map(([h, u]) => [Number(h), clip(u, 500)])),
+    cams: Object.fromEntries(Object.entries(s.cams || {}).filter(([h, u]) => Number.isInteger(Number(h)) && Number(h) >= 1 && Number(h) <= 18 && /^https:\/\//.test(u || '')).map(([h, u]) => [Number(h), clip(u, 500)])),
     // spot: where the sponsor shows (see SPOTS). holes: which holes, for hole, camera and contest spots
     sponsors: (Array.isArray(s.sponsors) ? s.sponsors : []).slice(0, 60).map((x) => {
       const holes = (Array.isArray(x.holes) ? x.holes : []).map(Number).filter((h) => h >= 1 && h <= 18);
@@ -157,6 +168,7 @@ function cleanSetup(s, old) {
     // each TV or LED wall at the club and what it plays (a board page opened with ?screen=<id>)
     displays: (Array.isArray(s.displays) ? s.displays : []).slice(0, 20).map((d) => ({
       id: /^[a-z0-9]{3,12}$/.test(d.id || '') ? d.id : rand(5, 'abcdefghijkmnpqrstuvwxyz23456789'), name: clip(d.name, 40),
+      where: clip(d.where, 40), group: clip(d.group, 24), // where it hangs ("Clubhouse bar") and a group to send to together ("Clubhouse")
       playlist: (Array.isArray(d.playlist) ? d.playlist : []).slice(0, 30).filter((x) => PAGE_KINDS.includes(x.k)).map((x) => ({
         k: x.k, fl: clip(x.fl, 12), hole: num(x.hole, 0, 18, 0), sponsor: clip(x.sponsor, 12), secs: num(x.secs, 4, 300, 12) })),
     })),
@@ -245,6 +257,14 @@ export class GolfEvent extends DurableObject {
       if (!b.key || b.key !== ev.key) return json({ error: 'This desk link is not right. Open the link you were given when the tournament was made.' }, 403);
       return this.desk(b);
     }
+    // the par 3 camera links: only from Flagcast Admin (clubs.js admin op 'cams'). Never routed from the web
+    // (the worker only forwards state|ws|cart|score|desk|pro|hit|where), so only the directory object reaches it.
+    if (op === 'cams') {
+      ev.cams = cleanSetup({ cams: b.cams || {} }, ev).cams;
+      await this.ctx.storage.put('event', ev);
+      await this.broadcast();
+      return json({ ok: true, cams: ev.cams });
+    }
     if (op === 'pro') return this.pro(b);
     if (op === 'hit') return this.hit(b);
     if (op === 'where') return this.where(b);
@@ -295,6 +315,7 @@ export class GolfEvent extends DurableObject {
     if (DAY_OPS.has(b.op)) return this.dayOp(b, 'Desk');
     if (b.op === 'save') {
       const s = cleanSetup(b.setup || {}, ev);
+      s.cams = ev.cams || {}; // camera links are Flagcast staff's (op 'cams' from Admin): a desk key can't change them
       Object.assign(ev, s, { v: (ev.v || 0) + 1 });
       // scores of teams that were removed go too
       const keep = new Set(ev.teams.map((t) => t.id)), sc = await this.scores();
@@ -325,6 +346,8 @@ export class GolfEvent extends DurableObject {
   async dayOp(b, by) {
     const ev = this.ev, now = Date.now();
     ev.live = ev.live || { force: {}, take: null };
+    // a timed send (Send now for 5 or 15 minutes) is over: the screen is back on its playlist
+    for (const [id, f] of Object.entries(ev.live.force || {})) if (f && f.until && f.until <= now) delete ev.live.force[id];
     if (b.op === 'stats') return json({ stats: await this.getStats(), log: ev.log || [] });
     if (b.op === 'groups') {
       if (!trackingOn(ev)) {
@@ -366,14 +389,16 @@ export class GolfEvent extends DurableObject {
       const ids = b.display === '*' ? all : want.filter((x) => all.includes(x));
       if (!ids.length && !want.includes('phones')) return json({ error: 'No such screen' }, 404);
       for (const id of ids) {
-        if (b.page && PAGE_KINDS.includes(b.page.k)) ev.live.force[id] = { k: b.page.k, fl: clip(b.page.fl, 12), hole: num(b.page.hole, 0, 18, 0), sponsor: clip(b.page.sponsor, 12), at: now };
+        // mins (optional): only for that long, then back to its playlist (the board watches `until` itself)
+        const mins = num(b.mins, 0, 600, 0);
+        if (b.page && PAGE_KINDS.includes(b.page.k)) ev.live.force[id] = { k: b.page.k, fl: clip(b.page.fl, 12), hole: num(b.page.hole, 0, 18, 0), sponsor: clip(b.page.sponsor, 12), at: now, ...(mins ? { until: now + mins * 60000 } : {}) };
         else delete ev.live.force[id];
       }
     } else if (b.op === 'scene') { // saved routings: save what every screen shows now, put one back, or delete one
       ev.scenes = ev.scenes || [];
       if (b.save) {
         const name = clip(b.save, 40).trim(); if (!name) return json({ error: 'Name the scene' }, 400);
-        const map = Object.fromEntries((ev.displays || []).map((d) => [d.id, ev.live.force[d.id] ? { ...ev.live.force[d.id], at: undefined } : null]));
+        const map = Object.fromEntries((ev.displays || []).map((d) => [d.id, ev.live.force[d.id] ? { ...ev.live.force[d.id], at: undefined, until: undefined } : null]));
         ev.scenes = [...ev.scenes.filter((s) => s.name.toLowerCase() !== name.toLowerCase()), { id: rand(6, 'abcdefghijkmnpqrstuvwxyz23456789'), name, map }].slice(-20);
       } else if (b.remove) ev.scenes = ev.scenes.filter((s) => s.id !== b.remove);
       else if (b.apply) {

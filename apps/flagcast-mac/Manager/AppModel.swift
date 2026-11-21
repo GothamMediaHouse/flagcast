@@ -3,9 +3,9 @@ import Observation
 
 /// The club account as /golf/api/club/me returns it.
 struct ClubMe: Decodable {
-    struct Club: Decodable { var id: String, name: String, status: String, credits: Int
-        init(from d: Decoder) throws { let c = try d.container(keyedBy: CodingKeys.self); id = c.str(.id); name = c.str(.name); status = c.str(.status); credits = c.int(.credits, 0) }
-        enum CodingKeys: String, CodingKey { case id, name, status, credits }
+    struct Club: Decodable { var id: String, name: String, status: String, credits: Int, city: String
+        init(from d: Decoder) throws { let c = try d.container(keyedBy: CodingKeys.self); id = c.str(.id); name = c.str(.name); status = c.str(.status); credits = c.int(.credits, 0); city = c.str(.city) }
+        enum CodingKeys: String, CodingKey { case id, name, status, credits, city }
         var canMake: Bool { status == "active" && credits != 0 }
         var stateLine: String {
             status == "pending" ? "Waiting for Flagcast to approve your club. We’ll email you when it’s ready."
@@ -19,12 +19,15 @@ struct ClubMe: Decodable {
     var email: String, role: String, club: Club?, members: [Member], events: [Ev]
     /// Flagcast staff (an email in the server's ADMIN_EMAIL list): the Admin section shows
     var admin = false
+    /// a password is set (sign in with email + password), Sign in with Apple is linked
+    var password = false, apple = false
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         email = c.str(.email); role = c.str(.role); club = try? c.decodeIfPresent(Club.self, forKey: .club)
         members = c.list(.members); events = c.list(.events); admin = c.bool(.admin, false)
+        password = c.bool(.password, false); apple = c.bool(.apple, false)
     }
-    enum CodingKeys: String, CodingKey { case email, role, club, members, events, admin }
+    enum CodingKeys: String, CodingKey { case email, role, club, members, events, admin, password, apple }
     var isOwner: Bool { role == "owner" }
 }
 
@@ -57,8 +60,18 @@ final class AppModel {
     /// Admin, for Flagcast staff: which admin page shows (nil = a tournament or Home), and tournaments opened from it
     let admin = AdminModel()
     var adminSection: AdminSection?
+    /// Admin mode (Flagcast staff only): the red sidebar with Overview, Sign-ups, Clubs, Tournaments, Cameras…
+    var adminMode = UserDefaults.standard.bool(forKey: "admin.mode") { didSet { UserDefaults.standard.set(adminMode, forKey: "admin.mode"); adminSection = adminMode ? (adminSection ?? .overview) : nil } }
+    /// "Matthew" from the signed-in email (for the Home greeting)
+    var firstName: String {
+        guard let e = me?.email, let local = e.split(separator: "@").first else { return "" }
+        let w = local.split(whereSeparator: { ".-_+0123456789".contains($0) }).first.map(String.init) ?? ""
+        return w.prefix(1).uppercased() + w.dropFirst()
+    }
     var adminRefs: [EventRef] = []
-    var isAdmin: Bool { (me?.admin ?? false) || forceAdmin }
+    /// Settings → Show engineering tools (for people who aren't Flagcast admins)
+    var showEngineering = UserDefaults.standard.bool(forKey: "engineering.show") { didSet { UserDefaults.standard.set(showEngineering, forKey: "engineering.show") } }
+    var isAdmin: Bool { (me?.admin ?? false) || !(admin.pass ?? "").isEmpty || forceAdmin }
     /// test builds' snapshots only
     var forceAdmin = false
     /// the sidebar's tournaments: the club's, then any opened from Admin
@@ -68,12 +81,9 @@ final class AppModel {
 
     init() {
         nav.onRename = { [weak self] id, name, date in self?.noteName(id, name: name, date: date) }
+        nav.canEngineer = { [weak self] in (self?.isAdmin ?? false) || self?.showEngineering == true }
         admin.token = { [weak self] in self?.saved.token ?? "" }
-        admin.onOpen = { [weak self] e in
-            guard let self else { return }
-            if !self.shownEvents.contains(where: { $0.id == e.id }) { self.adminRefs.append(EventRef(id: e.id, key: e.key, name: e.name, date: e.date, club: e.clubName)) }
-            self.adminSection = nil; self.selection = e.id; self.section = .overview
-        }
+        admin.onOpen = { [weak self] e in self?.openAdmin(id: e.id, key: e.key, name: e.name, date: e.date, club: e.clubName) }
         if let d = try? Data(contentsOf: file), let s = try? JSONDecoder().decode(Saved.self, from: d) { saved = s }
         listEvents()
     }
@@ -97,6 +107,12 @@ final class AppModel {
     }
     var current: DeskDoc? { selection.flatMap(doc) }
 
+    /// Open any club's tournament from Admin (kept in the list until the app quits).
+    func openAdmin(id: String, key: String, name: String, date: String? = nil, club: String? = nil) {
+        if !shownEvents.contains(where: { $0.id == id }) { adminRefs.append(EventRef(id: id, key: key, name: name, date: date, club: club)) }
+        adminMode = false; adminSection = nil; selection = id; section = .overview
+    }
+
     // ---- the club account ----
     @discardableResult
     func club(_ op: String, _ body: [String: Any] = [:]) async throws -> [String: Any] {
@@ -110,6 +126,7 @@ final class AppModel {
         }
     }
     func refresh() async {
+        if !(admin.pass ?? "").isEmpty { Task { try? await admin.refresh() } }
         guard signedIn else { me = nil; return }
         do {
             let d = try await Net.post("/golf/api/club/me", ["token": saved.token ?? ""])
@@ -130,6 +147,31 @@ final class AppModel {
         let d = try await Net.post("/golf/api/club/verify", ["email": email, "code": code])
         saved.token = Net.json(d)["token"] as? String
         write()
+        await refresh()
+    }
+    /// Email + password (set once in Settings after a code sign-in).
+    func login(_ email: String, _ password: String) async throws {
+        let d = try await Net.post("/golf/api/club/login", ["email": email, "password": password])
+        saved.token = Net.json(d)["token"] as? String
+        write(); await refresh()
+    }
+    /// Sign in with Apple: the identity token Apple gave the app.
+    func appleSignIn(_ identityToken: String) async throws {
+        let d = try await Net.post("/golf/api/club/apple", ["identityToken": identityToken])
+        saved.token = Net.json(d)["token"] as? String
+        write(); await refresh()
+    }
+    /// Sign in with Google is switched on on the server (GOOGLE_CLIENT_ID set).
+    var googleOn = false
+    func loadConfig() async { googleOn = ((try? Net.json(await Net.post("/golf/api/club/config", [:])))?["google"] as? String ?? "") != "" }
+    /// A Flagcast session handed back by the website's sign-in (Google).
+    func use(token: String) async {
+        saved.token = token
+        write(); await refresh()
+    }
+    /// Set or change the password for the signed-in email.
+    func setPassword(_ password: String) async throws {
+        try await club("setpass", ["password": password])
         await refresh()
     }
     func signOut() async {

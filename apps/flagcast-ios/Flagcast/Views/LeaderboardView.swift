@@ -20,9 +20,10 @@ struct LeaderboardScreen: View {
     var body: some View {
         VStack(spacing: 0) {
             if let s = feed.state {
-                GreenHeader(title: s.title, subtitle: [s.club, s.course.name != s.club ? s.course.name : "", s.date].filter { !$0.isEmpty }.joined(separator: " · ")) {
+                GreenHeader(title: s.title, subtitle: [s.club, s.course.name != s.club ? s.course.name : "", s.date].filter { !$0.isEmpty }.joined(separator: " · "), state: s, height: 230) {
                     LivePill(online: feed.online)
                 }
+                .ignoresSafeArea(edges: .top)
                 if let f = s.flash, Date().timeIntervalSince1970 * 1000 - f.at < 30 * 60_000 {
                     Label(f.text, systemImage: "megaphone.fill").font(.subheadline.weight(.semibold))
                         .frame(maxWidth: .infinity).padding(.horizontal, 16).padding(.vertical, 10)
@@ -68,8 +69,7 @@ struct LeaderboardScreen: View {
         .animation(.default, value: feed.state?.flash)
         .navigationTitle("Leaderboard")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color.fcGreen, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarBackground(.hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbar {
             if let code = Recents.all().first(where: { $0.id == id })?.code, !code.isEmpty,
@@ -196,7 +196,7 @@ struct LeaderboardScreen: View {
                 if let u = URL(string: f.give), !f.give.isEmpty { Button("Give now") { web = u }.font(.subheadline.weight(.semibold)) }
             }
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(Fmt.dollars(f.raised)).font(.system(.title, weight: .heavy)).fontWidth(.condensed).contentTransition(.numericText())
+                Text(Fmt.dollars(f.raised)).font(FCType.display(36)).contentTransition(.numericText())
                 if f.goal > 0 { Text("of \(Fmt.dollars(f.goal))").fcLabel() }
             }
             if f.goal > 0 {
@@ -236,10 +236,9 @@ struct LeaderboardScreen: View {
             let st = Core.holeStats(s, s.scores, h.n)
             let sp = s.sponsors.first { $0.holes.contains(h.n) }
             VStack(alignment: .leading, spacing: 0) {
-                camera(s, hole: h.n)
+                camera(s, hole: h.n, sub: ["Par 3", h.yds > 0 ? "\(h.yds) yds" : ""].filter { !$0.isEmpty }.joined(separator: " · "))
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Hole \(h.n)").fcHeading(.title)
-                    Text(["Par 3", h.yds > 0 ? "\(h.yds) yds" : "", "SI \(h.hcp)", st.avg.map { String(format: "avg %.2f", $0) } ?? "", sp.map { "presented by \($0.name)" } ?? ""]
+                    Text(["SI \(h.hcp)", st.avg.map { String(format: "avg %.2f", $0) } ?? "", sp.map { "presented by \($0.name)" } ?? ""]
                         .filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(.footnote.monospaced()).foregroundStyle(Color.fcMuted)
                     if !st.aces.isEmpty {
@@ -260,7 +259,7 @@ struct LeaderboardScreen: View {
         }
     }
 
-    @ViewBuilder private func camera(_ s: EventState, hole: Int) -> some View {
+    @ViewBuilder private func camera(_ s: EventState, hole: Int, sub: String) -> some View {
         let url = s.cams[hole].flatMap(URL.init(string:))
         let replays = s.replays.filter { $0.hole == hole }
         if let url, !CameraLink(hole: hole, url: url).isHLS {
@@ -275,13 +274,13 @@ struct LeaderboardScreen: View {
             .buttonStyle(.plain)
             if !replays.isEmpty { CameraBox(hole: hole, camURL: nil, replays: replays).padding([.horizontal, .top], 14) }
         } else {
-            CameraBox(hole: hole, camURL: url, replays: replays).padding([.horizontal, .top], 14)
+            CameraBox(hole: hole, camURL: url, replays: replays, title: "Hole \(hole)", sub: sub).padding([.horizontal, .top], 14)
         }
     }
 
     private func stat(_ n: Int, _ label: String) -> some View {
         VStack(spacing: 2) {
-            Text("\(n)").font(.system(.title, weight: .heavy)).fontWidth(.condensed)
+            Text("\(n)").font(FCType.display(36))
             Text(label).fcLabel()
         }
         .frame(maxWidth: .infinity)

@@ -131,11 +131,14 @@ struct CameraBox: View {
     var hole: Int
     var camURL: URL?
     var replays: [Replay]
+    /// the hole's name over the bottom of the picture ("HOLE 7", "165 yds · Par 3"), as on the Par 3s tab
+    var title: String? = nil
+    var sub: String? = nil
     @State private var cam: CameraController
     @State private var fullscreen = false
 
-    init(hole: Int, camURL: URL?, replays: [Replay]) {
-        self.hole = hole; self.camURL = camURL; self.replays = replays
+    init(hole: Int, camURL: URL?, replays: [Replay], title: String? = nil, sub: String? = nil) {
+        self.hole = hole; self.camURL = camURL; self.replays = replays; self.title = title; self.sub = sub
         _cam = State(initialValue: CameraController(camURL: camURL))
     }
 
@@ -151,6 +154,17 @@ struct CameraBox: View {
                     .foregroundStyle(cam.replay != nil ? Color.fcOnFlag : .white)
                     .padding(8).allowsHitTesting(false)
                 if cam.loading { ProgressView().tint(.white).frame(maxWidth: .infinity, maxHeight: .infinity) }
+                if let title {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Spacer()
+                        Text(title).font(FCType.display(30)).textCase(.uppercase)
+                        if let sub { Text(sub).font(.footnote.weight(.semibold)).opacity(0.85) }
+                    }
+                    .foregroundStyle(.white).shadow(color: .black.opacity(0.5), radius: 6, y: 1)
+                    .padding(12).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    .background(LinearGradient(colors: [.clear, .black.opacity(0.65)], startPoint: .center, endPoint: .bottom))
+                    .allowsHitTesting(false)
+                }
             }
             .aspectRatio(16 / 9, contentMode: .fit)
             .overlay(alignment: .topTrailing) {
@@ -217,7 +231,7 @@ struct FullscreenCamera: View {
                     HStack(spacing: 10) {
                         Button { dismiss() } label: { Image(systemName: "xmark").font(.headline).frame(width: 44, height: 44).background(.black.opacity(0.55), in: Circle()) }
                             .accessibilityLabel("Close")
-                        Text("Hole \(hole)").font(.system(.title3, weight: .heavy)).fontWidth(.condensed).textCase(.uppercase)
+                        Text("Hole \(hole)").font(FCType.display(26)).textCase(.uppercase)
                         Text(cam.replay != nil ? "REPLAY" : "LIVE").font(.caption2.monospaced().weight(.semibold)).tracking(1)
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(cam.replay != nil ? Color(UIColor(hex: 0xe8c547)) : Color(UIColor(hex: 0xc8312b)))
@@ -311,7 +325,7 @@ private struct QuadTile: View {
             VideoPlayer(player: cam.player).allowsHitTesting(false)
             HStack(spacing: 6) {
                 Text("LIVE").font(.caption2.monospaced().weight(.semibold)).padding(.horizontal, 5).padding(.vertical, 1).background(Color(UIColor(hex: 0xc8312b)))
-                Text("Hole \(hole.n)").font(.subheadline.weight(.heavy)).fontWidth(.condensed).textCase(.uppercase)
+                Text("Hole \(hole.n)").font(FCType.display(19)).textCase(.uppercase)
                 if hole.yds > 0 { Text("\(hole.yds) yds").font(.caption.monospaced()).foregroundStyle(.white.opacity(0.75)) }
             }
             .foregroundStyle(.white).padding(8).background(LinearGradient(colors: [.clear, .black.opacity(0.6)], startPoint: .top, endPoint: .bottom))
@@ -362,5 +376,68 @@ struct CameraSheet: View {
         } else {
             SafariView(url: link.url).ignoresSafeArea()
         }
+    }
+}
+
+/// A replay full screen, straight away (the scorecard's "New replay" banner), with "Back to live" when the hole has a camera.
+struct ReplayFullscreen: View {
+    var replay: Replay
+    var camURL: URL?
+    var replays: [Replay]
+    @State private var cam: CameraController
+    init(replay: Replay, camURL: URL?, replays: [Replay]) {
+        self.replay = replay; self.camURL = camURL; self.replays = replays
+        _cam = State(initialValue: CameraController(camURL: camURL))
+    }
+    var body: some View {
+        FullscreenCamera(cam: cam, hole: replay.hole, replays: replays)
+            .task { await cam.play(replay) }
+            .onDisappear { cam.pause() }
+    }
+}
+
+/// "New replay" on the scorecard: each replay once, only ones made since this phone first opened the tournament.
+enum ReplayCast {
+    private static func key(_ id: String) -> String { "flagcast:replay:\(id)" }
+    /// the newest replay this phone hasn't been shown (a replay from the last 15 minutes)
+    static func current(_ s: EventState, id: String) -> Replay? {
+        let d = UserDefaults.standard
+        guard let newest = s.replays.max(by: { $0.at < $1.at }) else { return nil }
+        if d.object(forKey: key(id)) == nil { d.set(newest.at, forKey: key(id)); return nil }   // first look: older ones aren't news
+        guard newest.at > d.double(forKey: key(id)), Date().timeIntervalSince1970 * 1000 - newest.at < 15 * 60_000 else { return nil }
+        return newest
+    }
+    static func seen(_ r: Replay, id: String) { UserDefaults.standard.set(r.at, forKey: key(id)) }
+}
+
+struct ReplayBanner: View {
+    var replay: Replay
+    var watch: () -> Void
+    var close: () -> Void
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("NEW REPLAY").font(.caption2.monospaced().weight(.bold)).tracking(1.2)
+                .padding(.horizontal, 7).padding(.vertical, 3)
+                .background(Color(UIColor(hex: 0xe8c547)), in: RoundedRectangle(cornerRadius: 3)).foregroundStyle(Color.fcOnFlag)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Hole \(replay.hole)").font(.subheadline.weight(.bold)).foregroundStyle(Color.fcOnGreen)
+                if !replay.label.isEmpty { Text(replay.label).font(.caption).foregroundStyle(Color.fcOnGreenMuted).lineLimit(1) }
+            }
+            Spacer(minLength: 4)
+            Image(systemName: "play.fill").font(.headline).foregroundStyle(Color.fcOnFlag)
+                .frame(width: 44, height: 40).background(Color(UIColor(hex: 0xe8c547)), in: RoundedRectangle(cornerRadius: 8))
+            Button { close() } label: { Image(systemName: "xmark").font(.body.weight(.semibold)).foregroundStyle(Color.fcOnGreenMuted).frame(width: 32, height: 40) }
+                .accessibilityLabel("Close")
+        }
+        .padding(.horizontal, 14).padding(.vertical, 12)
+        .background(Color(UIColor(hex: 0x123628)), in: RoundedRectangle(cornerRadius: 14))
+        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.white.opacity(0.18)))
+        .shadow(color: .black.opacity(0.35), radius: 15, y: 8)
+        .contentShape(Rectangle())
+        .onTapGesture { watch() }
+        .padding(.horizontal, 12).frame(maxWidth: 560)
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .accessibilityElement(children: .combine).accessibilityAddTraits(.isButton)
+        .accessibilityLabel("New replay, hole \(replay.hole). \(replay.label)").accessibilityHint("Plays it full screen")
     }
 }

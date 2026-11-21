@@ -16,6 +16,8 @@ final class DeskNav {
     /// the sidebar's find box: shown on the Teams page
     var search = ""
     @ObservationIgnored var onRename: ((_ id: String, _ name: String, _ date: String) -> Void)?
+    /// Screens → Engineering is offered (always to Flagcast admins; to others when Settings → Show engineering tools is on)
+    @ObservationIgnored var canEngineer: () -> Bool = { false }
 }
 
 /// The sections of a tournament, in the sidebar and menus: ⌘1–⌘9, ⌘0 for the course map.

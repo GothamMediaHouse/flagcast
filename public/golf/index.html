@@ -43,9 +43,11 @@ h2 { font-size: 1.5rem; margin: 30px 0 10px; }
   <!-- not signed in -->
   <form id="signin" hidden>
     <h2 style="margin:0">Club sign-in</h2>
-    <p class="help" style="margin:0">Sign in with your email. We’ll send you a 6-digit code, no password needed.</p>
-    <label>Email<input id="email" type="email" autocomplete="email" required placeholder="you@yourclub.com"></label>
-    <button class="btn primary" type="submit">Email me a code</button>
+    <p class="help" style="margin:0">Your email and password. First time? Leave the password empty and we’ll email you a 6-digit code, then you can set a password.</p>
+    <label>Email<input id="email" type="email" autocomplete="username" required placeholder="you@yourclub.com"></label>
+    <label>Password<input id="password" type="password" autocomplete="current-password" placeholder="Leave empty to get a code"></label>
+    <button class="btn primary" type="submit" id="signBtn">Email me a code</button>
+    <a class="btn" id="googleBtn" href="/golf/signin/google/" hidden style="text-align:center">Sign in with Google</a>
     <div class="err" id="sErr" role="alert"></div>
   </form>
   <form id="code" hidden>
@@ -81,6 +83,15 @@ h2 { font-size: 1.5rem; margin: 30px 0 10px; }
       <div class="err" id="err" role="alert"></div>
     </form>
     <div class="box"><h2>Tournaments</h2><div id="events"></div></div>
+    <form id="pw" class="box" style="display:grid">
+      <h2 style="margin:0" id="pwTitle">Set a password</h2>
+      <p class="help" style="margin:0">Then sign in with your email and password here and in the Flagcast Manager apps. At least 10 characters.</p>
+      <input type="text" autocomplete="username" id="pwUser" hidden>
+      <label>New password<input id="pw1" type="password" autocomplete="new-password" minlength="10" required></label>
+      <label>Type it again<input id="pw2" type="password" autocomplete="new-password" minlength="10" required></label>
+      <button class="btn" type="submit">Save password</button>
+      <div class="err" id="pwErr" role="alert"></div>
+    </form>
     <div class="box"><h2>People in your club</h2><p class="help">Everyone here can sign in and run the club’s tournaments.</p><div id="members"></div>
       <form id="invite" hidden style="display:flex;gap:8px;padding:12px 0 0;border:0;background:none"><input id="iEmail" type="email" placeholder="name@yourclub.com" required style="flex:1"><button class="btn" type="submit">Add</button></form>
       <div class="err" id="iErr" role="alert"></div>
@@ -107,7 +118,8 @@ if (mine.length) {
 function draw() {
   $('who').hidden = !me;
   if (!me) return show('signin');
-  $('who').innerHTML = `Signed in as ${esc(me.email)} · <a href="#" id="out">Sign out</a>`;
+  $('who').innerHTML = `Signed in as ${esc(me.email)}${me.admin ? ' · <a href="/golf/admin/">Flagcast Admin</a>' : ''} · <a href="#" id="out">Sign out</a>`;
+  $('pwTitle').textContent = me.password ? 'Change your password' : 'Set a password'; $('pwUser').value = me.email;
   $('out').onclick = async (e) => { e.preventDefault(); await api('signout').catch(() => {}); token.set(''); me = null; draw(); };
   if (!me.club) return show('request');
   show('club');
@@ -129,13 +141,22 @@ async function refresh() {
   draw();
 }
 
+api('config').then((c) => { if (c.google) $('googleBtn').hidden = false; }).catch(() => {});
+$('password').addEventListener('input', () => { $('signBtn').textContent = $('password').value ? 'Sign in' : 'Email me a code'; });
 $('signin').addEventListener('submit', async (e) => {
   e.preventDefault(); $('sErr').textContent = '';
-  const email = $('email').value.trim();
+  const email = $('email').value.trim(), password = $('password').value;
   try {
+    if (password) { const j = await api('login', { email, password }); token.set(j.token); $('password').value = ''; return await refresh(); }
     const j = await api('start', { email });
     $('sentTo').textContent = email; show('code'); $('codeIn').value = j.devCode || ''; $('codeIn').focus();
   } catch (x) { $('sErr').textContent = x.message; }
+});
+$('pw').addEventListener('submit', async (e) => {
+  e.preventDefault(); $('pwErr').textContent = '';
+  if ($('pw1').value !== $('pw2').value) { $('pwErr').textContent = 'The two don’t match.'; return; }
+  try { await api('setpass', { password: $('pw1').value }); $('pw1').value = $('pw2').value = ''; $('pwErr').textContent = 'Saved.'; me.password = true; $('pwTitle').textContent = 'Change your password'; }
+  catch (x) { $('pwErr').textContent = x.message; }
 });
 $('back').onclick = () => show('signin');
 $('code').addEventListener('submit', async (e) => {

@@ -37,7 +37,7 @@ struct HomeView: View {
             .frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
-        .background { VStack(spacing: 0) { Color.fcGreen.frame(height: 240); Color.fcPaper }.ignoresSafeArea() }
+        .background { VStack(spacing: 0) { Color.fcGreen.frame(height: 280); Color.fcPaper }.ignoresSafeArea() }
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .onAppear { recents = Recents.all(); pros = ProSignIns.all() }
@@ -64,14 +64,21 @@ struct HomeView: View {
     }
 
     private var hero: some View {
-        VStack(spacing: 12) {
-            Image("Logo").resizable().scaledToFit().frame(height: 54).accessibilityLabel("Flagcast")
-            Text("Live scoring, leaderboards and par 3 cams for your tournament.")
-                .font(.callout).multilineTextAlignment(.center).foregroundStyle(Color.fcOnGreenMuted).frame(maxWidth: 300)
+        VStack(alignment: .leading, spacing: 8) {
+            Image("Logo").resizable().scaledToFit().frame(height: 30).accessibilityLabel("Flagcast")
+            Text("Your tournament, live").font(FCType.display(44)).textCase(.uppercase).foregroundStyle(.white).padding(.top, 18)
+            Text("Scorecard, leaderboard and par 3 cameras, right here.")
+                .font(.callout).foregroundStyle(Color.fcOnGreen.opacity(0.85))
         }
-        .padding(.top, 28).padding(.bottom, 40).padding(.horizontal, 20)
-        .frame(maxWidth: .infinity)
-        .background(Color.fcGreen)
+        .padding(.top, 34).padding(.bottom, 46).padding(.horizontal, 22)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background {
+            ZStack {
+                LinearGradient(colors: [Color.fcGreen2, Color.fcGreen], startPoint: .topLeading, endPoint: .bottomTrailing)
+                Image(systemName: "flag.fill").font(.system(size: 220)).foregroundStyle(.white.opacity(0.05)).offset(x: 120, y: 10)
+            }
+        }
+        .clipped()
     }
 
     private var playCard: some View {

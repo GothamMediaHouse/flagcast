@@ -1,4 +1,4 @@
-// Flagcast club accounts in the browser: sign in with an emailed code, then call the club API.
+// Flagcast club accounts in the browser: sign in with email + password or an emailed code, then call the club API.
 // Used by /golf/ (the club's page). The Manager app has its own copy of this flow in home.html.
 const LS = 'flagcast:club-token';
 export const token = {
@@ -9,7 +9,7 @@ export async function api(op, body = {}) {
   const path = op === 'new' ? '/golf/api/new' : `/golf/api/club/${op}`;
   const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token.get(), ...body }) });
   const j = await r.json().catch(() => ({}));
-  if (r.status === 401 && op !== 'verify') token.set('');
+  if (r.status === 401 && !['verify', 'login'].includes(op)) token.set('');
   if (!r.ok) throw Object.assign(new Error(j.error || 'That didn’t work. Try again.'), { status: r.status });
   return j;
 }
