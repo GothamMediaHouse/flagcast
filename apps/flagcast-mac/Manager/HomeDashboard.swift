@@ -53,7 +53,12 @@ struct HomeDashboard: View {
         } content: {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    if let lead, let doc { LeadCard(ref: lead, doc: doc); StatusTiles(doc: doc) }
+                    if let lead, let doc {
+                        LeadCard(ref: lead, doc: doc)
+                        if DayOfChecks.isEventDay(doc) {
+                            DayOfChecks(doc: doc) { model.selection = lead.id; model.section = .screens }.padding(18).raisedCard()
+                        } else { StatusTiles(doc: doc) }
+                    }
                     else { emptyCard }
                     if !coming.isEmpty {
                         CardTitle("Coming up")

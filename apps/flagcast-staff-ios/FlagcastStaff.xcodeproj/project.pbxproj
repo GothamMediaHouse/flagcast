@@ -24,6 +24,7 @@
 		25D11A59641C9ED381AAC5F2 = {isa = PBXBuildFile; fileRef = 0E8BD471F8B2F04B31D90F63; };
 		B905603D4E4014D1F52C0C03 = {isa = PBXBuildFile; fileRef = 5821F4E446BC121536A5619F; };
 		B931FD2C98E409C12E1EBD92 = {isa = PBXBuildFile; fileRef = A38EFC18BA2501B0B74E8497; };
+		F07131FC8FDB97C21E94F879 = {isa = PBXBuildFile; fileRef = 7666093064319FAA872B33B0; };
 		C24C43B25E9CE97C05F1003B = {isa = PBXBuildFile; fileRef = 114899359BB15ED7EB36B371; };
 		8662ED94914FC53C12B47FD4 = {isa = PBXBuildFile; fileRef = 77C6E0EA06822F88CEE86CA2; };
 /* End PBXBuildFile section */
@@ -47,6 +48,7 @@
 		0E8BD471F8B2F04B31D90F63 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppModel.swift; path = "../flagcast-mac/Manager/AppModel.swift"; sourceTree = SOURCE_ROOT; };
 		5821F4E446BC121536A5619F = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppleSignIn.swift; path = "../flagcast-mac/Shared/AppleSignIn.swift"; sourceTree = SOURCE_ROOT; };
 		A38EFC18BA2501B0B74E8497 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Branding.swift; path = "../flagcast-mac/Shared/Branding.swift"; sourceTree = SOURCE_ROOT; };
+		7666093064319FAA872B33B0 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DayOf.swift; path = "../flagcast-mac/Shared/DayOf.swift"; sourceTree = SOURCE_ROOT; };
 		114899359BB15ED7EB36B371 = {isa = PBXFileReference; lastKnownFileType = file; name = BarlowCondensed-Bold.ttf; path = "../flagcast-mac/Shared/Fonts/BarlowCondensed-Bold.ttf"; sourceTree = SOURCE_ROOT; };
 		77C6E0EA06822F88CEE86CA2 = {isa = PBXFileReference; lastKnownFileType = file; name = BarlowCondensed-SemiBold.ttf; path = "../flagcast-mac/Shared/Fonts/BarlowCondensed-SemiBold.ttf"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
@@ -80,6 +82,7 @@
 				25D11A59641C9ED381AAC5F2,
 				B905603D4E4014D1F52C0C03,
 				B931FD2C98E409C12E1EBD92,
+				F07131FC8FDB97C21E94F879,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -129,6 +132,7 @@
 				0E8BD471F8B2F04B31D90F63,
 				5821F4E446BC121536A5619F,
 				A38EFC18BA2501B0B74E8497,
+				7666093064319FAA872B33B0,
 				114899359BB15ED7EB36B371,
 				77C6E0EA06822F88CEE86CA2,
 			);
