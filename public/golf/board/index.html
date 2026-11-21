@@ -221,7 +221,20 @@ function holeArt(h) {
   <ellipse cx="225" cy="80" rx="70" ry="38" fill="#58a26f"/><ellipse cx="160" cy="105" rx="26" ry="12" fill="#e4d6a6"/><line x1="236" y1="80" x2="236" y2="30" stroke="#fff" stroke-width="3"/><path d="M238 30 L268 40 L238 50 Z" fill="#c8312b"/></svg></div>`;
 }
 
+// Clubhouse TVs opened through the Flagcast Mac on the club network (http://<mac>:8790/g/<id>/board): the Mac bridges
+// NDI cameras and serves them at /local-cams/<id>/<hole>/index.m3u8 with almost no delay. Use those first; the
+// camera link (cloud) otherwise. The Mac lists what it has at /local-cams/<id>/index.json.
+const eventId = (location.pathname.match(/\/g\/([a-z0-9]{8})/) || [])[1] || '';
+let localCams = {};
+async function findLocalCams() {
+  if (location.protocol !== 'http:' || !eventId) return;
+  try { const r = await fetch(`/local-cams/${eventId}/index.json`, { cache: 'no-store' }); localCams = r.ok ? (await r.json()).holes || {} : {}; } catch { localCams = {}; }
+}
+findLocalCams(); setInterval(findLocalCams, 20000);
+const camURL = (n) => (localCams[n] ? `/local-cams/${eventId}/${n}/index.m3u8` : S.cams[n]);
+
 function camHtml(url, n) {
+  url = camURL(n) || url;
   const cs = spot('cam', n)[0], bug = cs ? `<span class="bug">CAM BY ${cs.logo ? `<img src="${esc(cs.logo)}" alt="${esc(cs.name)}">` : esc(cs.name).toUpperCase()}</span>` : '';
   return camInner(url, n) + bug;
 }

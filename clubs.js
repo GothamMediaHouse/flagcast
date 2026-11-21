@@ -29,6 +29,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { SEED, slug } from './courselib.js';
 import { hashPassword, checkPassword, passwordProblem, verifyAppleToken, appleKeys, verifyGoogleToken, googleKeys } from './auth.js';
+import { streamReady, liveInput, inputState } from './stream.js';
 
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
 const EMAIL = /^[^\s@<>"',;]{1,64}@[^\s@<>"',;]{1,190}\.[a-z]{2,24}$/i;
@@ -80,7 +81,8 @@ export class FlagcastClubs extends DurableObject {
       CREATE TABLE IF NOT EXISTS payments (id TEXT PRIMARY KEY, club TEXT, amount REAL, credits INTEGER, what TEXT, note TEXT, at INTEGER);
       CREATE TABLE IF NOT EXISTS log (n INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, who TEXT, club TEXT, what TEXT);
       CREATE TABLE IF NOT EXISTS accounts (email TEXT PRIMARY KEY, hash TEXT, salt TEXT, iter INTEGER, apple TEXT, updated INTEGER);
-      CREATE TABLE IF NOT EXISTS fails (k TEXT PRIMARY KEY, n INTEGER, since INTEGER);`);
+      CREATE TABLE IF NOT EXISTS fails (k TEXT PRIMARY KEY, n INTEGER, since INTEGER);
+      CREATE TABLE IF NOT EXISTS streams (event TEXT, hole INTEGER, uid TEXT, updated INTEGER, PRIMARY KEY (event, hole));`);
     // columns added after the first release
     for (const q of ['ALTER TABLE accounts ADD COLUMN google TEXT', 'ALTER TABLE clubs ADD COLUMN notes TEXT', 'ALTER TABLE events ADD COLUMN archived INTEGER DEFAULT 0', 'ALTER TABLE clubs ADD COLUMN course TEXT']) { try { this.sql.exec(q); } catch {} }
     // the Flagcast course library (courselib.js): courses any club can pick in Find the course
@@ -437,7 +439,7 @@ export class FlagcastClubs extends DurableObject {
         if (had && had.club !== cid) this.fail('That tournament belongs to another club. Use Move instead.');
         this.sql.exec('INSERT OR REPLACE INTO events (id, club, key, name, created, hidden, archived) VALUES (?, ?, ?, ?, ?, 0, 0)', id, cid, key, clip(ev.name, 80) || 'Tournament', ev.created || now);
       }
-      if (b.op && !['events', 'log', 'day', 'cams'].includes(b.op)) this.note('Flagcast', cid || evRow?.club || '', `Admin: ${b.op}${b.email ? ` ${clip(b.email, 254)}` : ''}${evRow ? ` ${evRow.name}` : ''}${b.op === 'pay' ? ` $${num(b.amount, 0, 1e7, 0)}` : ''}`);
+      if (b.op && !['events', 'log', 'day', 'cams', 'stream', 'streams'].includes(b.op)) this.note('Flagcast', cid || evRow?.club || '', `Admin: ${b.op}${b.email ? ` ${clip(b.email, 254)}` : ''}${evRow ? ` ${evRow.name}` : ''}${b.op === 'pay' ? ` $${num(b.amount, 0, 1e7, 0)}` : ''}`);
       // screen control for any club's tournament: the same day ops as the desk
       if (b.op === 'day') {
         const row = this.one('SELECT * FROM events WHERE id = ?', clip(b.id, 8)); if (!row) this.fail('That tournament isn’t on any club’s list.', 404);
@@ -454,6 +456,28 @@ export class FlagcastClubs extends DurableObject {
         const j = await this.golf(tid, 'cams', { cams: b.cams || {} });
         this.note('Flagcast', row?.club || '', `Admin cameras: ${Object.keys(j.cams || {}).length ? Object.keys(j.cams).map((h) => `hole ${h}`).join(', ') : 'none'} · ${row?.name || tid.toUpperCase()}`);
         return json({ ok: true, cams: j.cams });
+      }
+      // NDI cameras sent to Cloudflare Stream by the Mac: the hole's live input (made once, reused) for the Mac to push
+      // to, and the hole's camera link set to its playback address so phones, the live page and replays use it
+      if (b.op === 'stream') {
+        if (!streamReady(env)) this.fail('Cloudflare Stream isn’t set up yet: add CF_ACCOUNT_ID and CF_STREAM_TOKEN to the flagcast worker.', 409);
+        const tid = String(b.id || '').toLowerCase(), hole = num(b.hole, 1, 18, 0);
+        if (!/^[a-z0-9]{8}$/.test(tid) || !hole) this.fail('Pick a tournament and a hole.');
+        const st = await this.golf(tid, 'state');
+        const old = this.one('SELECT uid FROM streams WHERE event = ? AND hole = ?', tid, hole);
+        const input = await liveInput(env, fetch, { uid: old?.uid, name: `${clip(st.name, 80)} · hole ${hole}` }).catch((e) => this.fail(e.message, 502));
+        this.sql.exec('INSERT OR REPLACE INTO streams (event, hole, uid, updated) VALUES (?, ?, ?, ?)', tid, hole, input.uid, now);
+        if ((st.cams || {})[hole] !== input.playback) await this.golf(tid, 'cams', { cams: { ...(st.cams || {}), [hole]: input.playback } });
+        if (!old) this.note('Flagcast', this.one('SELECT club FROM events WHERE id = ?', tid)?.club || '', `Admin cameras: hole ${hole} streams from NDI · ${clip(st.name, 80)}`);
+        return json({ ok: true, hole, uid: input.uid, rtmps: input.rtmps, playback: input.playback });
+      }
+      // is each streamed hole's camera sending? → { holes: { 7: 'connected' } }
+      if (b.op === 'streams') {
+        const tid = String(b.id || '').toLowerCase();
+        if (!streamReady(env)) return json({ ready: false, holes: {} });
+        const rows = this.all('SELECT hole, uid FROM streams WHERE event = ?', tid);
+        const holes = Object.fromEntries(await Promise.all(rows.map(async (r) => [r.hole, await inputState(env, fetch, r.uid)])));
+        return json({ ready: true, holes });
       }
       if (b.op === 'log') return json({ log: this.all('SELECT * FROM log ORDER BY n DESC LIMIT 400') });
       if (b.op === 'events') {
