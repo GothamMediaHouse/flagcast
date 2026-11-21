@@ -105,7 +105,7 @@ private struct HomePage: View {
                     num("\(ev.teams.count)", "teams")
                     if played > 0 { num("\(played)", "holes played") }
                     if let l = board.first(where: { $0.played > 0 }) { num(ev.format.isStableford ? "\(l.score)" : Core.fmtPar(l.score), l.name, color: l.score < 0 && !ev.format.isStableford ? FC.red : FC.ink) }
-                    if behind > 0 { num("\(behind)", "behind", color: FC.flag) }
+                    if behind > 0 { num("\(behind)", "carts behind on scores", color: FC.flag) }   // 3+ holes behind the furthest cart: a nudge may help
                 }
                 HStack(spacing: 8) {
                     Button("Scores") { tabs.tab = .scores }.buttonStyle(GreenButton(full: true))

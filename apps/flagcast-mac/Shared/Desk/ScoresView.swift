@@ -21,7 +21,14 @@ struct ScoresView: View {
         let q = nav.search.lowercased()
         return Core.leaderboard(live, live.scores, mode: showMode).filter { q.isEmpty || $0.name.lowercased().contains(q) || $0.sub.lowercased().contains(q) }
     }
-    private var cell: CGFloat { holes.count > 9 ? 34 : 52 }
+    // hole columns share the card's width: all 18 fit in the narrowest window (scroll only below that), wide windows
+    // don't leave an empty band on the right
+    @State private var avail: CGFloat = 0
+    private var cell: CGFloat {
+        let fixed: CGFloat = 44 + 170 + 128 + 28, n = CGFloat(max(holes.count, 1))
+        let fit = avail > 0 ? (avail - fixed) / n : (holes.count > 9 ? 34 : 52)
+        return min(holes.count > 9 ? 46 : 64, max(26, fit.rounded(.down)))
+    }
     private var scoring: Int { lines.filter { $0.played > 0 && $0.thru != "F" }.count }
 
     var body: some View {
@@ -52,8 +59,9 @@ struct ScoresView: View {
                             }
                         }
                     }
-                    .frame(minWidth: 44 + 170 + CGFloat(holes.count) * cell + 128 + 28)
+                    .frame(minWidth: max(avail, 44 + 170 + CGFloat(holes.count) * cell + 128 + 28))
                 }
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { avail = $0 }
                 .background(FC.card)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(FC.line))

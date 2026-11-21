@@ -51,7 +51,7 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
 .step .val.set.birdie, .step .val.set.eagle { border-color: var(--red); color: var(--red); border-radius: 50%; }
 .step .val.set.bogey, .step .val.set.double { border-color: var(--ink); }
 .pu { grid-column: 1 / -1; display: flex; justify-content: space-between; font-size: .78rem; color: var(--muted); }
-.pu button { border: 0; background: none; color: var(--muted); text-decoration: underline; padding: 0; font-size: .78rem; }
+.pu button { border: 0; background: none; color: var(--muted); text-decoration: underline; padding: 12px 6px; margin: -12px -6px; min-height: 44px; font-size: .78rem; } /* a 44 pt target for a finger in a moving cart */
 .bar { position: fixed; left: 0; right: 0; bottom: 0; background: var(--card); border-top: 1px solid var(--line); padding: 12px max(16px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); display: flex; gap: 10px; }
 .bar .btn { flex: 1; padding: 14px; font-size: 1.05rem; }
 .card { margin-top: 26px; overflow-x: auto; }

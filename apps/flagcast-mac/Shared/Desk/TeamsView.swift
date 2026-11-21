@@ -36,8 +36,10 @@ struct TeamsView: View {
         } content: {
             HStack(alignment: .top, spacing: 16) {
                 table
-                inspector.frame(width: 340)
+                inspector.frame(width: compact ? 300 : 340)
             }
+            .frame(maxWidth: .infinity)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { areaWidth = $0 }
             .padding(.horizontal, 20).padding(.bottom, 18)
         }
         .sheet(isPresented: $pasting) { PasteTeamsSheet(doc: doc) }
@@ -46,6 +48,9 @@ struct TeamsView: View {
     }
 
     // ---- the table ----
+    // in a narrow window the handicap and cart columns step aside so the team names keep their room
+    @State private var areaWidth: CGFloat = 0
+    private var compact: Bool { areaWidth > 0 && areaWidth < 980 }
     private let cols: [GridItem] = []
     private var table: some View {
         VStack(spacing: 0) {
@@ -90,11 +95,13 @@ struct TeamsView: View {
                 Text(name).font(header ? hf : .system(size: 13, weight: .semibold)).foregroundStyle(header ? dim : fg).lineLimit(1)
                 if !header && !players.isEmpty { Text(players).font(.system(size: 11)).foregroundStyle(dim).lineLimit(1) }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minWidth: 120, maxWidth: .infinity, alignment: .leading)
             Group {
                 Text(flight).frame(width: 54, alignment: .leading)
-                Text(hcp).frame(width: 54, alignment: .leading)
-                Text(cart).frame(width: 60, alignment: .leading)
+                if !compact {
+                    Text(hcp).frame(width: 54, alignment: .leading)
+                    Text(cart).frame(width: 60, alignment: .leading)
+                }
                 Text(start).frame(width: 66, alignment: .leading)
             }
             .font(header ? hf : .system(size: 13)).foregroundStyle(header ? dim : fg)

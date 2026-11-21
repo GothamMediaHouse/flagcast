@@ -29,6 +29,7 @@ private struct ScoresPage: View {
             if !doc.ev.format.isStableford {
                 Picker("", selection: Binding(get: { showMode }, set: { mode = $0 })) { Text("Net").tag("net"); Text("Gross").tag("gross") }
                     .pickerStyle(.segmented).frame(width: 170).colorScheme(.light)
+                    .background(Color.white.opacity(0.85), in: RoundedRectangle(cornerRadius: 9))   // readable on the photo
             }
         } content: {
             if doc.ev.flights.count > 1 {
@@ -81,14 +82,13 @@ private struct ScoreCard: View {
                 Text(line.played == 0 ? "–" : stab ? "\(line.score)" : Core.fmtPar(line.score)).font(FC.display(32))
                     .foregroundStyle(stab || line.played == 0 ? FC.ink : line.score < 0 ? FC.red : line.score > 0 ? FC.blue : FC.ink)
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 2) {
-                    ForEach(holes, id: \.n) { h in
-                        let r = line.card.first { $0.hole == h.n }
-                        VStack(spacing: 2) {
-                            Text("\(h.n)").font(.system(size: 9, weight: .semibold)).foregroundStyle(FC.muted)
-                            ScoreMark(v: r.flatMap { $0.done ? (mode == "gross" ? $0.gross : $0.net) : nil }, par: r?.par ?? h.par, size: 26)
-                        }
+            // every hole on the card: the front 9 over the back 9 (a single row hid the back nine off the edge)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 2), count: min(9, max(holes.count, 1))), spacing: 6) {
+                ForEach(holes, id: \.n) { h in
+                    let r = line.card.first { $0.hole == h.n }
+                    VStack(spacing: 2) {
+                        Text("\(h.n)").font(.system(size: 9, weight: .semibold)).foregroundStyle(FC.muted)
+                        ScoreMark(v: r.flatMap { $0.done ? (mode == "gross" ? $0.gross : $0.net) : nil }, par: r?.par ?? h.par, size: 26)
                     }
                 }
             }

@@ -9,16 +9,27 @@ enum Snapshots {
         guard let dir = ProcessInfo.processInfo.environment["FLAGCAST_SNAPSHOTS"] else { return }
         log("snapshots: start, windows:", NSApp.windows.count)
         if ProcessInfo.processInfo.environment["FLAGCAST_SNAPSHOT_LIGHT"] == "1" { NSApp.appearance = NSAppearance(named: .aqua) }
+        let env = ProcessInfo.processInfo.environment
+        // FLAGCAST_SNAPSHOT_OFFSCREEN=1: the window sits off the screen (nobody at the Mac sees it) and pictures are
+        // drawn from its layers; FLAGCAST_SNAPSHOT_EVENT picks the tournament; FLAGCAST_SNAPSHOT_WIDTHS="1000,1500"
+        // shoots every section at each window width
+        let offscreen = env["FLAGCAST_SNAPSHOT_OFFSCREEN"] == "1"
+        let widths = (env["FLAGCAST_SNAPSHOT_WIDTHS"] ?? "").split(separator: ",").compactMap { Double($0) }
         Task {
             try? await Task.sleep(for: .seconds(3))
+            if offscreen, let w = NSApp.windows.first(where: { $0.isVisible }) { w.setFrame(NSRect(x: -30000, y: -30000, width: widths.first ?? 1300, height: 860), display: true) }
             shot(dir, "home")
-            guard let first = model.events.first else { NSApp.terminate(nil); return }
+            guard let first = model.events.first(where: { $0.id == env["FLAGCAST_SNAPSHOT_EVENT"] }) ?? model.events.first else { NSApp.terminate(nil); return }
             model.selection = first.id
-            for s in Section.allCases {
-                model.section = s
-                try? await Task.sleep(for: .seconds(s == .setup ? 4 : 2.5))
-                shot(dir, s.rawValue)
+            for width in (widths.isEmpty ? [0] : widths) {
+                if width > 0, let w = NSApp.windows.first(where: { $0.isVisible }) { var f = w.frame; f.size.width = width; w.setFrame(f, display: true) }
+                for s in Section.allCases {
+                    model.section = s
+                    try? await Task.sleep(for: .seconds(s == .setup ? 4 : 2.5))
+                    shot(dir, width > 0 ? "\(s.rawValue)-\(Int(width))" : s.rawValue)
+                }
             }
+            if env["FLAGCAST_SNAPSHOT_ADMIN"] == "0" { NSApp.terminate(nil); return }
             // Admin (the test copy shows it; the local site lets any sign-in in)
             model.forceAdmin = true
             model.adminMode = true
@@ -37,10 +48,13 @@ enum Snapshots {
         guard let w = NSApp.windows.first(where: { $0.isVisible }), let frame = w.contentView?.superview ?? w.contentView else { log("snapshots: no window"); return }
         let url = URL(fileURLWithPath: dir).appendingPathComponent("\(name).png")
         // 1) the system screenshot of the window (needs Screen Recording); 2) the window's layers drawn by hand
-        let task = Process(); task.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-        task.arguments = ["-x", "-o", "-l", "\(w.windowNumber)", url.path]
-        try? task.run(); task.waitUntilExit()
-        if FileManager.default.fileExists(atPath: url.path) { log("snapshots: saved", name); return }
+        // (always, when the window is off the screen)
+        if ProcessInfo.processInfo.environment["FLAGCAST_SNAPSHOT_OFFSCREEN"] != "1" {
+            let task = Process(); task.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+            task.arguments = ["-x", "-o", "-l", "\(w.windowNumber)", url.path]
+            try? task.run(); task.waitUntilExit()
+            if FileManager.default.fileExists(atPath: url.path) { log("snapshots: saved", name); return }
+        }
         frame.layoutSubtreeIfNeeded(); frame.displayIfNeeded()
         guard let layer = frame.layer else { log("snapshots: no layer"); return }
         let scale = w.backingScaleFactor, size = frame.bounds.size
