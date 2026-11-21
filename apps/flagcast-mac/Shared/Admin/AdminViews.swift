@@ -62,7 +62,7 @@ struct ClubsView: View {
                         .background(Color(hex: 0xfff8e1), in: RoundedRectangle(cornerRadius: 12))
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: 0xecd58a)))
                     }
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 16)], spacing: 16) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 260, maximum: 420), spacing: 16)], spacing: 16) {
                         ForEach(shown) { c in ClubCard(club: c) { opened = c } }
                     }
                     if shown.isEmpty {
@@ -115,7 +115,7 @@ struct ClubCard: View {
             }
             .foregroundStyle(.white).padding(16)
         }
-        .frame(height: 262).clipShape(RoundedRectangle(cornerRadius: 14))
+        .frame(maxWidth: .infinity).frame(height: 262).clipShape(RoundedRectangle(cornerRadius: 14))
         .contentShape(Rectangle()).onTapGesture(count: 2, perform: open)
         .task(id: club.id) {
             image = await CourseImages.place([club.name, club.city].filter { !$0.isEmpty }.joined(separator: " "), key: club.id)
