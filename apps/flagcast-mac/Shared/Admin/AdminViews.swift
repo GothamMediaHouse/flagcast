@@ -1,180 +1,128 @@
 import SwiftUI
 
-@main
-struct AdminApp: App {
-    @State private var model = AdminModel()
-    @State private var nav = DeskNav()
-    @NSApplicationDelegateAdaptor(AdminDelegate.self) private var delegate
-
-    var body: some Scene {
-        WindowGroup("Flagcast Admin", id: "main") {
-            AdminRoot()
-                .environment(model).environment(nav)
-                .frame(minWidth: 1040, minHeight: 660)
-        }
-        .defaultSize(width: 1380, height: 900)
-        .commands {
-            CommandGroup(replacing: .newItem) {
-                Button("New Club…") { model.section = .clubs; model.newClub = true; model.openDesk = nil }.keyboardShortcut("n").disabled(!model.unlocked)
-            }
-            CommandGroup(replacing: .saveItem) {
-                Button("Save") { if let id = model.openDesk { Task { await model.docs[id]?.save() } } }.keyboardShortcut("s")
-                    .disabled(!(model.openDesk.flatMap { model.docs[$0] }?.dirty ?? false))
-            }
-            CommandGroup(after: .appSettings) { Button("Check for Updates…") { Updates.shared.check() } }
-            CommandMenu("Go") {
-                ForEach(Array(AdminSection.allCases.enumerated()), id: \.element) { i, s in
-                    Button(s.title) { model.section = s; model.openDesk = nil }.keyboardShortcut(KeyEquivalent(Character(String(i + 1))), modifiers: [.command, .option])
-                }
-                Divider()
-                ForEach(Array(Section.allCases.enumerated()), id: \.element) { i, s in
-                    Button("Tournament: \(s.title)") { nav.section = s }.keyboardShortcut(KeyEquivalent(Character(String(i + 1 == 10 ? 0 : i + 1))), modifiers: .command).disabled(model.openDesk == nil)
-                }
-                Divider()
-                Button("Refresh") { Task { try? await model.refresh(); await model.refreshEvents(); await model.refreshLog() } }.keyboardShortcut("r")
-                Button("Lock Admin") { model.lock() }.keyboardShortcut("l", modifiers: [.command, .control]).disabled(!model.unlocked)
-            }
-        }
-        Settings {
-            Form {
-                LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
-                Button("Check for Updates Now") { Updates.shared.check() }
-                Button("Forget the Admin Passcode on This Mac") { model.lock() }.disabled(!model.unlocked)
-            }.formStyle(.grouped).frame(width: 420, height: 180)
-        }
-    }
-}
-
-final class AdminDelegate: NSObject, NSApplicationDelegate {
-    func applicationDidFinishLaunching(_ n: Notification) { Updates.shared.start() }
-    func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { true }
-}
-
-struct AdminRoot: View {
-    @Environment(AdminModel.self) private var model
-    var body: some View {
-        if !model.unlocked { UnlockView() }
-        else {
-            @Bindable var model = model
-            NavigationSplitView {
-                AdminSidebar().navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 320)
-            } detail: {
-                Group {
-                    if let id = model.openDesk, let e = model.events.first(where: { $0.id == id }) {
-                        DeskView(doc: model.doc(e)).id(id)
-                    } else {
-                        switch model.section {
-                        case .clubs: ClubsView()
-                        case .tournaments: TournamentsView()
-                        case .screens: ScreenControlView()
-                        case .activity: ActivityView()
-                        }
-                    }
-                }
-                .overlay(alignment: .bottom) {
-                    if let n = model.notice {
-                        Text(n).font(.callout.weight(.medium)).padding(.horizontal, 14).padding(.vertical, 8).background(.regularMaterial, in: Capsule()).shadow(radius: 4, y: 2).padding(.bottom, 16)
-                    }
-                }
-                .animation(.snappy, value: model.notice)
-            }
-            .task { try? await model.refresh(); await model.refreshEvents() }
-            .alert("Flagcast Admin", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) { Button("OK") {} } message: { Text(model.error ?? "") }
-        }
-    }
-}
-
-struct AdminSidebar: View {
-    @Environment(AdminModel.self) private var model
-    @Environment(DeskNav.self) private var nav
-    var body: some View {
-        List(selection: Binding<String?>(get: { model.openDesk.map { "desk|\($0)|\(nav.section.rawValue)" } ?? "sec|\(model.section.rawValue)" }, set: { v in
-            guard let v else { return }
-            let p = v.split(separator: "|").map(String.init)
-            if p[0] == "sec", let s = AdminSection(rawValue: p[1]) { model.section = s; model.openDesk = nil }
-            if p[0] == "desk" { if model.openDesk != p[1] { nav.section = .setup }; model.openDesk = p[1]; if p.count > 2, let s = Section(rawValue: p[2]) { nav.section = s } }
-        })) {
-            SwiftUI.Section("Flagcast") {
-                ForEach(AdminSection.allCases) { s in
-                    Label(s.title, systemImage: s.icon).tag("sec|\(s.rawValue)")
-                        .badge(s == .clubs ? model.clubs.filter { $0.status == "pending" }.count : 0)
-                }
-            }
-            if !model.opened.isEmpty {
-                SwiftUI.Section("Open tournaments") {
-                    ForEach(model.opened, id: \.self) { id in
-                        if let e = model.events.first(where: { $0.id == id }) {
-                            let open = model.openDesk == id
-                            VStack(alignment: .leading, spacing: 1) { Text(e.name).fontWeight(.semibold).lineLimit(1); Text(e.clubName).font(.caption).foregroundStyle(.secondary) }
-                                .tag("desk|\(id)|\(open ? nav.section.rawValue : "setup")")
-                                .contextMenu { Button("Close") { model.opened.removeAll { $0 == id }; if open { model.openDesk = nil } } }
-                            if open { ForEach(Section.allCases) { s in Label(s.title, systemImage: s.icon).tag("desk|\(id)|\(s.rawValue)").padding(.leading, 14) } }
-                        }
-                    }
-                }
-            }
-        }
-        .listStyle(.sidebar)
-        .safeAreaInset(edge: .bottom) {
-            HStack { Image(systemName: "lock.open").foregroundStyle(.secondary); Text("Admin unlocked on this Mac").font(.caption).foregroundStyle(.secondary); Spacer()
-                Button("Lock") { model.lock() }.controlSize(.small) }
-                .padding(.horizontal, 12).padding(.vertical, 8).background(.bar)
-        }
-    }
-}
-
-struct UnlockView: View {
-    @Environment(AdminModel.self) private var model
-    @State private var pass = ""
-    @State private var err: String?
-    @State private var busy = false
-    var body: some View {
-        VStack(spacing: 14) {
-            Image(nsImage: NSApp.applicationIconImage).resizable().frame(width: 96, height: 96)
-            Text("Flagcast Admin").font(.largeTitle.bold())
-            Text("Enter the admin passcode. It’s kept in this Mac’s Keychain.").foregroundStyle(.secondary)
-            SecureField("Admin passcode", text: $pass).textFieldStyle(.roundedBorder).frame(width: 280).onSubmit(go)
-            Button("Unlock", action: go).keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent).disabled(pass.isEmpty || busy)
-            if let err { Text(err).foregroundStyle(.red) }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-    private func go() { busy = true; err = nil; Task { defer { busy = false }; do { try await model.unlock(pass); pass = "" } catch { err = error.localizedDescription } } }
-}
-
 // MARK: - clubs
 
+/// The header bar of the Admin pages (design/Admin.dc.html): title, counts, find, and the page's buttons.
+struct AdminHeader<Actions: View>: View {
+    var title: String
+    var sub: String
+    @Binding var search: String
+    var prompt: String
+    @ViewBuilder var actions: Actions
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(title).font(.system(size: 15, weight: .bold))
+            Text(sub).font(.system(size: 13)).foregroundStyle(FC.muted)
+            Spacer()
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(FC.muted)
+                TextField("", text: $search, prompt: Text(prompt)).textFieldStyle(.plain).font(.system(size: 13))
+            }
+            .padding(.horizontal, 10).frame(width: 220, height: 30)
+            .background(FC.card, in: RoundedRectangle(cornerRadius: 7)).overlay(RoundedRectangle(cornerRadius: 7).stroke(FC.line))
+            actions
+        }
+        .padding(.horizontal, 20).frame(height: 56)
+        .background(Color(light: 0xfbfcf9, dark: 0x131c17))
+        .overlay(alignment: .bottom) { Rectangle().fill(FC.line).frame(height: 1) }
+        .contentShape(Rectangle()).gesture(WindowDragGesture())
+    }
+}
+
+/// Clubs: the ones waiting for approval in a yellow banner, then every club as a photo card.
 struct ClubsView: View {
     @Environment(AdminModel.self) private var model
-    @State private var selection: String?
     @State private var search = ""
-    @State private var sort = [KeyPathComparator(\AdminClub.name)]
+    @State private var opened: AdminClub?
     private var shown: [AdminClub] {
         let q = search.lowercased()
-        return model.clubs.filter { q.isEmpty || $0.name.lowercased().contains(q) || $0.city.lowercased().contains(q) || $0.members.contains { $0.email.contains(q) } }.sorted(using: sort)
+        return model.clubs.filter { q.isEmpty || $0.name.lowercased().contains(q) || $0.city.lowercased().contains(q) || $0.members.contains { $0.email.contains(q) } }
     }
     var body: some View {
         @Bindable var model = model
-        Table(shown, selection: $selection, sortOrder: $sort) {
-            TableColumn("Club", value: \.name) { c in Text(c.name).fontWeight(.medium) }.width(min: 160, ideal: 240)
-            TableColumn("Status", value: \.status) { c in StatusPill(text: c.statusText, warn: c.status == "off") }.width(80)
-            TableColumn("Tournaments left", value: \.credits) { c in Text(c.creditsText).monospacedDigit() }.width(110)
-            TableColumn("Made") { c in Text("\(c.events.count)").monospacedDigit() }.width(50)
-            TableColumn("People") { c in Text(c.members.map(\.email).joined(separator: ", ")).foregroundStyle(.secondary).lineLimit(1) }.width(min: 160, ideal: 260)
-            TableColumn("Town", value: \.city) { c in Text(c.city).foregroundStyle(.secondary) }.width(min: 80, ideal: 120)
-            TableColumn("Paid") { c in Text(c.paid > 0 ? c.paid.formatted(.currency(code: "USD").precision(.fractionLength(0))) : "").monospacedDigit() }.width(70)
-        }
-        .searchable(text: $search, placement: .toolbar, prompt: "Find a club, town or email")
-        .inspector(isPresented: .constant(true)) {
-            Group {
-                if let c = model.clubs.first(where: { $0.id == selection }) { ClubInspector(club: c).id(c.id) }
-                else { ContentUnavailableView("Select a club", systemImage: "building.2", description: Text("\(model.clubs.count) clubs · \(model.clubs.filter { $0.status == "pending" }.count) waiting for approval")) }
+        VStack(spacing: 0) {
+            AdminHeader(title: "Clubs", sub: "\(model.clubs.count) club\(model.clubs.count == 1 ? "" : "s") · \(model.clubs.filter { $0.status == "pending" }.count) waiting", search: $search, prompt: "Find a club") {
+                Button { model.newClub = true } label: { Label("New club", systemImage: "plus") }.buttonStyle(GreenButton()).help("Set up a club")
             }
-            .inspectorColumnWidth(min: 360, ideal: 420, max: 560)
+            ScrollView {
+                VStack(spacing: 16) {
+                    ForEach(model.clubs.filter { $0.status == "pending" }) { c in
+                        HStack(spacing: 16) {
+                            Text("!").font(.system(size: 16, weight: .bold)).foregroundStyle(FC.onFlag).frame(width: 36, height: 36).background(FC.flag, in: Circle())
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(c.name) asked to join").font(.system(size: 14, weight: .bold)).foregroundStyle(Color(hex: 0x14201a))
+                                Text(["Signed up \(Date(timeIntervalSince1970: c.created / 1000).formatted(.relative(presentation: .named)))", c.city.isEmpty ? nil : c.city, c.by.isEmpty ? nil : c.by].compactMap { $0 }.joined(separator: " · "))
+                                    .font(.system(size: 13)).foregroundStyle(Color(hex: 0x56625a))
+                            }
+                            Spacer()
+                            Button("Decline") { Task { await model.act("off", ["club": c.id], done: "Declined.") } }.buttonStyle(PlainCardButton())
+                            Button("Approve") { Task { await model.act("approve", ["club": c.id], done: "Approved. They have an email.") } }.buttonStyle(GreenButton())
+                        }
+                        .padding(.horizontal, 16).padding(.vertical, 12)
+                        .background(Color(hex: 0xfff8e1), in: RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: 0xecd58a)))
+                    }
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 16)], spacing: 16) {
+                        ForEach(shown) { c in ClubCard(club: c) { opened = c } }
+                    }
+                    if shown.isEmpty {
+                        VStack(spacing: 8) { Image(systemName: "building.2").font(.system(size: 30)).foregroundStyle(FC.muted); Text(model.clubs.isEmpty ? "No clubs yet" : "No club matches").font(.headline) }
+                            .frame(maxWidth: .infinity, minHeight: 220)
+                    }
+                }
+                .padding(.horizontal, 20).padding(.vertical, 18)
+            }
         }
-        .toolbar { ToolbarItem { Button { model.newClub = true } label: { Label("New Club", systemImage: "plus") }.help("Set up a club (⌘N)") } }
+        .background(FC.paper)
         .sheet(isPresented: $model.newClub) { NewClubSheet() }
-        .navigationTitle("Clubs")
+        .sheet(item: $opened) { c in
+            VStack(spacing: 0) {
+                HStack { Text(c.name).font(FC.display(30)); Spacer(); Button("Done") { opened = nil }.buttonStyle(GreenButton()).keyboardShortcut(.defaultAction) }.padding(16)
+                ClubInspector(club: model.clubs.first { $0.id == c.id } ?? c).id(c.id)
+            }
+            .frame(width: 560, height: 700).background(FC.card)
+        }
+    }
+}
+
+/// One club as a full-photo card: status, name and town, tournaments left / made / staff, +1, +5, Open club.
+struct ClubCard: View {
+    @Environment(AdminModel.self) private var model
+    let club: AdminClub
+    var open: () -> Void
+    @State private var image: NSImage?
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            CourseHeroImage(image: image)
+            LinearGradient(stops: [.init(color: FC.scrim.opacity(0.92), location: 0), .init(color: FC.scrim.opacity(0.35), location: 0.55), .init(color: FC.scrim.opacity(0.1), location: 1)], startPoint: .bottom, endPoint: .top)
+            Text(club.statusText.uppercased()).font(.system(size: 11, weight: .bold)).tracking(0.6).padding(.horizontal, 7).padding(.vertical, 3)
+                .background(club.status == "active" ? FC.flag : club.status == "pending" ? Color.white : FC.red, in: RoundedRectangle(cornerRadius: 4))
+                .foregroundStyle(club.status == "off" ? .white : FC.onFlag).padding(12)
+            VStack(alignment: .leading, spacing: 10) {
+                Spacer()
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(club.name).font(FC.display(28)).lineLimit(1).minimumScaleFactor(0.6)
+                    Text(club.city.isEmpty ? "No town on file" : club.city).font(.system(size: 12)).foregroundStyle(Color(hex: 0xdfe8e1))
+                }
+                HStack(spacing: 16) {
+                    stat(club.creditsText, "left"); stat("\(club.events.count)", "tournaments"); stat("\(club.members.count)", "staff")
+                }
+                HStack(spacing: 6) {
+                    Button("+1") { Task { await model.act("credits", ["club": club.id, "add": 1]) } }.buttonStyle(GlassButton()).disabled(club.credits < 0)
+                    Button("+5") { Task { await model.act("credits", ["club": club.id, "add": 5]) } }.buttonStyle(GlassButton()).disabled(club.credits < 0)
+                    Button("Open club", action: open).buttonStyle(WhiteButton()).frame(maxWidth: .infinity)
+                }
+            }
+            .foregroundStyle(.white).padding(16)
+        }
+        .frame(height: 262).clipShape(RoundedRectangle(cornerRadius: 14))
+        .contentShape(Rectangle()).onTapGesture(count: 2, perform: open)
+        .task(id: club.id) {
+            image = await CourseImages.place([club.name, club.city].filter { !$0.isEmpty }.joined(separator: " "), key: club.id)
+        }
+    }
+    private func stat(_ v: String, _ l: String) -> some View {
+        (Text(v).font(.system(size: 15, weight: .bold)).foregroundStyle(.white) + Text(" \(l)").font(.system(size: 12)).foregroundStyle(Color(hex: 0xcfdbd2)))
     }
 }
 
@@ -304,16 +252,18 @@ struct TournamentsView: View {
         .contextMenu(forSelectionType: String.self) { ids in
             if let id = ids.first, let e = model.events.first(where: { $0.id == id }) { menu(e) }
         } primaryAction: { ids in if let id = ids.first { model.open(id) } }
-        .searchable(text: $search, placement: .toolbar, prompt: "Find a tournament or club")
-        .toolbar {
-            ToolbarItemGroup {
-                Toggle("Show Hidden and Archived", isOn: $showHidden)
-                Button { Task { await model.refreshEvents() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }
-                if let id = selection { Button { model.open(id) } label: { Label("Open", systemImage: "arrow.up.forward.app") }.help("Open in the desk (double-click)") }
+        .scrollContentBackground(.hidden)
+        .background(FC.card).clipShape(RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(FC.line))
+        .padding(20)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            AdminHeader(title: "Tournaments", sub: "\(model.events.count) on every club’s list", search: $search, prompt: "Find a tournament or club") {
+                Toggle("Hidden and archived", isOn: $showHidden).toggleStyle(.checkbox)
+                Button { Task { await model.refreshEvents() } } label: { Image(systemName: "arrow.clockwise") }.buttonStyle(PlainCardButton())
+                if let id = selection { Button("Open in the desk") { model.open(id) }.buttonStyle(GreenButton()) }
             }
         }
+        .background(FC.paper)
         .sheet(item: $moving) { e in MoveSheet(event: e) }
-        .navigationTitle("Tournaments")
         .task { await model.refreshEvents() }
     }
     @ViewBuilder private func menu(_ e: AdminEvent) -> some View {
@@ -354,19 +304,17 @@ struct ActivityView: View {
             TableColumn("Club") { l in Text(clubName(l.club)).foregroundStyle(.secondary) }.width(min: 100, ideal: 160)
             TableColumn("What") { l in Text(l.what) }
         }
-        .searchable(text: $search, placement: .toolbar, prompt: "Find in the activity")
-        .toolbar { Button { Task { await model.refreshLog() } } label: { Label("Refresh", systemImage: "arrow.clockwise") } }
-        .navigationTitle("Activity")
+        .scrollContentBackground(.hidden)
+        .background(FC.card).clipShape(RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(FC.line))
+        .padding(20)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            AdminHeader(title: "Activity", sub: "Everything that happened, newest first", search: $search, prompt: "Find in the activity") {
+                Button { Task { await model.refreshLog() } } label: { Image(systemName: "arrow.clockwise") }.buttonStyle(PlainCardButton())
+            }
+        }
+        .background(FC.paper)
         .task { await model.refreshLog() }
     }
     private func clubName(_ id: String) -> String { model.clubs.first { $0.id == id }?.name ?? "" }
 }
 
-struct StatusPill: View {
-    var text: String, warn = false
-    var body: some View {
-        Text(text.uppercased()).font(.caption2.weight(.bold)).padding(.horizontal, 6).padding(.vertical, 2)
-            .background(warn ? Color.red : Color.fcFlag, in: RoundedRectangle(cornerRadius: 4)).foregroundStyle(warn ? .white : .black)
-    }
-}
-struct ClubRequest { var name = ""; var contact = ""; var phone = ""; var city = "" }

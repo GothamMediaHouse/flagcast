@@ -17,10 +17,18 @@ struct HomeView: View {
     @State private var invite = ""
     @State private var inviteErr: String?
     @FocusState private var focus: Field?
+    @State private var picture: CoursePicture?
     enum Field { case email, code, new, add }
 
     var body: some View {
-        Form {
+        PhotoPage(image: picture?.image, height: 290, section: "Home", titleHeight: 186) {
+            if model.signedIn { Button("Sign out") { Task { await model.signOut() } }.buttonStyle(GlassButton()) }
+            Button { focus = .new } label: { Label("New tournament", systemImage: "plus") }.buttonStyle(WhiteButton()).disabled(!(model.me?.club?.canMake ?? false))
+        } title: {
+            HeroTitle(kicker: model.me?.club.map { $0.stateLine } ?? "Flagcast Manager", title: model.me?.club?.name ?? "Welcome to Flagcast", size: 64,
+                      sub: model.me?.email ?? "Sign in with your club email to see your tournaments.")
+        } content: {
+            CardForm {
             if !model.signedIn || model.me == nil { signIn }
             else if let club = model.me?.club { clubSection(club) }
             else { requestClub }
@@ -33,11 +41,16 @@ struct HomeView: View {
                 if let addErr { Text(addErr).foregroundStyle(.red).font(.callout) }
             } header: { Text("Add a tournament you already have") } footer: { Text("Paste its desk link. It ends in a long key after a # sign.").foregroundStyle(.secondary) }
         }
-        .formStyle(.grouped)
-        .navigationTitle(model.me?.club?.name ?? "Flagcast Manager")
+            }
         .onChange(of: model.focusNew) { _, on in if on { focus = .new; model.focusNew = false } }
         .onChange(of: model.focusAdd) { _, on in if on { focus = .add; model.focusAdd = false } }
         .onAppear { if model.focusNew { focus = .new; model.focusNew = false } }
+        .task(id: model.events.first?.id) {
+            // the photo: the course of the club's first tournament
+            guard let e = model.events.first, let d = model.doc(e.id) else { return }
+            if !d.loaded { await d.load() }
+            d.picture.load(d.ev, id: d.id); picture = d.picture
+        }
     }
 
     @ViewBuilder private var signIn: some View {

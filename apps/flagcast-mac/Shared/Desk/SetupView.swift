@@ -1,69 +1,173 @@
 import SwiftUI
 
-/// Setup: the tournament, its format and the course (Find the course, holes, tees).
+/// Setup (design/Setup.dc.html): the course over the aerial photo; Tournament and Tees cards on the left, the
+/// scorecard (front and back nine) on the right. The nine not in play is dimmed.
 struct SetupView: View {
     @Bindable var doc: DeskDoc
-    @Environment(DeskNav.self) private var model
+    @Environment(DeskNav.self) private var nav
     @State private var finding = false
 
     var body: some View {
-        Form {
-            SwiftUI.Section("Tournament") {
-                TextField("Name", text: $doc.ev.name)
-                TextField("Club", text: $doc.ev.club)
-                DayPicker(text: $doc.ev.date)
-                TextField("Course name", text: $doc.ev.course.name)
+        DeskPage(doc: doc, section: .setup, height: 300, titleHeight: 192) {
+            Button("Find the course…") { finding = true }.buttonStyle(GlassButton())
+            Button("Map the holes") { nav.section = .map }.buttonStyle(GlassButton())
+        } title: {
+            HeroTitle(kicker: "COURSE" + (doc.ev.club.isEmpty ? "" : " · \(doc.ev.club)"), title: doc.ev.course.name.isEmpty ? "Pick the course" : doc.ev.course.name, size: 56)
+        } content: {
+            HStack(alignment: .top, spacing: 16) {
+                ScrollView {
+                    VStack(spacing: 14) { tournamentCard; teesCard }.padding(.bottom, 18)
+                }
+                .scrollIndicators(.never)
+                .frame(width: 320)
+                ScrollView {
+                    VStack(spacing: 14) { scorecard; extras }.padding(.bottom, 18)
+                }
+                .scrollIndicators(.never)
             }
-            SwiftUI.Section {
-                Picker("Format", selection: $doc.ev.format.type) {
+            .padding(.horizontal, 20)
+        }
+        .sheet(isPresented: $finding) { FindCourseSheet(doc: doc) }
+    }
+
+    // ---- left: tournament ----
+    private var tournamentCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            CardTitle("Tournament")
+            field("Name") { TextField("", text: $doc.ev.name).textFieldStyle(.roundedBorder) }
+            field("Club") { TextField("", text: $doc.ev.club).textFieldStyle(.roundedBorder) }
+            field("Date") { DayPicker(text: $doc.ev.date, label: false) }
+            field("Format") {
+                Picker("", selection: $doc.ev.format.type) {
                     Text("Best ball (teams)").tag("bestball"); Text("Scramble (one team score)").tag("scramble")
                     Text("Stroke play (each player)").tag("stroke"); Text("Stableford points").tag("stableford")
-                }
-                if doc.ev.format.type == "bestball" || doc.ev.format.type == "stableford" {
-                    Picker("Best balls that count on each hole", selection: $doc.ev.format.count) { ForEach(1...3, id: \.self) { Text("\($0)").tag($0) } }
-                }
-                LabeledContent("Handicap allowance") {
-                    HStack { TextField("", value: $doc.ev.format.allowance, format: .number).frame(width: 60).multilineTextAlignment(.trailing); Text("%").foregroundStyle(.secondary)
-                        Stepper("", value: $doc.ev.format.allowance, in: 0...100, step: 5).labelsHidden() }
-                }
-                Picker("Holes", selection: $doc.ev.format.nine) { Text("18 holes").tag(""); Text("Front 9 (holes 1–9)").tag("front"); Text("Back 9 (holes 10–18)").tag("back") }
-                Picker("Leaderboard shows", selection: $doc.ev.format.show) { Text("Net scores").tag("net"); Text("Gross scores").tag("gross") }
-                TextField("Flights", text: Binding(get: { doc.ev.flights.joined(separator: ", ") },
-                                                   set: { doc.ev.flights = $0.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty } }),
-                          prompt: Text("A, B, C"))
-                Toggle("Side games on the scorecard (skins, Nassau and birdies)", isOn: $doc.ev.sideGames)
-            } header: { Text("Format") } footer: {
-                Help("Handicaps on the Teams page are each player’s course handicap. The allowance is applied to it, and strokes fall on the holes by stroke index. A picked-up ball counts as net double bogey. Ties are broken on the back 9, 6, 3 and last hole.")
+                }.labelsHidden()
             }
-            SwiftUI.Section {
-                HStack {
-                    Button { finding = true } label: { Label("Find the Course…", systemImage: "magnifyingglass") }
-                    Button("Fill a Standard Par 72") { doc.ev.course.holes = Core.defaultHoles() }
-                    Spacer()
-                    Button { model.section = .map } label: { Label(doc.ev.map.holes.isEmpty ? "Map the Course…" : "Course Map (\(doc.ev.map.holes.count) of 18 holes)", systemImage: "map") }
-                }
-                HoleGrid(holes: $doc.ev.course.holes, playing: Set(doc.ev.playHoles))
-            } header: { Text("Course") } footer: {
-                Help("Find the course fills in par, yardage, stroke index and every set of tees with its rating and slope. Stroke index (SI) 1 is the hardest hole: check against the club’s scorecard.")
+            if doc.ev.format.type == "bestball" || doc.ev.format.type == "stableford" {
+                field("Best balls that count on each hole") { Picker("", selection: $doc.ev.format.count) { ForEach(1...3, id: \.self) { Text("\($0)").tag($0) } }.pickerStyle(.segmented).labelsHidden() }
             }
-            SwiftUI.Section {
-                TeeTable(tees: $doc.ev.course.tees, par: doc.ev.course.par)
-            } header: { Text("Tees (for GHIN handicaps)") } footer: {
-                Help("Add each set of tees with its course rating and slope. Give players their Handicap Index on the Teams page and Flagcast works out each course handicap: Index × Slope ÷ 113 + (Rating − Par).")
+            field("Holes") {
+                Picker("", selection: $doc.ev.format.nine) { Text("All 18").tag(""); Text("Front 9").tag("front"); Text("Back 9").tag("back") }.pickerStyle(.segmented).labelsHidden()
             }
         }
-        .formStyle(.grouped)
-        .sheet(isPresented: $finding) { FindCourseSheet(doc: doc) }
+        .raisedCard(padding: 16)
+    }
+    private func field<C: View>(_ label: String, @ViewBuilder _ c: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 4) { Text(label).font(.system(size: 12, weight: .semibold)).foregroundStyle(FC.muted); c() }
+    }
+
+    // ---- left: tees ----
+    private var teesCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack { CardTitle("Tees"); Spacer()
+                Button("+ Add tees") { doc.ev.course.tees.append(Tee(name: ["Blue", "White", "Gold", "Red"][min(doc.ev.course.tees.count, 3)], slope: 113, rating: 72)) }
+                    .buttonStyle(.plain).font(.system(size: 12, weight: .semibold)).foregroundStyle(FC.link) }
+            HStack { Text("Tees"); Spacer(); Text("Rating").frame(width: 56, alignment: .trailing); Text("Slope").frame(width: 48, alignment: .trailing); Color.clear.frame(width: 16) }
+                .font(.system(size: 11, weight: .bold)).foregroundStyle(FC.muted)
+            if doc.ev.course.tees.isEmpty { Text("No tees yet. Find the course, or add them to use Handicap Index.").font(.callout).foregroundStyle(FC.muted).padding(.vertical, 6) }
+            ForEach($doc.ev.course.tees) { $t in
+                Divider().overlay(FC.hairline)
+                HStack(spacing: 8) {
+                    Circle().fill(swatch(t.name)).frame(width: 12, height: 12).overlay(Circle().stroke(.black.opacity(0.25)))
+                    TextField("", text: $t.name).textFieldStyle(.plain).font(.system(size: 13, weight: .medium))
+                    TextField("", value: $t.rating, format: .number.precision(.fractionLength(1))).textFieldStyle(.plain).multilineTextAlignment(.trailing).frame(width: 56)
+                    TextField("", value: $t.slope, format: .number).textFieldStyle(.plain).multilineTextAlignment(.trailing).frame(width: 48)
+                    Button { doc.ev.course.tees.removeAll { $0.id == t.id } } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(FC.muted.opacity(0.6)) }.buttonStyle(.plain).frame(width: 16)
+                }
+                .font(.system(size: 13)).padding(.vertical, 3)
+            }
+            Help("Course handicap = Index × Slope ÷ 113 + (Rating − Par).").padding(.top, 4)
+        }
+        .raisedCard(padding: 16)
+    }
+    private func swatch(_ name: String) -> Color {
+        let n = name.lowercased()
+        for (k, c) in [("black", Color.black), ("blue", Color(hex: 0x1f5aa6)), ("white", Color.white), ("gold", Color(hex: 0xd4a72c)), ("yellow", Color(hex: 0xe8c547)),
+                       ("green", Color(hex: 0x2f8a57)), ("red", Color(hex: 0xc8312b)), ("orange", Color(hex: 0xe07b28)), ("silver", Color.gray), ("copper", Color(hex: 0xb06a3b))] where n.hasPrefix(k) { return c }
+        return FC.paper2
+    }
+
+    // ---- right: the scorecard ----
+    private var scorecard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack { CardTitle("Scorecard"); Spacer()
+                Button("Fill a standard par 72") { doc.ev.course.holes = Core.defaultHoles() }.buttonStyle(.plain).font(.system(size: 12, weight: .semibold)).foregroundStyle(FC.link) }
+            nine("FRONT 9", 0..<9, playing: doc.ev.format.nine != "back")
+            nine("BACK 9", 9..<18, playing: doc.ev.format.nine != "front")
+            Help("Stroke index (SI) 1 is the hardest hole. Check the numbers against the club’s scorecard.")
+        }
+        .raisedCard(padding: 18)
+    }
+    private func nine(_ title: String, _ r: Range<Int>, playing: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) { Text(title).font(.system(size: 12, weight: .bold)).tracking(1).foregroundStyle(FC.muted)
+                if !playing { Text("not in play").font(.system(size: 12)).foregroundStyle(FC.muted) } }
+            Grid(horizontalSpacing: 0, verticalSpacing: 0) {
+                GridRow {
+                    cellLabel("Hole", header: true)
+                    ForEach(r, id: \.self) { i in Text("\(doc.ev.course.holes[i].n)").font(FC.display(16)).foregroundStyle(FC.onGreen).frame(maxWidth: .infinity, minHeight: 30).background(FC.green) }
+                    Text(r.lowerBound == 0 ? "OUT" : "IN").font(FC.display(16)).foregroundStyle(FC.onGreen).frame(width: 56, height: 30).background(FC.green)
+                }
+                gridRow("Par", r, \.par, shade: true)
+                gridRow("Yards", r, \.yds, shade: false)
+                gridRow("SI", r, \.hcp, shade: false, total: false)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(FC.line))
+        }
+        .opacity(playing ? 1 : 0.4)
+    }
+    private func cellLabel(_ t: String, header: Bool = false) -> some View {
+        Text(t).font(.system(size: 12, weight: .semibold)).foregroundStyle(header ? FC.onGreen : FC.muted)
+            .frame(width: 64, alignment: .leading).padding(.leading, 10).frame(minHeight: 30).background(header ? FC.green : FC.head)
+    }
+    private func gridRow(_ label: String, _ r: Range<Int>, _ k: WritableKeyPath<Hole, Int>, shade: Bool, total: Bool = true) -> some View {
+        GridRow {
+            cellLabel(label)
+            ForEach(r, id: \.self) { i in
+                TextField("", value: Binding(get: { doc.ev.course.holes[i][keyPath: k] }, set: { doc.ev.course.holes[i][keyPath: k] = $0 }), format: .number)
+                    .textFieldStyle(.plain).multilineTextAlignment(.center).font(.system(size: 14, weight: label == "Par" ? .semibold : .regular).monospacedDigit())
+                    .frame(maxWidth: .infinity, minHeight: 32).background(shade ? FC.paper2.opacity(0.6) : FC.card)
+                    .overlay(alignment: .leading) { Rectangle().fill(FC.hairline).frame(width: 1) }
+            }
+            Text(total ? "\(r.reduce(0) { $0 + doc.ev.course.holes[$1][keyPath: k] })" : "").font(.system(size: 14, weight: .bold).monospacedDigit())
+                .frame(width: 56, height: 32).background(FC.head)
+        }
+        .overlay(alignment: .top) { Rectangle().fill(FC.hairline).frame(height: 1) }
+    }
+
+    // ---- right, below: the rest of the format ----
+    private var extras: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            CardTitle("Scoring")
+            HStack(spacing: 18) {
+                field("Handicap allowance") {
+                    HStack { TextField("", value: $doc.ev.format.allowance, format: .number).textFieldStyle(.roundedBorder).frame(width: 60); Text("%").foregroundStyle(FC.muted)
+                        Stepper("", value: $doc.ev.format.allowance, in: 0...100, step: 5).labelsHidden() }
+                }
+                field("Leaderboard shows") { Picker("", selection: $doc.ev.format.show) { Text("Net").tag("net"); Text("Gross").tag("gross") }.pickerStyle(.segmented).labelsHidden().frame(width: 140) }
+                field("Flights") {
+                    TextField("", text: Binding(get: { doc.ev.flights.joined(separator: ", ") }, set: { doc.ev.flights = $0.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty } }), prompt: Text("A, B, C"))
+                        .textFieldStyle(.roundedBorder)
+                }
+            }
+            Toggle("Side games on the scorecard (skins, Nassau and birdies)", isOn: $doc.ev.sideGames)
+            Help("Handicaps are each player’s course handicap; the allowance is applied to it and strokes fall by stroke index. A picked-up ball counts as net double bogey. Ties are broken on the back 9, 6, 3 and last hole.")
+        }
+        .raisedCard(padding: 18)
     }
 }
 
 /// A yyyy-mm-dd date (or none).
 struct DayPicker: View {
     @Binding var text: String
+    var label = true
     var body: some View {
+        if label { LabeledContent("Date") { picker } } else { picker }
+    }
+    private var picker: some View {
         let date = ISO8601DateFormatter.day.date(from: text)
-        LabeledContent("Date") {
-            HStack {
+        return HStack {
                 if let date {
                     DatePicker("", selection: Binding(get: { date }, set: { text = ISO8601DateFormatter.day.string(from: $0) }), displayedComponents: .date).labelsHidden()
                     Button("Clear") { text = "" }.buttonStyle(.borderless)
@@ -71,7 +175,6 @@ struct DayPicker: View {
                     Button("Set Date") { text = ISO8601DateFormatter.day.string(from: Date()) }
                 }
             }
-        }
     }
 }
 

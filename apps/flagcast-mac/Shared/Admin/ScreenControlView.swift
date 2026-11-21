@@ -77,8 +77,15 @@ struct ScreenControlView: View {
             }
         }
         .formStyle(.grouped)
-        .navigationTitle("Screens and Phones")
-        .toolbar { Button { Task { await model.refreshEvents() } } label: { Label("Refresh", systemImage: "arrow.clockwise") } }
+        .scrollContentBackground(.hidden)
+        .background(FC.card).clipShape(RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(FC.line))
+        .padding(20)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            AdminHeader(title: "Screens & phones", sub: "Any club’s screens and every player’s phone", search: .constant(""), prompt: "") {
+                Button { Task { await model.refreshEvents() } } label: { Image(systemName: "arrow.clockwise") }.buttonStyle(PlainCardButton())
+            }
+        }
+        .background(FC.paper)
         .task { while !Task.isCancelled { await model.refreshEvents(); try? await Task.sleep(for: .seconds(15)) } }
     }
     private func take(_ e: AdminEvent, _ b: [String: Any]) { var d = b; d["op"] = "take"; Task { await model.day(e.id, d, done: b["kind"] as? String == "clear" ? "Back to the playlists." : "On every screen now.") } }

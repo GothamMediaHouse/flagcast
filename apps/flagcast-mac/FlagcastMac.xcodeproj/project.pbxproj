@@ -11,14 +11,8 @@
 		FAF5652DA53260BBF9075DE6 = {isa = PBXBuildFile; fileRef = 726CB379D3AA7CCFAD50641C; };
 		D48657414165AB11C472641F = {isa = PBXBuildFile; fileRef = E74CD2FD1A07E59432C86CAE; };
 		1C3F74AEB3DC3AD609D32AF1 = {isa = PBXBuildFile; fileRef = 379A05E62FF6D64D18D6F506; };
-		AD8B49FE0F9A5FC36383CE74 = {isa = PBXBuildFile; fileRef = F4D57C4521017BE73D8F5E1B; };
-		E94082227F2DB132976B18B0 = {isa = PBXBuildFile; fileRef = 726CB379D3AA7CCFAD50641C; };
-		98516A33E3F060877C24F7B8 = {isa = PBXBuildFile; fileRef = E74CD2FD1A07E59432C86CAE; };
-		E78F6FFC1A5F842F4EA0F7A1 = {isa = PBXBuildFile; fileRef = 379A05E62FF6D64D18D6F506; };
 		061D24816F2C6B76D185DE67 = {isa = PBXBuildFile; fileRef = 85A512E66350D728E9EB3D75; };
 		5644135018E0DF937F115E10 = {isa = PBXBuildFile; fileRef = 85A512E66350D728E9EB3D75; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		F94CF8FE44DB00C6DDD787FA = {isa = PBXBuildFile; fileRef = 85A512E66350D728E9EB3D75; };
-		8C872051079F8F7900AE8B31 = {isa = PBXBuildFile; fileRef = 85A512E66350D728E9EB3D75; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -113,10 +107,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				AD8B49FE0F9A5FC36383CE74,
-				E94082227F2DB132976B18B0,
-				98516A33E3F060877C24F7B8,
-				E78F6FFC1A5F842F4EA0F7A1,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -124,7 +114,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F94CF8FE44DB00C6DDD787FA,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -141,7 +130,6 @@
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				8C872051079F8F7900AE8B31,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -215,7 +203,6 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				9694F55A4D95B7BDB294D8E1,
 				A2EFA9212CB75714A2869963,
 			);
 			name = Admin;
@@ -257,7 +244,7 @@
 				CLANG_ENABLE_OBJC_ARC = YES;
 				COPY_PHASE_STRIP = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				SDKROOT = macosx;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_TESTABILITY = YES;
@@ -276,7 +263,7 @@
 				CLANG_ENABLE_OBJC_ARC = YES;
 				COPY_PHASE_STRIP = NO;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				SDKROOT = macosx;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ONLY_ACTIVE_ARCH = NO;
@@ -288,6 +275,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -303,8 +291,8 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 2.0.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 2.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.manager.debug;
 				PRODUCT_NAME = "Flagcast Manager";
 				SDKROOT = macosx;
@@ -317,6 +305,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -332,8 +321,8 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 2.0.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 2.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.manager;
 				PRODUCT_NAME = "Flagcast Manager";
 				SDKROOT = macosx;
@@ -346,6 +335,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -361,8 +351,8 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 2.0.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 2.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.admin.debug;
 				PRODUCT_NAME = "Flagcast Admin";
 				SDKROOT = macosx;
@@ -375,6 +365,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
@@ -390,8 +381,8 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				MARKETING_VERSION = 2.0.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
+				MARKETING_VERSION = 2.1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.admin;
 				PRODUCT_NAME = "Flagcast Admin";
 				SDKROOT = macosx;

@@ -19,7 +19,15 @@ enum Snapshots {
                 try? await Task.sleep(for: .seconds(s == .setup ? 4 : 2.5))
                 shot(dir, s.rawValue)
             }
-            if let name = ProcessInfo.processInfo.environment["FLAGCAST_SNAPSHOT_DARK"], name == "1" { NSApp.appearance = NSAppearance(named: .darkAqua); model.section = .teams; try? await Task.sleep(for: .seconds(2)); shot(dir, "teams-dark") }
+            // Admin (the test copy shows it; the local site lets any sign-in in)
+            model.forceAdmin = true
+            for a in AdminSection.allCases { model.adminSection = a; try? await Task.sleep(for: .seconds(a == .clubs ? 5 : 3)); shot(dir, "admin-\(a.rawValue)") }
+            model.adminSection = nil
+            // dark mode
+            NSApp.appearance = NSAppearance(named: .darkAqua)
+            for s in [Section.overview, .setup, .teams, .scores] { model.section = s; try? await Task.sleep(for: .seconds(2.5)); shot(dir, "\(s.rawValue)-dark") }
+            model.selection = nil; try? await Task.sleep(for: .seconds(2.5)); shot(dir, "home-dark")
+            model.adminSection = .clubs; try? await Task.sleep(for: .seconds(3)); shot(dir, "admin-clubs-dark")
             NSApp.terminate(nil)
         }
     }

@@ -5,12 +5,15 @@ struct ManagerApp: App {
     @State private var model = AppModel()
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
 
+    init() { FC.registerFonts() }
+
     var body: some Scene {
         WindowGroup("Flagcast Manager", id: "main") {
             RootView()
                 .environment(model)
                 .environment(model.nav)
-                .frame(minWidth: 980, minHeight: 640)
+                .environment(model.admin)
+                .frame(minWidth: 1100, minHeight: 700)
                 .task {
                     await model.refresh()
                     #if DEBUG
@@ -19,7 +22,8 @@ struct ManagerApp: App {
                     #endif
                 }
         }
-        .defaultSize(width: 1320, height: 880)
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 1380, height: 880)
         .commands { ManagerCommands(model: model) }
 
         Settings { SettingsView().environment(model) }
@@ -44,9 +48,9 @@ struct ManagerCommands: Commands {
         }
         CommandGroup(after: .appSettings) { Button("Check for Updates…") { Updates.shared.check() } }
         CommandMenu("Tournament") {
-            ForEach(Array(Section.allCases.enumerated()), id: \.element) { i, s in
-                Button(s.title) { model.section = s }.keyboardShortcut(KeyEquivalent(Character(String(i + 1 == 10 ? 0 : i + 1))), modifiers: .command)
-                    .disabled(model.selection == nil)
+            ForEach(Section.allCases) { s in
+                if let k = s.key { Button(s.title) { model.section = s }.keyboardShortcut(k, modifiers: .command).disabled(model.selection == nil) }
+                else { Button(s.title) { model.section = s }.disabled(model.selection == nil) }
                 if s == .report { Divider() }
             }
             Divider()
@@ -55,116 +59,203 @@ struct ManagerCommands: Commands {
             }.keyboardShortcut("l", modifiers: [.command, .shift]).disabled(model.current == nil)
             Button("Reload from Flagcast") { if let d = model.current { Task { await d.load() } } }.keyboardShortcut("r").disabled(model.current == nil)
             Divider()
+            Button("Open the Board") { if let d = model.current { NSWorkspace.shared.open(d.boardURL) } }.disabled(model.current == nil)
             Button("Open Live Leaderboard") { if let d = model.current { NSWorkspace.shared.open(d.liveURL) } }.disabled(model.current == nil)
             Button("All Tournaments") { model.selection = nil }.keyboardShortcut("h", modifiers: [.command, .shift])
         }
-        CommandGroup(replacing: .help) {
-            Button("Flagcast Help") { NSWorkspace.shared.open(URL(string: "https://flagcast.app")!) }
-        }
+        CommandGroup(replacing: .help) { Button("Flagcast Help") { NSWorkspace.shared.open(URL(string: "https://flagcast.app")!) } }
     }
 }
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
     var body: some View {
-        @Bindable var model = model
-        NavigationSplitView {
-            Sidebar()
-                .navigationSplitViewColumnWidth(min: 220, ideal: 250, max: 320)
-        } detail: {
-            if let d = model.current {
-                DeskView(doc: d).id(d.id)
-            } else {
-                HomeView()
+        HStack(spacing: 0) {
+            ManagerSidebar().frame(width: 248)
+            Group {
+                if let a = model.adminSection { AdminPage(section: a) }
+                else if let d = model.current { DeskView(doc: d).id(d.id) } else { HomeView() }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .ignoresSafeArea()
+        .background(FC.paper)
         .alert("Flagcast", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
             Button("OK") { model.error = nil }
         } message: { Text(model.error ?? "") }
     }
 }
 
-// MARK: - sidebar
+// MARK: - the green sidebar (design/Sidebar.dc.html)
 
-struct Sidebar: View {
+struct ManagerSidebar: View {
     @Environment(AppModel.self) private var model
+    @Environment(DeskNav.self) private var nav
     @State private var confirmRemove: EventRef?
 
     var body: some View {
-        @Bindable var model = model
-        List(selection: Binding<String?>(get: { model.selection.map { "\($0)|\(model.section.rawValue)" } ?? "home" },
-                                         set: { v in
-            guard let v, v != "home" else { model.selection = nil; return }
-            let p = v.split(separator: "|").map(String.init)
-            if model.selection != p[0] { model.section = .setup }
-            model.selection = p[0]
-            if p.count > 1, let s = Section(rawValue: p[1]) { model.section = s }
-        })) {
-            Label(model.me?.club?.name ?? "Home", systemImage: "house").tag("home")
-            SwiftUI.Section("Tournaments") {
-                if model.events.isEmpty {
-                    Text(model.signedIn ? "No tournaments yet. Press ⌘N to make one." : "Sign in to see your club’s tournaments.")
-                        .font(.callout).foregroundStyle(.secondary).padding(.vertical, 4)
-                }
-                ForEach(model.events) { e in
-                    let open = model.selection == e.id
-                    EventRow(ref: e, open: open).tag("\(e.id)|\(open ? model.section.rawValue : "setup")")
-                        .contextMenu {
-                            Button("Open Live Leaderboard") { NSWorkspace.shared.open(URL(string: "\(Server.base.absoluteString)/g/\(e.id)")!) }
-                            Button("Copy Desk Link") { copy("\(Server.base.absoluteString)/g/\(e.id)/desk#\(e.key)") }
-                            Divider()
-                            Button(e.fromClub == true ? "Hide from List…" : "Remove from List…", role: .destructive) { confirmRemove = e }
-                        }
-                    if open {
-                        ForEach(Section.allCases) { s in
-                            Label(s.title, systemImage: s.icon).tag("\(e.id)|\(s.rawValue)").padding(.leading, 14)
-                        }
-                    }
+        @Bindable var nav = nav
+        VStack(alignment: .leading, spacing: 14) {
+            Color.clear.frame(height: 26).contentShape(Rectangle()).gesture(WindowDragGesture())   // room for the window buttons
+            HStack(spacing: 10) {
+                FlagcastMark(size: 34)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("FLAGCAST").font(FC.display(22)).tracking(0.5)
+                    Text("MANAGER").font(.system(size: 11, weight: .semibold)).tracking(1.6).foregroundStyle(FC.onGreenMuted)
                 }
             }
+            .padding(.horizontal, 6)
+            .contentShape(Rectangle()).onTapGesture { model.selection = nil }
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass").font(.system(size: 12, weight: .semibold)).foregroundStyle(FC.onGreenMuted)
+                TextField("", text: $nav.search, prompt: Text("Find a team or player").foregroundStyle(FC.onGreenMuted))
+                    .textFieldStyle(.plain).font(.system(size: 13))
+                    .onSubmit { if model.selection != nil { nav.section = .teams } }
+                    .onChange(of: nav.search) { _, q in if !q.isEmpty, model.selection != nil, nav.section != .scores { nav.section = .teams } }
+            }
+            .padding(.horizontal, 10).padding(.vertical, 7)
+            .background(FC.onGreen.opacity(0.10), in: RoundedRectangle(cornerRadius: 8))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("TOURNAMENTS").font(.system(size: 11, weight: .bold)).tracking(1.2).foregroundStyle(FC.onGreenMuted).padding(.horizontal, 8).padding(.vertical, 4)
+                    if model.events.isEmpty {
+                        Text(model.signedIn ? "No tournaments yet. Press ⌘N to make one." : "Sign in to see your club’s tournaments.")
+                            .font(.system(size: 12)).foregroundStyle(FC.onGreenMuted).padding(.horizontal, 8).padding(.vertical, 4)
+                    }
+                    ForEach(model.shownEvents) { e in eventRow(e) }
+                    if model.isAdmin { adminSection }
+                }
+            }
+            .scrollIndicators(.never)
+            Button { model.selection = nil; model.focusNew = true } label: {
+                HStack(spacing: 8) { Image(systemName: "plus").font(.system(size: 13, weight: .bold)); Text("New tournament"); Spacer(); Text("⌘N").font(.system(size: 11)).foregroundStyle(FC.onGreenMuted) }
+                    .font(.system(size: 13, weight: .semibold)).padding(.horizontal, 10).padding(.vertical, 8)
+                    .background(FC.onGreen.opacity(0.10), in: RoundedRectangle(cornerRadius: 8)).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Divider().overlay(FC.onGreen.opacity(0.14))
+            Button { model.selection = nil } label: {
+                HStack(spacing: 10) {
+                    Text(initials).font(.system(size: 12, weight: .bold)).frame(width: 28, height: 28).background(FC.green2, in: Circle())
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(model.me?.club?.name ?? (model.signedIn ? model.me?.email ?? "" : "Sign in")).font(.system(size: 13, weight: .semibold)).lineLimit(1)
+                        Text(clubLine).font(.system(size: 11)).foregroundStyle(FC.onGreenMuted).lineLimit(1)
+                    }
+                    Spacer()
+                    SettingsLink { Image(systemName: "gearshape").foregroundStyle(FC.onGreenMuted) }.buttonStyle(.plain).help("Settings (⌘,)")
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).padding(.horizontal, 6)
         }
-        .listStyle(.sidebar)
-        .safeAreaInset(edge: .bottom) { AccountRow() }
-        .toolbar {
-            ToolbarItem { Button { model.selection = nil; model.focusNew = true } label: { Label("New Tournament", systemImage: "plus") }.help("New tournament (⌘N)") }
-        }
+        .padding(.horizontal, 12).padding(.top, 10).padding(.bottom, 12)
+        .foregroundStyle(FC.onGreen)
+        .background(FC.green)
+        .environment(\.colorScheme, .dark)
         .confirmationDialog(confirmRemove?.fromClub == true ? "Hide this tournament from your club’s list?" : "Remove this tournament from this Mac?",
                             isPresented: Binding(get: { confirmRemove != nil }, set: { if !$0 { confirmRemove = nil } }), presenting: confirmRemove) { e in
             Button(e.fromClub == true ? "Hide" : "Remove", role: .destructive) { Task { await model.remove(e.id) } }
         } message: { e in Text(e.fromClub == true ? "It isn’t deleted. Its scores and pages stay." : "Copy its desk link first if you’ll need it again: right-click → Copy Desk Link.") }
     }
-}
 
-struct EventRow: View {
-    let ref: EventRef, open: Bool
-    var body: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(ref.name).fontWeight(.semibold).lineLimit(1)
-            Text(sub).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-        }
-        .padding(.vertical, 2)
-    }
-    var sub: String {
-        if let d = ref.date, !d.isEmpty, let date = ISO8601DateFormatter.day.date(from: d) { return date.formatted(date: .abbreviated, time: .omitted) }
-        return ref.id.uppercased()
-    }
-}
-
-struct AccountRow: View {
-    @Environment(AppModel.self) private var model
-    var body: some View {
-        HStack(spacing: 8) {
-            Circle().fill(Color.fcGreen).frame(width: 24, height: 24)
-                .overlay(Text(String(model.me?.email.first ?? "?").uppercased()).font(.caption.bold()).foregroundStyle(.white))
-            VStack(alignment: .leading, spacing: 0) {
-                Text(model.me?.club?.name ?? model.me?.email ?? "Not signed in").font(.callout.weight(.medium)).lineLimit(1)
-                Text(model.me?.email ?? "Sign in on the Home page").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+    @ViewBuilder private func eventRow(_ e: EventRef) -> some View {
+        let open = model.selection == e.id && model.adminSection == nil
+        Button { model.adminSection = nil; if open { model.selection = nil } else { model.selection = e.id; nav.section = .overview } } label: {
+            HStack(spacing: 8) {
+                Image(systemName: open ? "chevron.down" : "chevron.right").font(.system(size: 9, weight: .heavy)).foregroundStyle(FC.onGreenMuted).frame(width: 10)
+                Text(e.name).font(.system(size: 14, weight: open ? .semibold : .regular)).lineLimit(1)
+                Spacer(minLength: 4)
+                if isLive(e) { LiveChip() } else if let d = shortDate(e.date) { Text(d).font(.system(size: 12)).foregroundStyle(FC.onGreenMuted) }
             }
-            Spacer()
-            SettingsLink { Image(systemName: "gearshape") }.buttonStyle(.borderless).help("Settings (⌘,)")
+            .padding(.horizontal, 8).padding(.vertical, 7).contentShape(Rectangle())
         }
-        .padding(.horizontal, 12).padding(.vertical, 8)
-        .background(.bar)
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button("Open Live Leaderboard") { NSWorkspace.shared.open(URL(string: "\(Server.base.absoluteString)/g/\(e.id)")!) }
+            Button("Copy Desk Link") { copy("\(Server.base.absoluteString)/g/\(e.id)/desk#\(e.key)") }
+            Divider()
+            Button(e.fromClub == true ? "Hide from List…" : "Remove from List…", role: .destructive) { confirmRemove = e }
+        }
+        if open {
+            ForEach(Section.allCases) { s in
+                let on = nav.section == s
+                Button { model.adminSection = nil; nav.section = s } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: s.icon).font(.system(size: 13)).frame(width: 18).foregroundStyle(on ? FC.green : FC.onGreenMuted)
+                        Text(s.title).font(.system(size: 13, weight: on ? .semibold : .medium)).lineLimit(1).minimumScaleFactor(0.85)
+                        Spacer()
+                        Text(s.keyLabel).font(.system(size: 11)).foregroundStyle(on ? FC.green.opacity(0.7) : FC.onGreenMuted)
+                    }
+                    .foregroundStyle(on ? FC.green : Color(hex: 0xdfe8e1))
+                    .padding(.leading, 26).padding(.trailing, 8).padding(.vertical, 6)
+                    .background(on ? FC.onGreen : .clear, in: RoundedRectangle(cornerRadius: 7))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+    /// Flagcast staff only: clubs, every tournament, screens and phones, activity.
+    @ViewBuilder private var adminSection: some View {
+        HStack(spacing: 6) {
+            Text("ADMIN").font(.system(size: 10, weight: .bold)).tracking(1.4).foregroundStyle(.white)
+                .padding(.horizontal, 5).padding(.vertical, 2).background(FC.red, in: RoundedRectangle(cornerRadius: 3))
+            Spacer()
+        }
+        .padding(.horizontal, 8).padding(.top, 14).padding(.bottom, 4)
+        ForEach(AdminSection.allCases) { a in
+            let on = model.adminSection == a
+            Button { model.adminSection = a } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: a.icon).font(.system(size: 13)).frame(width: 18).foregroundStyle(on ? FC.green : FC.onGreenMuted)
+                    Text(a.title).font(.system(size: 13, weight: on ? .semibold : .medium))
+                    Spacer()
+                    let n = a == .clubs ? model.admin.clubs.filter { $0.status == "pending" }.count : 0
+                    if n > 0 { Text("\(n)").font(.system(size: 12, weight: .bold)).foregroundStyle(on ? FC.green : FC.flag) }
+                }
+                .foregroundStyle(on ? FC.green : Color(hex: 0xdfe8e1))
+                .padding(.horizontal, 8).padding(.vertical, 6)
+                .background(on ? FC.onGreen : .clear, in: RoundedRectangle(cornerRadius: 7))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+    }
+    private var initials: String {
+        let n = model.me?.club?.name ?? model.me?.email ?? "?"
+        return String(n.split(separator: " ").prefix(2).compactMap(\.first)).uppercased()
+    }
+    private var clubLine: String {
+        guard let c = model.me?.club else { return model.signedIn ? "Club not set up yet" : "to see your club’s tournaments" }
+        return c.credits < 0 ? "Unlimited tournaments" : "\(c.credits) tournament\(c.credits == 1 ? "" : "s") left"
+    }
+    private func isLive(_ e: EventRef) -> Bool { e.date == ISO8601DateFormatter.day.string(from: Date()) }
+    private func shortDate(_ s: String?) -> String? {
+        guard let s, let d = ISO8601DateFormatter.day.date(from: s) else { return nil }
+        return d.formatted(.dateTime.month(.abbreviated).day())
     }
 }
 
+/// An Admin page in the Manager window (staff only), with its notices.
+struct AdminPage: View {
+    @Environment(AdminModel.self) private var admin
+    let section: AdminSection
+    var body: some View {
+        Group {
+            switch section {
+            case .clubs: ClubsView()
+            case .tournaments: TournamentsView()
+            case .screens: ScreenControlView()
+            case .activity: ActivityView()
+            }
+        }
+        .ignoresSafeArea(edges: .top)
+        .overlay(alignment: .bottom) {
+            if let n = admin.notice {
+                Text(n).font(.callout.weight(.medium)).padding(.horizontal, 14).padding(.vertical, 8).background(.regularMaterial, in: Capsule()).shadow(radius: 4, y: 2).padding(.bottom, 16)
+            }
+        }
+        .animation(.snappy, value: admin.notice)
+        .task(id: section) { try? await admin.refresh(); await admin.refreshEvents() }
+    }
+}

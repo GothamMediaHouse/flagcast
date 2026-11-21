@@ -8,7 +8,12 @@ struct StaffView: View {
     @Bindable var doc: DeskDoc
 
     var body: some View {
-        Form {
+        DeskPage(doc: doc, section: .staff) {
+            EmptyView()
+        } title: {
+            HeroTitle(title: "Staff", size: 52, sub: "Golf pros, marshals, screens and the schedule", subBeside: true)
+        } content: {
+            CardForm {
             SwiftUI.Section {
                 LabeledContent("Tournament code") { Text(doc.id.uppercased()).font(.title3.monospaced().weight(.semibold)).textSelection(.enabled) }
                 ForEach($doc.ev.pins) { $p in
@@ -44,7 +49,7 @@ struct StaffView: View {
                 Button { doc.ev.schedule.append(ScheduleItem()) } label: { Label("Add a Time", systemImage: "plus") }
             } header: { Text("Schedule") } footer: { Help("Shows on the Schedule page of the screens.") }
         }
-        .formStyle(.grouped)
+            }
     }
     private func addPin(_ role: String) {
         let pin = String(format: "%04d", Int.random(in: 1000...9999))
@@ -98,7 +103,13 @@ struct ReportView: View {
     @State private var file: CSVFile?
 
     var body: some View {
-        Form {
+        DeskPage(doc: doc, section: .report, save: false) {
+            Button { Task { await doc.refreshDay() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }.buttonStyle(GlassButton())
+            Button("Results (CSV)…") { export("results", results()) }.buttonStyle(WhiteButton())
+        } title: {
+            HeroTitle(title: "Report", size: 52, sub: "Results, sponsors and GHIN posting", subBeside: true)
+        } content: {
+            CardForm {
             SwiftUI.Section {
                 HStack {
                     Button("Results (CSV)…") { export("results", results()) }.buttonStyle(.borderedProminent)
@@ -136,7 +147,7 @@ struct ReportView: View {
                 }
             }
         }
-        .formStyle(.grouped)
+            }
         .task { await doc.refreshDay() }
         .fileExporter(isPresented: Binding(get: { file != nil }, set: { if !$0 { file = nil } }), document: file, contentType: .commaSeparatedText, defaultFilename: file?.name) { _ in file = nil }
     }

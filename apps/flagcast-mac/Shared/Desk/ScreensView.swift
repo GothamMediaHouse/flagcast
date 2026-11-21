@@ -17,7 +17,12 @@ struct ScreensView: View {
     private var par3s: [Hole] { doc.ev.course.holes.filter { $0.par == 3 } }
 
     var body: some View {
-        Form {
+        DeskPage(doc: doc, section: .screens) {
+            Button("Open the board") { NSWorkspace.shared.open(doc.boardURL) }.buttonStyle(GlassButton())
+        } title: {
+            HeroTitle(title: "Screens & sponsors", size: 52, sub: "What the big screens show", subBeside: true)
+        } content: {
+            CardForm {
             SwiftUI.Section("Big screens") {
                 TextField("Title on the screens", text: $doc.ev.screens.title, prompt: Text("Uses the tournament name"))
                 Stepper("\(doc.ev.screens.seconds) seconds on each page", value: $doc.ev.screens.seconds, in: 5...60)
@@ -81,8 +86,8 @@ struct ScreensView: View {
                     Button("Update the Total") { if let n = Double(raised) { Task { if await doc.day("fund", ["raised": n], done: "Total updated on the screens.") != nil { raised = "" } } } }.disabled(Double(raised) == nil)
                 }
             }
+            }
         }
-        .formStyle(.grouped)
     }
     private func saveReplay(screens: Bool) {
         Task {

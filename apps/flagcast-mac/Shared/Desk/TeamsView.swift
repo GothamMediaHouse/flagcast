@@ -1,73 +1,169 @@
 import SwiftUI
 
-/// Teams: a table of every team, and an inspector for the selected one's players.
+/// Teams (design/Teams.dc.html): photo header with the counts, flight filter and Add team; the teams as a raised
+/// table card, and the selected team in a card with its starting hole pictured.
 struct TeamsView: View {
     @Bindable var doc: DeskDoc
-    @State private var selection = Set<String>()
-    @State private var search = ""
+    @Environment(DeskNav.self) private var nav
+    @State private var selection: String?
+    @State private var flight = ""
     @State private var pasting = false
     @State private var printing = false
-    @State private var sort = [KeyPathComparator(\DeskTeam.start)]
 
     private var shown: [DeskTeam] {
-        let q = search.trimmingCharacters(in: .whitespaces).lowercased()
-        let list = q.isEmpty ? doc.ev.teams : doc.ev.teams.filter { t in
-            t.displayName.lowercased().contains(q) || t.code.lowercased().contains(q) || t.players.contains { $0.name.lowercased().contains(q) } || t.flight.lowercased() == q
+        let q = nav.search.trimmingCharacters(in: .whitespaces).lowercased()
+        return doc.ev.teams.filter { t in
+            (flight.isEmpty || t.flight == flight) &&
+            (q.isEmpty || t.displayName.lowercased().contains(q) || t.code.lowercased().contains(q) || t.players.contains { $0.name.lowercased().contains(q) })
         }
-        return list.sorted(using: sort)
     }
     private var scramble: Bool { doc.ev.format.isScramble }
+    private var counts: String {
+        let p = doc.ev.teams.reduce(0) { $0 + $1.players.count }, f = Set(doc.ev.teams.map(\.flight).filter { !$0.isEmpty }).count
+        return "\(doc.ev.teams.count) team\(doc.ev.teams.count == 1 ? "" : "s") · \(p) player\(p == 1 ? "" : "s")" + (f > 0 ? " · \(f) flight\(f == 1 ? "" : "s")" : "")
+    }
 
     var body: some View {
-        Table(shown, selection: $selection, sortOrder: $sort) {
-            TableColumn("Team", value: \.name) { t in
-                Text(t.displayName.isEmpty ? "New team" : t.displayName).foregroundStyle(t.displayName.isEmpty ? .secondary : .primary)
-            }.width(min: 140, ideal: 220)
-            TableColumn("Flight", value: \.flight) { t in Text(t.flight) }.width(50)
-            TableColumn("Start", value: \.start) { t in Text("\(t.start)").monospacedDigit() }.width(44)
-            TableColumn("Players") { t in
-                Text(t.players.map { "\($0.name) (\(hcpText($0)))" }.joined(separator: ", ")).foregroundStyle(.secondary).lineLimit(1)
-            }.width(min: 200, ideal: 380)
-            TableColumn("Cart code", value: \.code) { t in Text(t.code.isEmpty ? "After save" : t.code).font(.body.monospaced()).foregroundStyle(t.code.isEmpty ? .tertiary : .primary) }.width(80)
-        }
-        .contextMenu(forSelectionType: String.self) { ids in
-            Button("Remove \(ids.count == 1 ? "Team" : "\(ids.count) Teams")", role: .destructive) { remove(ids) }.disabled(ids.isEmpty)
-        }
-        .onDeleteCommand { remove(selection) }
-        .searchable(text: $search, placement: .toolbar, prompt: "Find a team or player")
-        .inspector(isPresented: .constant(true)) {
-            if selection.count == 1, let i = doc.ev.teams.firstIndex(where: { $0.id == selection.first }) {
-                TeamEditor(team: $doc.ev.teams[i], tees: doc.ev.course.tees, par: doc.ev.course.par, scramble: scramble, flights: doc.ev.flights)
-                    .inspectorColumnWidth(min: 340, ideal: 400, max: 520)
-            } else {
-                ContentUnavailableView(selection.isEmpty ? "Select a team" : "\(selection.count) teams selected", systemImage: "person.3",
-                                       description: Text("\(doc.ev.teams.count) team\(doc.ev.teams.count == 1 ? "" : "s") · \(doc.ev.teams.reduce(0) { $0 + $1.players.count }) players"))
-                    .inspectorColumnWidth(min: 340, ideal: 400, max: 520)
+        DeskPage(doc: doc, section: .teams, height: 200, titleHeight: 92) {
+            if !doc.ev.flights.isEmpty {
+                FlightPicker(flights: doc.ev.flights, flight: $flight)
             }
-        }
-        .toolbar {
-            ToolbarItemGroup {
-                Button { add() } label: { Label("Add Team", systemImage: "plus") }.keyboardShortcut("t", modifiers: [.command, .shift]).help("Add a team (⇧⌘T)")
-                Button { remove(selection) } label: { Label("Remove", systemImage: "minus") }.disabled(selection.isEmpty).help("Remove the selected teams (⌫)")
-                Button { pasting = true } label: { Label("Paste from a Spreadsheet", systemImage: "tablecells.badge.ellipsis") }.help("Add teams copied from Excel or Google Sheets")
-                Button { printing = true } label: { Label("Print Cart Cards", systemImage: "printer") }.help("One card per team with its QR code")
+            Button("Import from a spreadsheet") { pasting = true }.buttonStyle(GlassButton())
+            Button { printing = true } label: { Label("Cart cards", systemImage: "printer") }.buttonStyle(GlassButton())
+            Button { add() } label: { Label("Add team", systemImage: "plus") }.buttonStyle(GlassButton()).keyboardShortcut("t", modifiers: [.command, .shift])
+        } title: {
+            HeroTitle(title: "Teams", size: 52, sub: counts, subBeside: true)
+        } content: {
+            HStack(alignment: .top, spacing: 16) {
+                table
+                inspector.frame(width: 340)
             }
-        }
-        .safeAreaInset(edge: .bottom) {
-            if doc.ev.teams.contains(where: { $0.code.isEmpty }) && doc.dirty {
-                Text("New teams get their cart code and QR card when you save (⌘S).").font(.callout).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(8).background(.bar)
-            }
+            .padding(.horizontal, 20).padding(.bottom, 18)
         }
         .sheet(isPresented: $pasting) { PasteTeamsSheet(doc: doc) }
         .sheet(isPresented: $printing) { CartCardsSheet(doc: doc) }
+        .onAppear { if selection == nil { selection = shown.first?.id } }
     }
 
-    private func hcpText(_ p: DeskPlayer) -> String { p.index != nil ? "\(Int(p.hcp)) · \(Core.fmtIndex(p.index))" : "\(Int(p.hcp))" }
-    private func add() {
-        let t = DeskTeam(flight: doc.ev.flights.first ?? "", start: 1, players: [DeskPlayer()])
-        doc.ev.teams.append(t); selection = [t.id]; search = ""
+    // ---- the table ----
+    private let cols: [GridItem] = []
+    private var table: some View {
+        VStack(spacing: 0) {
+            row(header: true, n: "#", name: "TEAM", players: "", flight: "FLIGHT", hcp: "HCP", cart: "CART", start: "STARTS", status: ("CARD", FC.muted))
+                .background(FC.head)
+            Divider().overlay(FC.paper2)
+            if shown.isEmpty {
+                VStack(spacing: 8) {
+                    Image(systemName: "person.2").font(.system(size: 30)).foregroundStyle(FC.muted)
+                    Text(doc.ev.teams.isEmpty ? "No teams yet" : "No team matches").font(.headline)
+                    Text(doc.ev.teams.isEmpty ? "Add a team, or import them from a spreadsheet." : "Try another name or flight.").font(.callout).foregroundStyle(FC.muted)
+                }
+                .frame(maxWidth: .infinity, minHeight: 240)
+            }
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(shown.enumerated()), id: \.element.id) { i, t in
+                        let on = selection == t.id
+                        row(header: false, n: "\(i + 1)", name: t.displayName.isEmpty ? "New team" : t.displayName, players: t.players.map(\.name).joined(separator: " · "),
+                            flight: t.flight.isEmpty ? "–" : t.flight, hcp: hcpText(t), cart: t.cart.isEmpty ? "–" : t.cart, start: "Hole \(t.start)", status: status(t), on: on)
+                            .background(on ? FC.green : FC.card)
+                            .contentShape(Rectangle())
+                            .onTapGesture { selection = t.id }
+                            .contextMenu { Button("Remove Team", role: .destructive) { remove(t.id) } }
+                        Divider().overlay(FC.hairline)
+                    }
+                }
+            }
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(FC.line))
+        .background(FC.card, in: RoundedRectangle(cornerRadius: 12))
+        .shadow(color: FC.scrim.opacity(0.18), radius: 15, y: 8)
+        .onDeleteCommand { if let s = selection { remove(s) } }
     }
-    private func remove(_ ids: Set<String>) { doc.ev.teams.removeAll { ids.contains($0.id) }; selection = [] }
+    private func row(header: Bool, n: String, name: String, players: String, flight: String, hcp: String, cart: String, start: String, status: (String, Color), on: Bool = false) -> some View {
+        let fg: Color = on ? FC.onGreen : FC.ink, dim: Color = on ? FC.onGreenMuted : FC.muted
+        let hf = Font.system(size: 11, weight: .bold)
+        return HStack(spacing: 12) {
+            Text(n).font(header ? hf : .system(size: 13, weight: .bold)).foregroundStyle(dim).frame(width: 28, alignment: .leading)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(name).font(header ? hf : .system(size: 13, weight: .semibold)).foregroundStyle(header ? dim : fg).lineLimit(1)
+                if !header && !players.isEmpty { Text(players).font(.system(size: 11)).foregroundStyle(dim).lineLimit(1) }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Group {
+                Text(flight).frame(width: 54, alignment: .leading)
+                Text(hcp).frame(width: 54, alignment: .leading)
+                Text(cart).frame(width: 60, alignment: .leading)
+                Text(start).frame(width: 66, alignment: .leading)
+            }
+            .font(header ? hf : .system(size: 13)).foregroundStyle(header ? dim : fg)
+            HStack(spacing: 6) {
+                if !header { Circle().fill(status.1).frame(width: 7, height: 7) }
+                Text(status.0).font(header ? hf : .system(size: 13, weight: .semibold)).foregroundStyle(header ? dim : (on ? FC.onGreen : status.1))
+            }
+            .frame(width: 110, alignment: .leading)
+        }
+        .tracking(header ? 0.8 : 0)
+        .padding(.horizontal, 16).frame(height: header ? 34 : 46)
+    }
+    private func hcpText(_ t: DeskTeam) -> String {
+        if scramble { return "\(Int(t.hcp))" }
+        // the team's average course handicap (each player's is in the card on the right)
+        return t.players.isEmpty ? "–" : String(format: "%.1f", t.players.reduce(0) { $0 + $1.hcp } / Double(t.players.count))
+    }
+    private func status(_ t: DeskTeam) -> (String, Color) {
+        if t.code.isEmpty { return ("After save", FC.muted) }
+        let s = doc.live?.scores[t.id] ?? [:]
+        let done = doc.ev.playHoles.filter { h in !s.isEmpty && s.values.allSatisfy { h - 1 < $0.count && $0[h - 1] != nil } }.count
+        if done == doc.ev.playHoles.count { return ("Finished", FC.muted) }
+        if done > 0 { return ("Thru \(done)", FC.ok) }
+        return ("Not started", FC.muted)
+    }
+
+    // ---- the inspector card ----
+    @ViewBuilder private var inspector: some View {
+        if let id = selection, let i = doc.ev.teams.firstIndex(where: { $0.id == id }) {
+            let t = doc.ev.teams[i]
+            VStack(spacing: 0) {
+                ZStack(alignment: .bottomLeading) {
+                    HolePicture(id: doc.id, n: t.start, h: doc.ev.map.holes[t.start], fallback: doc.picture.image)
+                    LinearGradient(colors: [Color(hex: 0x0b2219).opacity(0.9), Color(hex: 0x0b2219).opacity(0.1)], startPoint: .bottom, endPoint: .init(x: 0.5, y: 0.25))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(["TEAM \((doc.ev.teams.firstIndex { $0.id == t.id } ?? 0) + 1)", t.flight.isEmpty ? nil : "FLIGHT \(t.flight)", t.cart.isEmpty ? nil : "CART \(t.cart)"].compactMap { $0 }.joined(separator: " · "))
+                            .font(.system(size: 11, weight: .bold)).tracking(1.2).foregroundStyle(FC.flag)
+                        Text(t.displayName.isEmpty ? "New team" : t.displayName).font(FC.display(30)).foregroundStyle(FC.onGreen).lineLimit(1).minimumScaleFactor(0.6)
+                    }
+                    .padding(.horizontal, 18).padding(.bottom, 12)
+                }
+                .frame(height: 150).clipped()
+                TeamEditor(team: $doc.ev.teams[i], tees: doc.ev.course.tees, par: doc.ev.course.par, scramble: scramble, flights: doc.ev.flights)
+                    .scrollContentBackground(.hidden)
+                HStack {
+                    Button(role: .destructive) { remove(t.id) } label: { Label("Remove", systemImage: "trash") }.buttonStyle(PlainCardButton())
+                    Spacer()
+                    if !t.code.isEmpty { Button("Open scorecard") { NSWorkspace.shared.open(doc.cartURL(t.code)) }.buttonStyle(GreenButton()) }
+                }
+                .padding(14)
+            }
+            .background(FC.card)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .shadow(color: FC.scrim.opacity(0.18), radius: 15, y: 8)
+        } else {
+            VStack(spacing: 8) {
+                Image(systemName: "person.crop.circle.badge.plus").font(.system(size: 30)).foregroundStyle(FC.muted)
+                Text("Pick a team").font(.headline)
+                Text("Its players, GHIN numbers and tees show here.").font(.callout).foregroundStyle(FC.muted).multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity, minHeight: 260).raisedCard(padding: 16)
+        }
+    }
+
+    private func add() {
+        let t = DeskTeam(flight: flight.isEmpty ? (doc.ev.flights.first ?? "") : flight, start: 1, players: [DeskPlayer()])
+        doc.ev.teams.append(t); selection = t.id; nav.search = ""
+    }
+    private func remove(_ id: String) { doc.ev.teams.removeAll { $0.id == id }; if selection == id { selection = shown.first?.id } }
 }
 
 /// The selected team: name, flight, start, and up to four players with GHIN numbers, Index, tees and course handicap.
@@ -149,5 +245,32 @@ struct PasteTeamsSheet: View {
             }
         }
         .padding(20).frame(width: 620)
+    }
+}
+
+/// The flight filter over the photo.
+struct FlightPicker: View {
+    let flights: [String]
+    @Binding var flight: String
+    var body: some View { PhotoSegments(options: [("All", "")] + flights.map { ($0, $0) }, selection: $flight) }
+}
+
+/// A switch over the photo: a light segmented control (white 85%), the picked one solid green.
+struct PhotoSegments: View {
+    let options: [(String, String)]
+    @Binding var selection: String
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(options, id: \.1) { o in
+                let on = selection == o.1
+                Button { selection = o.1 } label: {
+                    Text(o.0).font(.system(size: 12, weight: .semibold)).padding(.horizontal, 11).frame(height: 26)
+                        .foregroundStyle(on ? FC.onGreen : FC.green)
+                        .background(on ? FC.green : .clear, in: RoundedRectangle(cornerRadius: 6)).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(2).background(Color.white.opacity(0.85), in: RoundedRectangle(cornerRadius: 7))
     }
 }

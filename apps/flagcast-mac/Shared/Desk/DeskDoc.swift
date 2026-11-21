@@ -13,6 +13,8 @@ final class DeskDoc {
     var error: String?
     var notice: String?
     let feed: EventFeed
+    /// the course picture for the page headers
+    let picture = CoursePicture()
 
     init(ref: EventRef) {
         self.ref = ref

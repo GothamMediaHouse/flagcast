@@ -6,7 +6,13 @@ struct ContestsView: View {
     @Bindable var doc: DeskDoc
 
     var body: some View {
-        Form {
+        DeskPage(doc: doc, section: .contests) {
+            Button { add("ctp") } label: { Label("Closest to the pin", systemImage: "flag") }.buttonStyle(GlassButton())
+            Button { add("ld") } label: { Label("Long drive", systemImage: "arrow.up.right") }.buttonStyle(GlassButton())
+        } title: {
+            HeroTitle(title: "Contests", size: 52, sub: "Closest to the pin and long drive", subBeside: true)
+        } content: {
+            CardForm {
             if doc.ev.contests.isEmpty {
                 SwiftUI.Section { Text("No contests yet. Add closest to the pin or long drive with the buttons above.").foregroundStyle(.secondary) }
             }
@@ -24,13 +30,7 @@ struct ContestsView: View {
             }
             Help("Closest to the pin is measured in feet (4.5 = 4 ft 6 in). Long drive in yards. Set the contest’s hole and name, then Save before entering results. Marshals can post results from the Flagcast phone app with their PIN.")
         }
-        .formStyle(.grouped)
-        .toolbar {
-            ToolbarItemGroup {
-                Button { add("ctp") } label: { Label("Add Closest to the Pin", systemImage: "flag") }
-                Button { add("ld") } label: { Label("Add Long Drive", systemImage: "arrow.up.right") }
             }
-        }
     }
     private func add(_ kind: String) {
         let p3 = doc.ev.course.holes.first { $0.par == 3 }?.n ?? 3, p5 = doc.ev.course.holes.first { $0.par == 5 }?.n ?? 2
