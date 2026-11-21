@@ -293,7 +293,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 2.7.2;
+				MARKETING_VERSION = 2.8.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.manager.debug;
 				PRODUCT_NAME = "Flagcast Manager";
 				SDKROOT = macosx;
@@ -324,7 +324,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 2.7.2;
+				MARKETING_VERSION = 2.8.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.manager;
 				PRODUCT_NAME = "Flagcast Manager";
 				SDKROOT = macosx;
