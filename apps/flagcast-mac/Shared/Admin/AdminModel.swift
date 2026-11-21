@@ -163,6 +163,15 @@ final class AdminModel {
         do { try await call("day", ["id": event, "day": d]); await refreshEvents(); if let done { flash(done) } }
         catch { flash(error.localizedDescription) }
     }
+    /// Change a tournament's TVs (name, where, what they show normally, remove) from Admin, with its desk key.
+    func editTVs(_ e: AdminEvent, done: String, _ change: @escaping (inout [Display]) -> Void) async {
+        do {
+            var ev = try await Net.deskGet(e.id, e.key)
+            change(&ev.displays)
+            _ = try await Net.deskSave(e.id, e.key, ev)
+            await refreshEvents(); flash(done)
+        } catch { flash(error.localizedDescription) }
+    }
     /// Set a tournament's par 3 camera links (Flagcast only; clubs can't).
     func saveCams(_ id: String, _ cams: [Int: String]) async -> Bool {
         do {

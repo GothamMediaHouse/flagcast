@@ -162,12 +162,6 @@ struct SettingsView: View {
             AdminPassSettings()
                 .formStyle(.grouped).tabItem { Label("Admin", systemImage: "key") }
             Form {
-                Toggle("Show engineering tools", isOn: Binding(get: { model.showEngineering }, set: { model.showEngineering = $0 }))
-                Text(model.isAdmin ? "You’re signed in as a Flagcast admin, so Engineering is always on." : "Adds Engineering to the Screens page: every TV in one table, routing several at once, scenes and take-overs. Club staff don’t need it.")
-                    .font(.callout).foregroundStyle(.secondary)
-            }
-            .formStyle(.grouped).tabItem { Label("Advanced", systemImage: "wrench.and.screwdriver") }
-            Form {
                 Toggle("Check for updates when Flagcast Manager opens", isOn: $autoCheck)
                 LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")
                 Button("Check for Updates Now") { Updates.shared.check() }
