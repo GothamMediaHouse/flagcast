@@ -1,4 +1,5 @@
 import Foundation
+import Security
 import Observation
 
 
@@ -31,9 +32,12 @@ struct AdminClub: Decodable, Identifiable, Hashable {
 
 /// One tournament on any club's list, with how it's going (op "events").
 struct AdminEvent: Decodable, Identifiable, Hashable {
-    struct Disp: Decodable, Hashable, Identifiable { var id: String, name: String, online: Int, pages: Int, force: PageRef?
-        init(from d: Decoder) throws { let c = try d.container(keyedBy: CodingKeys.self); id = c.str(.id); name = c.str(.name); online = c.int(.online, 0); pages = c.int(.pages, 0); force = try? c.decodeIfPresent(PageRef.self, forKey: .force) }
-        enum CodingKeys: String, CodingKey { case id, name, online, pages, force }
+    struct Disp: Decodable, Hashable, Identifiable { var id: String, name: String, place: String, group: String, online: Int, pages: Int, force: PageRef?, list: [PageRef]
+        init(from d: Decoder) throws {
+            let c = try d.container(keyedBy: CodingKeys.self); id = c.str(.id); name = c.str(.name); place = c.str(.place); group = c.str(.group)
+            online = c.int(.online, 0); pages = c.int(.pages, 0); force = try? c.decodeIfPresent(PageRef.self, forKey: .force); list = c.list(.list)
+        }
+        enum CodingKeys: String, CodingKey { case id, name, place = "where", group, online, pages, force, list }
     }
     struct Named: Decodable, Hashable, Identifiable { var id: String, name: String
         init(from d: Decoder) throws { let c = try d.container(keyedBy: CodingKeys.self); id = c.str(.id); name = c.str(.name) }
@@ -48,6 +52,8 @@ struct AdminEvent: Decodable, Identifiable, Hashable {
     var teams: Int, scored: Int, screens: Int, online: Int, replays: Int
     var displays: [Disp], p3: [Int], sponsors: [Named], replayList: [Rep], scenes: [Named], scene: String, flights: [String]
     var take: Take?, flash: Flash?, phone: PhoneRoute?
+    /// par 3 camera links by hole (set by Flagcast Admin only)
+    var cams: [Int: String]
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         id = c.str(.id); key = c.str(.key); name = c.str(.name); club = c.str(.club); clubName = c.str(.clubName); date = c.str(.date)
@@ -56,8 +62,11 @@ struct AdminEvent: Decodable, Identifiable, Hashable {
         displays = c.list(.displays); p3 = (try? c.decodeIfPresent([Int].self, forKey: .p3)) ?? []; sponsors = c.list(.sponsors); replayList = c.list(.replayList)
         scenes = c.list(.scenes); scene = c.str(.scene); flights = (try? c.decodeIfPresent([String].self, forKey: .flights)) ?? []
         take = try? c.decodeIfPresent(Take.self, forKey: .take); flash = try? c.decodeIfPresent(Flash.self, forKey: .flash); phone = try? c.decodeIfPresent(PhoneRoute.self, forKey: .phone)
+        let raw = (try? c.decodeIfPresent([String: String].self, forKey: .cams)) ?? [:]
+        cams = Dictionary(uniqueKeysWithValues: raw.compactMap { k, v in Int(k).map { ($0, v) } })
     }
-    enum CodingKeys: String, CodingKey { case id, key, name, club, clubName, date, created, hidden, archived, gone, locked, teams, scored, screens, online, replays, displays, p3, sponsors, replayList, scenes, scene, flights, take, flash, phone }
+    enum CodingKeys: String, CodingKey { case id, key, name, club, clubName, date, created, hidden, archived, gone, locked, teams, scored, screens, online, replays, displays, p3, sponsors, replayList, scenes, scene, flights, take, flash, phone, cams }
+    var isToday: Bool { date == ISO8601DateFormatter.day.string(from: Date()) }
     var ref: EventRef { EventRef(id: id, key: key, name: name, date: date, club: clubName) }
 }
 
@@ -69,10 +78,14 @@ struct LogLine: Decodable, Hashable, Identifiable {
 }
 
 enum AdminSection: String, CaseIterable, Identifiable {
-    case clubs, tournaments, screens, activity
+    case overview, signups, clubs, tournaments, cameras, screens, activity
     var id: String { rawValue }
-    var title: String { switch self { case .clubs: "Clubs"; case .tournaments: "Tournaments"; case .screens: "Screens & phones"; case .activity: "Activity" } }
-    var icon: String { switch self { case .clubs: "building.2"; case .tournaments: "flag.2.crossed"; case .screens: "tv.and.mediabox"; case .activity: "list.bullet.rectangle" } }
+    var title: String {
+        switch self { case .overview: "Overview"; case .signups: "Sign-ups"; case .clubs: "Clubs"; case .tournaments: "Tournaments"; case .cameras: "Cameras"; case .screens: "Screens & phones"; case .activity: "Activity" }
+    }
+    var icon: String {
+        switch self { case .overview: "square.grid.2x2"; case .signups: "person.badge.plus"; case .clubs: "building.2"; case .tournaments: "flag.2.crossed"; case .cameras: "video"; case .screens: "tv.and.mediabox"; case .activity: "list.bullet.rectangle" }
+    }
 }
 
 /// Flagcast Admin inside the Manager: every club and tournament, through POST /golf/api/club/admin { token, op, … }
@@ -90,10 +103,25 @@ final class AdminModel {
     var newClub = false
     /// the Manager's sign-in token
     @ObservationIgnored var token: () -> String = { "" }
+    /// The Flagcast Admin passcode (the server's GOLF_CREATE_PASS), kept in the login Keychain. With it, Admin works
+    /// without signing in by email.
+    var pass: String? = Keychain.pass
     /// open a tournament in the Manager's desk
     @ObservationIgnored var onOpen: ((AdminEvent) -> Void)?
 
-    private func body(_ extra: [String: Any]) -> [String: Any] { var b = extra; b["token"] = token(); return b }
+    private func body(_ extra: [String: Any]) -> [String: Any] {
+        var b = extra; b["token"] = token()
+        if let pass, !pass.isEmpty { b["pass"] = pass }
+        return b
+    }
+    /// Try a passcode: kept in the Keychain if the server takes it.
+    func unlock(_ p: String) async throws {
+        let old = pass
+        pass = p.trimmingCharacters(in: .whitespacesAndNewlines)
+        do { try await refresh(); Keychain.pass = pass; await refreshEvents() }
+        catch { pass = old; throw error }
+    }
+    func forget() { pass = nil; Keychain.pass = nil; clubs = []; events = []; log = [] }
 
     @discardableResult
     func call(_ op: String?, _ extra: [String: Any] = [:]) async throws -> [String: Any] {
@@ -135,9 +163,60 @@ final class AdminModel {
         do { try await call("day", ["id": event, "day": d]); await refreshEvents(); if let done { flash(done) } }
         catch { flash(error.localizedDescription) }
     }
+    /// Change a tournament's TVs (name, where, what they show normally, remove) from Admin, with its desk key.
+    func editTVs(_ e: AdminEvent, done: String, _ change: @escaping (inout [Display]) -> Void) async {
+        do {
+            var ev = try await Net.deskGet(e.id, e.key)
+            change(&ev.displays)
+            _ = try await Net.deskSave(e.id, e.key, ev)
+            await refreshEvents(); flash(done)
+        } catch { flash(error.localizedDescription) }
+    }
+    /// Set a tournament's par 3 camera links (Flagcast only; clubs can't).
+    func saveCams(_ id: String, _ cams: [Int: String]) async -> Bool {
+        do {
+            try await call("cams", ["id": id, "cams": Dictionary(uniqueKeysWithValues: cams.filter { !$0.value.trimmingCharacters(in: .whitespaces).isEmpty }.map { ("\($0.key)", $0.value.trimmingCharacters(in: .whitespaces)) })])
+            await refreshEvents(); flash("Cameras saved. TVs and phones have them now.")
+            return true
+        } catch { flash(error.localizedDescription); return false }
+    }
+    /// An NDI camera's Cloudflare Stream input for one hole: the RTMPS address to push to (with its key), or nil when
+    /// Stream isn't set up on the server. The server also points the hole's camera link at the Stream playback.
+    func streamTarget(_ id: String, _ hole: Int) async -> (push: String?, problem: String?) {
+        do {
+            let j = try await call("stream", ["id": id, "hole": hole])
+            let r = j["rtmps"] as? [String: Any]
+            guard let url = r?["url"] as? String, let key = r?["streamKey"] as? String, !url.isEmpty, !key.isEmpty else { return (nil, "Cloudflare Stream gave no address.") }
+            return ((url.hasSuffix("/") ? url : url + "/") + key, nil)
+        } catch { return (nil, error.localizedDescription) }
+    }
+    /// Is each streamed hole's camera reaching Cloudflare? → [hole: "connected" | "disconnected" | "unknown"], nil = Stream not set up
+    func streamHealth(_ id: String) async -> [Int: String]? {
+        guard let j = try? await call("streams", ["id": id]), j["ready"] as? Bool == true else { return nil }
+        let h = j["holes"] as? [String: String] ?? [:]
+        return Dictionary(uniqueKeysWithValues: h.compactMap { k, v in Int(k).map { ($0, v) } })
+    }
     func flash(_ s: String) { notice = s; Task { try? await Task.sleep(for: .seconds(4)); if notice == s { notice = nil } } }
     func open(_ id: String) {
         if let e = events.first(where: { $0.id == id }) { onOpen?(e); return }
         Task { await refreshEvents(); if let e = events.first(where: { $0.id == id }) { onOpen?(e) } }
+    }
+}
+
+/// The Admin passcode in the login Keychain (Flagcast Manager's own item; test builds keep their own).
+enum Keychain {
+    private static let service = Bundle.main.bundleIdentifier ?? "app.flagcast.manager", account = "admin-passcode"
+    static var pass: String? {
+        get {
+            var out: AnyObject?
+            let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account, kSecReturnData as String: true]
+            guard SecItemCopyMatching(q as CFDictionary, &out) == errSecSuccess, let d = out as? Data else { return nil }
+            return String(data: d, encoding: .utf8)
+        }
+        set {
+            let q: [String: Any] = [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
+            SecItemDelete(q as CFDictionary)
+            if let v = newValue, !v.isEmpty { var a = q; a[kSecValueData as String] = Data(v.utf8); SecItemAdd(a as CFDictionary, nil) }
+        }
     }
 }

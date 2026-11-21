@@ -118,6 +118,7 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 
 <form id="gate" class="box" hidden>
   <h2>Flagcast Admin</h2>
+  <p class="help" style="margin:0 0 6px"><a href="/golf/">Sign in with your Flagcast email</a> and Admin opens by itself. Or use the admin passcode:</p>
   <label>Admin passcode<input id="pass" type="password" autocomplete="current-password" required></label>
   <label style="display:flex;gap:8px;align-items:center;flex-direction:row"><input type="checkbox" id="remember" style="width:auto"> Remember on this computer</label>
   <button class="btn primary" style="width:100%">Open</button>
@@ -145,8 +146,10 @@ const money = (n) => `$${Number(n || 0).toLocaleString(undefined, { maximumFract
 const credText = (n) => (n < 0 ? 'Unlimited' : `${n} left`);
 const clubName = (id) => clubs.find((c) => c.id === id)?.name || '—';
 
+// signed in on /golf/ with an admin email: that sign-in opens Admin (no passcode needed)
+const clubToken = () => { try { return localStorage.getItem('flagcast:club-token') || ''; } catch { return ''; } };
 async function call(body) {
-  const r = await fetch('/golf/api/club/admin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pass, ...body }) });
+  const r = await fetch('/golf/api/club/admin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pass, token: clubToken(), ...body }) });
   const j = await r.json().catch(() => ({}));
   if (r.status === 403 && !body.op) throw Object.assign(new Error(j.error || 'That passcode is not right.'), { gate: true });
   if (!r.ok) throw new Error(j.error || 'That didn’t work.');
@@ -458,7 +461,7 @@ $('view').addEventListener('submit', async (e) => {
 
 async function start() {
   try { await admin({}); $('gate').hidden = true; $('app').hidden = false; $('lock').hidden = false; $('tabs').hidden = false; }
-  catch (x) { $('gate').hidden = false; $('app').hidden = true; $('lock').hidden = true; $('tabs').hidden = true; if (pass) $('gErr').textContent = x.message; }
+  catch (x) { $('gate').hidden = false; $('app').hidden = true; $('lock').hidden = true; $('tabs').hidden = true; if (pass || clubToken()) $('gErr').textContent = pass ? x.message : 'That sign-in isn’t a Flagcast admin. Use the passcode.'; }
 }
 $('gate').addEventListener('submit', async (e) => {
   e.preventDefault(); $('gErr').textContent = ''; pass = $('pass').value;

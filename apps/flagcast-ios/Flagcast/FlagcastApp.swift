@@ -4,6 +4,7 @@ import SwiftUI
 struct FlagcastApp: App {
     @State private var router = Router()
     @Environment(\.scenePhase) private var phase
+    init() { FCType.registerFonts() }
 
     var body: some Scene {
         WindowGroup {

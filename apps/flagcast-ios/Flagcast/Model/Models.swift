@@ -139,18 +139,25 @@ struct Contest: Codable, Hashable, Identifiable {
 }
 
 struct PageRef: Codable, Hashable { var k: String; var fl: String = ""; var hole: Int = 0; var sponsor: String = ""; var secs: Int = 12
-    init(k: String, fl: String = "", hole: Int = 0, sponsor: String = "") { self.k = k; self.fl = fl; self.hole = hole; self.sponsor = sponsor }
+    /// a page sent to a screen for a while: when it ends (ms since 1970), 0 = until someone changes it
+    var until: Double = 0
+    init(k: String, fl: String = "", hole: Int = 0, sponsor: String = "", secs: Int = 12) { self.k = k; self.fl = fl; self.hole = hole; self.sponsor = sponsor; self.secs = secs }
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
-        k = c.str(.k); fl = c.str(.fl); hole = c.int(.hole, 0); sponsor = c.str(.sponsor); secs = c.int(.secs, 12)
+        k = c.str(.k); fl = c.str(.fl); hole = c.int(.hole, 0); sponsor = c.str(.sponsor); secs = c.int(.secs, 12); until = c.dbl(.until, 0)
     }
+    /// still on: sent until someone changes it, or its time isn't up
+    var isOn: Bool { until == 0 || until > Date().timeIntervalSince1970 * 1000 }
 }
 struct Display: Codable, Hashable, Identifiable {
     var id: String, name: String, playlist: [PageRef]
+    /// where it hangs ("Clubhouse bar") and a group to send to together ("Clubhouse")
+    var place = "", group = ""
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
-        id = c.str(.id); name = c.str(.name); playlist = c.list(.playlist)
+        id = c.str(.id); name = c.str(.name); playlist = c.list(.playlist); place = c.str(.place); group = c.str(.group)
     }
+    enum CodingKeys: String, CodingKey { case id, name, playlist, place = "where", group }
 }
 
 struct Fund: Codable, Hashable {

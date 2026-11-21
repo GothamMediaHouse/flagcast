@@ -1,11 +1,10 @@
 import SwiftUI
 
-let PAGE_NAMES: [(String, String)] = [("lb", "Leaderboard"), ("p3", "Par 3 camera"), ("cam", "One hole’s camera"), ("contests", "Contests"), ("skins", "Skins"),
-                                      ("fund", "Fundraising"), ("sponsors", "All sponsors"), ("sponsor", "One sponsor"), ("schedule", "Schedule")]
 
 /// Staff and playlists: golf pros' and marshals' PINs, the club's screens and what each plays, and the schedule.
 struct StaffView: View {
     @Bindable var doc: DeskDoc
+    @Environment(DeskNav.self) private var nav
 
     var body: some View {
         DeskPage(doc: doc, section: .staff) {
@@ -33,10 +32,14 @@ struct StaffView: View {
                 Help("They sign in to the Flagcast phone app with the tournament code and their PIN (4 to 8 digits). A golf pro can fix scores, switch screens, take over the screens and nudge a cart. A marshal can only post contest results.")
             }
             SwiftUI.Section {
-                ForEach($doc.ev.displays) { $d in DisplayEditor(display: $d, doc: doc) }
-                Button { doc.ev.displays.append(Display(name: "Screen \(doc.ev.displays.count + 1)")) } label: { Label("Add Screen", systemImage: "plus") }
-            } header: { Text("Screens at the club") } footer: {
-                Help("Add each TV or LED wall and pick what it plays, in order. Open its link full screen on that TV. A screen with an empty list shows everything.")
+                HStack {
+                    Text(doc.ev.displays.isEmpty ? "No TVs yet." : "\(doc.ev.displays.count) TV\(doc.ev.displays.count == 1 ? "" : "s"): \(doc.ev.displays.map(\.name).joined(separator: ", "))")
+                        .foregroundStyle(.secondary).lineLimit(1)
+                    Spacer()
+                    Button("Go to Screens") { nav.section = .screens }
+                }
+            } header: { Text("TVs at the club") } footer: {
+                Help("The club’s TVs and what they show are on the Screens page.")
             }
             SwiftUI.Section {
                 ForEach($doc.ev.schedule.indices, id: \.self) { i in
@@ -54,45 +57,6 @@ struct StaffView: View {
     private func addPin(_ role: String) {
         let pin = String(format: "%04d", Int.random(in: 1000...9999))
         doc.ev.pins.append(StaffPin(name: role == "pro" ? "Golf pro" : "Marshal \(doc.ev.pins.filter { $0.role == "marshal" }.count + 1)", role: role, pin: pin))
-    }
-}
-
-/// One screen at the club: its name, its link, whether it's on, and its playlist.
-struct DisplayEditor: View {
-    @Binding var display: Display
-    let doc: DeskDoc
-    private var url: String { "\(doc.boardURL.absoluteString)?screen=\(display.id)" }
-    private var on: Int { doc.live?.online[display.id] ?? 0 }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Circle().fill(on > 0 ? Color.green : Color.secondary.opacity(0.4)).frame(width: 8, height: 8).help(on > 0 ? "On now" : "Not connected")
-                TextField("Screen name", text: $display.name).fontWeight(.medium)
-                Button("Copy Link") { copy(url) }
-                Button("Open") { NSWorkspace.shared.open(URL(string: url)!) }
-                Button(role: .destructive) { doc.ev.displays.removeAll { $0.id == display.id } } label: { Image(systemName: "trash") }.buttonStyle(.borderless)
-            }
-            ForEach($display.playlist.indices, id: \.self) { k in
-                HStack {
-                    Text("\(k + 1)").monospacedDigit().foregroundStyle(.secondary).frame(width: 18)
-                    Picker("", selection: $display.playlist[k].k) { ForEach(PAGE_NAMES, id: \.0) { Text($0.1).tag($0.0) } }.labelsHidden().frame(width: 170)
-                    switch display.playlist[k].k {
-                    case "lb": TextField("Flight", text: $display.playlist[k].fl, prompt: Text("All flights")).frame(width: 100)
-                    case "p3", "cam": Picker("", selection: $display.playlist[k].hole) {
-                        Text("Each in turn").tag(0); ForEach(doc.ev.course.holes.filter { display.playlist[k].k == "cam" || $0.par == 3 }, id: \.n) { Text("Hole \($0.n)").tag($0.n) } }.labelsHidden().frame(width: 130)
-                    case "sponsor": Picker("", selection: $display.playlist[k].sponsor) { Text("Pick one").tag(""); ForEach(doc.ev.sponsors) { Text($0.name).tag($0.id) } }.labelsHidden().frame(width: 160)
-                    default: EmptyView()
-                    }
-                    Stepper("\(display.playlist[k].secs) s", value: $display.playlist[k].secs, in: 4...300, step: 2).monospacedDigit()
-                    Spacer()
-                    Button { if k > 0 { display.playlist.swapAt(k, k - 1) } } label: { Image(systemName: "arrow.up") }.buttonStyle(.borderless).disabled(k == 0)
-                    Button(role: .destructive) { display.playlist.remove(at: k) } label: { Image(systemName: "minus.circle") }.buttonStyle(.borderless)
-                }
-            }
-            Button { display.playlist.append(PageRef(k: "lb")) } label: { Label("Add a Page", systemImage: "plus") }.controlSize(.small)
-        }
-        .padding(.vertical, 4)
     }
 }
 

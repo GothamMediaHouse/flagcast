@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in with Google · Flagcast</title>
+<link rel="icon" href="/golf/brand/mark.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/golf/golf.css">
+<style>
+  body { background: #123628; color: #eef3ec; display: grid; place-items: center; min-height: 100vh; margin: 0; font-family: Inter, system-ui, sans-serif; }
+  .card { background: #fff; color: #14201a; border-radius: 16px; padding: 28px; width: min(420px, 92vw); box-shadow: 0 10px 40px rgba(0,0,0,.3); text-align: center; }
+  .card h1 { margin: 0 0 6px; font-size: 24px; }
+  .card p { color: #56625a; margin: 0 0 18px; }
+  #g { display: flex; justify-content: center; min-height: 44px; }
+  .err { color: #c8312b; margin-top: 12px; min-height: 1.2em; }
+</style>
+</head>
+<body>
+<!-- Sign in with Google for Flagcast club accounts. The website's sign-in opens it in a popup-free page; the Manager
+     apps open it with ?app=1 (in a sign-in sheet) and get the Flagcast session back on flagcastmanager://signin. -->
+<div class="card">
+  <img src="/golf/brand/mark.svg" alt="" width="48" height="48" style="border-radius:12px">
+  <h1>Sign in to Flagcast</h1>
+  <p id="msg">With your Google account.</p>
+  <div id="g"></div>
+  <div class="err" id="err" role="alert"></div>
+</div>
+<script type="module">
+const q = new URLSearchParams(location.search), app = q.get('app') === '1';
+const $ = (id) => document.getElementById(id);
+const post = async (op, body) => {
+  const r = await fetch(`/golf/api/club/${op}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'That didn’t work. Try again.'); return j;
+};
+async function signedIn(res) {
+  $('err').textContent = '';
+  try {
+    const { token } = await post('google', { idToken: res.credential });
+        try { localStorage.setItem('flagcast:club-token', token); } catch {}
+    location.href = q.get('next') === 'admin' ? '/golf/admin/' : '/golf/';
+  } catch (e) { $('err').textContent = e.message; }
+}
+const { google: clientId } = await post('config', {}).catch(() => ({ google: '' }));
+if (!clientId) { $('msg').textContent = 'Sign in with Google isn’t switched on yet. Use your email instead.'; }
+else {
+  const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true;
+  s.onload = () => {
+    // the apps: Google posts the sign-in to the server, which hands the session back to the app; the website: a popup
+    window.google.accounts.id.initialize(app ? { client_id: clientId, ux_mode: 'redirect', login_uri: `${location.origin}/golf/api/club/google-app`, auto_select: false }
+                                             : { client_id: clientId, callback: signedIn, ux_mode: 'popup', auto_select: false });
+    window.google.accounts.id.renderButton($('g'), { theme: 'outline', size: 'large', text: 'signin_with', shape: 'pill', width: 300 });
+  };
+  document.head.appendChild(s);
+}
+</script>
+</body>
+</html>

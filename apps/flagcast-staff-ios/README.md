@@ -1,11 +1,12 @@
-# Flagcast Manager and Flagcast Admin for iPhone and iPad
+# Flagcast Manager for iPhone and iPad
 
-Two small native apps so a club (Manager) and Flagcast (Admin) can adjust things on the course from a phone or
-tablet. They load the same pages as the Mac apps — https://flagcast.app/golf/ (club sign-in, tournaments, desk)
-and https://flagcast.app/golf/admin/ — so they update whenever the site does. The shell adds: sign-ins kept on
-the device, a native Back / Home bar away from the start page, pull to refresh, other sites in Safari view,
-downloaded files (reports) to the share sheet, and a "Can't reach Flagcast" screen with Try again.
+Flagcast Manager (`app.flagcast.manager`, iPhone and iPad, iOS 17+, team C8KXPB4QNA) is a native SwiftUI app: a club
+runs its tournament day from it (Today, Teams, Scores, Screens, More). Signing in with a Flagcast admin email, or the
+admin passcode (Settings), adds the Admin tab: clubs, every tournament, any club's TVs and players' phones, activity.
 
-- Open `FlagcastStaff.xcodeproj`; schemes **Manager** (`app.flagcast.manager`) and **Admin** (`app.flagcast.admin`),
-  iPhone and iPad, iOS 17+, team C8KXPB4QNA. `Shared/WebShell.swift` is the code both use.
+- `python3 tools/make-project.py` writes `FlagcastStaff.xcodeproj`. `Manager/` and `Admin/` are synchronized folders.
+- Shared by reference: the tournament model, scoring math and live feed from the iPhone player app
+  (`../flagcast-ios`), and the desk model, server calls, Admin model, course pictures and TV logic from the Mac app
+  (`../flagcast-mac`). Change them there; all three apps pick them up.
+- `Admin` (`app.flagcast.admin`) is retired: its last build only says Admin is now in Manager.
 - Debug builds can point at a local copy of the site with the launch argument `-FlagcastServer http://localhost:8787`.

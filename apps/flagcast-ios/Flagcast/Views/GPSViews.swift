@@ -20,7 +20,7 @@ struct GPSCard: View {
                 HStack(alignment: .center, spacing: 14) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(y?.m.map(String.init) ?? "—")
-                            .font(.system(size: 46, weight: .heavy)).fontWidth(.condensed).monospacedDigit()
+                            .font(FCType.display(46)).monospacedDigit()
                             .contentTransition(.numericText())
                         Text(o?.me == true ? "to the middle" : "middle, from the tee").fcLabel().foregroundStyle(Color.fcOnGreenMuted)
                     }
@@ -302,7 +302,7 @@ struct CourseView: View {
             Button { dismiss() } label: { Image(systemName: "xmark").font(.headline).frame(width: 40, height: 40).background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 8)) }
                 .accessibilityLabel("Close")
             VStack(alignment: .leading, spacing: 2) {
-                Text("Hole \(hole)").font(.system(.title2, weight: .heavy)).fontWidth(.condensed).textCase(.uppercase)
+                Text("Hole \(hole)").font(FCType.display(30)).textCase(.uppercase)
                 Text("Par \(H.par)\(H.yds > 0 ? " · \(H.yds) yds" : "")").font(.caption.monospaced()).foregroundStyle(Color(UIColor(hex: 0xa9bdb0)))
             }
             Spacer()
@@ -332,7 +332,7 @@ struct CourseView: View {
         if let h, let o = origin {
             let y = Geo.yardages(h, from: o.at)
             VStack(alignment: .trailing, spacing: 2) {
-                Text(y.m.map(String.init) ?? "—").font(.system(size: 40, weight: .heavy)).fontWidth(.condensed).foregroundStyle(.white).monospacedDigit()
+                Text(y.m.map(String.init) ?? "—").font(FCType.display(40)).foregroundStyle(.white).monospacedDigit()
                 Text(o.me ? "to the middle" : "from the tee")
                 if y.f != nil || y.b != nil {
                     Text([y.f.map { "Front \($0)" }, y.b.map { "Back \($0)" }].compactMap { $0 }.joined(separator: " · "))

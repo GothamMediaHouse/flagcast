@@ -19,6 +19,7 @@ struct ManagerApp: App {
                     #if DEBUG
                     Snapshots.run(model)
                     SelfTest.run(model)
+                    NDISelfTest.run()
                     #endif
                 }
         }
@@ -33,6 +34,18 @@ struct ManagerApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ n: Notification) { Updates.shared.start() }
     func applicationShouldTerminateAfterLastWindowClosed(_ app: NSApplication) -> Bool { true }
+    /// NDI cameras stop when the app quits: say so first.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let n = MainActor.assumeIsolated { Bridges.shared.running.count }
+        guard n > 0 else { return .terminateNow }
+        let a = NSAlert()
+        a.messageText = "Stop \(n) NDI camera\(n == 1 ? "" : "s")?"
+        a.informativeText = "The clubhouse TVs and phones stop getting \(n == 1 ? "this camera" : "these cameras") when Flagcast Manager quits."
+        a.addButton(withTitle: "Keep Running"); a.addButton(withTitle: "Quit Anyway")
+        if a.runModal() == .alertFirstButtonReturn { return .terminateCancel }
+        MainActor.assumeIsolated { Bridges.shared.stopAll() }
+        return .terminateNow
+    }
 }
 
 struct ManagerCommands: Commands {
@@ -47,6 +60,10 @@ struct ManagerCommands: Commands {
             Button("Revert to Saved") { model.current?.revert() }.disabled(!(model.current?.dirty ?? false))
         }
         CommandGroup(after: .appSettings) { Button("Check for Updates…") { Updates.shared.check() } }
+        CommandGroup(after: .toolbar) {
+            Button(model.adminMode ? "Back to Manager" : "Flagcast Admin") { model.adminMode.toggle() }
+                .keyboardShortcut("a", modifiers: [.command, .option]).disabled(!model.isAdmin)
+        }
         CommandMenu("Tournament") {
             ForEach(Section.allCases) { s in
                 if let k = s.key { Button(s.title) { model.section = s }.keyboardShortcut(k, modifiers: .command).disabled(model.selection == nil) }
@@ -61,9 +78,13 @@ struct ManagerCommands: Commands {
             Divider()
             Button("Open the Board") { if let d = model.current { NSWorkspace.shared.open(d.boardURL) } }.disabled(model.current == nil)
             Button("Open Live Leaderboard") { if let d = model.current { NSWorkspace.shared.open(d.liveURL) } }.disabled(model.current == nil)
-            Button("All Tournaments") { model.selection = nil }.keyboardShortcut("h", modifiers: [.command, .shift])
+            Button("Home") { model.adminMode = false; model.selection = nil }.keyboardShortcut("h", modifiers: [.command, .shift])
         }
-        CommandGroup(replacing: .help) { Button("Flagcast Help") { NSWorkspace.shared.open(URL(string: "https://flagcast.app")!) } }
+        CommandGroup(replacing: .help) {
+            Button("Flagcast Help") { NSWorkspace.shared.open(URL(string: "https://flagcast.app")!) }
+            Divider()
+            SettingsLink { Text("Flagcast Admin Passcode…") }
+        }
     }
 }
 
@@ -71,12 +92,19 @@ struct RootView: View {
     @Environment(AppModel.self) private var model
     var body: some View {
         HStack(spacing: 0) {
-            ManagerSidebar().frame(width: 248)
-            Group {
-                if let a = model.adminSection { AdminPage(section: a) }
-                else if let d = model.current { DeskView(doc: d).id(d.id) } else { HomeView() }
+            if model.isAdmin && model.adminMode {
+                AdminSidebar().frame(width: 248)
+                AdminPage(section: model.adminSection ?? .overview).frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ManagerSidebar().frame(width: 248)
+                Group {
+                    if let d = model.current { DeskView(doc: d).id(d.id) }
+                    else if model.signedIn, model.me != nil, model.me?.club == nil, !model.isAdmin, model.events.isEmpty { WelcomeView() }
+                    else if model.signedIn, model.me != nil { HomeDashboard() }
+                    else { HomeView() }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .ignoresSafeArea()
         .background(FC.paper)
@@ -97,6 +125,7 @@ struct ManagerSidebar: View {
         @Bindable var nav = nav
         VStack(alignment: .leading, spacing: 14) {
             Color.clear.frame(height: 26).contentShape(Rectangle()).gesture(WindowDragGesture())   // room for the window buttons
+            if model.isAdmin { ModeSwitch() }
             HStack(spacing: 10) {
                 FlagcastMark(size: 34)
                 VStack(alignment: .leading, spacing: 3) {
@@ -123,7 +152,6 @@ struct ManagerSidebar: View {
                             .font(.system(size: 12)).foregroundStyle(FC.onGreenMuted).padding(.horizontal, 8).padding(.vertical, 4)
                     }
                     ForEach(model.shownEvents) { e in eventRow(e) }
-                    if model.isAdmin { adminSection }
                 }
             }
             .scrollIndicators(.never)
@@ -159,8 +187,8 @@ struct ManagerSidebar: View {
     }
 
     @ViewBuilder private func eventRow(_ e: EventRef) -> some View {
-        let open = model.selection == e.id && model.adminSection == nil
-        Button { model.adminSection = nil; if open { model.selection = nil } else { model.selection = e.id; nav.section = .overview } } label: {
+        let open = model.selection == e.id
+        Button { if open { model.selection = nil } else { model.selection = e.id; nav.section = .overview } } label: {
             HStack(spacing: 8) {
                 Image(systemName: open ? "chevron.down" : "chevron.right").font(.system(size: 9, weight: .heavy)).foregroundStyle(FC.onGreenMuted).frame(width: 10)
                 Text(e.name).font(.system(size: 14, weight: open ? .semibold : .regular)).lineLimit(1)
@@ -179,7 +207,7 @@ struct ManagerSidebar: View {
         if open {
             ForEach(Section.allCases) { s in
                 let on = nav.section == s
-                Button { model.adminSection = nil; nav.section = s } label: {
+                Button { nav.section = s } label: {
                     HStack(spacing: 10) {
                         Image(systemName: s.icon).font(.system(size: 13)).frame(width: 18).foregroundStyle(on ? FC.green : FC.onGreenMuted)
                         Text(s.title).font(.system(size: 13, weight: on ? .semibold : .medium)).lineLimit(1).minimumScaleFactor(0.85)
@@ -193,32 +221,6 @@ struct ManagerSidebar: View {
                 }
                 .buttonStyle(.plain)
             }
-        }
-    }
-    /// Flagcast staff only: clubs, every tournament, screens and phones, activity.
-    @ViewBuilder private var adminSection: some View {
-        HStack(spacing: 6) {
-            Text("ADMIN").font(.system(size: 10, weight: .bold)).tracking(1.4).foregroundStyle(.white)
-                .padding(.horizontal, 5).padding(.vertical, 2).background(FC.red, in: RoundedRectangle(cornerRadius: 3))
-            Spacer()
-        }
-        .padding(.horizontal, 8).padding(.top, 14).padding(.bottom, 4)
-        ForEach(AdminSection.allCases) { a in
-            let on = model.adminSection == a
-            Button { model.adminSection = a } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: a.icon).font(.system(size: 13)).frame(width: 18).foregroundStyle(on ? FC.green : FC.onGreenMuted)
-                    Text(a.title).font(.system(size: 13, weight: on ? .semibold : .medium))
-                    Spacer()
-                    let n = a == .clubs ? model.admin.clubs.filter { $0.status == "pending" }.count : 0
-                    if n > 0 { Text("\(n)").font(.system(size: 12, weight: .bold)).foregroundStyle(on ? FC.green : FC.flag) }
-                }
-                .foregroundStyle(on ? FC.green : Color(hex: 0xdfe8e1))
-                .padding(.horizontal, 8).padding(.vertical, 6)
-                .background(on ? FC.onGreen : .clear, in: RoundedRectangle(cornerRadius: 7))
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
         }
     }
     private var initials: String {
@@ -243,8 +245,11 @@ struct AdminPage: View {
     var body: some View {
         Group {
             switch section {
+            case .overview: AdminOverview()
+            case .signups: SignupsView()
             case .clubs: ClubsView()
             case .tournaments: TournamentsView()
+            case .cameras: CamerasView()
             case .screens: ScreenControlView()
             case .activity: ActivityView()
             }

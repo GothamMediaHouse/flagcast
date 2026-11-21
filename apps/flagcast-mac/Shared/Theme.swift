@@ -187,10 +187,10 @@ struct HeroTitle: View {
 struct CourseHeroImage: View {
     var image: NSImage?
     var body: some View {
-        ZStack {
-            LinearGradient(colors: [FC.green2, FC.green], startPoint: .topLeading, endPoint: .bottomTrailing)
-            if let image { Image(nsImage: image).resizable().aspectRatio(contentMode: .fill).transition(.opacity) }
-        }
+        // The photo is an overlay, so a wide photo can't make the view wider than the space it's given (it was pushing cards under the sidebar).
+        LinearGradient(colors: [FC.green2, FC.green], startPoint: .topLeading, endPoint: .bottomTrailing)
+            .overlay { if let image { Image(nsImage: image).resizable().aspectRatio(contentMode: .fill).transition(.opacity) } }
+            .clipped()
         .animation(.easeOut(duration: 0.4), value: image != nil)
     }
 }

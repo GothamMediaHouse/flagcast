@@ -9,6 +9,8 @@ struct ScorecardScreen: View {
     @State private var sideGames = false
     @State private var camera: CameraLink?
     @State private var dismissed = 0.0
+    @State private var replay: Replay?
+    @State private var replaySeen = 0.0
     @Environment(Router.self) private var router
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -55,6 +57,10 @@ struct ScorecardScreen: View {
             Button("OK", role: .cancel) {}
         } message: { Text(model.nudge?.text ?? "") }
         .sheet(isPresented: $sideGames) { SideGamesSheet(model: model) }
+        .fullScreenCover(item: $replay) { r in
+            ReplayFullscreen(replay: r, camURL: model.state?.cams[r.hole].flatMap(URL.init(string:)).flatMap { CameraLink(hole: r.hole, url: $0).isHLS ? $0 : nil },
+                             replays: model.state?.replays.filter { $0.hole == r.hole } ?? [])
+        }
         .sheet(item: $camera) { l in CameraSheet(link: l, replays: model.state?.replays.filter { $0.hole == l.hole } ?? []) }
     }
 
@@ -133,6 +139,15 @@ struct ScorecardScreen: View {
                 }
             }
             .animation(.spring(duration: 0.35), value: s.live.phone)
+            .overlay(alignment: .top) {
+                // a new par 3 replay: once, one tap plays it full screen
+                if let r = ReplayCast.current(s, id: model.id), replaySeen >= 0 {
+                    ReplayBanner(replay: r, watch: { ReplayCast.seen(r, id: model.id); replay = r; replaySeen += 1 },
+                                 close: { ReplayCast.seen(r, id: model.id); withAnimation { replaySeen += 1 } })
+                        .padding(.top, 8)
+                }
+            }
+            .animation(.spring(duration: 0.35), value: s.replays.first?.id)
             bottomBar(t, h)
         }
         .background(Color.fcPaper)
@@ -169,7 +184,7 @@ struct ScorecardScreen: View {
                         let par = s.course.holes[n - 1].par, on = n == cur, done = model.holeDone(n)
                         Button { model.hole = n } label: {
                             VStack(spacing: 0) {
-                                Text("\(n)").font(.title3.weight(.bold)).fontWidth(.condensed)
+                                Text("\(n)").font(FCType.display(24))
                                 Text("P\(par)").font(.system(size: 9, weight: .medium, design: .monospaced))
                                     .foregroundStyle(on ? Color.fcOnFlag : par == 3 ? Color.fcFlag : Color.fcOnGreenMuted)
                             }
@@ -196,15 +211,7 @@ struct ScorecardScreen: View {
     }
 
     private func holeHeader(_ s: EventState, _ H: Hole) -> some View {
-        HStack(alignment: .lastTextBaseline) {
-            Text("Hole \(H.n)").font(.system(.largeTitle, weight: .heavy)).fontWidth(.condensed).textCase(.uppercase)
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("Par \(H.par)").font(.headline.monospaced())
-                Text((H.yds > 0 ? "\(H.yds) yds · " : "") + "SI \(H.hcp)").font(.footnote.monospaced()).foregroundStyle(Color.fcMuted)
-            }
-        }
-        .accessibilityElement(children: .combine)
+        HolePhotoHeader(state: s, hole: H)
     }
 
     @ViewBuilder private func sponsors(_ s: EventState, _ h: Int) -> some View {
@@ -308,13 +315,13 @@ struct ScorecardScreen: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(stab ? "Points" : s.format.show == "gross" ? "Gross to par" : "Net to par").fcLabel()
                 Text(l.map { $0.played > 0 ? Core.fmtPar($0.score, stab) : "—" } ?? "—")
-                    .font(.system(.largeTitle, weight: .heavy)).fontWidth(.condensed)
+                    .font(FCType.display(44))
                     .foregroundStyle((l?.score ?? 0) < 0 && !stab && (l?.played ?? 0) > 0 ? Color.fcRed : Color.fcInk)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
                 Text("Position").fcLabel()
-                Text(l.map { $0.pos.isEmpty ? "—" : $0.pos } ?? "—").font(.system(.largeTitle, weight: .heavy)).fontWidth(.condensed)
+                Text(l.map { $0.pos.isEmpty ? "—" : $0.pos } ?? "—").font(FCType.display(44))
             }
         }
         .accessibilityElement(children: .combine)
@@ -358,7 +365,7 @@ struct AceCelebration: View {
             Confetti().ignoresSafeArea()
             VStack(spacing: 8) {
                 Image(systemName: "flag.fill").font(.system(size: 44)).foregroundStyle(Color.fcFlag)
-                Text("Hole in one!").font(.system(size: 46, weight: .heavy)).fontWidth(.condensed).textCase(.uppercase).foregroundStyle(.white)
+                Text("Hole in one!").font(FCType.display(46)).textCase(.uppercase).foregroundStyle(.white)
                 Text("It’s on the big screens now.").font(.headline).foregroundStyle(Color.fcOnGreenMuted)
             }
             .padding(28)
@@ -371,5 +378,36 @@ struct AceCelebration: View {
         .task { try? await Task.sleep(for: .seconds(4.5)); done() }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
+    }
+}
+
+/// The hole at the top of the scorecard: its picture from the course map (tee at the bottom, green at the top) with
+/// HOLE 7 in big white letters, par, yards and stroke index; a green card when the course isn't mapped.
+struct HolePhotoHeader: View {
+    let state: EventState
+    let hole: Hole
+    @State private var photo: UIImage?
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            LinearGradient(colors: [Color.fcGreen2, Color.fcGreen], startPoint: .topLeading, endPoint: .bottomTrailing)
+                .overlay { if let photo { Image(uiImage: photo).resizable().aspectRatio(contentMode: .fill).transition(.opacity) } }
+                .clipped()
+            LinearGradient(colors: [Color.fcScrim.opacity(0.85), Color.fcScrim.opacity(0)], startPoint: .bottom, endPoint: .center)
+            HStack(alignment: .lastTextBaseline) {
+                Text("Hole \(hole.n)").font(FCType.display(48)).textCase(.uppercase)
+                Spacer()
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text("Par \(hole.par)").font(FCType.display(26))
+                    Text((hole.yds > 0 ? "\(hole.yds) yds · " : "") + "SI \(hole.hcp)").font(.footnote.weight(.semibold)).opacity(0.85)
+                }
+            }
+            .foregroundStyle(.white).shadow(color: .black.opacity(0.4), radius: 6, y: 1)
+            .padding(.horizontal, 16).padding(.bottom, 12)
+        }
+        .frame(height: photo == nil ? 96 : 170)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .animation(.easeOut(duration: 0.35), value: photo != nil)
+        .task(id: "\(state.id)-\(hole.n)") { photo = await CoursePhoto.hole(state, hole.n) }
+        .accessibilityElement(children: .combine)
     }
 }
