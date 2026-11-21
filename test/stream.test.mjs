@@ -62,6 +62,12 @@ ok('upload health: connected / disconnected / unknown');
   assert.deepEqual(calls, ['GET /live_inputs/uidX/videos', 'DELETE /v1', 'DELETE /v2', 'DELETE /live_inputs/uidX']);
 }
 ok('removing a hole deletes its recordings and its live input');
+{
+  const f = async (url, init = {}) => url.endsWith('/videos') ? { ok: true, status: 200, json: async () => ({ success: true, result: [{ uid: 'v1' }] }) }
+    : { ok: false, status: 501, json: async () => ({ success: false, errors: [{ message: 'Not Implemented: Feature not supported' }] }) };
+  await assert.rejects(deleteInput(env, f, 'uidX'), /still finishing .* Try again in a minute/);
+}
+ok('a recording still being finished: try again in a minute');
 
 await assert.rejects(liveInput({ ...env, CF_ACCOUNT_ID: 'wrong' }, m.fetcher, { name: 'z' }), /not found/);
 ok('Stream errors come back as messages');
