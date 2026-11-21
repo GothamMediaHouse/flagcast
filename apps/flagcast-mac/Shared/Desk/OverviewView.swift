@@ -23,9 +23,17 @@ struct OverviewView: View {
         } content: {
             VStack(spacing: 18) {
                 stats.padding(.horizontal, 24)
-                HStack(alignment: .top, spacing: 16) {
-                    leaderboard.frame(maxWidth: .infinity).layoutPriority(1.35)
-                    contestTile.frame(maxWidth: .infinity)
+                // the leaderboard takes the room; the contest card keeps a fixed share (its photo never sets the width)
+                // side by side when the leaderboard still gets 420 pt; stacked in a narrow window
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 16) {
+                        leaderboard.frame(minWidth: 420, maxWidth: .infinity)
+                        contestTile.frame(width: 340)
+                    }
+                    VStack(spacing: 16) {
+                        leaderboard.frame(maxWidth: .infinity)
+                        contestTile.frame(maxWidth: .infinity).frame(height: 220)
+                    }
                 }
                 .padding(.horizontal, 24).padding(.bottom, 22)
             }
@@ -74,7 +82,7 @@ struct OverviewView: View {
                 Spacer()
                 Button("All scores ›") { nav.section = .scores }.buttonStyle(.plain).font(.system(size: 13, weight: .semibold)).foregroundStyle(FC.link)
             }
-            .padding(.horizontal, 16).padding(.vertical, 12)
+            .padding(.leading, 16).padding(.trailing, 20).padding(.vertical, 12)
             let top = Array(board.filter { $0.played > 0 }.prefix(5))
             if top.isEmpty {
                 VStack(spacing: 6) {
@@ -90,9 +98,9 @@ struct OverviewView: View {
                     Text(l.name).font(.system(size: 14, weight: .semibold)).lineLimit(1)
                     Spacer()
                     Text(l.thru == "F" ? "F" : "Thru \(l.thru)").font(.system(size: 12)).foregroundStyle(FC.muted).frame(width: 60, alignment: .leading)
-                    Text(scoreText(l)).font(FC.display(22)).foregroundStyle(scoreColor(l)).frame(width: 48, alignment: .trailing)
+                    Text(scoreText(l)).font(FC.display(22)).foregroundStyle(scoreColor(l)).lineLimit(1).fixedSize().frame(minWidth: 58, alignment: .trailing)
                 }
-                .padding(.horizontal, 16).padding(.vertical, 7)
+                .padding(.leading, 16).padding(.trailing, 20).padding(.vertical, 7)
             }
             Spacer(minLength: 0)
         }
@@ -107,7 +115,10 @@ struct OverviewView: View {
         let c = (live?.contests ?? ev.contests).first { !$0.isLongDrive } ?? (live?.contests ?? ev.contests).first
         let lead = c.flatMap { Core.contestLeader($0).first }
         return ZStack(alignment: .bottomLeading) {
-            if let c { HolePicture(id: doc.id, n: c.hole, h: ev.map.holes[c.hole], fallback: doc.picture.image) } else { CourseHeroImage(image: doc.picture.image) }
+            Color.clear.overlay {
+                if let c { HolePicture(id: doc.id, n: c.hole, h: ev.map.holes[c.hole], fallback: doc.picture.image) } else { CourseHeroImage(image: doc.picture.image) }
+            }
+            .clipped()
             LinearGradient(colors: [FC.scrim.opacity(0.88), FC.scrim.opacity(0)], startPoint: .bottom, endPoint: .init(x: 0.5, y: 0.35))
             VStack(alignment: .leading, spacing: 2) {
                 Text(c.map { "\($0.isLongDrive ? "LONG DRIVE" : "CLOSEST TO THE PIN") · HOLE \($0.hole)" } ?? "CONTESTS").font(.system(size: 11, weight: .bold)).tracking(1.2).foregroundStyle(FC.flag)

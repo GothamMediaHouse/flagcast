@@ -80,7 +80,7 @@ const contests = [
   ...par3.slice(0, 2).map((h, i) => ({ kind: 'ctp', hole: h, label: `Closest to the pin · hole ${h}`, sponsor: 'Par 3 Camera Sponsor', entries: [{ name: names[i * 3], dist: 54 + i * 31 }, { name: names[i * 3 + 5], dist: 97 + i * 12 }] })),
   ...par5.slice(0, 1).map((h) => ({ kind: 'ld', hole: h, label: `Longest drive · hole ${h}`, sponsor: '', entries: [{ name: names[9], dist: 287 }, { name: names[2], dist: 271 }] })),
 ];
-const today = new Date().toISOString().slice(0, 10);
+const d0 = new Date(), today = `${d0.getFullYear()}-${String(d0.getMonth() + 1).padStart(2, '0')}-${String(d0.getDate()).padStart(2, '0')}`; // the local day, not London's
 await desk('save', { setup: { ...got, name: NAME, club: CLUB, date: today, course: { name: courseName, holes, tees, at },
   format: { type: 'bestball', count: 1, allowance: 85, show: 'net' }, flights: ['A', 'B', 'C', 'D'], teams, sponsors, contests,
   screens: { ...(got.screens || {}), title: NAME, ticker: 'Welcome to the Sample Member-Guest · a Flagcast demo tournament', seconds: 12, rows: 10, skins: true },
