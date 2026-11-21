@@ -236,10 +236,9 @@ struct LeaderboardScreen: View {
             let st = Core.holeStats(s, s.scores, h.n)
             let sp = s.sponsors.first { $0.holes.contains(h.n) }
             VStack(alignment: .leading, spacing: 0) {
-                camera(s, hole: h.n)
+                camera(s, hole: h.n, sub: ["Par 3", h.yds > 0 ? "\(h.yds) yds" : ""].filter { !$0.isEmpty }.joined(separator: " · "))
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Hole \(h.n)").fcHeading(.title)
-                    Text(["Par 3", h.yds > 0 ? "\(h.yds) yds" : "", "SI \(h.hcp)", st.avg.map { String(format: "avg %.2f", $0) } ?? "", sp.map { "presented by \($0.name)" } ?? ""]
+                    Text(["SI \(h.hcp)", st.avg.map { String(format: "avg %.2f", $0) } ?? "", sp.map { "presented by \($0.name)" } ?? ""]
                         .filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(.footnote.monospaced()).foregroundStyle(Color.fcMuted)
                     if !st.aces.isEmpty {
@@ -260,7 +259,7 @@ struct LeaderboardScreen: View {
         }
     }
 
-    @ViewBuilder private func camera(_ s: EventState, hole: Int) -> some View {
+    @ViewBuilder private func camera(_ s: EventState, hole: Int, sub: String) -> some View {
         let url = s.cams[hole].flatMap(URL.init(string:))
         let replays = s.replays.filter { $0.hole == hole }
         if let url, !CameraLink(hole: hole, url: url).isHLS {
@@ -275,7 +274,7 @@ struct LeaderboardScreen: View {
             .buttonStyle(.plain)
             if !replays.isEmpty { CameraBox(hole: hole, camURL: nil, replays: replays).padding([.horizontal, .top], 14) }
         } else {
-            CameraBox(hole: hole, camURL: url, replays: replays).padding([.horizontal, .top], 14)
+            CameraBox(hole: hole, camURL: url, replays: replays, title: "Hole \(hole)", sub: sub).padding([.horizontal, .top], 14)
         }
     }
 

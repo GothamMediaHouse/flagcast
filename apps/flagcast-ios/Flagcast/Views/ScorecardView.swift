@@ -9,6 +9,8 @@ struct ScorecardScreen: View {
     @State private var sideGames = false
     @State private var camera: CameraLink?
     @State private var dismissed = 0.0
+    @State private var replay: Replay?
+    @State private var replaySeen = 0.0
     @Environment(Router.self) private var router
     @Environment(\.dynamicTypeSize) private var typeSize
 
@@ -55,6 +57,10 @@ struct ScorecardScreen: View {
             Button("OK", role: .cancel) {}
         } message: { Text(model.nudge?.text ?? "") }
         .sheet(isPresented: $sideGames) { SideGamesSheet(model: model) }
+        .fullScreenCover(item: $replay) { r in
+            ReplayFullscreen(replay: r, camURL: model.state?.cams[r.hole].flatMap(URL.init(string:)).flatMap { CameraLink(hole: r.hole, url: $0).isHLS ? $0 : nil },
+                             replays: model.state?.replays.filter { $0.hole == r.hole } ?? [])
+        }
         .sheet(item: $camera) { l in CameraSheet(link: l, replays: model.state?.replays.filter { $0.hole == l.hole } ?? []) }
     }
 
@@ -133,6 +139,15 @@ struct ScorecardScreen: View {
                 }
             }
             .animation(.spring(duration: 0.35), value: s.live.phone)
+            .overlay(alignment: .top) {
+                // a new par 3 replay: once, one tap plays it full screen
+                if let r = ReplayCast.current(s, id: model.id), replaySeen >= 0 {
+                    ReplayBanner(replay: r, watch: { ReplayCast.seen(r, id: model.id); replay = r; replaySeen += 1 },
+                                 close: { ReplayCast.seen(r, id: model.id); withAnimation { replaySeen += 1 } })
+                        .padding(.top, 8)
+                }
+            }
+            .animation(.spring(duration: 0.35), value: s.replays.first?.id)
             bottomBar(t, h)
         }
         .background(Color.fcPaper)
