@@ -20,14 +20,12 @@ struct ScreensView: View {
 
     var body: some View {
         DeskPage(doc: doc, section: .screens) {
-            PhotoSegments(options: [("TVs", "screens"), ("Sponsors & more", "settings")] + (nav.canEngineer() ? [("Engineering", "eng")] : []),
-                          selection: Binding(get: { tab == "eng" && !nav.canEngineer() ? "screens" : tab }, set: { tab = $0 }))
+            PhotoSegments(options: [("TVs", "screens"), ("Sponsors & more", "settings")], selection: Binding(get: { tab == "settings" ? "settings" : "screens" }, set: { tab = $0 }))
             Button("Open the board") { NSWorkspace.shared.open(doc.boardURL) }.buttonStyle(GlassButton())
         } title: {
-            HeroTitle(title: "Screens & sponsors", size: 52, sub: tab == "eng" ? "Every TV, routing, scenes and take-overs" : tab == "settings" ? "Sponsors, cameras, announcements" : "The TVs at the club and what they show", subBeside: true)
+            HeroTitle(title: "Screens & sponsors", size: 52, sub: tab == "settings" ? "Sponsors, cameras, announcements" : "The TVs at the club and what they show", subBeside: true)
         } content: {
-            if tab == "eng" && nav.canEngineer() { ScrollView { EngineeringView(src: doc.engSource).padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 22) } }
-            else if tab == "settings" { settings } else { ScreenWall(doc: doc) }
+            if tab == "settings" { settings } else { ScreenWall(doc: doc) }
         }
     }
 

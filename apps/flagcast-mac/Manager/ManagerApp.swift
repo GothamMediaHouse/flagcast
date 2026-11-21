@@ -63,9 +63,6 @@ struct ManagerCommands: Commands {
         CommandGroup(after: .toolbar) {
             Button(model.adminMode ? "Back to Manager" : "Flagcast Admin") { model.adminMode.toggle() }
                 .keyboardShortcut("a", modifiers: [.command, .option]).disabled(!model.isAdmin)
-            Button("Engineering") { UserDefaults.standard.set("eng", forKey: "screens.tab"); model.adminMode = false; model.section = .screens }
-                .keyboardShortcut("e", modifiers: [.command, .option])
-                .disabled(model.selection == nil || !(model.isAdmin || model.showEngineering))
         }
         CommandMenu("Tournament") {
             ForEach(Section.allCases) { s in
