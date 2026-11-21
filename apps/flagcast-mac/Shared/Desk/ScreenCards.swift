@@ -29,75 +29,146 @@ struct PageChoices {
     }
 }
 
-/// How long Send now keeps the page on before the screen goes back to its playlist.
+/// How long "Show something else" keeps the page on before the TV goes back to normal.
 enum SendLength: Int, CaseIterable, Identifiable {
     case five = 5, fifteen = 15, changed = 0
     var id: Int { rawValue }
-    var title: String { switch self { case .five: "5 min"; case .fifteen: "15 min"; case .changed: "Until I change it" } }
+    var title: String { switch self { case .five: "For 5 minutes"; case .fifteen: "For 15 minutes"; case .changed: "Until I switch back" } }
 }
 
-/// "Showing … until 3:42 PM" or "Playing its playlist".
+/// "Showing the Leaderboard until 3:42 PM" or "Showing its normal mix".
 func screenStatus(_ force: PageRef?, playlist: [PageRef], choices: PageChoices) -> String {
     if let f = force, f.isOn {
         let page = choices.label(f)
-        return f.until > 0 ? "\(page) until \(Date(timeIntervalSince1970: f.until / 1000).formatted(date: .omitted, time: .shortened))" : "\(page), until you change it"
+        return f.until > 0 ? "Showing \(page) until \(Date(timeIntervalSince1970: f.until / 1000).formatted(date: .omitted, time: .shortened)), then back to normal"
+                           : "Showing \(page) until you switch back"
     }
-    if playlist.isEmpty { return "Playing everything (no playlist)" }
-    return "Playing its playlist · \(playlist.count) page\(playlist.count == 1 ? "" : "s")"
+    return "Showing its normal: \(ShowTile.matching(playlist)?.title ?? "your own mix")"
 }
 
-// MARK: - Send now
+// MARK: - what a TV shows normally
 
-/// Pick a page (and its flight, hole or sponsor) and how long, then send it.
+/// The big choice on each TV: a ready-made show with sensible timings.
+enum ShowTile: String, CaseIterable, Identifiable {
+    case mix, leaderboard, camera, sponsors, contests
+    var id: String { rawValue }
+    var title: String { switch self { case .mix: "Mix"; case .leaderboard: "Leaderboard"; case .camera: "Par 3 camera"; case .sponsors: "Sponsors"; case .contests: "Contests" } }
+    var note: String { switch self { case .mix: "Recommended"; case .leaderboard: "Scores only"; case .camera: "The live hole"; case .sponsors: "Logos, in turn"; case .contests: "Closest & longest" } }
+    var icon: String { switch self { case .mix: "sparkles.tv"; case .leaderboard: "list.number"; case .camera: "video"; case .sponsors: "star"; case .contests: "flag.2.crossed" } }
+    var pages: [PageRef] {
+        switch self {
+        case .mix: [PageRef(k: "lb", secs: 15), PageRef(k: "p3", secs: 20), PageRef(k: "sponsors", secs: 8)]
+        case .leaderboard: [PageRef(k: "lb", secs: 20)]
+        case .camera: [PageRef(k: "p3", secs: 30)]
+        case .sponsors: [PageRef(k: "sponsors", secs: 10)]
+        case .contests: [PageRef(k: "contests", secs: 15)]
+        }
+    }
+    /// the tile a list came from (pages and order; timings may have been changed)
+    static func matching(_ list: [PageRef]) -> ShowTile? {
+        allCases.first { t in t.pages.count == list.count && zip(t.pages, list).allSatisfy { $0.k == $1.k && $1.fl.isEmpty && $1.hole == 0 && $1.sponsor.isEmpty } }
+    }
+}
+
+struct ShowTiles: View {
+    @Binding var playlist: [PageRef]
+    var body: some View {
+        let on = ShowTile.matching(playlist)
+        HStack(spacing: 8) {
+            ForEach(ShowTile.allCases) { t in
+                let sel = on == t
+                Button { withAnimation(.snappy) { playlist = t.pages } } label: {
+                    VStack(spacing: 4) {
+                        Image(systemName: t.icon).font(.system(size: 18, weight: .semibold))
+                        Text(t.title).font(.system(size: 12, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
+                        Text(t.note).font(.system(size: 10)).opacity(0.75).lineLimit(1).minimumScaleFactor(0.8)
+                    }
+                    .foregroundStyle(sel ? FC.onGreen : FC.ink)
+                    .frame(maxWidth: .infinity).padding(.vertical, 10)
+                    .background(sel ? FC.green : FC.paper2.opacity(0.6), in: RoundedRectangle(cornerRadius: 9))
+                    .overlay(RoundedRectangle(cornerRadius: 9).stroke(sel ? FC.flag : FC.line, lineWidth: sel ? 2 : 1))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+// MARK: - show something else for a bit
+
+/// Pick what to show (big buttons), then how long: one click sends it.
 struct SendNowPanel: View {
     var target: String
     var choices: PageChoices
     var send: (PageRef, Int) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var page = PageRef(k: "lb")
-    @State private var length: SendLength = .fifteen
+
+    private let quick: [(String, String, String)] = [("lb", "Leaderboard", "list.number"), ("p3", "Par 3 camera", "video"), ("contests", "Contests", "flag.2.crossed"),
+                                                     ("sponsors", "Sponsors", "star"), ("fund", "Fundraising", "heart"), ("schedule", "Schedule", "clock"), ("skins", "Skins", "dollarsign.circle")]
+    private var needsSponsor: Bool { page.k == "sponsor" && page.sponsor.isEmpty }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Send to \(target)").font(.headline)
-            PagePicker(page: $page, choices: choices)
-            Picker("For", selection: $length) { ForEach(SendLength.allCases) { Text($0.title).tag($0) } }.pickerStyle(.segmented)
-            Text(length == .changed ? "It stays on until you send something else or put the screen back on its playlist." : "Then the screen goes back to its playlist by itself.")
-                .font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Spacer()
-                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Send Now") { send(page, length.rawValue); dismiss() }.keyboardShortcut(.defaultAction)
-                    .disabled(page.k == "sponsor" && page.sponsor.isEmpty)
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Show on \(target)").font(.headline)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
+                ForEach(quick, id: \.0) { q in
+                    let on = page.k == q.0 || (q.0 == "sponsors" && page.k == "sponsor")
+                    Button { page = PageRef(k: q.0) } label: {
+                        VStack(spacing: 4) { Image(systemName: q.2).font(.system(size: 17, weight: .semibold)); Text(q.1).font(.system(size: 11, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8) }
+                            .foregroundStyle(on ? FC.onGreen : FC.ink).frame(maxWidth: .infinity).padding(.vertical, 10)
+                            .background(on ? FC.green : FC.paper2.opacity(0.6), in: RoundedRectangle(cornerRadius: 8)).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
             }
+            // only when there's a real choice to make
+            if page.k == "lb" && choices.flights.count > 1 {
+                Picker("Which flight", selection: $page.fl) { Text("All flights").tag(""); ForEach(choices.flights, id: \.self) { Text("Flight \($0)").tag($0) } }
+            }
+            if page.k == "p3" && choices.p3.count > 1 {
+                Picker("Which hole", selection: $page.hole) { Text("Each in turn").tag(0); ForEach(choices.p3, id: \.self) { Text("Hole \($0)").tag($0) } }
+            }
+            if (page.k == "sponsors" || page.k == "sponsor") && choices.sponsors.count > 1 {
+                Picker("Which sponsor", selection: Binding(get: { page.k == "sponsor" ? page.sponsor : "" }, set: { v in page = v.isEmpty ? PageRef(k: "sponsors") : PageRef(k: "sponsor", sponsor: v) })) {
+                    Text("All of them, in turn").tag(""); ForEach(choices.sponsors, id: \.id) { Text($0.name).tag($0.id) }
+                }
+            }
+            Divider()
+            Text("For how long?").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                ForEach(SendLength.allCases) { l in
+                    Button(l.title) { send(page, l.rawValue); dismiss() }.buttonStyle(GreenButton()).disabled(needsSponsor)
+                }
+            }
+            Text("Then it goes back to normal by itself (or press Back to Normal).").font(.caption).foregroundStyle(.secondary)
         }
-        .padding(18).frame(width: 380)
+        .padding(18).frame(width: 430)
     }
 }
 
-/// The page and, for the pages that have one, its flight, hole or sponsor.
+/// The page and, for the pages that have one, its flight, hole or sponsor (Customize).
 struct PagePicker: View {
     @Binding var page: PageRef
     var choices: PageChoices
-    var compact = false
 
     var body: some View {
         HStack(spacing: 8) {
-            Picker(compact ? "" : "Page", selection: $page.k) { ForEach(PAGE_NAMES, id: \.0) { Text($0.1).tag($0.0) } }
-                .labelsHidden(compact).frame(width: compact ? 170 : nil)
+            Picker("", selection: $page.k) { ForEach(PAGE_NAMES, id: \.0) { Text($0.1).tag($0.0) } }.labelsHidden().frame(width: 160)
             switch page.k {
             case "lb":
-                Picker("", selection: $page.fl) { Text("All flights").tag(""); ForEach(choices.flights, id: \.self) { Text("Flight \($0)").tag($0) } }
-                    .labelsHidden().frame(width: 120).disabled(choices.flights.isEmpty)
+                if !choices.flights.isEmpty {
+                    Picker("", selection: $page.fl) { Text("All flights").tag(""); ForEach(choices.flights, id: \.self) { Text("Flight \($0)").tag($0) } }.labelsHidden().frame(width: 110)
+                }
             case "p3", "cam":
                 Picker("", selection: $page.hole) {
                     Text("Each in turn").tag(0)
                     ForEach(page.k == "p3" ? choices.p3 : choices.holes, id: \.self) { Text("Hole \($0)").tag($0) }
                 }
-                .labelsHidden().frame(width: 130)
+                .labelsHidden().frame(width: 120)
             case "sponsor":
-                Picker("", selection: $page.sponsor) { Text("Pick one").tag(""); ForEach(choices.sponsors, id: \.id) { Text($0.name).tag($0.id) } }
-                    .labelsHidden().frame(width: 160)
+                Picker("", selection: $page.sponsor) { Text("Pick one").tag(""); ForEach(choices.sponsors, id: \.id) { Text($0.name).tag($0.id) } }.labelsHidden().frame(width: 150)
             default: EmptyView()
             }
         }
@@ -105,13 +176,9 @@ struct PagePicker: View {
     }
 }
 
-private extension View {
-    @ViewBuilder func labelsHidden(_ on: Bool) -> some View { if on { self.labelsHidden() } else { self } }
-}
-
 // MARK: - the card
 
-/// A small picture of what the screen shows: the page's icon and name on the green, or the start of its playlist.
+/// A small picture of what the TV shows now.
 struct ScreenPreview: View {
     var force: PageRef?
     var playlist: [PageRef]
@@ -121,41 +188,30 @@ struct ScreenPreview: View {
     var body: some View {
         ZStack {
             LinearGradient(colors: [FC.green2, FC.green], startPoint: .topLeading, endPoint: .bottomTrailing)
-            if let f = force, f.isOn {
-                VStack(spacing: 6) {
-                    Image(systemName: PageChoices.icon(f.k)).font(.system(size: 22, weight: .semibold)).foregroundStyle(FC.flag)
-                    Text(choices.label(f)).font(FC.display(17)).multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.7)
+            VStack(spacing: 6) {
+                if let f = force, f.isOn {
+                    Image(systemName: PageChoices.icon(f.k)).font(.system(size: 24, weight: .semibold)).foregroundStyle(FC.flag)
+                    Text(choices.label(f)).font(FC.display(18)).multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.7)
+                } else {
+                    let t = ShowTile.matching(playlist)
+                    Image(systemName: t?.icon ?? "rectangle.stack").font(.system(size: 24, weight: .semibold))
+                    Text(t?.title ?? "Own mix").font(FC.display(18))
                 }
-                .padding(8)
-            } else if playlist.isEmpty {
-                VStack(spacing: 6) { Image(systemName: "square.grid.2x2").font(.system(size: 20)); Text("Everything").font(FC.display(17)) }
-            } else {
-                VStack(alignment: .leading, spacing: 3) {
-                    ForEach(Array(playlist.prefix(4).enumerated()), id: \.offset) { i, p in
-                        HStack(spacing: 5) {
-                            Image(systemName: PageChoices.icon(p.k)).font(.system(size: 9)).frame(width: 12)
-                            Text(choices.label(p)).font(.system(size: 10, weight: .semibold)).lineLimit(1)
-                        }
-                        .opacity(i == 0 ? 1 : 0.7)
-                    }
-                    if playlist.count > 4 { Text("+ \(playlist.count - 4) more").font(.system(size: 9)).opacity(0.6) }
-                }
-                .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(8)
+            if !online {
+                Color.black.opacity(0.45)
+                Text("TV NOT ON").font(.system(size: 10, weight: .bold)).tracking(1).foregroundStyle(.white)
             }
         }
         .foregroundStyle(FC.onGreen)
-        .frame(width: 168, height: 94)
-        .overlay(alignment: .topTrailing) {
-            if force?.isOn == true { LiveChip(text: "SENT").scaleEffect(0.8).padding(4) }
-        }
-        .overlay { if !online { Color.black.opacity(0.35) } }
+        .frame(width: 150, height: 86)
         .clipShape(RoundedRectangle(cornerRadius: 8))
-        .overlay(RoundedRectangle(cornerRadius: 8).stroke(FC.line))
     }
 }
 
-/// One screen: on or off, its name and where it hangs (title), what it shows now with Send now and Back to Playlist,
-/// its link, and below it whatever the page adds (the playlist editor on the desk).
+/// One TV: its name and where it is (title), what it shows now, Show Something Else and Back to Normal, then whatever the
+/// page adds below (the desk: what it shows normally).
 struct ScreenCard<Title: View, Details: View>: View {
     var name: String
     var online: Int
@@ -167,31 +223,32 @@ struct ScreenCard<Title: View, Details: View>: View {
     @ViewBuilder var title: Title
     @ViewBuilder var details: Details
     @State private var sending = false
+    @State private var setup = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 8) {
-                Circle().fill(online > 0 ? FC.ok : FC.muted.opacity(0.4)).frame(width: 9, height: 9).padding(.top, 6)
-                    .help(online > 0 ? "On now\(online > 1 ? " (\(online) open)" : "")" : "Not connected")
-                title
-                Spacer(minLength: 4)
-                if let url {
-                    Button { copy(url.absoluteString) } label: { Image(systemName: "link") }.buttonStyle(.borderless).help("Copy this screen’s link (open it full screen on the TV)")
-                    Button { NSWorkspace.shared.open(url) } label: { Image(systemName: "arrow.up.right.square") }.buttonStyle(.borderless).help("Open this screen here")
-                }
-            }
+        VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .top, spacing: 14) {
                 ScreenPreview(force: force, playlist: playlist, choices: choices, online: online > 0)
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(online > 0 ? "ON NOW" : "NOT CONNECTED").font(.system(size: 10, weight: .bold)).tracking(1).foregroundStyle(online > 0 ? FC.ok : FC.muted)
+                VStack(alignment: .leading, spacing: 6) {
+                    title
                     TimelineView(.periodic(from: .now, by: 15)) { _ in
-                        Text(screenStatus(force, playlist: playlist, choices: choices)).font(.system(size: 13, weight: .medium)).fixedSize(horizontal: false, vertical: true)
+                        Text(online > 0 ? screenStatus(force, playlist: playlist, choices: choices) : "This TV isn’t showing Flagcast yet.")
+                            .font(.system(size: 13)).foregroundStyle(FC.muted).fixedSize(horizontal: false, vertical: true)
                     }
                     HStack(spacing: 6) {
-                        Button("Send Now…") { sending = true }.buttonStyle(GreenButton())
-                            .popover(isPresented: $sending, arrowEdge: .bottom) { SendNowPanel(target: name.isEmpty ? "this screen" : name, choices: choices) { send($0, $1) } }
-                        if force?.isOn == true { Button("Back to Playlist") { send(nil, 0) }.buttonStyle(PlainCardButton()) }
+                        if force?.isOn == true { Button("Back to Normal") { send(nil, 0) }.buttonStyle(GreenButton()) }
+                        Button("Show Something Else…") { sending = true }.buttonStyle(force?.isOn == true ? AnyButtonStyle(PlainCardButton()) : AnyButtonStyle(GreenButton()))
+                            .popover(isPresented: $sending, arrowEdge: .bottom) { SendNowPanel(target: name.isEmpty ? "this TV" : name, choices: choices) { send($0, $1) } }
+                        if let url, online == 0 {
+                            Button("Set Up This TV…") { setup = true }.buttonStyle(PlainCardButton())
+                                .sheet(isPresented: $setup) { TVSetupSheet(name: name, url: url) }
+                        }
                     }
+                }
+                Spacer(minLength: 0)
+                if let url, online > 0 {
+                    Menu { Button("Copy the TV’s Link") { copy(url.absoluteString) }; Button("Open It Here") { NSWorkspace.shared.open(url) } } label: { Image(systemName: "ellipsis.circle") }
+                        .menuStyle(.borderlessButton).fixedSize().help("This TV’s link")
                 }
             }
             details
@@ -202,28 +259,64 @@ struct ScreenCard<Title: View, Details: View>: View {
     }
 }
 
-/// Above the wall: Send now to every screen or a group, and put them all back on their playlists.
+/// A button style chosen at run time.
+struct AnyButtonStyle: ButtonStyle {
+    private let make: (Configuration) -> AnyView
+    init<S: ButtonStyle>(_ s: S) { make = { AnyView(s.makeBody(configuration: $0)) } }
+    func makeBody(configuration c: Configuration) -> some View { make(c) }
+}
+
+/// How to put Flagcast on a TV: three big steps and one button to copy the link.
+struct TVSetupSheet: View {
+    var name: String
+    var url: URL
+    @Environment(\.dismiss) private var dismiss
+    @State private var copied = false
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Put Flagcast on \(name.isEmpty ? "this TV" : name)").font(FC.display(30))
+            step(1, "Copy the TV’s link", "Send it to yourself (email or text) so you can open it on the TV.")
+            HStack {
+                Text(url.absoluteString).font(.system(size: 13).monospaced()).textSelection(.enabled).lineLimit(1).truncationMode(.middle)
+                    .padding(.horizontal, 10).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(FC.paper2, in: RoundedRectangle(cornerRadius: 7))
+                Button(copied ? "Copied" : "Copy the Link") { copy(url.absoluteString); copied = true }.buttonStyle(GreenButton())
+            }
+            step(2, "Open it in the TV’s web browser", "Or on the computer or stick plugged into the TV.")
+            step(3, "Make it full screen", "This card turns green when the TV is showing Flagcast.")
+            HStack { Button("Open It on This Mac") { NSWorkspace.shared.open(url) }; Spacer(); Button("Done") { dismiss() }.keyboardShortcut(.defaultAction) }
+        }
+        .padding(24).frame(width: 520)
+    }
+    private func step(_ n: Int, _ t: String, _ sub: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Text("\(n)").font(FC.display(22)).foregroundStyle(FC.onGreen).frame(width: 32, height: 32).background(FC.green, in: Circle())
+            VStack(alignment: .leading, spacing: 2) { Text(t).font(.system(size: 15, weight: .semibold)); Text(sub).font(.callout).foregroundStyle(.secondary) }
+        }
+    }
+}
+
+/// Above the TVs: show something on every TV, or all the TVs in one place, and put them back to normal.
 struct SendToManyBar: View {
     var groups: [String]
     var choices: PageChoices
-    /// nil = every screen, else a group's name; page nil = back to the playlists
+    /// nil = every TV, else a place; page nil = back to normal
     var send: (String?, PageRef?, Int) -> Void
     @State private var target = "*"
     @State private var sending = false
-    private var targetName: String { target == "*" ? "every screen" : "the \(target) screens" }
+    private var targetName: String { target == "*" ? "every TV" : "the TVs at \(target)" }
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: "tv.and.mediabox").foregroundStyle(FC.muted)
-            Text("Several screens at once").font(.system(size: 14, weight: .bold))
+            Text("All at once:").font(.system(size: 14, weight: .bold))
             Picker("", selection: $target) {
-                Text("Every screen").tag("*")
-                if !groups.isEmpty { Divider(); ForEach(groups, id: \.self) { Text("Group: \($0)").tag($0) } }
+                Text("Every TV").tag("*")
+                if !groups.isEmpty { Divider(); ForEach(groups, id: \.self) { Text("TVs at \($0)").tag($0) } }
             }
-            .labelsHidden().frame(width: 200)
+            .labelsHidden().frame(width: 190)
             Spacer()
-            Button("Back to Playlists") { send(target == "*" ? nil : target, nil, 0) }.buttonStyle(PlainCardButton())
-            Button("Send Now…") { sending = true }.buttonStyle(GreenButton())
+            Button("Back to Normal") { send(target == "*" ? nil : target, nil, 0) }.buttonStyle(PlainCardButton())
+            Button("Show Something Else…") { sending = true }.buttonStyle(GreenButton())
                 .popover(isPresented: $sending, arrowEdge: .bottom) { SendNowPanel(target: targetName, choices: choices) { send(target == "*" ? nil : target, $0, $1) } }
         }
         .padding(.horizontal, 16).padding(.vertical, 12)
@@ -233,15 +326,6 @@ struct SendToManyBar: View {
 }
 
 // MARK: - the playlist (desk)
-
-/// Ready-made playlists: (name, pages). An empty list plays everything.
-let READY_PLAYLISTS: [(String, [PageRef])] = [
-    ("Leaderboard only", [PageRef(k: "lb", secs: 20)]),
-    ("Leaderboard and sponsors", [PageRef(k: "lb", secs: 15), PageRef(k: "sponsors", secs: 8)]),
-    ("Par 3 cameras", [PageRef(k: "p3", secs: 20)]),
-    ("Leaderboard, cameras, contests", [PageRef(k: "lb", secs: 15), PageRef(k: "p3", secs: 20), PageRef(k: "contests", secs: 10), PageRef(k: "sponsors", secs: 8)]),
-    ("Everything (no list)", []),
-]
 
 /// A screen's playlist: drag the handle to reorder; each page with its flight, hole or sponsor and seconds.
 struct PlaylistEditor: View {
@@ -255,25 +339,24 @@ struct PlaylistEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                CardTitle("Playlist")
+                Text("Pages, in order").font(.system(size: 12, weight: .semibold)).foregroundStyle(FC.muted)
                 Spacer()
-                Menu("Ready-made") { ForEach(READY_PLAYLISTS, id: \.0) { r in Button(r.0) { playlist = r.1 } } }.fixedSize().controlSize(.small)
                 if !others.isEmpty {
                     Menu("Copy to…") {
-                        Button("Every Other Screen") { copyTo(others.map(\.id)) }
+                        Button("Every Other TV") { copyTo(others.map(\.id)) }
                         Divider()
-                        ForEach(others, id: \.id) { o in Button(o.name.isEmpty ? "Unnamed screen" : o.name) { copyTo([o.id]) } }
+                        ForEach(others, id: \.id) { o in Button(o.name.isEmpty ? "Unnamed TV" : o.name) { copyTo([o.id]) } }
                     }
                     .fixedSize().controlSize(.small).disabled(playlist.isEmpty)
                 }
             }
-            if playlist.isEmpty { Text("No list: this screen plays everything in turn.").font(.callout).foregroundStyle(FC.muted) }
+            if playlist.isEmpty { Text("Nothing picked: this TV shows everything in turn.").font(.callout).foregroundStyle(FC.muted) }
             ForEach(playlist.indices, id: \.self) { k in
                 HStack(spacing: 8) {
                     Image(systemName: "line.3.horizontal").foregroundStyle(FC.muted).frame(width: 16).contentShape(Rectangle())
                         .draggable(String(k)).help("Drag to move")
                     Text("\(k + 1)").monospacedDigit().foregroundStyle(FC.muted).frame(width: 16)
-                    PagePicker(page: $playlist[k], choices: choices, compact: true)
+                    PagePicker(page: $playlist[k], choices: choices)
                     Spacer(minLength: 4)
                     Stepper("\(playlist[k].secs) s", value: $playlist[k].secs, in: 4...300, step: 2).monospacedDigit().fixedSize()
                     Button(role: .destructive) { playlist.remove(at: k) } label: { Image(systemName: "minus.circle") }.buttonStyle(.borderless).help("Take this page off")
@@ -290,7 +373,7 @@ struct PlaylistEditor: View {
                 Button { playlist.append(PageRef(k: "lb", secs: 15)) } label: { Label("Add a Page", systemImage: "plus") }.controlSize(.small)
                 Spacer()
                 if !playlist.isEmpty {
-                    Text("One loop: \(playlist.reduce(0) { $0 + $1.secs }) s").font(.caption).foregroundStyle(FC.muted)
+                    Text("Goes round every \(playlist.reduce(0) { $0 + $1.secs }) seconds").font(.caption).foregroundStyle(FC.muted)
                 }
             }
             // dropping below the last page moves it to the end

@@ -35,13 +35,13 @@ struct StaffView: View {
             }
             SwiftUI.Section {
                 HStack {
-                    Text(doc.ev.displays.isEmpty ? "No screens yet." : "\(doc.ev.displays.count) screen\(doc.ev.displays.count == 1 ? "" : "s"): \(doc.ev.displays.map(\.name).joined(separator: ", "))")
+                    Text(doc.ev.displays.isEmpty ? "No TVs yet." : "\(doc.ev.displays.count) TV\(doc.ev.displays.count == 1 ? "" : "s"): \(doc.ev.displays.map(\.name).joined(separator: ", "))")
                         .foregroundStyle(.secondary).lineLimit(1)
                     Spacer()
                     Button("Go to Screens") { nav.section = .screens }
                 }
-            } header: { Text("Screens at the club") } footer: {
-                Help("The club’s TVs, where they hang, their playlists and Send now are on the Screens page.")
+            } header: { Text("TVs at the club") } footer: {
+                Help("The club’s TVs and what they show are on the Screens page.")
             }
             SwiftUI.Section {
                 ForEach($doc.ev.schedule.indices, id: \.self) { i in
