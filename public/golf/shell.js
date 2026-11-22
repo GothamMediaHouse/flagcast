@@ -229,3 +229,14 @@ export async function mountSidebar(el, opts = {}) {
   };
 }
 export const menuButton = () => `<button class="gbtn menu-btn" type="button" onclick="document.body.classList.toggle('side-open')" aria-label="Tournaments">${icon('menu', 15)}</button>`;
+
+// ---- photos for golfers (golf.js op 'photo'): shrink a picked photo to about 1600 pixels across as a JPEG ----
+export async function shrinkPhoto(file, long = 1600) {
+  if (!/^image\//.test(file?.type || '')) throw new Error('Pick a photo (JPEG or PNG).');
+  const img = await createImageBitmap(file).catch(() => { throw new Error('That photo couldn’t be opened. Try a JPEG.'); });
+  const k = Math.min(1, long / Math.max(img.width, img.height)), c = document.createElement('canvas');
+  c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+  c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+  for (const q of [0.82, 0.7, 0.55]) { const u = c.toDataURL('image/jpeg', q); if (u.length < 1_500_000) return u; }
+  throw new Error('That photo is too big. Try a smaller one.');
+}

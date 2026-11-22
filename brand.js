@@ -70,3 +70,35 @@ export function brandFor(ev) {
 
 /** the logo a tournament serves at /golf/api/<id>/logo (null when it shows Flagcast's) */
 export const logoOf = (ev) => (ev.demo ? null : decodeLogo(ev.logo || ev.clubBrand?.logo || ''));
+
+// ---- photos a club adds for its golfers (golf.js op 'photo') ----
+// a cover photo (the player app's welcome screen and the web join page), one photo per hole (that hole's page),
+// and a wide banner per sponsor (with its logo where the sponsor shows). The apps shrink each photo to about
+// 1600 pixels across before sending; each is kept apart from the tournament (storage key p:<slot>) and served at
+// /golf/api/<id>/photo/<slot>?v=<version>.
+export const PHOTO_MAX = 1_600_000; // characters of data: URI (about 1.2 MB of picture)
+export const PHOTO_SLOT = /^(cover|h(?:[1-9]|1[0-8])|s-[a-z0-9]{1,12})$/;
+
+/** A photo as sent by an app or page: a PNG/JPEG/WebP data: URI → { type, bytes }. Throws a plain-words error. */
+export function cleanPhoto(v) {
+  const s = String(v || '').replace(/\s/g, '');
+  if (s.length > PHOTO_MAX) throw Object.assign(new Error('That photo is too big. Try a smaller one (under 1 MB).'), { status: 413 });
+  const d = decodeLogo(s);
+  if (!d || !d.bytes.length || d.type === 'image/svg+xml') throw Object.assign(new Error('Use a JPEG or PNG photo.'), { status: 400 });
+  const head = d.bytes.slice(0, 12);
+  const ok = { 'image/png': head[0] === 0x89 && head[1] === 0x50, 'image/jpeg': head[0] === 0xff && head[1] === 0xd8,
+    'image/webp': String.fromCharCode(...head.slice(8, 12)) === 'WEBP' }[d.type];
+  if (!ok) throw Object.assign(new Error('That file isn’t the photo it says it is. Save it again as a JPEG and try again.'), { status: 400 });
+  return { type: d.type, bytes: d.bytes, v: logoVersion(s) };
+}
+
+/** the addresses golfers load: { cover, holes: { n: url }, sponsors: { id: url } } (only the ones a club added) */
+export function photoLinks(ev) {
+  const p = ev?.photos || {}, at = (k) => `/golf/api/${ev.id}/photo/${k}?v=${p[k]}`;
+  const sp = new Set((ev?.sponsors || []).map((x) => x.id)), out = { cover: p.cover ? at('cover') : '', holes: {}, sponsors: {} };
+  for (const k of Object.keys(p)) {
+    if (/^h\d+$/.test(k)) out.holes[k.slice(1)] = at(k);
+    else if (k.startsWith('s-') && sp.has(k.slice(2))) out.sponsors[k.slice(2)] = at(k);
+  }
+  return out;
+}

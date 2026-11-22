@@ -10,6 +10,7 @@
 //   POST /golf/api/<id>/desk               { key, op, … }   the tournament desk (see desk() below)
 //   POST /golf/api/<id>/pro                { pin, op, … }   a golf pro or marshal with a PIN from the Manager (see pro() below)
 //   POST /golf/api/<id>/where              { code, team, at: [lat, lng], acc, hole }   a group's spot, from a scorecard with GPS on
+//   GET  /golf/api/<id>/photo/<slot>       a photo the club added: cover, h<n> (a hole), s-<sponsor id> (a banner)
 //   POST /golf/api/<id>/hit                { list: [{ s: sponsorId, k: 'view'|'tap'|'secs', n }] }   sponsor counts for the report
 //
 // Pages: /g/<id> live page · /g/<id>/board screens · /g/<id>/desk#<key> desk · /g/<id>/map#<key> course map · /g/<id>/s/<code> cart · /g/<id>/cards QR cards
@@ -18,7 +19,7 @@ import { defaultHoles, courseHcp } from './public/golf/core.js';
 import { trackingOn } from './public/golf/gps.js';
 import { clubs } from './clubs.js';
 import { camPlaylist } from './stream.js';
-import { brandFor, logoOf, cleanLogo, decodeLogo } from './brand.js';
+import { brandFor, logoOf, cleanLogo, decodeLogo, cleanPhoto, photoLinks, PHOTO_SLOT } from './brand.js';
 
 const ID = /^[a-z0-9]{8}$/;
 const CODE = /^[A-HJ-NP-Z2-9]{6}$/;
@@ -97,6 +98,10 @@ export async function golf(request, env) {
     if (request.method !== 'GET' && request.method !== 'HEAD') return json({ error: 'Use GET' }, 405);
     if (!(await isCam(env, m[1]))) return json({ error: 'There is no Flagcast camera at this address.' }, 404);
     return camPlaylist(fetch, m[1], m[2], url.searchParams);
+  }
+  // the photos a club added for its golfers (brand.js): GET only
+  if ((m = url.pathname.match(/^\/golf\/api\/([a-z0-9]{8})\/photo\/([a-z0-9-]{1,14})$/)) && (request.method === 'GET' || request.method === 'HEAD')) {
+    return cors(request, await env.GOLF.get(env.GOLF.idFromName(m[1])).fetch(request));
   }
   if ((m = url.pathname.match(/^\/golf\/api\/([a-z0-9]{8})\/(state|ws|cart|score|desk|pro|hit|where|logo)$/))) {
     const stub = env.GOLF.get(env.GOLF.idFromName(m[1]));
@@ -246,7 +251,7 @@ export class GolfEvent extends DurableObject {
   // what anyone can see: the setup without the cart codes or the desk key
   async publicState() {
     const ev = await this.load(), sc = await this.scores();
-    const { key, pins, log, logo, clubBrand, demo, ...rest } = ev; // logos go by address (op 'logo'), not in the state
+    const { key, pins, log, logo, clubBrand, demo, photos, ...rest } = ev; // logos and photos go by address, not in the state
 
     const teams = ev.teams.map(({ code, ...t }) => ({ ...t, players: t.players.map(({ ghin, ...p }) => p) })); // GHIN numbers stay with the desk
     const online = Object.fromEntries((ev.displays || []).map((d) => [d.id, this.ctx.getWebSockets(`d:${d.id}`).length]));
@@ -258,7 +263,7 @@ export class GolfEvent extends DurableObject {
       const at = Math.max(0, ...Object.values(s).flatMap((arr) => arr.map((x) => (x ? x.at || 0 : 0))));
       if (at) lastAt[t.id] = at;
     }
-    return { ...rest, teams, scores, lastAt, online, brand: brandFor(ev) };
+    return { ...rest, teams, scores, lastAt, online, brand: brandFor(ev), photos: photoLinks(ev) };
   }
 
   async broadcast() {
@@ -280,6 +285,14 @@ export class GolfEvent extends DurableObject {
     }
     const ev = await this.load();
     if (!ev) return json({ error: 'There is no tournament at this address.' }, 404);
+    // a photo the club added (brand.js), with a long cache: its address changes when the photo does
+    const pm = url.pathname.match(/\/photo\/([a-z0-9-]{1,14})$/);
+    if (pm) {
+      const ph = PHOTO_SLOT.test(pm[1]) && ev.photos?.[pm[1]] ? await this.ctx.storage.get(`p:${pm[1]}`) : null;
+      if (!ph) return json({ error: 'There is no photo here.' }, 404);
+      return new Response(ph.bytes, { headers: { 'Content-Type': ph.type, 'Cache-Control': 'public, max-age=31536000, immutable', 'Access-Control-Allow-Origin': '*',
+        'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'" } });
+    }
     const op = url.pathname.split('/').pop();
     if (op === 'state') return json(await this.publicState());
     // the logo golfers and the TVs see (the tournament's own, else its club's); none when it shows Flagcast's
@@ -374,7 +387,21 @@ export class GolfEvent extends DurableObject {
   // plus every day op (see dayOp): lock, contest, ctp, fund, flash, nudge, fix, screen, take, stats
   async desk(b) {
     const ev = this.ev;
-    if (b.op === 'get') return json({ ...ev, stats: await this.getStats() });
+    if (b.op === 'get') return json({ ...ev, photos: photoLinks(ev), stats: await this.getStats() });
+    // a photo for golfers: { slot: 'cover' | 'h<n>' | 's-<sponsor id>', image: data: URI, or '' to take it off }
+    if (b.op === 'photo') {
+      const slot = String(b.slot || '');
+      if (!PHOTO_SLOT.test(slot)) return json({ error: 'That photo spot isn’t right.' }, 400);
+      ev.photos = { ...(ev.photos || {}) };
+      if (b.image) {
+        let ph; try { ph = cleanPhoto(b.image); } catch (e) { return json({ error: e.message }, e.status || 400); }
+        await this.ctx.storage.put(`p:${slot}`, { type: ph.type, bytes: ph.bytes });
+        ev.photos[slot] = ph.v;
+      } else { delete ev.photos[slot]; await this.ctx.storage.delete(`p:${slot}`); }
+      await this.ctx.storage.put('event', ev);
+      await this.broadcast();
+      return json({ ok: true, photos: photoLinks(ev) });
+    }
     if (DAY_OPS.has(b.op)) return this.dayOp(b, 'Desk');
     if (b.op === 'save') {
       // the tournament's own logo (instead of the club's): '' takes it off; left out, it stays as it is
@@ -387,13 +414,16 @@ export class GolfEvent extends DurableObject {
       // scores of teams that were removed go too
       const keep = new Set(ev.teams.map((t) => t.id)), sc = await this.scores();
       for (const id of Object.keys(sc)) if (!keep.has(id)) { delete sc[id]; await this.ctx.storage.delete(`s:${id}`); }
+      // banners of sponsors that were removed go too
+      const sps = new Set(ev.sponsors.map((x) => `s-${x.id}`));
+      for (const k of Object.keys(ev.photos || {})) if (k.startsWith('s-') && !sps.has(k)) { delete ev.photos[k]; await this.ctx.storage.delete(`p:${k}`); }
     } else if (b.op === 'ace') ev.aces = (ev.aces || []).filter((a) => a.at !== b.remove);
     else if (b.op === 'clear') {
       const sc = await this.scores(); delete sc[b.team]; await this.ctx.storage.delete(`s:${b.team}`);
     } else return json({ error: 'Unknown change' }, 400);
     await this.ctx.storage.put('event', ev);
     await this.broadcast();
-    return json(b.op === 'save' ? ev : { ok: true });
+    return json(b.op === 'save' ? { ...ev, photos: photoLinks(ev) } : { ok: true });
   }
 
   // a golf pro or marshal signs in with the PIN the Manager gave them. Pros run the day; marshals post contest results.

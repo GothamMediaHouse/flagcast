@@ -74,6 +74,9 @@ main { max-width: 720px; margin: 0 auto; padding: 14px max(16px, env(safe-area-i
 .flash { background: var(--flag); color: var(--on-flag); padding: 10px 16px; text-align: center; font-weight: 600; }
 .has-club .topbar { border-bottom: 3px solid var(--club, transparent); }
 .topbar img.clublogo { height: 36px !important; }
+/* the club's cover photo behind the title */
+.topbar.photo { background: linear-gradient(rgba(0, 0, 0, .25), rgba(0, 0, 0, .7)), var(--cover) center / cover no-repeat, var(--green); padding-top: 46px; }
+.topbar.photo .label { color: rgba(255, 255, 255, .85); }
 .powered { font-size: 11px; letter-spacing: .08em; color: var(--muted); text-align: center; padding: 18px 0 6px; }
 </style>
 </head>
@@ -179,6 +182,8 @@ function skView() {
 function render(keepVideo) {
   if (!S) return;
   $('title').textContent = S.screens?.title || S.name;
+  const top = document.querySelector('.topbar'); top.classList.toggle('photo', !!S.photos?.cover);
+  if (S.photos?.cover) top.style.setProperty('--cover', `url("${S.photos.cover}")`); else top.style.removeProperty('--cover');
   $('sub').textContent = [S.club, S.course.name && S.course.name !== S.club ? S.course.name : '', S.date].filter(Boolean).join(' · ');
   document.title = `${S.screens?.title || S.name} · Leaderboard`;
   $('flash').hidden = !(S.flash && Date.now() - S.flash.at < 30 * 60e3); if (S.flash) $('flash').textContent = S.flash.text;
