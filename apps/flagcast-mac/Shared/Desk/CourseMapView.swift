@@ -16,7 +16,6 @@ struct CourseMapView: View {
     @State private var search = ""
     @State private var busy = false
     @State private var confirmRedo = false
-    @State private var flyTick = 0          // "Fly the hole": each change starts a flight
     @State private var flying = false
     @State private var flyAll: Task<Void, Never>?
 
@@ -64,10 +63,16 @@ struct CourseMapView: View {
                     UserAnnotation()
                 }
                 .mapStyle(.imagery(elevation: threeD ? .realistic : .flat))
-                .mapCameraKeyframeAnimator(trigger: flyTick) { _ in flight() }
                 .mapControls { MapCompass(); MapScaleView(); MapPitchToggle(); MapZoomStepper() }
                 .coordinateSpace(.named("map"))
                 .onMapCameraChange(frequency: .onEnd) { ctx in lastRegion = ctx.region }
+                #if DEBUG
+                .onMapCameraChange(frequency: .continuous) { ctx in
+                    if ProcessInfo.processInfo.environment["FLAGCAST_FLYLOG"] != nil {
+                        FileHandle.standardError.write("fly \(flying ? "F" : "-") \(ctx.camera.centerCoordinate.latitude) \(ctx.camera.centerCoordinate.longitude) h=\(Int(ctx.camera.heading)) d=\(Int(ctx.camera.distance)) p=\(Int(ctx.camera.pitch))\n".data(using: .utf8)!)
+                    }
+                }
+                #endif
                 .onTapGesture(coordinateSpace: .named("map")) { pt in
                     guard let c = proxy.convert(pt, from: .named("map")) else { return }
                     place(GeoPoint(lat: c.latitude, lng: c.longitude))
@@ -82,8 +87,14 @@ struct CourseMapView: View {
         }
         .inspector(isPresented: .constant(true)) { inspector.inspectorColumnWidth(min: 300, ideal: 340, max: 420) }
         .onAppear { hole = firstOpenHole(); fit() }
-        .onChange(of: hole) { _, _ in fit() }
-        .onChange(of: threeD) { _, _ in fit() }
+        #if DEBUG
+        .onReceive(NotificationCenter.default.publisher(for: .init("FlagcastFlyTest"))) { n in
+            if let k = n.object as? Int { hole = k }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) { FileHandle.standardError.write("flytest: plan \(plan() != nil) hole \(hole)\n".data(using: .utf8)!); flyHole() }
+        }
+        #endif
+        .onChange(of: hole) { _, _ in if !flying { fit() } }
+        .onChange(of: threeD) { _, _ in if !flying { fit() } }   // (re-framing mid-flight would stop it)
         .confirmationDialog("Map every hole again from OpenStreetMap?", isPresented: $confirmRedo) {
             Button("Redo Every Hole", role: .destructive) { auto(all: true) }
         } message: { Text("Holes you placed or moved by hand are replaced.") }
@@ -197,62 +208,54 @@ struct CourseMapView: View {
         let len = Double(yards(t, g)), mid = GeoPoint(lat: (t.lat + g.lat) / 2, lng: (t.lng + g.lng) / 2)
         return (p, g, MapCamera(centerCoordinate: mid.coordinate, distance: max(350, len * 2.6), heading: bearing(t, g), pitch: 55))
     }
-    @KeyframesBuilder<MapCamera>
-    private func flight() -> some Keyframes<MapCamera> {
-        // (with no hole mapped, a still camera where the map is: the buttons are off then anyway)
-        let (p, g, end) = plan() ?? {
-            let c = GeoPoint(lat: lastRegion?.center.latitude ?? 0, lng: lastRegion?.center.longitude ?? 0)
-            return (FlyPath.make(HoleMap(tee: c, m: c), tee: c, green: FlyPath.offset(c, yards: 100, bearing: 0), look: 200), c, MapCamera(centerCoordinate: c.coordinate, distance: 800))
-        }()
-        do {
-            KeyframeTrack(\MapCamera.centerCoordinate) {
-                CubicKeyframe(p.stops[0].at.coordinate, duration: 0.6)
-                for s in p.stops.dropFirst() { CubicKeyframe(s.at.coordinate, duration: s.secs) }
-                CubicKeyframe(g.coordinate, duration: 1.8)
-                CubicKeyframe(end.centerCoordinate, duration: 1.2)
-            }
-            KeyframeTrack(\MapCamera.heading) {
-                CubicKeyframe(p.stops[0].heading, duration: 0.6)
-                for s in p.stops.dropFirst() { CubicKeyframe(s.heading, duration: s.secs) }
-                CubicKeyframe(p.stops.last!.heading, duration: 1.8)
-                CubicKeyframe(p.unwrap(end.heading), duration: 1.2)
-            }
-            KeyframeTrack(\MapCamera.distance) {
-                CubicKeyframe(p.cameraMetres, duration: 0.6)
-                LinearKeyframe(p.cameraMetres, duration: p.flySecs)
-                CubicKeyframe(210, duration: 1.8)
-                CubicKeyframe(end.distance, duration: 1.2)
-            }
-            KeyframeTrack(\MapCamera.pitch) {
-                CubicKeyframe(60, duration: 0.6)
-                LinearKeyframe(60, duration: p.flySecs)
-                CubicKeyframe(45, duration: 1.8)
-                CubicKeyframe(55, duration: 1.2)
-            }
+    /// The flight, step by step: the camera glides from stop to stop down the hole (the Mac's map doesn't run
+    /// keyframe camera animations, so each leg is its own animation), then settles on the green and the whole hole.
+    private func fly() async {
+        guard let (p, g, end) = plan() else { return }
+        let cam = { (c: GeoPoint, h: Double, d: Double, pitch: Double) in MapCamera(centerCoordinate: c.coordinate, distance: d, heading: h, pitch: pitch) }
+        // down to just behind the tee first
+        withAnimation(.easeInOut(duration: 2)) { camera = .camera(cam(p.stops[0].at, p.stops[0].heading, p.cameraMetres, 60)) }
+        try? await Task.sleep(for: .seconds(2.2))
+        for s in p.stops.dropFirst() {
+            if Task.isCancelled || !flying { return }
+            withAnimation(.linear(duration: s.secs)) { camera = .camera(cam(s.at, s.heading, p.cameraMetres, 60)) }
+            try? await Task.sleep(for: .seconds(s.secs))
         }
+        if Task.isCancelled || !flying { return }
+        withAnimation(.easeInOut(duration: 1.8)) { camera = .camera(cam(g, p.stops.last!.heading, 210, 45)) }
+        try? await Task.sleep(for: .seconds(1.8))
+        withAnimation(.easeInOut(duration: 1.2)) { camera = .camera(end) }
+        try? await Task.sleep(for: .seconds(1.2))
     }
+    @State private var flyTask: Task<Void, Never>?
     private func flyHole() {
-        guard let p = plan() else { return }
-        threeD = true; tool = nil; flying = true; flyTick += 1
-        let secs = p.path.flySecs + 3.8
-        Task { try? await Task.sleep(for: .seconds(secs)); flying = false }
+        guard plan() != nil else { return }
+        let was3D = threeD
+        threeD = true; tool = nil; flying = true
+        flyTask = Task {
+            // switching to 3D re-frames the map: let that finish, then fly
+            if !was3D { try? await Task.sleep(for: .seconds(1.2)) }
+            await fly()
+            flying = false
+        }
     }
     private func flyEvery() {
         threeD = true; tool = nil
         flyAll = Task {
             for n in mappedHoles {
                 if Task.isCancelled { break }
-                hole = n
+                flying = false; hole = n; fit()
                 try? await Task.sleep(for: .seconds(1.5))
-                guard let p = plan(), !Task.isCancelled else { continue }
-                flying = true; flyTick += 1
-                try? await Task.sleep(for: .seconds(p.path.flySecs + 4.5))
+                guard plan() != nil, !Task.isCancelled else { continue }
+                flying = true
+                await fly()
+                try? await Task.sleep(for: .seconds(1))
                 flying = false
             }
             flyAll = nil
         }
     }
-    private func stopFlying() { flyAll?.cancel(); flyAll = nil; flying = false; fit() }
+    private func stopFlying() { flyAll?.cancel(); flyAll = nil; flyTask?.cancel(); flying = false; fit() }
 
     private func pick(_ n: Int) {
         hole = n

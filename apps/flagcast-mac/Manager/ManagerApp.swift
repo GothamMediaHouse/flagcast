@@ -18,6 +18,7 @@ struct ManagerApp: App {
                     await model.refresh()
                     #if DEBUG
                     Snapshots.run(model)
+                    Snapshots.flyTest(model)
                     SelfTest.run(model)
                     NDISelfTest.run()
                     #endif

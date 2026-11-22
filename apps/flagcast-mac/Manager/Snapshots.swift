@@ -5,6 +5,27 @@ import SwiftUI
 /// a picture of the window for each (for checking the layout without anyone at the Mac).
 @MainActor
 enum Snapshots {
+    /// FLAGCAST_FLYTEST=<tournament id> (and FLAGCAST_FLYHOLE=<n>): open its Course map off-screen, fly the hole, and
+    /// log the camera (FLAGCAST_FLYLOG) to check the flight moves down the hole.
+    static func flyTest(_ model: AppModel) {
+        let env = ProcessInfo.processInfo.environment
+        guard let id = env["FLAGCAST_FLYTEST"] else { return }
+        log("flytest: start")
+        Task {
+            try? await Task.sleep(for: .seconds(3))
+            // on the screen but see-through and click-through (off the screen, macOS stops drawing the map)
+            if let w = NSApp.windows.first(where: { $0.isVisible }) { w.alphaValue = 0; w.ignoresMouseEvents = true; w.level = .init(rawValue: -1000); w.setFrame(NSRect(x: 0, y: 0, width: 1300, height: 860), display: true) }
+            log("flytest: events", model.events.map(\.id), "windows", NSApp.windows.count)
+            model.selection = id; model.section = .map
+            for _ in 0..<30 { if model.doc(id)?.loaded == true { break }; try? await Task.sleep(for: .seconds(1)) }
+            log("flytest: loaded", model.doc(id)?.loaded ?? false, model.doc(id)?.error ?? "", "section", model.section.rawValue, "holes", model.doc(id)?.ev.map.holes.count ?? -1)
+            try? await Task.sleep(for: .seconds(5))
+            log("flytest: flying")
+            NotificationCenter.default.post(name: .init("FlagcastFlyTest"), object: Int(env["FLAGCAST_FLYHOLE"] ?? "") ?? 2)
+            try? await Task.sleep(for: .seconds(20))
+            NSApp.terminate(nil)
+        }
+    }
     static func run(_ model: AppModel) {
         guard let dir = ProcessInfo.processInfo.environment["FLAGCAST_SNAPSHOTS"] else { return }
         log("snapshots: start, windows:", NSApp.windows.count)
