@@ -36,7 +36,9 @@ struct ClubMe: Decodable {
 /// (Electron) Manager used, ~/Library/Application Support/Flagcast Manager/manager.json, so the sign-in carries over.
 @MainActor @Observable
 final class AppModel {
-    private struct Saved: Codable { var base: String?; var token: String?; var events: [EventRef]?; var clubEvents: [EventRef]? }
+    private struct Saved: Codable { var base: String?; var token: String?; var events: [EventRef]?; var clubEvents: [EventRef]?
+        /// the signed-in email (from club/me): which desk-link tournaments show
+        var email: String? }
     private var saved = Saved()
     private let file: URL = {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("Flagcast Manager")
@@ -72,7 +74,10 @@ final class AppModel {
     var adminRefs: [EventRef] = []
     /// Settings → Show engineering tools (for people who aren't Flagcast admins)
     var showEngineering = UserDefaults.standard.bool(forKey: "engineering.show") { didSet { UserDefaults.standard.set(showEngineering, forKey: "engineering.show") } }
-    var isAdmin: Bool { (me?.admin ?? false) || !(admin.pass ?? "").isEmpty || forceAdmin }
+    var isAdmin: Bool { (me?.admin ?? false) || (passAllowed && !(admin.pass ?? "").isEmpty) || forceAdmin }
+    /// The admin passcode only counts while nobody is signed in, or the sign-in is Flagcast staff: a club's own
+    /// account never gets Admin from a passcode left on its computer.
+    var passAllowed: Bool { !signedIn || me?.admin == true }
     /// test builds' snapshots only
     var forceAdmin = false
     /// the sidebar's tournaments: the club's, then any opened from Admin
@@ -84,6 +89,7 @@ final class AppModel {
         nav.onRename = { [weak self] id, name, date in self?.noteName(id, name: name, date: date) }
         nav.canEngineer = { [weak self] in (self?.isAdmin ?? false) || self?.showEngineering == true }
         admin.token = { [weak self] in self?.saved.token ?? "" }
+        admin.passAllowed = { [weak self] in self?.passAllowed ?? false }
         admin.onOpen = { [weak self] e in self?.openAdmin(id: e.id, key: e.key, name: e.name, date: e.date, club: e.clubName) }
         if let d = try? Data(contentsOf: file), let s = try? JSONDecoder().decode(Saved.self, from: d) { saved = s }
         listEvents()
@@ -97,7 +103,10 @@ final class AppModel {
     private func listEvents() {
         let club = (saved.clubEvents ?? []).map { var e = $0; e.fromClub = true; return e }
         let ids = Set(club.map(\.id))
-        events = club + (saved.events ?? []).filter { !ids.contains($0.id) }
+        // desk-link tournaments: only the ones added by this account (signed in), or added while signed out
+        let who = signedIn ? (saved.email ?? "") : ""
+        let mine = (saved.events ?? []).filter { !ids.contains($0.id) && ($0.owner ?? "") == who && !(signedIn && who.isEmpty) }
+        events = club + mine
     }
 
     func doc(_ id: String) -> DeskDoc? {
@@ -122,22 +131,42 @@ final class AppModel {
             let d = try await Net.post("/golf/api/club/\(op)", b)
             return Net.json(d)
         } catch let e as APIError where e.status == 401 {
-            saved.token = nil; saved.clubEvents = []; write(); listEvents(); me = nil
+            forgetAccount()
             throw e
         }
     }
+    /// Signed out (or the sign-in ran out): nothing of that account, or of Admin, stays on screen.
+    private func forgetAccount() {
+        saved.token = nil; saved.clubEvents = []; saved.email = nil; me = nil
+        clearSession(); write(); listEvents()
+    }
+    /// Everything that belonged to the last sign-in: tournaments opened from Admin, open desks, Admin's lists
+    private func clearSession() {
+        adminRefs = []; docs = [:]; selection = nil; adminSection = nil
+        admin.clear()
+        if !isAdmin { adminMode = false }
+    }
+    /// A new sign-in: start from a clean list, then load this account's tournaments.
+    private func startSession(_ token: String?) async {
+        saved.token = token; saved.clubEvents = []; saved.email = nil; me = nil
+        clearSession(); write(); listEvents()
+        await refresh()
+    }
     func refresh() async {
-        if !(admin.pass ?? "").isEmpty { Task { try? await admin.refresh() } }
+        if passAllowed, !(admin.pass ?? "").isEmpty { Task { try? await admin.refresh() } }
         guard signedIn else { me = nil; return }
         do {
             let d = try await Net.post("/golf/api/club/me", ["token": saved.token ?? ""])
             let m = try JSONDecoder().decode(ClubMe.self, from: d)
             me = m
+            // a club account on a computer where staff once saved the admin passcode: forget it
+            if !m.admin, !(admin.pass ?? "").isEmpty { admin.forget(); adminMode = false; adminSection = nil }
+            if saved.email != m.email { saved.email = m.email; adminRefs = []; docs = [:]; selection = nil }
             saved.clubEvents = m.events.map { e in EventRef(id: e.id, key: e.key, name: e.name, date: saved.clubEvents?.first { $0.id == e.id }?.date, added: e.created) }
             write(); listEvents()
             if m.admin { Task { try? await admin.refresh() } }
         } catch let e as APIError where e.status == 401 {
-            saved.token = nil; saved.clubEvents = []; write(); listEvents(); me = nil
+            forgetAccount()
         } catch { self.error = error.localizedDescription }
     }
     func startSignIn(_ email: String) async throws -> String? {
@@ -146,21 +175,17 @@ final class AppModel {
     }
     func verify(_ email: String, _ code: String) async throws {
         let d = try await Net.post("/golf/api/club/verify", ["email": email, "code": code])
-        saved.token = Net.json(d)["token"] as? String
-        write()
-        await refresh()
+        await startSession(Net.json(d)["token"] as? String)
     }
     /// Email + password (set once in Settings after a code sign-in).
     func login(_ email: String, _ password: String) async throws {
         let d = try await Net.post("/golf/api/club/login", ["email": email, "password": password])
-        saved.token = Net.json(d)["token"] as? String
-        write(); await refresh()
+        await startSession(Net.json(d)["token"] as? String)
     }
     /// Sign in with Apple: the identity token Apple gave the app.
     func appleSignIn(_ identityToken: String) async throws {
         let d = try await Net.post("/golf/api/club/apple", ["identityToken": identityToken])
-        saved.token = Net.json(d)["token"] as? String
-        write(); await refresh()
+        await startSession(Net.json(d)["token"] as? String)
     }
     /// Sign in with Google is switched on on the server (GOOGLE_CLIENT_ID set).
     var googleOn = false
@@ -172,8 +197,7 @@ final class AppModel {
     }
     /// A Flagcast session handed back by the website's sign-in (Google).
     func use(token: String) async {
-        saved.token = token
-        write(); await refresh()
+        await startSession(token)
     }
     /// Set or change the password for the signed-in email.
     /// The club's logo and colour (any of its people can change them): nil when saved, else the problem.
@@ -186,7 +210,7 @@ final class AppModel {
     }
     func signOut() async {
         _ = try? await club("signout")
-        saved.token = nil; saved.clubEvents = []; me = nil; selection = nil; write(); listEvents()
+        forgetAccount()
     }
 
     // ---- tournaments ----
@@ -207,7 +231,8 @@ final class AppModel {
         let parts = link[m].split(separator: "/").map(String.init)   // ["g", id, "desk#key"]
         let id = parts[1].lowercased(), key = String(parts[2].split(separator: "#").last ?? "")
         let ev = try await Net.deskGet(id, key)
-        saved.events = [EventRef(id: id, key: key, name: ev.name.isEmpty ? "Tournament" : ev.name, date: ev.date, added: Date().timeIntervalSince1970 * 1000)]
+        saved.events = [EventRef(id: id, key: key, name: ev.name.isEmpty ? "Tournament" : ev.name, date: ev.date, added: Date().timeIntervalSince1970 * 1000,
+                                 owner: signedIn ? (saved.email ?? me?.email ?? "") : "")]
             + (saved.events ?? []).filter { $0.id != id }
         write(); listEvents()
         selection = id; section = .setup

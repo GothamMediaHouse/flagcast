@@ -75,7 +75,11 @@ const own = (e) => { if (!String(e.senderFrame?.url || '').startsWith('file://')
 const handle = (ch, fn) => ipcMain.handle(ch, (e, ...a) => { own(e); return fn(e, ...a); });
 ipcMain.handle('gl:home', () => goHome());
 // tournaments: the club's (from its Flagcast account) and any added on this computer by desk link
-const allEvents = () => { const club = (data.clubEvents || []).map((e) => ({ ...e, fromClub: true })); const ids = new Set(club.map((e) => e.id)); return [...club, ...(data.events || []).filter((e) => !ids.has(e.id))]; };
+// Desk-link ones only show for the account that added them (owner = its email; '' = added while signed out), so one
+// club never sees another's on a shared computer.
+const viewer = () => (data.token ? data.email || null : '');
+const allEvents = () => { const club = (data.clubEvents || []).map((e) => ({ ...e, fromClub: true })); const ids = new Set(club.map((e) => e.id)); const who = viewer(); return [...club, ...(data.events || []).filter((e) => !ids.has(e.id) && who !== null && (e.owner || '') === who)]; };
+const forgetAccount = () => { data.token = ''; data.clubEvents = []; data.email = ''; };
 const findEvent = (id) => allEvents().find((x) => x.id === id);
 handle('gl:list', () => ({ base: base(), events: allEvents(), signedIn: !!data.token }));
 // club account: sign in with an emailed code, then everything goes with the saved sign-in
@@ -84,13 +88,14 @@ handle('gl:club', async (_e, op, body = {}) => {
   if (op !== 'start' && op !== 'verify' && op !== 'config' && !data.token) throw new Error('Please sign in.');
   const r = await fetch(op === 'new' ? `${base()}/golf/api/new` : `${base()}/golf/api/club/${op}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, token: data.token }) });
   const j = await r.json().catch(() => ({}));
-  if (op === 'signout' || r.status === 401) { data.token = ''; data.clubEvents = []; save(data); }
+  if (op === 'signout' || r.status === 401) { forgetAccount(); save(data); }
   if (!r.ok) throw new Error(j.error || `The server answered ${r.status}`);
-  if (op === 'verify') { data.token = j.token; save(data); return { ok: true }; }
+  if (op === 'verify') { forgetAccount(); data.token = j.token; save(data); return { ok: true }; }
+  if (op === 'me' && j.email) data.email = j.email;
   if (j.events) { data.clubEvents = j.events.map(({ id, key, name, created }) => ({ id, key, name, added: created })); save(data); }
   return j;
 });
-handle('gl:setBase', (_e, b) => { const u = String(b || '').trim().replace(/\/+$/, ''); if (!/^https?:\/\/[^\s/]+$/.test(u)) throw new Error('Use a web address like https://flagcast.app'); if (u !== base()) { data.token = ''; data.clubEvents = []; } data.base = u; save(data); return base(); });
+handle('gl:setBase', (_e, b) => { const u = String(b || '').trim().replace(/\/+$/, ''); if (!/^https?:\/\/[^\s/]+$/.test(u)) throw new Error('Use a web address like https://flagcast.app'); if (u !== base()) forgetAccount(); data.base = u; save(data); return base(); });
 handle('gl:create', async (_e, { name }) => {
   if (!data.token) throw new Error('Please sign in.');
   const r = await fetch(`${base()}/golf/api/new`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, token: data.token }) });
@@ -107,7 +112,7 @@ handle('gl:add', async (_e, link) => {
   const r = await fetch(`${base()}/golf/api/${id}/desk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, op: 'get' }) });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.error || 'That desk link did not work.');
-  data.events = [{ id, key, name: j.name || 'Tournament', date: j.date || '', added: Date.now() }, ...(data.events || []).filter((x) => x.id !== id)]; save(data);
+  data.events = [{ id, key, name: j.name || 'Tournament', date: j.date || '', added: Date.now(), owner: data.token ? data.email || '' : '' }, ...(data.events || []).filter((x) => x.id !== id)]; save(data);
   return data.events[0];
 });
 handle('gl:remove', async (_e, id) => {

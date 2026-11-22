@@ -108,6 +108,8 @@ final class AdminModel {
     var newClub = false
     /// the Manager's sign-in token
     @ObservationIgnored var token: () -> String = { "" }
+    /// whether the saved passcode may be used now (the Manager says no while a club's own account is signed in)
+    @ObservationIgnored var passAllowed: () -> Bool = { true }
     /// The Flagcast Admin passcode (the server's GOLF_CREATE_PASS), kept in the login Keychain. With it, Admin works
     /// without signing in by email.
     var pass: String? = Keychain.pass
@@ -116,17 +118,20 @@ final class AdminModel {
 
     private func body(_ extra: [String: Any]) -> [String: Any] {
         var b = extra; b["token"] = token()
-        if let pass, !pass.isEmpty { b["pass"] = pass }
+        if let pass, !pass.isEmpty, passAllowed() { b["pass"] = pass }
         return b
     }
     /// Try a passcode: kept in the Keychain if the server takes it.
     func unlock(_ p: String) async throws {
+        guard passAllowed() else { throw APIError(status: 403, message: "Sign out of the club’s account first. The passcode only works for Flagcast staff.") }
         let old = pass
         pass = p.trimmingCharacters(in: .whitespacesAndNewlines)
         do { try await refresh(); Keychain.pass = pass; await refreshEvents() }
         catch { pass = old; throw error }
     }
-    func forget() { pass = nil; Keychain.pass = nil; clubs = []; events = []; log = [] }
+    func forget() { pass = nil; Keychain.pass = nil; clear() }
+    /// drop every club's data from memory (sign-out, or another account signing in)
+    func clear() { clubs = []; events = []; log = []; error = nil; notice = nil }
 
     @discardableResult
     func call(_ op: String?, _ extra: [String: Any] = [:]) async throws -> [String: Any] {

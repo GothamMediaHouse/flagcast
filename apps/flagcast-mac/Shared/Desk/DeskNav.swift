@@ -6,6 +6,9 @@ struct EventRef: Codable, Hashable, Identifiable {
     var id: String, key: String, name: String
     var date: String? = nil, club: String? = nil, added: Double? = nil
     var fromClub: Bool? = nil
+    /// a desk-link tournament: the email signed in when it was added ('' or nil = added while signed out). It only
+    /// shows for that account, so one club never sees another's on a shared computer.
+    var owner: String? = nil
 }
 
 /// What the desk views need from the app around them: which section shows, and a way to tell the app a
