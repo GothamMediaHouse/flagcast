@@ -115,6 +115,28 @@ struct DetailsView: View {
                 }
                 .padding(14)
             }
+            CardBox(title: "Photos golfers see", footer: "The cover shows when golfers open the tournament. A hole photo shows on that hole’s page. Photos save as soon as you add them.") {
+                VStack(alignment: .leading, spacing: 8) {
+                    PhotoSpot(doc: doc, slot: "cover", label: "Cover photo", url: doc.ev.photos.coverURL, height: 170)
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 3), spacing: 6) {
+                        ForEach(doc.ev.course.holes, id: \.n) { h in PhotoSpot(doc: doc, slot: "h\(h.n)", label: "Hole \(h.n)", url: doc.ev.photos.hole(h.n), height: 72) }
+                    }
+                }
+                .padding(14)
+            }
+            if !doc.ev.sponsors.isEmpty {
+                CardBox(title: "Sponsor banners", footer: "A wide picture golfers see with the sponsor on their phones.") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(doc.ev.sponsors) { sp in
+                            HStack(spacing: 10) {
+                                Text(sp.name.isEmpty ? "Sponsor" : sp.name).font(.subheadline.weight(.semibold)).frame(width: 96, alignment: .leading).lineLimit(2)
+                                PhotoSpot(doc: doc, slot: "s-\(sp.id)", label: "Banner", url: doc.ev.photos.sponsor(sp.id), height: 64)
+                            }
+                        }
+                    }
+                    .padding(14)
+                }
+            }
             CardBox(title: "On the TVs") {
                 VStack(alignment: .leading, spacing: 12) {
                     TextField("Ticker along the bottom", text: $doc.ev.screens.ticker, axis: .vertical).padding(12).background(FC.paper2, in: RoundedRectangle(cornerRadius: 10))

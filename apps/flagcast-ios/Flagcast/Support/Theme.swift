@@ -144,7 +144,20 @@ struct ClubLogo: View {
     }
 }
 
-/// The top of a page: the course photo (from the tournament's course map) with a dark fade, the logo, and the big
+/// A photo the club added, by address, kept in memory once loaded (the server gives each version its own address).
+@MainActor
+enum ClubPhoto {
+    private static var cache: [URL: UIImage] = [:]
+    static func load(_ url: URL?) async -> UIImage? {
+        guard let url else { return nil }
+        if let c = cache[url] { return c }
+        guard let (d, r) = try? await URLSession.shared.data(from: url), (r as? HTTPURLResponse)?.statusCode == 200, let i = UIImage(data: d) else { return nil }
+        if cache.count > 40 { cache.removeAll() }
+        cache[url] = i; return i
+    }
+}
+
+/// The top of a page: the club's cover photo when it added one, else the course photo (from the tournament's course map) with a dark fade, the logo, and the big
 /// white title at its bottom, as in Flagcast Manager. Plain green when the course isn't mapped.
 struct GreenHeader<Trailing: View>: View {
     var title: String
@@ -177,7 +190,10 @@ struct GreenHeader<Trailing: View>: View {
         .frame(maxWidth: .infinity)
         .clipped()
         .animation(.easeOut(duration: 0.4), value: photo != nil)
-        .task(id: state?.id) { if let state { photo = await CoursePhoto.course(state) } }
+        .task(id: "\(state?.id ?? "")-\(state?.photos.cover ?? "")") {
+            guard let state else { return }
+            if let p = await ClubPhoto.load(state.photos.coverURL) { photo = p } else { photo = await CoursePhoto.course(state) }
+        }
     }
 }
 

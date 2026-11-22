@@ -183,6 +183,22 @@ struct Brand: Codable, Hashable {
     /// the club logo's full address, or nil for the Flagcast logo
     var logoURL: URL? { demo || logo.isEmpty ? nil : URL(string: logo, relativeTo: Server.base)?.absoluteURL }
 }
+/// Photos the club added for golfers (brand.js on the server): a cover photo, one per hole, a wide banner per sponsor.
+/// Each is an address on the server; missing ones aren't there.
+struct Photos: Codable, Hashable {
+    var cover = "", holes: [String: String] = [:], sponsors: [String: String] = [:]
+    init() {}
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        cover = c.str(.cover)
+        holes = (try? c.decodeIfPresent([String: String].self, forKey: .holes)) ?? [:]
+        sponsors = (try? c.decodeIfPresent([String: String].self, forKey: .sponsors)) ?? [:]
+    }
+    private func url(_ s: String?) -> URL? { guard let s, !s.isEmpty else { return nil }; return URL(string: s, relativeTo: Server.base)?.absoluteURL }
+    var coverURL: URL? { url(cover) }
+    func hole(_ n: Int) -> URL? { url(holes[String(n)]) }
+    func sponsor(_ id: String) -> URL? { url(sponsors[id]) }
+}
 struct News: Codable, Hashable { var text: String; var at: Double; var by: String? }
 struct Nudge: Codable, Hashable { var team: String; var text: String; var at: Double }
 struct Ace: Codable, Hashable { var hole: Int; var name: String; var team: String; var at: Double }
@@ -291,10 +307,11 @@ struct EventState: Codable, Hashable {
     var online: [String: Int] = [:]
     var lastAt: [String: Double] = [:]   // team id → when that cart last entered a score (ms)
     var brand = Brand()
+    var photos = Photos()
 
     enum CodingKeys: String, CodingKey {
         case id, name, club, date, course, format, sideGames, flights, teams, screens, cams, sponsors, schedule, displays, fund, contests
-        case locked, aces, flash, news, nudges, live, replays, map, scores, online, brand, lastAt
+        case locked, aces, flash, news, nudges, live, replays, map, scores, online, brand, lastAt, photos
     }
     init() {}
     init(from d: Decoder) throws {
@@ -321,6 +338,7 @@ struct EventState: Codable, Hashable {
         scores = (try? c.decodeIfPresent(Scores.self, forKey: .scores)) ?? [:]
         online = (try? c.decodeIfPresent([String: Int].self, forKey: .online)) ?? [:]
         brand = (try? c.decodeIfPresent(Brand.self, forKey: .brand)) ?? Brand()
+        photos = (try? c.decodeIfPresent(Photos.self, forKey: .photos)) ?? Photos()
         lastAt = (try? c.decodeIfPresent([String: Double].self, forKey: .lastAt)) ?? [:]
     }
     func encode(to e: Encoder) throws {
@@ -333,7 +351,7 @@ struct EventState: Codable, Hashable {
         try c.encode(fund, forKey: .fund); try c.encode(contests, forKey: .contests); try c.encode(locked, forKey: .locked)
         try c.encode(aces, forKey: .aces); try c.encodeIfPresent(flash, forKey: .flash); try c.encode(news, forKey: .news)
         try c.encode(nudges, forKey: .nudges); try c.encode(live, forKey: .live); try c.encode(replays, forKey: .replays); try c.encode(map, forKey: .map); try c.encode(scores, forKey: .scores); try c.encode(online, forKey: .online)
-        try c.encode(brand, forKey: .brand); try c.encode(lastAt, forKey: .lastAt)
+        try c.encode(brand, forKey: .brand); try c.encode(lastAt, forKey: .lastAt); try c.encode(photos, forKey: .photos)
     }
 
     /// "Sat, Nov 21" for the tournament's day (it's stored as 2026-11-21, a day where the club is)

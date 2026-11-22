@@ -100,6 +100,10 @@ struct ScorecardScreen: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
+                        // the club's cover photo welcomes the cart until its first score
+                        if s.photos.coverURL != nil, !s.scorers(t).contains(where: { p in (model.myScores()[t.id]?[p.id] ?? []).contains { $0 != nil } }) {
+                            CoverCard(state: s)
+                        }
                         holeHeader(s, H).id("top")
                         if Geo.mapped(s) {
                             GPSCard(state: s, hole: h) { d in
@@ -223,13 +227,13 @@ struct ScorecardScreen: View {
         let sp = s.sponsors.first { $0.spot == "hole" && $0.holes.contains(h) } ?? s.sponsors.first { $0.holes.contains(h) }
         let turn = h == 10 ? s.sponsors.first { $0.spot == "turn" } : nil
         if let sp {
-            SponsorLine(sponsor: sp, lead: "Presented by") { model.hits.tap(sp.id) }
+            SponsorLine(sponsor: sp, lead: "Presented by", banner: s.photos.sponsor(sp.id)) { model.hits.tap(sp.id) }
                 .onAppear { model.hits.view(sp.id, once: "\(sp.id):\(h)") }
         }
         if let turn {
             VStack(alignment: .leading, spacing: 6) {
                 Text("At the turn").fcHeading(.subheadline)
-                SponsorLine(sponsor: turn) { model.hits.tap(turn.id) }
+                SponsorLine(sponsor: turn, banner: s.photos.sponsor(turn.id)) { model.hits.tap(turn.id) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12).background(Color.fcPaper2, in: RoundedRectangle(cornerRadius: 10))
@@ -388,6 +392,28 @@ struct AceCelebration: View {
 
 /// The hole at the top of the scorecard: its picture from the course map (tee at the bottom, green at the top) with
 /// HOLE 7 in big white letters, par, yards and stroke index; a green card when the course isn't mapped.
+/// "Welcome to <tournament>" on the club's cover photo
+struct CoverCard: View {
+    let state: EventState
+    @State private var photo: UIImage?
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            Color.fcGreen.overlay { if let photo { Image(uiImage: photo).resizable().aspectRatio(contentMode: .fill) } }.clipped()
+            LinearGradient(colors: [Color.fcScrim.opacity(0.8), Color.fcScrim.opacity(0)], startPoint: .bottom, endPoint: .center)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("WELCOME TO").font(.caption2.monospaced()).tracking(1.5).opacity(0.85)
+                Text(state.title).font(FCType.display(30)).textCase(.uppercase).lineLimit(2).minimumScaleFactor(0.6)
+            }
+            .foregroundStyle(.white).shadow(color: .black.opacity(0.4), radius: 6, y: 1)
+            .padding(.horizontal, 16).padding(.bottom, 12)
+        }
+        .frame(height: 190)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .task(id: state.photos.cover) { photo = await ClubPhoto.load(state.photos.coverURL) }
+        .accessibilityElement(children: .combine)
+    }
+}
+
 struct HolePhotoHeader: View {
     let state: EventState
     let hole: Hole
@@ -412,7 +438,10 @@ struct HolePhotoHeader: View {
         .frame(height: photo == nil ? 96 : 170)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .animation(.easeOut(duration: 0.35), value: photo != nil)
-        .task(id: "\(state.id)-\(hole.n)") { photo = await CoursePhoto.hole(state, hole.n) }
+        // the club's own photo of the hole when it added one, else the satellite picture
+        .task(id: "\(state.id)-\(hole.n)-\(state.photos.holes[String(hole.n)] ?? "")") {
+            if let p = await ClubPhoto.load(state.photos.hole(hole.n)) { photo = p } else { photo = await CoursePhoto.hole(state, hole.n) }
+        }
         .accessibilityElement(children: .combine)
     }
 }

@@ -1,5 +1,8 @@
 import SwiftUI
 import UniformTypeIdentifiers
+#if os(iOS)
+import PhotosUI
+#endif
 #if canImport(AppKit)
 import AppKit
 #else
@@ -46,6 +49,128 @@ enum LogoPrep {
         return UIGraphicsImageRenderer(size: size, format: fmt).image { _ in img.draw(in: CGRect(origin: .zero, size: size)) }.pngData()
     }
     #endif
+}
+
+/// A photo for golfers (cover, hole, sponsor banner) as the JPEG data: URI the server takes: at most 1600 px on its
+/// longest side, under about 1.1 MB.
+enum PhotoPrep {
+    static func dataURI(_ data: Data) -> String? {
+        for (side, q) in [(1600.0, 0.82), (1600.0, 0.68), (1280.0, 0.65), (1000.0, 0.6)] {
+            guard let j = jpeg(data, maxSide: side, quality: q) else { return nil }
+            if j.count < 1_100_000 { return "data:image/jpeg;base64," + j.base64EncodedString() }
+        }
+        return nil
+    }
+    #if canImport(AppKit)
+    private static func jpeg(_ data: Data, maxSide: CGFloat, quality: Double) -> Data? {
+        guard let img = NSImage(data: data), let cg = img.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        let f = min(1, maxSide / CGFloat(max(cg.width, cg.height)))
+        let w = max(1, Int(CGFloat(cg.width) * f)), h = max(1, Int(CGFloat(cg.height) * f))
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+                                         isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
+        NSGraphicsContext.saveGraphicsState(); NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        NSGraphicsContext.current?.cgContext.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h)); NSGraphicsContext.restoreGraphicsState()
+        return rep.representation(using: .jpeg, properties: [.compressionFactor: quality])
+    }
+    #else
+    private static func jpeg(_ data: Data, maxSide: CGFloat, quality: Double) -> Data? {
+        guard let img = UIImage(data: data), img.size.width > 0 else { return nil }
+        let px = CGSize(width: img.size.width * img.scale, height: img.size.height * img.scale)
+        let f = min(1, maxSide / max(px.width, px.height))
+        let size = CGSize(width: max(1, (px.width * f).rounded()), height: max(1, (px.height * f).rounded()))
+        let fmt = UIGraphicsImageRendererFormat(); fmt.scale = 1; fmt.opaque = true
+        return UIGraphicsImageRenderer(size: size, format: fmt).image { _ in img.draw(in: CGRect(origin: .zero, size: size)) }.jpegData(compressionQuality: quality)
+    }
+    #endif
+}
+
+/// One photo spot for the Manager apps: the picture (or "Add …"), tap to pick one (Photos on iPhone, a file on the
+/// Mac), with a remove button. Saves at once.
+struct PhotoSpot: View {
+    @Bindable var doc: DeskDoc
+    let slot: String
+    let label: String
+    let url: URL?
+    var height: CGFloat = 90
+    @State private var importing = false
+    #if os(iOS)
+    @State private var picked: PhotosPickerItem?
+    #endif
+    var body: some View {
+        let busy = doc.photoBusy.contains(slot)
+        picker(tile(busy))
+            .disabled(busy)
+            .overlay(alignment: .topTrailing) {
+                if url != nil && !busy {
+                    Button { Task { await doc.setPhoto(slot, nil) } } label: { Image(systemName: "xmark.circle.fill").font(.system(size: 18)).foregroundStyle(.white, .black.opacity(0.55)) }
+                        .buttonStyle(.plain).padding(5).accessibilityLabel("Remove \(label)")
+                }
+            }
+            .accessibilityLabel(url == nil ? "Add \(label)" : label)
+    }
+    private func tile(_ busy: Bool) -> some View {
+        ZStack(alignment: .bottomLeading) {
+            RoundedRectangle(cornerRadius: 8).fill(Color.secondary.opacity(0.12))
+                .overlay { if let url { RemotePhoto(url: url) } }
+                .overlay { if url == nil { RoundedRectangle(cornerRadius: 8).strokeBorder(Color.secondary.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [4])) } }
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            Text(url == nil ? "Add \(label.lowercased())" : label)
+                .font(.system(size: 12, weight: .semibold)).foregroundStyle(url == nil ? Color.secondary : .white)
+                .shadow(color: url == nil ? .clear : .black.opacity(0.6), radius: 3)
+                .padding(8)
+            if busy { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
+        }
+        .frame(height: height)
+        .contentShape(Rectangle())
+    }
+    #if os(iOS)
+    private func picker(_ t: some View) -> some View {
+        PhotosPicker(selection: $picked, matching: .images) { t }
+            .buttonStyle(.plain)
+            .onChange(of: picked) { _, item in
+                guard let item else { return }
+                picked = nil
+                Task { if let d = try? await item.loadTransferable(type: Data.self) { await doc.setPhoto(slot, d) } else { doc.flash("That photo couldn’t be opened.") } }
+            }
+    }
+    #else
+    private func picker(_ t: some View) -> some View {
+        Button { importing = true } label: { t }
+            .buttonStyle(.plain)
+            .contextMenu {
+                Button(url == nil ? "Add Photo…" : "Change Photo…") { importing = true }
+                if url != nil { Button("Remove Photo", role: .destructive) { Task { await doc.setPhoto(slot, nil) } } }
+            }
+            .fileImporter(isPresented: $importing, allowedContentTypes: [.jpeg, .png, .heic, .webP, .image]) { r in
+                guard case .success(let file) = r else { return }
+                let ok = file.startAccessingSecurityScopedResource(); defer { if ok { file.stopAccessingSecurityScopedResource() } }
+                let d = try? Data(contentsOf: file)
+                Task { await doc.setPhoto(slot, d) }
+            }
+    }
+    #endif
+}
+
+/// A photo from the server by address, filling its frame.
+struct RemotePhoto: View {
+    let url: URL
+    @State private var image: Image?
+    @MainActor private static var cache: [URL: Image] = [:]
+    var body: some View {
+        Color.clear.overlay { if let image { image.resizable().aspectRatio(contentMode: .fill) } }
+            .clipped()
+            .task(id: url) {
+                if let c = Self.cache[url] { image = c; return }
+                guard let (d, r) = try? await Net.session.data(from: url), (r as? HTTPURLResponse)?.statusCode == 200 else { return }
+                #if canImport(AppKit)
+                guard let n = NSImage(data: d) else { return }; let i = Image(nsImage: n)
+                #else
+                guard let u = UIImage(data: d) else { return }; let i = Image(uiImage: u)
+                #endif
+                if Self.cache.count > 60 { Self.cache.removeAll() }
+                Self.cache[url] = i; image = i
+            }
+    }
 }
 
 /// A picture from the server by address (club logos), kept in memory once loaded.

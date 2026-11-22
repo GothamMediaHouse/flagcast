@@ -89,10 +89,20 @@ struct SponsorBadge: View {
 struct SponsorLine: View {
     var sponsor: Sponsor
     var lead: String = ""
+    var banner: URL? = nil   // the sponsor's wide picture, when the club added one
     var onTap: () -> Void = {}
     @Environment(\.openURL) private var openURL
+    @State private var bannerImage: UIImage?
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
+            if let bannerImage {
+                let pic = Image(uiImage: bannerImage).resizable().aspectRatio(contentMode: .fill)
+                    .frame(maxWidth: .infinity).frame(height: 96).clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .accessibilityLabel(sponsor.name)
+                if let u = URL(string: sponsor.url), !sponsor.url.isEmpty {
+                    Button { onTap(); openURL(u) } label: { pic }.buttonStyle(.plain)
+                } else { pic }
+            }
             HStack(spacing: 6) {
                 if !lead.isEmpty { Text(lead).font(.footnote).foregroundStyle(Color.fcMuted) }
                 SponsorBadge(sponsor: sponsor)
@@ -110,6 +120,7 @@ struct SponsorLine: View {
                 }
             }
         }
+        .task(id: banner) { bannerImage = await ClubPhoto.load(banner) }
     }
 }
 

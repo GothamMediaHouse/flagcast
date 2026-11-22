@@ -107,10 +107,11 @@ struct DeskEvent: Codable, Hashable {
     var news: [News] = []
     var stats: [String: SponsorStat] = [:]
     var log: [FixLog] = []
+    var photos = Photos()   // the photos golfers see (op "photo", saved at once, never with Save)
 
     enum CodingKeys: String, CodingKey {
         case name, club, date, course, format, sideGames, flights, teams, screens, cams, sponsors, schedule, pins, displays, fund, contests, logo
-        case id, key, locked, aces, map, live, scenes, replays, news, stats, log
+        case id, key, locked, aces, map, live, scenes, replays, news, stats, log, photos
     }
     init() {}
     init(from d: Decoder) throws {
@@ -133,6 +134,7 @@ struct DeskEvent: Codable, Hashable {
         scenes = c.list(.scenes); replays = c.list(.replays); news = c.list(.news)
         stats = (try? c.decodeIfPresent([String: Lenient<SponsorStat>].self, forKey: .stats))?.compactMapValues(\.value) ?? [:]
         log = c.list(.log)
+        photos = (try? c.decodeIfPresent(Photos.self, forKey: .photos)) ?? Photos()
     }
     /// Only the setup goes back on Save; cleanSetup ignores anything else.
     func encode(to e: Encoder) throws {

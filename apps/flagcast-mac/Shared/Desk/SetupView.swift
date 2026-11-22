@@ -21,7 +21,7 @@ struct SetupView: View {
                 .scrollIndicators(.never)
                 .frame(width: 320)
                 ScrollView {
-                    VStack(spacing: 14) { scorecard; extras }.padding(.bottom, 18)
+                    VStack(spacing: 14) { scorecard; photosCard; extras }.padding(.bottom, 18)
                 }
                 .scrollIndicators(.never)
             }
@@ -149,6 +149,23 @@ struct SetupView: View {
     }
 
     // ---- right, below: the rest of the format ----
+    // ---- right: the photos golfers see (saved at once, not with Save) ----
+    private var photosCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            CardTitle("Photos golfers see")
+            Help("A cover photo shows when golfers open the tournament on their phone. A hole photo shows on that hole’s page instead of the satellite view. Photos save as soon as you add them.")
+            HStack(alignment: .top, spacing: 8) {
+                PhotoSpot(doc: doc, slot: "cover", label: "Cover photo", url: doc.ev.photos.coverURL, height: 176).frame(width: 240)
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 6), spacing: 6) {
+                    ForEach(doc.ev.course.holes, id: \.n) { h in
+                        PhotoSpot(doc: doc, slot: "h\(h.n)", label: "Hole \(h.n)", url: doc.ev.photos.hole(h.n), height: 54)
+                    }
+                }
+            }
+        }
+        .raisedCard(padding: 18)
+    }
+
     private var extras: some View {
         VStack(alignment: .leading, spacing: 12) {
             CardTitle("Scoring")

@@ -78,7 +78,7 @@ struct ScreensView: View {
                 Help("Save Replay plays the hole’s camera back from 25 seconds before you press it (the camera’s HLS link must keep a recording window). Or paste a clip link (.mp4 or .m3u8). Players see replays on their phones.")
             }
             SwiftUI.Section {
-                ForEach($doc.ev.sponsors) { $s in SponsorRow(sponsor: $s, holes: doc.ev.course.holes) { doc.ev.sponsors.removeAll { $0.id == s.id } } }
+                ForEach($doc.ev.sponsors) { $s in SponsorRow(sponsor: $s, holes: doc.ev.course.holes, doc: doc) { doc.ev.sponsors.removeAll { $0.id == s.id } } }
                 Button { doc.ev.sponsors.append(Sponsor(id: Ids.make(), name: "")) } label: { Label("Add Sponsor", systemImage: "plus") }
             } header: { Text("Sponsors") } footer: {
                 Help("Pick where each sponsor shows. Hole, camera and contest spots use the hole numbers. The link and offer show on the players’ phones, and taps are counted for the report. Logos: PNG or JPG under 140 KB.")
@@ -109,6 +109,7 @@ struct ScreensView: View {
 struct SponsorRow: View {
     @Binding var sponsor: Sponsor
     var holes: [Hole]
+    var doc: DeskDoc? = nil
     var remove: () -> Void
     @State private var importing = false
     @State private var err: String?
@@ -125,6 +126,11 @@ struct SponsorRow: View {
                     .frame(width: 88, height: 52).background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
                 }
                 .buttonStyle(.plain).help("Choose a logo (PNG or JPG under 140 KB)")
+                // a wide picture golfers see with the sponsor (saved at once)
+                if let doc {
+                    PhotoSpot(doc: doc, slot: "s-\(sponsor.id)", label: "Banner", url: doc.ev.photos.sponsor(sponsor.id), height: 52)
+                        .frame(width: 150).help("A wide picture golfers see with this sponsor on their phones. It saves as soon as you add it.")
+                }
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         TextField("Sponsor name", text: $sponsor.name)

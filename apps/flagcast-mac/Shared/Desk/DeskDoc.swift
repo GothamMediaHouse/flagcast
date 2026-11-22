@@ -65,6 +65,20 @@ final class DeskDoc {
         ev = e
         savedData = fresh.setupData
     }
+    /// A photo golfers see (brand.js): "cover", "h<n>" for a hole, "s-<sponsor id>" for a banner. Saved at once.
+    /// nil takes it off. The picture is shrunk to about 1600 px across as a JPEG first.
+    func setPhoto(_ slot: String, _ data: Data?) async {
+        var extra: [String: Any] = ["slot": slot, "image": ""]
+        if let data {
+            guard let uri = PhotoPrep.dataURI(data) else { flash("That file isn’t a photo this app can read. Try a JPEG."); return }
+            extra["image"] = uri
+        }
+        photoBusy.insert(slot); defer { photoBusy.remove(slot) }
+        guard let r = await day("photo", extra, done: data == nil ? "Photo removed." : "Photo added. Golfers see it now."),
+              let p = r["photos"], let d = try? JSONSerialization.data(withJSONObject: p), let ph = try? JSONDecoder().decode(Photos.self, from: d) else { return }
+        ev.photos = ph
+    }
+    var photoBusy: Set<String> = []
     func flash(_ s: String) { notice = s; Task { try? await Task.sleep(for: .seconds(4)); if notice == s { notice = nil } } }
 
     // ---- links ----
