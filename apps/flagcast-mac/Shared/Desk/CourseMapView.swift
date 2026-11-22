@@ -88,7 +88,7 @@ struct CourseMapView: View {
             }
         }
         .inspector(isPresented: .constant(true)) { inspector.inspectorColumnWidth(min: 300, ideal: 340, max: 420) }
-        .onAppear { hole = firstOpenHole(); fit() }
+        .onAppear { hole = firstOpenHole(); fit(); addBends() }
         #if DEBUG
         .onReceive(NotificationCenter.default.publisher(for: .init("FlagcastFlyTest"))) { n in
             if let k = n.object as? Int { hole = k }
@@ -347,6 +347,30 @@ struct CourseMapView: View {
             withAnimation { camera = .camera(MapCamera(centerCoordinate: c, distance: 2500, heading: 0, pitch: 0)) }
         }
     }
+    /// Courses mapped before the course map kept each hole's bends fly straight from tee to green, across a dogleg.
+    /// When the map came from OpenStreetMap and some holes have no bends, this quietly looks them up again and adds
+    /// them, keeping every tee, green and hazard as it is (once each time the course map opens).
+    private func addBends() {
+        let missing = doc.ev.map.holes.filter { $0.value.tee != nil && $0.value.line.isEmpty }
+        guard doc.ev.map.src == "osm", !missing.isEmpty, !bendsTried else { return }
+        bendsTried = true
+        let pts = doc.ev.map.holes.values.flatMap { [$0.tee, $0.m ?? $0.f].compactMap { $0 } }
+        guard let s = pts.map(\.lat).min(), let n = pts.map(\.lat).max(), let w = pts.map(\.lng).min(), let e = pts.map(\.lng).max() else { return }
+        Task {
+            guard let els = try? await OSM.fetch(south: s - 0.002, west: w - 0.002, north: n + 0.002, east: e + 0.002) else { return }
+            var added = 0
+            for k in missing.keys {
+                // OpenStreetMap's hole with this number that starts nearest our tee (other courses next door share
+                // the numbers), and only if it starts within 60 yds of it
+                guard var cur = doc.ev.map.holes[k], cur.line.isEmpty, let a = cur.tee,
+                      let v = OSM.build(els, near: a).holes[k], !v.line.isEmpty, let b = v.tee, yards(a, b) < 60 else { continue }
+                cur.line = v.line; doc.ev.map.holes[k] = cur; added += 1
+            }
+            if added > 0 { scheduleSave() }
+        }
+    }
+    @State private var bendsTried = false
+
     /// Map holes from OpenStreetMap: the empty ones, or every one.
     private func auto(all: Bool) {
         guard let region = lastRegion ?? currentRegion() else { note = "Find the course first, so it fills the map."; return }
