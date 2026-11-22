@@ -19,7 +19,11 @@ struct OverviewView: View {
             LockButton(doc: doc)
             Button("Save") { Task { await doc.save() } }.buttonStyle(WhiteButton()).disabled(!doc.dirty || doc.saving)
         } title: {
-            HeroTitle(kicker: dayLine(ev.date) ?? "NO DATE SET", live: isToday && !ev.locked, title: ev.name.isEmpty ? "Tournament" : ev.name, size: 76, sub: subtitle)
+            VStack(alignment: .leading, spacing: 14) {
+                // the logo golfers and the TVs see: the club's (or this tournament's own); none on a Demo
+                if let u = logoURL(live?.brand.logo) { RemoteLogo(url: u).frame(maxWidth: 240, maxHeight: 64, alignment: .leading).shadow(color: .black.opacity(0.3), radius: 6) }
+                HeroTitle(kicker: dayLine(ev.date) ?? "NO DATE SET", live: isToday && !ev.locked, title: ev.name.isEmpty ? "Tournament" : ev.name, size: 76, sub: subtitle)
+            }
         } content: {
             VStack(spacing: 18) {
                 stats.padding(.horizontal, 24)
