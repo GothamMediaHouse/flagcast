@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -18,7 +18,7 @@ body { background: #e9ece6; color: var(--ink); }
 .sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 3.9in), 1fr)); gap: 16px; padding: 16px; max-width: 8.5in; margin: 0 auto; }
 .card { background: #fff; border: 1.5px dashed var(--line); border-radius: 6px; padding: .3in; display: grid; grid-template-columns: 1fr auto; gap: .2in; break-inside: avoid; min-height: 4.6in; align-content: start; }
 /* the top of each card: the club's logo (Flagcast's for a demo or a club with no logo) and the tournament, over a line in the club's colour */
-.card .head { grid-column: 1 / -1; display: flex; align-items: center; gap: .15in; border-bottom: 3px solid var(--club, #c9d1c5); padding-bottom: .1in; }
+.card .head { grid-column: 1 / -1; display: flex; align-items: center; gap: .15in; border-bottom: 3px solid var(--club, var(--line)); padding-bottom: .1in; }
 .card .head img { height: .55in; width: auto; max-width: 1.6in; object-fit: contain; flex: none; }
 .card .ev { font-family: var(--f-display); font-weight: 700; font-size: 1.05rem; line-height: 1.1; text-transform: uppercase; }
 .card .ev small { display: block; font-family: var(--f-mono); font-weight: 500; font-size: .66rem; letter-spacing: .12em; color: var(--muted); margin-top: 2px; }
