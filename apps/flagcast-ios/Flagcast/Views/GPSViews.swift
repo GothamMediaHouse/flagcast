@@ -144,9 +144,11 @@ struct CourseView: View {
     private func content(_ h: HoleMap, _ g: GeoPoint) -> some MapContent {
         let from = origin?.at
         if let from, let toG = Geo.yds(from, g) {
-            let up = Geo.bearing(from, g)
-            // carry arcs every 50 yards from where you are
+            // the hole from here to the green, round its doglegs
+            let way = FlyPath.ahead(h, from: from, green: g)
+            // carry arcs every 50 yards from where you are, each centred where it crosses the fairway
             ForEach(Array(stride(from: 50.0, to: toG - 25, by: 50.0)).filter { !($0 < 100 && toG > 250) }, id: \.self) { d in
+                let up = FlyPath.cross(way, from: from, yards: d).map { Geo.bearing(from, $0) } ?? Geo.bearing(from, g)
                 let span = min(28.0, 70.0 / max(d, 1) * 57.3 * 0.9)
                 MapPolyline(coordinates: stride(from: -span, through: span, by: span / 8).map { Geo.offset(from, yards: d, bearing: up + $0).coordinate })
                     .stroke(.white.opacity(0.55), lineWidth: 1.5)
@@ -160,7 +162,7 @@ struct CourseView: View {
                 Annotation("", coordinate: mid(from, t).coordinate) { pill("\(Int(jsRound(Geo.yds(from, t) ?? 0)))", gold: true) }
                 Annotation("", coordinate: mid(t, g).coordinate) { pill("\(Int(jsRound(Geo.yds(t, g) ?? 0)))", gold: true) }
             } else {
-                MapPolyline(coordinates: [from.coordinate, g.coordinate]).stroke(.white.opacity(0.95), lineWidth: 2.5)
+                MapPolyline(coordinates: way.map(\.coordinate)).stroke(.white.opacity(0.95), lineWidth: 2.5)
             }
             if origin?.me == false, let tee = h.tee {
                 Annotation("", coordinate: tee.coordinate) {

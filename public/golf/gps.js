@@ -16,6 +16,20 @@ export function yds(a, b) {
   const h = Math.sin(dla / 2) ** 2 + Math.cos(a[0] * t) * Math.cos(b[0] * t) * Math.sin(dlo / 2) ** 2;
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(h))) * YD;
 }
+// the hole from `from` to the green round its doglegs: you, the bends still ahead (h.line), the green
+export function ahead(h, from, g) {
+  const left = yds(from, g) || 0;
+  const bends = ((h && h.line) || []).filter((b) => yds(b, g) < left - 20 && yds(from, b) > 20).sort((x, y) => yds(y, g) - yds(x, g));
+  return [from, ...bends, g];
+}
+// where that line is `d` yards from `from` as the crow flies (where a carry arc crosses the fairway)
+export function cross(pts, from, d) {
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1], b = pts[i], n = Math.max(1, Math.ceil((yds(a, b) || 0) / 2));
+    for (let k = 0; k <= n; k++) { const p = [a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]; if (yds(from, p) >= d) return p; }
+  }
+  return null;
+}
 export const middle = (h) => h && (h.m || (h.f && h.b ? [(h.f[0] + h.b[0]) / 2, (h.f[1] + h.b[1]) / 2] : h.f || h.b)) || null;
 export const holeMap = (S, n) => (S && S.map && S.map.holes && (S.map.holes[n] || S.map.holes[String(n)])) || null;
 export const mapped = (S) => !!(S && S.map && S.map.holes && Object.values(S.map.holes).some((h) => middle(h)));
@@ -181,10 +195,13 @@ export function holeView(canvas) {
     if (from) {
       const a = P(from), gg = P(g), toG = yds(from, g);
       // carry arcs every 50 yards from where you are (like the rings in golf GPS apps)
-      const pxPerYd = Math.hypot(gg.x - a.x, gg.y - a.y) / toG, up = Math.atan2(gg.y - a.y, gg.x - a.x);
+      // the hole from here to the green round its doglegs; each arc is centred where it crosses that line
+      const way = ahead(h, from, g), wayPx = way.map(P);
+      const pxPerYd = Math.hypot(gg.x - a.x, gg.y - a.y) / toG;
       for (let d = 50; d < toG - 25; d += 50) {
         if (d < 100 && toG > 250) continue;
         const r = d * pxPerYd; if (r < 40) continue;
+        const c = cross(way, from, d), cp = c ? P(c) : gg, up = Math.atan2(cp.y - a.y, cp.x - a.x);
         const span = Math.min(0.5, 70 / r);
         ctx.strokeStyle = 'rgba(255,255,255,.55)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(a.x, a.y, r, up - span, up + span); ctx.stroke();
         const ex = a.x + r * Math.cos(up + span), ey = a.y + r * Math.sin(up + span);
@@ -197,7 +214,7 @@ export function holeView(canvas) {
         ring(tap, 8, '#f2d04f', '#1a1a10');
         label((a.x + t.x) / 2 + 26, (a.y + t.y) / 2, `${Math.round(yds(from, tap))}`, { bg: '#f2d04f', fg: '#1a1a10', size: 15 });
         label((t.x + gg.x) / 2 + 26, (t.y + gg.y) / 2, `${Math.round(yds(tap, g))}`, { bg: '#f2d04f', fg: '#1a1a10', size: 15 });
-      } else line([a, gg], 'rgba(255,255,255,.95)', 2.5);
+      } else line(wayPx, 'rgba(255,255,255,.95)', 2.5);
     }
     // hazards: a small ring where you reach it, a line to where it's carried, and the numbers
     for (const z of h.hz || []) {

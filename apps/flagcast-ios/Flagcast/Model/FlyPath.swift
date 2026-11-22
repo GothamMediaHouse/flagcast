@@ -69,6 +69,21 @@ struct FlyPath: Equatable {
     }
     static func length(_ pts: [GeoPoint]) -> Double { zip(pts, pts.dropFirst()).reduce(0) { $0 + (FlyPath.yds($1.0, $1.1) ?? 0) } }
 
+    /// The hole from where you are to the green, round its doglegs: you, the bends still ahead of you, the green.
+    static func ahead(_ h: HoleMap, from: GeoPoint, green g: GeoPoint) -> [GeoPoint] {
+        let left = yds(from, g) ?? 0
+        let bends = h.line.filter { b in (yds(b, g) ?? 0) < left - 20 && (yds(from, b) ?? 0) > 20 }
+            .sorted { (yds($0, g) ?? 0) > (yds($1, g) ?? 0) }
+        return [from] + bends + [g]
+    }
+    /// Where the hole's line (`ahead`) is `d` yards from you as the crow flies: where a 50-yard arc crosses the fairway.
+    static func cross(_ pts: [GeoPoint], from: GeoPoint, yards d: Double) -> GeoPoint? {
+        let total = length(pts)
+        var s = 0.0
+        while s <= total { let p = point(pts, at: s); if (yds(from, p) ?? 0) >= d { return p }; s += 2 }
+        return nil
+    }
+
     /// The point `s` yards along a path, carried on past either end in a straight line.
     static func along(_ pts: [GeoPoint], at s: Double, total: Double) -> GeoPoint {
         if s < 0, pts.count > 1 { return offset(pts[0], yards: -s, bearing: bearing(pts[1], pts[0])) }
