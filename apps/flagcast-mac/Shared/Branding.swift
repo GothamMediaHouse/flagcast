@@ -189,8 +189,8 @@ struct TournamentLogoField: View {
 
 // ---- club logos in Admin (Mac and iPhone) ----
 
-/// How Admin's club cards look (a trial of two, flipped on the Clubs page): the club's logo on a tile over its place
-/// photo, or the logo big on the club's own colour. A club with no logo yet keeps its photo either way.
+/// How Admin's club cards look (both kept, picked on the Clubs page and remembered on each device): the club's logo
+/// on a tile over its place photo, or the logo big on the club's own colour. A club with no logo yet keeps its photo either way.
 enum ClubLook: String, CaseIterable, Identifiable {
     case photo, logo
     var id: String { rawValue }

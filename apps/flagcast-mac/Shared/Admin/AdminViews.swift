@@ -43,7 +43,7 @@ struct ClubsView: View {
         @Bindable var model = model
         VStack(spacing: 0) {
             AdminHeader(title: "Clubs", sub: "\(model.clubs.count) club\(model.clubs.count == 1 ? "" : "s") · \(model.clubs.filter { $0.status == "pending" }.count) waiting", search: $search, prompt: "Find a club") {
-                Picker("Club cards", selection: $look) { ForEach(ClubLook.allCases) { Text($0.title).tag($0) } }.pickerStyle(.segmented).labelsHidden().frame(width: 230).help("Try both looks for the club cards")
+                Picker("Club cards", selection: $look) { ForEach(ClubLook.allCases) { Text($0.title).tag($0) } }.pickerStyle(.segmented).labelsHidden().frame(width: 230).help("How the club cards look: the logo on the place photo, or on the club’s colour")
                 Button { model.newClub = true } label: { Label("New club", systemImage: "plus") }.buttonStyle(GreenButton()).help("Set up a club")
             }
             ScrollView {
