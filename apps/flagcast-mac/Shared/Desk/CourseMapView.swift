@@ -348,11 +348,13 @@ struct CourseMapView: View {
         }
     }
     /// Courses mapped before the course map kept each hole's bends fly straight from tee to green, across a dogleg.
-    /// When the map came from OpenStreetMap and some holes have no bends, this quietly looks them up again and adds
-    /// them, keeping every tee, green and hazard as it is (once each time the course map opens).
+    /// When the map came from OpenStreetMap and some holes have no bends (or are missing), this quietly looks them up
+    /// again and adds them, keeping every tee, green and hazard already there (once each time the course map opens).
     private func addBends() {
         let missing = doc.ev.map.holes.filter { $0.value.tee != nil && $0.value.line.isEmpty }
-        guard doc.ev.map.src == "osm", !missing.isEmpty, !bendsTried else { return }
+        let count = min(18, max(doc.ev.course.holes.count, doc.ev.map.holes.keys.max() ?? 0))
+        let absent = (1...max(1, count)).filter { doc.ev.map.holes[$0]?.tee == nil }
+        guard doc.ev.map.src == "osm", !missing.isEmpty || !absent.isEmpty, !bendsTried else { return }
         bendsTried = true
         let pts = doc.ev.map.holes.values.flatMap { [$0.tee, $0.m ?? $0.f].compactMap { $0 } }
         guard let s = pts.map(\.lat).min(), let n = pts.map(\.lat).max(), let w = pts.map(\.lng).min(), let e = pts.map(\.lng).max() else { return }
@@ -366,7 +368,14 @@ struct CourseMapView: View {
                       let v = OSM.build(els, near: a).holes[k], !v.line.isEmpty, let b = v.tee, yards(a, b) < 60 else { continue }
                 cur.line = v.line; doc.ev.map.holes[k] = cur; added += 1
             }
-            if added > 0 { scheduleSave() }
+            // and holes OpenStreetMap has that the map is missing, if they start on this course (within 300 yds
+            // of a tee or green already mapped), so a course isn't left a hole short
+            for k in absent {
+                guard let v = OSM.build(els, near: GeoPoint(lat: (s + n) / 2, lng: (w + e) / 2)).holes[k], let t = v.tee,
+                      pts.contains(where: { yards($0, t) < 300 }), doc.ev.map.holes[k]?.tee == nil else { continue }
+                doc.ev.map.holes[k] = v; added += 1
+            }
+            if added > 0 { scheduleSave(); if absent.contains(hole) { fit() } }
         }
     }
     @State private var bendsTried = false
