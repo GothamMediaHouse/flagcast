@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="/golf/golf.css">
+<link rel="stylesheet" href="/golf/manager.css">
 <style>
 html, body { height: 100%; }
 body { display: flex; flex-direction: column; overflow: hidden; }
@@ -23,11 +24,20 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .strip button[aria-current="true"] { background: var(--flag); color: var(--on-flag); border-color: var(--flag); }
 .strip button[aria-current="true"] small { color: var(--on-flag); }
 .wrap { flex: 1; display: flex; min-height: 0; }
-#map { flex: 1; min-width: 0; background: #16301f; }
+.mapbox { flex: 1; min-width: 0; position: relative; }
+#map, #map3d { position: absolute; inset: 0; background: #16301f; }
+#map3d { z-index: 500; }
+/* the Mac's map header: the title, the course, the buttons */
+.topbar .ttl h1 { font: 700 34px/1 var(--f-display); text-transform: none; display: inline; margin-right: 12px; }
+.topbar .ttl .crs { color: var(--on-green-muted); font-size: 13px; white-space: nowrap; }
+.topbar .acts3 { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.topbar .gbtn[aria-pressed="true"] { background: var(--on-green); color: #123628; border-color: var(--on-green); }
+body.embed .topbar .label { display: none; }
+body.embed .mode { display: none; }
 .panel { width: 340px; overflow-y: auto; background: var(--paper); border-left: 1px solid var(--line); padding: 14px 14px calc(18px + env(safe-area-inset-bottom, 0px)); }
 @media (max-width: 760px) {
   .wrap { flex-direction: column; }
-  #map { flex: 1 1 55%; }
+  .mapbox { flex: 1 1 55%; }
   .panel { width: auto; flex: 1 1 45%; border-left: 0; border-top: 1px solid var(--line); }
 }
 .panel h2 { font-size: 1.5rem; margin-bottom: 4px; }
@@ -78,10 +88,11 @@ body.groups .strip { display: none; }
 </style>
 </head>
 <body>
-<div class="topbar"><div class="ttl"><div class="label">Course map · hole GPS</div><h1 id="evname">Course map</h1></div><span id="saved"></span><div class="mode" id="mode"><button data-mode="holes" aria-pressed="true">Map holes</button><button data-mode="groups" aria-pressed="false">Groups</button></div></div>
+<div class="topbar"><div class="ttl"><div class="label">Course map · hole GPS</div><h1 id="maptitle">Course map</h1><span class="crs" id="evname"></span></div><span id="saved"></span>
+<span class="acts3" id="acts3"><button class="gbtn" id="fly" type="button" hidden title="Fly down this hole in 3D, as golfers see it in the app">✈ Fly the Hole</button><button class="gbtn" id="flyAll" type="button" hidden title="Fly every mapped hole, 1 to 18, back to back (for a demo or a TV)">Fly Every Hole</button><button class="gbtn" id="stopFly" type="button" hidden>■ Stop</button><button class="gbtn" id="d3" type="button" aria-pressed="false" title="Show the course in 3D">3D</button></span><div class="mode" id="mode"><button data-mode="holes" aria-pressed="true">Map holes</button><button data-mode="groups" aria-pressed="false">Groups</button></div></div>
 <div class="strip" id="strip"></div>
 <div class="wrap">
-  <div id="map"></div>
+  <div class="mapbox"><div id="map"></div><div id="map3d" hidden></div></div>
   <div class="panel" id="panel"><p class="help">Loading…</p></div>
 </div>
 <div class="toast" id="toast" hidden></div>
@@ -91,6 +102,8 @@ body.groups .strip { display: none; }
 import { eventId, api, post, esc } from '/golf/client.js';
 import { TILES, TILE_CREDIT, yds, middle, HZ_LABEL } from '/golf/gps.js';
 import { fetchGolf, buildMap, OSM_CREDIT } from '/golf/osm.js';
+import { holePath } from '/golf/flypath.js';
+import { open3D } from '/golf/fly3d.js';
 
 const $ = (id) => document.getElementById(id);
 const id = eventId();
@@ -122,7 +135,8 @@ function drawMap() {
     const g = middle(h); if (g) L.marker(g, { icon: icon('rgba(255,255,255,.5)', n), interactive: true }).on('click', () => pick(Number(n))).addTo(others);
   }
   const h = H(), g = middle(h);
-  if (h.tee && g) L.polyline([h.tee, g], { color: '#fff', weight: 2, dashArray: '6 7', opacity: .85 }).addTo(layer);
+  // the hole as it's played, round its doglegs (the line Fly the hole follows)
+  if (h.tee && g) L.polyline(holePath(h, h.tee, g), { color: '#fff', weight: 2, dashArray: '6 7', opacity: .85 }).addTo(layer);
   for (const [k] of TOOLS) {
     const p = h[k]; if (!p) continue;
     const m = L.marker(p, { icon: icon(COLORS[k], k === 'tee' ? 'T' : k.toUpperCase()), draggable: true }).addTo(layer);
@@ -291,7 +305,8 @@ $('strip').addEventListener('click', (e) => { const b = e.target.closest('[data-
 function pick(n) {
   hole = n; pendingHz = null;
   const h = H(); tool = TOOLS.find(([k]) => !h[k])?.[0] || null;
-  drawStrip(); drawMap(); drawPanel();
+  drawStrip(); drawMap(); drawPanel(); drawFly();
+  if (D3 && !D3.flying) D3.show(n);
   if (middle(h) || h.tee) fit();
 }
 
@@ -354,6 +369,8 @@ function drawGroups() {
 }
 function setMode(m) {
   mode = m; document.body.classList.toggle('groups', m === 'groups');
+  $('maptitle').textContent = m === 'groups' ? 'Where the groups are' : 'Course map';
+  if (m === 'groups' && d3on) set3D(false); drawFly();
   $('mode').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
   clearInterval(gTimer);
   if (m === 'groups') {
@@ -383,7 +400,34 @@ async function save() {
   saving = false; if (again) { again = false; save(); }
 }
 
+// ---- 3D and Fly the hole (fly3d.js, the same flight as the players' app) ----
+let D3 = null, d3on = false;
+const mappedHoles = () => Object.keys(MAP.holes).map(Number).filter((n) => MAP.holes[n].tee && middle(MAP.holes[n])).sort((a, b) => a - b);
+function drawFly() {
+  const flying = !!D3?.flying, any = mode === 'holes' && mappedHoles().length > 0;
+  $('fly').hidden = !any || flying; $('flyAll').hidden = !any || flying; $('stopFly').hidden = !flying;
+  $('fly').disabled = !(H().tee && middle(H()));
+  $('d3').hidden = mode !== 'holes';
+  $('d3').setAttribute('aria-pressed', String(d3on));
+}
+async function set3D(on) {
+  d3on = on; $('map3d').hidden = !on; drawFly();
+  if (!on) { D3?.stop(); drawFly(); return; }
+  if (!D3) {
+    try {
+      D3 = await open3D($('map3d'), { holes: () => MAP.holes, card: (n) => S?.course?.holes?.[n - 1], onHole: (n) => { if (n !== hole) { hole = n; drawStrip(); drawPanel(); } } });
+    } catch (e) { toast(e.message); d3on = false; $('map3d').hidden = true; drawFly(); return; }
+  }
+  D3.show(hole);
+}
+$('d3').onclick = () => set3D(!d3on);
+$('fly').onclick = async () => { if (!d3on) await set3D(true); if (!D3) return; const p = D3.flyHole(hole); drawFly(); await p; drawFly(); };
+$('flyAll').onclick = async () => { if (!d3on) await set3D(true); if (!D3) return; const p = D3.flyEvery(mappedHoles()); drawFly(); await p; drawFly(); };
+$('stopFly').onclick = () => { D3?.stop(); drawFly(); };
+
 async function start() {
+  if (new URLSearchParams(location.search).has('embed')) document.body.classList.add('embed');
+  $('maptitle').textContent = mode === 'groups' ? 'Where the groups are' : 'Course map';
   if (!id || (!key && !pin)) { $('panel').innerHTML = '<h2>Open this from the desk</h2><p class="help">Open the course map from the tournament desk (Setup → Course map), or from the golf pro’s phone app.</p>'; return; }
   try { const r = await fetch(api('state')); S = await r.json(); if (!r.ok) throw new Error(S.error || 'Not found'); }
   catch (e) { $('panel').innerHTML = `<h2>Not found</h2><p class="help">${esc(e.message)}</p>`; return; }
@@ -396,7 +440,7 @@ async function start() {
   // start on the first hole that isn't finished
   hole = Array.from({ length: 18 }, (_, i) => i + 1).find((n) => !(MAP.holes[n]?.tee && middle(MAP.holes[n]))) || 1;
   tool = TOOLS.find(([k]) => !H()[k])?.[0] || null;
-  drawStrip(); drawMap(); drawPanel();
+  drawStrip(); drawMap(); drawPanel(); drawFly();
   const any = Object.values(MAP.holes).flatMap((h) => [h.tee, middle(h)]).filter(Boolean);
   if (middle(H()) || H().tee) fit(); else if (any.length) map.fitBounds(any, { padding: [30, 30], maxZoom: 17 });
   else goToCourse(); // nothing mapped yet: open on the course picked in the Desk and fill the holes in from OpenStreetMap

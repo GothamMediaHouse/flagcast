@@ -14,16 +14,19 @@
 <meta name="theme-color" content="#123628">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <link rel="stylesheet" href="/golf/golf.css">
+<link rel="stylesheet" href="/golf/manager.css">
 <style>
-.top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-.top h1 { font-size: 1.7rem; }
-.top .acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.top .btn { padding: 7px 12px; font-size: .9rem; }
-#dirty { font-size: .85rem; color: var(--flag); }
-nav.tabs { position: sticky; top: 0; z-index: 5; display: flex; gap: 2px; padding: 0 max(16px, env(safe-area-inset-left, 0px)); background: var(--green); overflow-x: auto; }
-nav.tabs a { padding: 10px 14px; color: var(--on-green-muted); text-decoration: none; font-weight: 600; font-size: .92rem; border-bottom: 3px solid transparent; white-space: nowrap; }
-nav.tabs a[aria-current="page"] { color: var(--on-green); border-color: var(--flag); }
-main { max-width: 1180px; margin: 0 auto; padding: 24px max(16px, env(safe-area-inset-left, 0px)) 80px max(16px, env(safe-area-inset-right, 0px)); }
+main { padding: 0 24px 80px; position: relative; z-index: 2; }
+/* each section is a white card raised over the photo's bottom edge (the hero shows its title) */
+main > section:not(.ov):not(.embed) { max-width: 1180px; background: var(--card); border-radius: 12px; box-shadow: 0 8px 30px rgba(var(--scrim), .18); padding: 6px 24px 24px; margin-top: -28px; }
+main > section > h2:first-child { display: none; }
+main > section.ov { max-width: 1180px; }
+main > section.embed { margin: 0 -24px -80px; }
+main > section.embed iframe { display: block; width: 100%; height: 100vh; height: 100dvh; min-height: 480px; border: 0; }
+/* the map pages bring their own green header (the Mac's MapHeader): no photo over them */
+body.maponly #hero { display: none !important; }
+@media (max-width: 900px) { body.maponly #hero { display: flex !important; min-height: 0 !important; } body.maponly #hero .ttl, body.maponly #hero .acts { display: none; } main > section.embed iframe { height: calc(100dvh - 52px); } }
+@media (max-width: 640px) { main { padding: 0 12px 60px; } main > section:not(.ov):not(.embed) { padding: 4px 14px 18px; } main > section.embed { margin: 0 -12px -60px; } }
 section[hidden] { display: none; }
 h2 { font-size: 1.8rem; margin: 6px 0 14px; }
 h3 { font-size: 1.2rem; margin: 22px 0 10px; }
@@ -74,16 +77,21 @@ table.t .n { width: 64px; }
 @media (max-width: 760px) { .link { grid-template-columns: 1fr; } .sponsor { grid-template-columns: 1fr 1fr; } }
 </style>
 </head>
-<body>
-<header class="topbar">
-  <div class="top"><div><div class="label">Tournament desk</div><h1 id="evname">Loading…</h1></div>
-    <div class="acts"><span id="dirty" hidden>Unsaved changes</span><button class="btn primary" id="save" disabled>Save</button><button class="btn" id="lock">Lock results</button></div></div>
+<body class="mgr-body">
+<div class="mgr"><aside class="side" id="side"></aside><div class="mgr-main">
+<header class="hero" id="hero"><div class="photo" id="photo"></div>
+  <div class="bar"><span id="menuSlot"></span><span class="where" id="where">Tournament desk</span>
+    <span class="acts"><span class="sstate" id="sstate"><i></i><span id="sstateT">Saved</span></span><span id="dirty" hidden></span>
+    <a class="gbtn" id="boardBtn" target="_blank" rel="noopener" hidden>Open the board</a><button class="gbtn" id="lock">Lock results</button><button class="wbtn" id="save" disabled title="Save changes">Save</button></span></div>
+  <div class="ttl"><img class="clublogo" id="clublogo" alt="" hidden><div class="kick" id="kick"></div><h1 id="evname">Loading…</h1><div class="sub" id="evsub"></div></div>
 </header>
-<nav class="tabs" id="tabs">
-  <a href="#setup">Setup</a><a href="#teams">Teams</a><a href="#scores">Scores</a><a href="#contests">Contests</a><a href="#screens">Screens and sponsors</a><a href="#staff">Staff and playlists</a><a href="#links">Links and cards</a><a href="#report">Report</a>
-</nav>
 <main id="main">
 <div class="gate" id="gate" hidden><h2>Desk link needed</h2><p class="help">Open this page with the full desk link you got when the tournament was made. It ends in a long key after a # sign.</p></div>
+
+<section id="s-overview" class="ov" hidden>
+  <div class="stats" id="ovStats"></div>
+  <div class="ovgrid"><div class="raised lb" id="ovLb"></div><a class="ctp" id="ovCtp" href="#contests"><div class="tilebox" id="ovCtpPic"></div><div class="tx" id="ovCtpTx"></div></a></div>
+</section>
 
 <section id="s-setup" hidden>
   <h2>Setup</h2>
@@ -109,7 +117,7 @@ table.t .n { width: 64px; }
   <div id="cres"></div>
   <p class="help" style="margin:8px 0 0">Course set up and mapped? <button class="btn" type="button" id="libSave">Save to the Flagcast course list</button> so any club can pick it.</p>
   <div class="scroll"><table class="t course" id="course"></table></div>
-  <div class="row" style="margin-top:12px"><a class="btn dark" id="mapLink" target="_blank" rel="noopener">Course map (hole GPS)</a><a class="btn" id="groupsLink" target="_blank" rel="noopener">Where are the groups</a><span class="help" id="mapHelp">Mark each tee, green and hazard on a satellite view, or walk the course with a phone. Players then see yardages and a course view on their scorecard. Your club keeps the map for its next tournament.</span></div>
+  <div class="row" style="margin-top:12px"><a class="btn dark" id="mapLink" href="#map">Course map (hole GPS)</a><a class="btn" id="groupsLink" href="#groups">Where the groups are</a><span class="help" id="mapHelp">Mark each tee, green and hazard on a satellite view, or walk the course with a phone. Players then see yardages and a course view on their scorecard. Your club keeps the map for its next tournament.</span></div>
   <div class="row"><button class="btn" id="par72">Fill a standard par 72</button><span class="help">Stroke index (SI) 1 is the hardest hole. Use the numbers on the club’s scorecard.</span></div>
   <h3>Tees (for GHIN handicaps)</h3>
   <p class="help">Add each set of tees with its course rating and slope from the scorecard or the USGA course rating database. Then give players their Handicap Index on the Teams tab and Flagcast works out each course handicap: Index × Slope ÷ 113 + (Rating − Par).</p>
@@ -209,11 +217,15 @@ table.t .n { width: 64px; }
   <h3>Hole in one log</h3>
   <div id="aces" class="help">None yet.</div>
 </section>
-</main>
+<section id="s-map" class="embed" hidden><iframe id="mapFrame" title="Course map"></iframe></section>
+<section id="s-groups" class="embed" hidden><iframe id="groupsFrame" title="Where the groups are"></iframe></section>
+</main></div></div>
 <div class="toast" id="toast" hidden></div>
 <script type="module">
 import { defaultHoles, leaderboard, courseHcp, coursePar, parseIndex, fmtIndex, netDoubleBogey } from '/golf/core.js';
 import { eventId, post, live, esc } from '/golf/client.js';
+import { fmtPar, contestLeader, fmtDist, playHoles } from '/golf/core.js';
+import { SECTIONS, sectionTitle, mountSidebar, menuButton, paintPhoto, courseView, holeView, dayLine, today, rememberLink } from '/golf/shell.js';
 
 const key = location.hash.slice(1).split('&')[0].replace(/^key=/, '');
 let EV = null, LIVE = null, dirty = false;
@@ -222,27 +234,91 @@ const toast = (t) => { const el = $('toast'); el.textContent = t; el.hidden = fa
 const rid = () => Math.random().toString(36).slice(2, 8);
 const desk = (op, extra = {}) => post('desk', { key, op, ...extra });
 
-function setDirty(on = true) { dirty = on; $('dirty').hidden = !on; $('save').disabled = !on; }
+function setDirty(on = true) {
+  dirty = on; $('save').disabled = !on;
+  $('sstate').classList.toggle('dirty', on);
+  $('sstateT').textContent = on ? 'Unsaved changes' : EV && EV.locked ? 'Results locked' : 'Saved';
+}
 addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
 
-// tabs: kept in the address after the key, so a reload stays put
-const TABS = ['setup', 'teams', 'scores', 'contests', 'screens', 'staff', 'links', 'report'];
-let tab = (location.hash.split('&')[1] || 'setup');
+// sections: kept in the address after the key, so a reload stays put; picked in the sidebar (shell.js)
+const TABS = SECTIONS.map(([k]) => k);
+let tab = (location.hash.split('&')[1] || 'overview'), SIDE = null;
 function showTab(t) {
-  tab = TABS.includes(t) ? t : 'setup';
+  tab = TABS.includes(t) ? t : 'overview';
   for (const x of TABS) $(`s-${x}`).hidden = x !== tab;
-  for (const a of document.querySelectorAll('#tabs a')) a.setAttribute('aria-current', a.getAttribute('href') === `#${tab}` ? 'page' : 'false');
   history.replaceState(null, '', `#${key}&${tab}`);
+  if (SIDE) SIDE.setSection(tab);
+  drawHero();
+  if (tab === 'overview') drawOverview();
   if (tab === 'scores') drawScores();
   if (tab === 'links') drawLinks();
   if (tab === 'report') drawReport();
+  if (tab === 'map' && !$('mapFrame').src) $('mapFrame').src = `/g/${eventId()}/map?embed#${key}`;
+  if (tab === 'groups' && !$('groupsFrame').src) $('groupsFrame').src = `/g/${eventId()}/map?embed#${key}&groups`;
+  scrollTo(0, 0);
 }
-$('tabs').addEventListener('click', (e) => { const a = e.target.closest('a'); if (!a) return; e.preventDefault(); showTab(a.getAttribute('href').slice(1)); });
+addEventListener('hashchange', () => { const t = location.hash.split('&')[1]; if (t && t !== tab) showTab(t); });
+$('main').addEventListener('click', (e) => { const a = e.target.closest('a[href^="#"]'); if (!a || !TABS.includes(a.getAttribute('href').slice(1))) return; e.preventDefault(); showTab(a.getAttribute('href').slice(1)); });
+
+// ---- the photo header (the Mac's PhotoPage): the course, the title, the section's buttons ----
+const S = () => LIVE || EV;
+const isStab = () => S()?.format?.type === 'stableford';
+const scoreText = (l) => (isStab() ? `${l.score}` : fmtPar(l.score));
+const scoreClass = (l) => (isStab() ? '' : l.score < 0 ? 'u' : l.score > 0 ? 'o' : '');
+let painted = '';
+function heroSub() {
+  const ev = S(), ph = playHoles(ev), holes = ev.course.holes.filter((h) => ph.includes(h.n));
+  const par = holes.reduce((a, h) => a + (h.par || 0), 0), yds = holes.reduce((a, h) => a + (h.yds || 0), 0), tee = (ev.course.tees || [])[0]?.name;
+  return [ev.course.name || ev.club || null, ev.format.nine === 'front' ? 'Front 9' : ev.format.nine === 'back' ? 'Back 9' : '18 holes', `Par ${par}`,
+    yds ? `${tee ? `${tee} tees ` : ''}${yds.toLocaleString()} yds` : null].filter(Boolean).join(' · ');
+}
+function drawHero() {
+  if (!EV) return;
+  const ov = tab === 'overview', ev = S(), live = ev.date === today() && !ev.locked;
+  document.body.classList.toggle('maponly', ['map', 'groups'].includes(tab));
+  $('hero').style.minHeight = ov ? '420px' : ['map', 'groups'].includes(tab) ? '150px' : '230px';
+  $('hero').style.display = 'flex'; $('hero').style.flexDirection = 'column'; $('hero').style.justifyContent = 'space-between';
+  $('where').textContent = sectionTitle(tab);
+  const logo = LIVE?.brand?.logo; $('clublogo').hidden = !(ov && logo); if (ov && logo && $('clublogo').getAttribute('src') !== logo) $('clublogo').src = logo;
+  $('kick').className = `kick${ov && live ? ' on' : ''}`;
+  $('kick').innerHTML = ov ? `${live ? '<span class="chip-live">LIVE</span>' : ''}<span>${esc(dayLine(ev.date) || 'No date set')}${ev.locked ? ' · Final' : ''}</span>` : `<span>${esc(ev.name || 'Tournament')}</span>`;
+  $('evname').textContent = ov ? ev.name || 'Tournament' : sectionTitle(tab);
+  $('evname').className = ov ? '' : 'mid';
+  $('evsub').textContent = ov ? heroSub() : '';
+  $('evsub').hidden = !ov;
+  $('boardBtn').hidden = !ov; $('boardBtn').href = `/g/${eventId()}/board`;
+  const v = courseView(ev), sig = JSON.stringify(v);
+  if (sig !== painted) { painted = sig; paintPhoto($('photo'), v); }
+}
+
+// ---- Overview (the Mac's OverviewView): four numbers, the leaderboard, the contest card ----
+function drawOverview() {
+  if (!EV || tab !== 'overview') return;
+  const ev = S(), board = LIVE ? leaderboard(LIVE, LIVE.scores) : [];
+  const scoring = board.filter((l) => l.played > 0 && l.thru !== 'F').length, finished = board.filter((l) => l.thru === 'F').length;
+  const leader = board.find((l) => l.played > 0), screens = (ev.displays || []).length, on = (ev.displays || []).filter((d) => (LIVE?.online?.[d.id] || 0) > 0).length;
+  const stat = (l, v, s, cls = '') => `<div class="stat"><div class="l">${l}</div><div class="v ${cls}">${esc(v)}</div><div class="s">${esc(s)}</div></div>`;
+  $('ovStats').innerHTML = stat('Teams', String(ev.teams.length), `${ev.teams.reduce((a, t) => a + (t.players || []).length, 0)} players`)
+    + stat('On the course', String(scoring), finished ? `${finished} finished` : ev.locked ? 'results final' : 'scoring now')
+    + stat('Leader', leader ? scoreText(leader) : '–', leader ? leader.name : 'No scores yet', leader ? scoreClass(leader) : '')
+    + stat('Screens', screens ? `${on}/${screens}` : '–', screens ? 'on now' : 'None set up', on ? 'okc' : '');
+  const top = board.filter((l) => l.played > 0).slice(0, 5);
+  $('ovLb').innerHTML = `<div class="h"><span>Leaderboard</span><a class="lnk" href="#scores">All scores ›</a></div>`
+    + (top.length ? top.map((l) => `<div class="r"><span class="p">${esc(l.pos)}</span><span class="n">${esc(l.name)}</span><span class="t">${l.thru === 'F' ? 'F' : `Thru ${esc(l.thru)}`}</span><span class="s ${scoreClass(l)}">${esc(scoreText(l))}</span></div>`).join('')
+      : `<div class="none"><span style="font-size:26px">⚑</span>${ev.teams.length ? 'Scores show here as the carts send them.' : 'Add teams on the Teams page, then Save.'}</div>`);
+  const cs = ev.contests || [], c = cs.find((x) => x.kind !== 'ld') || cs[0], lead = c ? contestLeader(c)[0] : null;
+  $('ovCtpTx').innerHTML = `<div class="k">${c ? `${c.kind === 'ld' ? 'LONG DRIVE' : 'CLOSEST TO THE PIN'} · HOLE ${c.hole}` : 'CONTESTS'}</div>
+    <div class="w">${esc(lead ? lead.name : c ? 'No results yet' : 'No contests yet')}</div>
+    <div class="d">${esc(lead ? fmtDist(c, lead.dist) + (c.sponsor ? ` · presented by ${c.sponsor}` : '') : c ? 'Marshals post results from the phone app.' : 'Add one on the Contests page.')}</div>`;
+  const pv = (c && holeView(ev, c.hole)) || courseView(ev), sig = JSON.stringify(pv);
+  if ($('ovCtpPic').dataset.sig !== sig) { $('ovCtpPic').dataset.sig = sig; paintPhoto($('ovCtpPic'), pv); }
+}
 
 // ---- form <-> setup ----
 const val = (id) => $(id).value.trim();
 function fill() {
-  $('evname').textContent = EV.name || 'Tournament';
+  drawHero();
   $('f-name').value = EV.name; $('f-club').value = EV.club; $('f-date').value = EV.date; $('f-course').value = EV.course.name;
   $('f-type').value = EV.format.type; $('f-count').value = EV.format.count; $('f-allow').value = EV.format.allowance; $('f-show').value = EV.format.show; $('f-nine').value = EV.format.nine || '';
   $('f-flights').value = EV.flights.join(', '); $('f-side').value = EV.sideGames === false ? '' : '1';
@@ -622,8 +698,6 @@ $('scores').addEventListener('change', async (e) => {
 
 // the course map links live on the Setup tab, so they're set as soon as the desk opens (not only on Links and cards)
 function setMapLinks() {
-  $('mapLink').href = `/g/${eventId()}/map#${key}`;
-  $('groupsLink').href = `/g/${eventId()}/map#${key}&groups`;
   $('cardsLink').href = `/g/${eventId()}/cards#${key}`; // the Teams tab's cart cards button too
 }
 function drawLinks() {
@@ -643,10 +717,18 @@ $('links').addEventListener('click', async (e) => { const b = e.target.closest('
 $('aces').addEventListener('click', async (e) => { const b = e.target.closest('[data-unace]'); if (!b) return; try { await desk('ace', { remove: Number(b.dataset.unace) }); toast('Removed.'); } catch (err) { toast(err.message); } });
 
 async function start() {
-  if (!key || !eventId()) { $('gate').hidden = false; document.querySelector('.acts').hidden = true; return; }
-  try { EV = await desk('get'); } catch (e) { $('gate').hidden = false; $('gate').querySelector('p').textContent = e.message; document.querySelector('.acts').hidden = true; return; }
-  fill(); showTab(tab);
-  live((s) => { LIVE = s; drawReplays(); if (!dirty) { EV.locked = s.locked; drawLock(); } if (tab === 'scores') drawScores(); if (tab === 'links') drawLinks(); });
+  $('menuSlot').innerHTML = menuButton();
+  const gate = (msg) => { $('gate').hidden = false; if (msg) $('gate').querySelector('p').textContent = msg; document.querySelector('.acts').hidden = true; for (const x of TABS) $(`s-${x}`).hidden = true; $('evname').textContent = 'Tournament desk'; mountSidebar($('side'), {}); };
+  if (!key || !eventId()) return gate();
+  try { EV = await desk('get'); } catch (e) { return gate(e.message); }
+  fill(); showTab(tab); setDirty(false);
+  mountSidebar($('side'), { current: { id: eventId(), key, name: EV.name, date: EV.date, locked: EV.locked }, section: tab, onSection: showTab })
+    .then((side) => { SIDE = side; if (!(side.me?.events || []).some((e) => e.id === eventId())) rememberLink({ id: eventId(), key, name: EV.name }, side.me?.email); });
+  live((s) => {
+    LIVE = s; drawReplays(); if (!dirty) { EV.locked = s.locked; drawLock(); setDirty(false); }
+    drawHero(); if (tab === 'overview') drawOverview(); if (tab === 'scores') drawScores(); if (tab === 'links') drawLinks();
+    if (SIDE) SIDE.setCurrent({ name: s.name, date: s.date, locked: s.locked });
+  });
 }
 start();
 </script>

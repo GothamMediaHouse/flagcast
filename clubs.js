@@ -69,6 +69,18 @@ export async function clubs(request, env, op) {
   return stub.fetch(new Request(`https://clubs/${op}?local=${local ? 1 : 0}&ip=${encodeURIComponent(ip)}`, { method: 'POST', body: await request.text() }));
 }
 
+// where a tournament's course is, for Admin's club and tournament photos: { center: [lat, lng], span: metres } from the
+// course map (every hole), else the spot Find the course gave; null when it has neither
+export function coursePhoto(s) {
+  const pts = Object.values(s?.map?.holes || {}).flatMap((h) => [h.tee, h.m || h.f || h.b]).filter((p) => Array.isArray(p) && p.length === 2);
+  if (pts.length >= 2) {
+    const la = pts.map((p) => p[0]), lo = pts.map((p) => p[1]), c = [(Math.min(...la) + Math.max(...la)) / 2, (Math.min(...lo) + Math.max(...lo)) / 2];
+    const span = Math.max(700, Math.max((Math.max(...la) - Math.min(...la)) * 111000, (Math.max(...lo) - Math.min(...lo)) * 111000 * Math.cos(c[0] * Math.PI / 180)) * 1.15);
+    return { center: c, span: Math.round(span) };
+  }
+  const a = s?.course?.at; return a && Number.isFinite(a.lat) ? { center: [a.lat, a.lng], span: 1400 } : null;
+}
+
 export class FlagcastClubs extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
@@ -559,7 +571,7 @@ export class FlagcastClubs extends DurableObject {
             const scored = Object.values(s.scores || {}).reduce((n, pl) => n + Object.values(pl).reduce((m, arr) => m + arr.filter((v) => v != null).length, 0), 0);
             const online = Object.values(s.online || {}).reduce((n, v) => n + v, 0);
             const lasts = Object.values(s.lastAt || {}), soon = Date.now() - 20 * 60000;
-            return { ...e, name: s.name || e.name, date: s.date || '', demo: !!s.brand?.marked, brand: s.brand || null,
+            return { ...e, name: s.name || e.name, date: s.date || '', demo: !!s.brand?.marked, brand: s.brand || null, photo: coursePhoto(s),
               lastScore: lasts.length ? Math.max(...lasts) : 0, scoringNow: lasts.filter((a) => a > soon).length, teams: (s.teams || []).length, scored, screens: (s.displays || []).length, online, locked: !!s.locked, replays: (s.replays || []).length,
               // for screen control
               displays: (s.displays || []).map((d) => ({ id: d.id, name: d.name, where: d.where || '', group: d.group || '', online: (s.online || {})[d.id] || 0, force: s.live?.force?.[d.id] || null,

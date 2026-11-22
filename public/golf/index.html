@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
-<title>Flagcast</title>
+<title>Flagcast Manager</title>
 <link rel="icon" href="/golf/brand/mark.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/golf/brand/manager-180.png">
 <link rel="manifest" href="/golf/manager.webmanifest">
@@ -15,149 +15,294 @@
 <meta name="theme-color" content="#123628">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <link rel="stylesheet" href="/golf/golf.css">
+<link rel="stylesheet" href="/golf/manager.css">
 <style>
-main { max-width: 640px; margin: 0 auto; padding: 28px max(16px, env(safe-area-inset-left, 0px)) 60px max(16px, env(safe-area-inset-right, 0px)); }
-.topbar h1 { font-size: 2.4rem; }
-.topbar p { margin: 6px 0 0; color: var(--on-green-muted); max-width: 60ch; }
-form { display: grid; gap: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+/* Home (the Mac Manager's HomeDashboard, WelcomeView and sign-in) */
+.wrap { max-width: 1100px; }
+form.card, .card { display: grid; gap: 12px; padding: 20px; }
+.narrow { max-width: 520px; }
 label { display: grid; gap: 4px; font-size: .88rem; color: var(--muted); font-weight: 500; }
-input { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 10px; }
-h2 { font-size: 1.5rem; margin: 30px 0 10px; }
-.mine a { display: flex; justify-content: space-between; gap: 10px; padding: 12px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; text-decoration: none; color: var(--ink); margin-bottom: 8px; }
-.mine span { color: var(--muted); font-size: .85rem; }
-.box { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-top: 16px; }
-.box h2 { margin: 0 0 10px; }
-.help { color: var(--muted); font-size: .9rem; margin: 0 0 10px; }
+input { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; padding: 10px; width: 100%; min-width: 0; }
+.card h2, form.card h2 { font: 700 26px/1.1 var(--f-display); text-transform: none; margin: 0; }
+.help { color: var(--muted); font-size: .9rem; margin: 0; }
 .err { color: var(--red); font-size: .9rem; }
-.ev { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 12px 0; border-top: 1px solid var(--line); }
-.ev:first-of-type { border-top: 0; }
-.ev small { display: block; color: var(--muted); }
-.mem { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; font-size: .92rem; border-top: 1px solid var(--line); }
-.status { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .codein { font: 600 1.6rem var(--f-mono); letter-spacing: .3em; text-align: center; }
+.mem { display: flex; justify-content: space-between; gap: 8px; padding: 7px 0; font-size: .92rem; border-top: 1px solid var(--hairline); }
+.mem:first-child { border-top: 0; }
+.mem a { color: var(--red); font-size: .86rem; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px; align-items: start; }
+@media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
+.choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; margin-top: -40px; position: relative; z-index: 2; max-width: 700px; }
+.choice { display: grid; gap: 10px; padding: 24px; text-align: left; border: 0; color: var(--ink); cursor: pointer; font: inherit; }
+.choice .ic { width: 54px; height: 54px; border-radius: 14px; background: var(--green); color: #fff; display: grid; place-items: center; }
+.choice b { font: 700 30px/1 var(--f-display); }
+.choice span { color: var(--muted); font-size: 14px; }
+.logobox { background: #123628; border-radius: 8px; height: 64px; display: grid; place-items: center; padding: 6px; }
+.logobox img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.empty { padding: 30px; text-align: center; display: grid; gap: 10px; justify-items: center; margin-top: -40px; position: relative; z-index: 2; }
+.empty b { font: 700 30px var(--f-display); }
+#signinWrap { margin-top: -40px; position: relative; z-index: 2; }
 </style>
 </head>
-<body>
-<header class="topbar"><div style="max-width:640px;margin:0 auto"><div class="label">Live golf scoring</div><h1><img src="/golf/brand/wide-on-dark.svg" alt="Flagcast" style="height:56px;width:auto;display:block;margin:4px 0 2px"></h1><p>Live scoring for golf tournaments: cart scorecards on players’ phones, a live leaderboard, and big screens with the par 3s, contests and sponsors.</p></div></header>
-<main>
+<body class="mgr-body">
+<div class="mgr"><aside class="side" id="side"></aside><div class="mgr-main">
+<header class="hero" id="hero" style="min-height:300px;display:flex;flex-direction:column;justify-content:space-between">
+  <div class="photo" id="photo"></div>
+  <div class="bar"><span id="menuSlot"></span><span class="where">Home</span>
+    <span id="homeActs" hidden class="row"><button class="gbtn" type="button" id="addBtn">Add by link</button><button class="wbtn" type="button" id="newBtn">+ New tournament</button></span>
+    <span id="outActs" hidden><button class="gbtn" type="button" id="out">Sign out</button></span></div>
+  <div class="ttl"><img class="clublogo" id="heroLogo" alt="" hidden><div class="kick" id="heroKick">Flagcast Manager</div><h1 id="heroTitle">Welcome to Flagcast</h1><div class="sub" id="heroSub">Sign in with your club email to see your tournaments.</div></div>
+</header>
+<main class="over wrap">
   <!-- not signed in -->
-  <form id="signin" hidden>
-    <h2 style="margin:0">Club sign-in</h2>
-    <p class="help" style="margin:0">Your email and password. First time? Leave the password empty and we’ll email you a 6-digit code, then you can set a password.</p>
+  <div id="signinWrap">
+  <form id="signin" class="raised card narrow" hidden>
+    <h2>Sign in</h2>
+    <p class="help">Your email and password. First time? Leave the password empty and we’ll email you a 6-digit code, then you can set a password.</p>
     <label>Email<input id="email" type="email" autocomplete="username" required placeholder="you@yourclub.com"></label>
     <label>Password<input id="password" type="password" autocomplete="current-password" placeholder="Leave empty to get a code"></label>
     <button class="btn primary" type="submit" id="signBtn">Email me a code</button>
     <a class="btn" id="googleBtn" href="/golf/signin/google/" hidden style="text-align:center">Sign in with Google</a>
     <a class="btn" id="appleBtn" href="/golf/signin/apple/" hidden style="text-align:center;background:#000;color:#fff;border-color:#000"> Sign in with Apple</a>
+    <p class="help">Flagcast staff get Admin when they sign in.</p>
     <div class="err" id="sErr" role="alert"></div>
   </form>
-  <form id="code" hidden>
-    <h2 style="margin:0">Check your email</h2>
-    <p class="help" style="margin:0">We sent a code to <b id="sentTo"></b>. It works for 15 minutes.</p>
+  <form id="code" class="raised card narrow" hidden>
+    <h2>Check your email</h2>
+    <p class="help">We sent a code to <b id="sentTo"></b>. It works for 15 minutes.</p>
     <label>Code<input id="codeIn" class="codein" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required placeholder="••••••"></label>
     <button class="btn primary" type="submit">Sign in</button>
     <button class="btn" type="button" id="back">Use a different email</button>
     <div class="err" id="cErr" role="alert"></div>
   </form>
+  </div>
 
-  <!-- signed in, no club yet -->
-  <form id="request" hidden>
-    <h2 style="margin:0">Set up your club</h2>
-    <p class="help" style="margin:0">Tell us about your club. Flagcast will approve it and email you, usually within a day.</p>
-    <label>Club name<input id="rName" required placeholder="Willow Creek Country Club"></label>
-    <label>Your name<input id="rContact" autocomplete="name"></label>
-    <label>Phone<input id="rPhone" type="tel" autocomplete="tel"></label>
-    <label>Town and state<input id="rCity" placeholder="Rye, NY"></label>
-    <button class="btn primary" type="submit">Send to Flagcast</button>
-    <div class="err" id="rErr" role="alert"></div>
-  </form>
-
-  <!-- signed in with a club -->
-  <div id="club" hidden>
-    <div class="box" style="margin-top:0">
-      <div class="status"><div><h2 id="clubName" style="margin:0"></h2><small class="help" id="clubState"></small></div><span class="pill" id="clubPill"></span></div>
+  <!-- signed in, no club yet (the Mac's WelcomeView) -->
+  <div id="welcome" hidden>
+    <div class="choices">
+      <button class="raised choice" type="button" id="chooseClub"><span class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/></svg></span><b>Set up my club</b><span>Tell us your club. Flagcast approves it and emails you, then you can make tournaments.</span></button>
+      <button class="raised choice" type="button" id="chooseLink"><span class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg></span><b>I was sent a link</b><span>Someone gave you a tournament’s desk link. Paste it to open that tournament.</span></button>
     </div>
-    <form id="f" class="box" style="display:grid">
-      <h2 style="margin:0">New tournament</h2>
-      <label>Tournament name<input id="name" required placeholder="2027 Member-Guest"></label>
-      <button class="btn primary" type="submit" id="makeBtn">Make the tournament</button>
-      <div class="err" id="err" role="alert"></div>
+    <form id="request" class="raised card narrow" style="margin-top:18px" hidden>
+      <h2>Set up my club</h2>
+      <p class="help">Flagcast approves it and emails you, usually within a day.</p>
+      <label>Club name<input id="rName" required placeholder="Willow Creek Country Club"></label>
+      <label>Your name<input id="rContact" autocomplete="name"></label>
+      <label>Phone<input id="rPhone" type="tel" autocomplete="tel"></label>
+      <label>Town and state<input id="rCity" placeholder="Rye, NY"></label>
+      <button class="btn primary" type="submit">Send to Flagcast</button>
+      <div class="err" id="rErr" role="alert"></div>
     </form>
-    <div class="box"><h2>Tournaments</h2><div id="events"></div></div>
-    <form id="pw" class="box" style="display:grid">
-      <h2 style="margin:0" id="pwTitle">Set a password</h2>
-      <p class="help" style="margin:0">Then sign in with your email and password here and in the Flagcast Manager apps. At least 10 characters.</p>
+  </div>
+
+  <!-- signed in with a club (the Mac's HomeDashboard) -->
+  <div id="club" hidden>
+    <div id="leadWrap"></div>
+    <div id="dayWrap"></div>
+    <div id="comingWrap"></div>
+    <div class="two">
+      <div class="raised card"><div class="cardtitle" id="peopleTitle">People who can run your club’s tournaments</div><div id="members"></div>
+        <form id="invite" hidden style="display:flex;gap:8px;padding:8px 0 0"><input id="iEmail" type="email" placeholder="name@yourclub.com" required style="flex:1"><button class="pbtn" type="submit">Add</button></form>
+        <div class="err" id="iErr" role="alert"></div>
+      </div>
+      <div class="raised card" id="brandBox"><div class="cardtitle">Club logo</div><p class="help">Your logo shows on the TVs, the live page and the players’ app instead of the Flagcast logo.</p>
+        <div class="logobox"><img id="bLogo" alt="" hidden><span id="bNone" style="color:#cfe0d4;font-size:13px">Flagcast logo for now</span></div>
+        <div class="row">
+          <label class="pbtn" style="cursor:pointer;display:inline-flex">Choose logo…<input type="file" id="bFile" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden></label>
+          <button class="pbtn" id="bRemove" type="button" hidden>Remove</button>
+          <label style="display:flex;gap:6px;align-items:center;margin:0">Colour <input type="color" id="bColor" style="width:44px;height:32px;padding:0"></label>
+          <button class="pbtn" id="bColorSave" type="button">Save colour</button>
+        </div>
+        <div class="err" id="bErr" role="alert"></div>
+      </div>
+    </div>
+    <form id="pw" class="raised card narrow" style="margin-top:18px">
+      <div class="cardtitle" id="pwTitle">Set a password</div>
+      <p class="help">Then sign in with your email and password here and in the Flagcast Manager apps. At least 10 characters.</p>
       <input type="text" autocomplete="username" id="pwUser" hidden>
       <label>New password<input id="pw1" type="password" autocomplete="new-password" minlength="10" required></label>
       <label>Type it again<input id="pw2" type="password" autocomplete="new-password" minlength="10" required></label>
-      <button class="btn" type="submit">Save password</button>
+      <button class="pbtn" type="submit" style="justify-self:start">Save password</button>
       <div class="err" id="pwErr" role="alert"></div>
     </form>
-    <div class="box" id="brandBox"><h2>Club logo</h2><p class="help">Your logo shows on the TVs, the live page and the players’ app instead of the Flagcast logo.</p>
-      <div style="background:#123628;border-radius:8px;height:64px;display:grid;place-items:center;padding:6px;margin-bottom:10px"><img id="bLogo" alt="" style="max-width:100%;max-height:100%;object-fit:contain" hidden><span id="bNone" style="color:#cfe0d4;font-size:13px">Flagcast logo for now</span></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <label class="btn" style="cursor:pointer">Choose logo…<input type="file" id="bFile" accept="image/png,image/jpeg,image/svg+xml,image/webp" hidden></label>
-        <button class="btn" id="bRemove" type="button" hidden>Remove</button>
-        <label style="display:flex;gap:6px;align-items:center;margin:0">Colour <input type="color" id="bColor" style="width:44px;height:32px;padding:0"></label>
-        <button class="btn" id="bColorSave" type="button">Save colour</button>
-      </div>
-      <div class="err" id="bErr" role="alert"></div>
-    </div>
-    <div class="box"><h2>People in your club</h2><p class="help">Everyone here can sign in and run the club’s tournaments.</p><div id="members"></div>
-      <form id="invite" hidden style="display:flex;gap:8px;padding:12px 0 0;border:0;background:none"><input id="iEmail" type="email" placeholder="name@yourclub.com" required style="flex:1"><button class="btn" type="submit">Add</button></form>
-      <div class="err" id="iErr" role="alert"></div>
-    </div>
   </div>
   <p class="help" id="who" hidden style="margin-top:18px;text-align:center"></p>
-  <div id="mineWrap" hidden><h2>Tournaments on this computer</h2><div class="mine" id="mine"></div></div>
 </main>
+</div></div>
+
+<dialog id="newDlg"><form method="dialog" id="f">
+  <h2>New tournament</h2><p class="help" id="newState"></p>
+  <label style="margin-top:10px">Tournament name<input id="name" required placeholder="2027 Member-Guest"></label>
+  <div class="err" id="err" role="alert"></div>
+  <div class="acts"><button class="pbtn" type="button" value="cancel" data-close>Cancel</button><button class="gbtn-green" type="submit" id="makeBtn">Make tournament</button></div>
+</form></dialog>
+<dialog id="addDlg"><form method="dialog" id="addForm">
+  <h2>Add a tournament by its link</h2><p class="help">Paste the desk link you were sent. It ends in a long key after a # sign.</p>
+  <label style="margin-top:10px">Desk link<input id="link" required placeholder="https://flagcast.app/g/…/desk#…"></label>
+  <div class="err" id="addErr" role="alert"></div>
+  <div class="acts"><button class="pbtn" type="button" data-close>Cancel</button><button class="gbtn-green" type="submit">Add</button></div>
+</form></dialog>
+<div class="toast" id="toast" hidden></div>
+
 <script type="module">
 import { api, token, esc, creditsText, signinError } from '/golf/club.js';
 import { fileToLogo } from '/golf/brandmark.js';
+import { leaderboard, fmtPar } from '/golf/core.js';
+import { mountSidebar, menuButton, getMe, myEvents, withMeta, featured, stepsLeft, isEventDay, slowCarts, teamName, paintPhoto, courseView,
+  dayLine, monthDay, today, deskURL, rememberLink, icon } from '/golf/shell.js';
 const $ = (id) => document.getElementById(id);
-const show = (id) => { for (const x of ['signin', 'code', 'request', 'club']) $(x).hidden = x !== id; };
+const toast = (t) => { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), 3200); };
+const show = (id) => { for (const x of ['signin', 'code']) $(x).hidden = x !== id; $('welcome').hidden = id !== 'welcome'; $('club').hidden = id !== 'club'; };
 let me = null;
+$('menuSlot').innerHTML = menuButton();
+for (const d of document.querySelectorAll('dialog')) d.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) d.close(); });
 
-// tournaments made in this browser before club accounts
-const LS = 'golf:mine';
-const mine = (() => { try { return JSON.parse(localStorage.getItem(LS)) || []; } catch { return []; } })();
-if (mine.length) {
-  $('mineWrap').hidden = false;
-  $('mine').innerHTML = mine.map((m) => `<a href="/g/${m.id}/desk#${m.key}"><b></b><span>${new Date(m.at).toLocaleDateString()}</span></a>`).join('');
-  document.querySelectorAll('#mine b').forEach((b, i) => (b.textContent = mine[i].name));
+function hero({ kick, title, sub, logo }) {
+  $('heroKick').textContent = kick || ''; $('heroTitle').textContent = title; $('heroSub').textContent = sub || ''; $('heroSub').hidden = !sub;
+  $('heroLogo').hidden = !logo; if (logo) $('heroLogo').src = logo;
 }
+const greeting = () => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'; };
+const stateLine = (c) => c.status === 'pending' ? 'Waiting for Flagcast to approve your club. We’ll email you.' : c.status === 'off' ? 'Switched off. Contact hello@flagcast.app.'
+  : c.credits === 0 ? 'No tournaments left to make. Contact hello@flagcast.app to add more.' : creditsText(c.credits);
+const canMake = () => !!(me?.club && me.club.status === 'active' && me.club.credits !== 0);
 
-function draw() {
+async function draw() {
   $('who').hidden = !me;
-  if (!me) return show('signin');
-  $('who').innerHTML = `Signed in as ${esc(me.email)}${me.admin ? ' · <a href="/golf/admin/">Flagcast Admin</a>' : ''} · <a href="#" id="out">Sign out</a>`;
+  $('homeActs').hidden = !me; $('outActs').hidden = !me || !!me.club || me.admin;
+  if (!me) { hero({ kick: 'Flagcast Manager', title: 'Welcome to Flagcast', sub: 'Sign in with your club email to see your tournaments.' }); return show('signin'); }
+  $('who').innerHTML = `Signed in as ${esc(me.email)}${me.admin ? ' · <a href="/golf/admin/">Flagcast Admin</a>' : ''} · <a href="#" id="out2">Sign out</a>`;
+  $('out2').onclick = signOut;
   $('pwTitle').textContent = me.password ? 'Change your password' : 'Set a password'; $('pwUser').value = me.email;
-  $('out').onclick = async (e) => { e.preventDefault(); await api('signout').catch(() => {}); token.set(''); me = null; draw(); };
-  if (!me.club) return show('request');
+  $('newBtn').disabled = !canMake();
+  if (!me.club && !me.admin) {
+    hero({ kick: 'Flagcast Manager', title: 'Welcome to Flagcast', sub: `Signed in as ${me.email}. How would you like to start?` });
+    return show('welcome');
+  }
   show('club');
   const c = me.club;
-  $('clubName').textContent = c.name;
-  const open = c.status === 'active' && c.credits !== 0;
-  $('clubState').textContent = c.status === 'pending' ? 'Waiting for Flagcast to approve your club. We’ll email you.' : c.status === 'off' ? 'Switched off. Contact hello@flagcast.app.' : c.credits === 0 ? 'No tournaments left to make. Contact hello@flagcast.app to add more.' : creditsText(c.credits);
-  $('clubPill').textContent = c.status === 'active' ? 'Active' : c.status === 'pending' ? 'Waiting' : 'Off';
-  $('clubPill').className = `pill ${c.status === 'active' ? 'live' : 'off'}`;
-  $('f').hidden = !open;
-  $('events').innerHTML = me.events.length ? me.events.map((e) => `<div class="ev"><div><b>${esc(e.name)}</b><small>${new Date(e.created).toLocaleDateString()} · ${e.id.toUpperCase()}</small></div><a class="btn dark" href="/g/${e.id}/desk#${e.key}">Open desk</a></div>`).join('') : '<p class="help" style="margin:0">No tournaments yet.</p>';
-  const owner = me.role === 'owner';
-  $('members').innerHTML = me.members.map((m) => `<div class="mem"><span>${esc(m.email)}${m.role === 'owner' ? ' · owner' : ''}</span>${owner && m.role !== 'owner' ? `<a href="#" data-rm="${esc(m.email)}">Remove</a>` : ''}</div>`).join('');
-  $('invite').hidden = !owner;
-  $('bLogo').hidden = !c.logo; $('bNone').hidden = !!c.logo; if (c.logo) $('bLogo').src = c.logo;
-  $('bRemove').hidden = !c.logo; $('bColor').value = c.accent || '#1a6b3c';
+  $('brandBox').hidden = !c; $('peopleTitle').parentElement.hidden = !c;
+  if (c) {
+    $('peopleTitle').textContent = `People who can run ${c.name}’s tournaments`;
+    const owner = me.role === 'owner';
+    $('members').innerHTML = me.members.map((m) => `<div class="mem"><span>${esc(m.email)}${m.role === 'owner' ? ' <span class="help">owner</span>' : ''}</span>${owner && m.role !== 'owner' ? `<a href="#" data-rm="${esc(m.email)}">Remove</a>` : ''}</div>`).join('');
+    $('invite').hidden = !owner;
+    $('bLogo').hidden = !c.logo; $('bNone').hidden = !!c.logo; if (c.logo) $('bLogo').src = c.logo;
+    $('bRemove').hidden = !c.logo; $('bColor').value = c.accent || '#1a6b3c';
+  }
+  hero({ kick: c ? [c.name, c.city].filter(Boolean).join(' · ') : 'Flagcast staff', title: greeting(), sub: c ? stateLine(c) : 'Every club’s tournaments are in the sidebar. Admin is at the top.', logo: c?.logo });
+  await drawDashboard();
 }
-async function brand(changes) { $('bErr').textContent = ''; try { me = await api('brand', changes); draw(); } catch (x) { $('bErr').textContent = x.message; } }
+
+// ---- the dashboard: the live (or next) tournament, Day of or the status tiles, coming up ----
+async function drawDashboard() {
+  const list = await withMeta(await myEvents(me));
+  const lead = featured(list);
+  if (!lead) {
+    $('leadWrap').innerHTML = `<div class="raised empty"><span style="font-size:34px;color:var(--muted)">⚑</span><b>No tournaments yet</b><p class="help">${canMake() ? 'Make your first one, or add one you were sent.' : me.club ? esc(stateLine(me.club)) : 'Add a tournament you were sent a link for.'}</p>
+      <div class="row"><button class="pbtn" data-act="add">Add by link</button>${canMake() ? '<button class="gbtn-green" data-act="new">New tournament</button>' : ''}</div></div>`;
+    $('dayWrap').innerHTML = ''; $('comingWrap').innerHTML = '';
+    paintPhoto($('photo'), null);
+    return;
+  }
+  const S = await fetch(`/golf/api/${lead.id}/state`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null);
+  if (!S) { $('leadWrap').innerHTML = ''; return; }
+  paintPhoto($('photo'), courseView(S));
+  const board = leaderboard(S, S.scores), played = board.reduce((a, l) => a + l.played, 0), l1 = board.find((l) => l.played > 0);
+  const most = Math.max(0, ...board.map((l) => l.played)), behind = board.filter((l) => most > 0 && l.played < most - 2).length, stab = S.format?.type === 'stableford';
+  const isToday = S.date === today();
+  const fmt = { bestball: 'Best ball', scramble: 'Scramble', stableford: 'Stableford', stroke: 'Stroke play' }[S.format?.type] || '';
+  const num = (v, l, cls = '') => `<div><b class="${cls}">${esc(v)}</b><span>${esc(l)}</span></div>`;
+  $('leadWrap').innerHTML = `<div class="raised lead">
+    <div class="pic"><div class="tilebox" id="leadPic"></div>${isToday && !S.locked ? '<span class="chip-live">LIVE</span>' : ''}</div>
+    <div class="info"><div class="when">${esc(dayLine(S.date) || 'NO DATE SET')}${S.locked ? ' · FINAL' : ''}</div>
+      <div class="nm">${esc(S.name || lead.name)}</div><div class="cs">${esc([S.course?.name, fmt].filter(Boolean).join(' · '))}</div>
+      <div class="nums">${num(String(S.teams.length), 'teams')}${played ? num(String(played), 'holes played') : ''}${l1 ? num(stab ? String(l1.score) : fmtPar(l1.score), l1.name, !stab && l1.score < 0 ? 'u' : '') : ''}${behind ? num(String(behind), 'behind on scores', 'warnc') : ''}</div>
+      <div class="go"><a class="gbtn-green" href="${deskURL(lead.id, lead.key)}">Open tournament</a><a class="pbtn" href="${deskURL(lead.id, lead.key, 'scores')}">Scores</a><a class="pbtn" href="${deskURL(lead.id, lead.key, 'screens')}">Screens</a><a class="pbtn" href="${deskURL(lead.id, lead.key, 'teams')}">Teams</a></div></div></div>`;
+  paintPhoto($('leadPic'), courseView(S));
+  if (isEventDay(S)) drawDayOf(lead, S); else drawTiles(S);
+  const t = today(), coming = list.filter((e) => e.id !== lead.id && ((e.date || '') >= t || !e.date)).sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999')).slice(0, 8);
+  $('comingWrap').innerHTML = coming.length ? `<div class="sect-title">Coming up</div><div class="raised coming" id="coming">${coming.map((e) => {
+    const [m, d] = monthDay(e.date);
+    return `<a href="${deskURL(e.id, e.key)}" data-id="${e.id}"><span class="md"><small>${m}</small><b>${d}</b></span><span class="tx"><b>${esc(e.name)}</b><small>${esc(e.club || '')}</small></span><span class="steps" hidden></span><span style="color:var(--muted)">›</span></a>`;
+  }).join('')}</div>` : '';
+  // READY or N STEPS LEFT for each coming-up tournament
+  for (const e of coming) fetch(`/golf/api/${e.id}/state`, { cache: 'no-store' }).then((r) => r.json()).then((s) => {
+    const a = document.querySelector(`#coming a[data-id="${e.id}"]`); if (!a) return;
+    const st = stepsLeft(s), chip = a.querySelector('.steps');
+    a.querySelector('.tx small').textContent = st.length ? st.join(' · ') : 'All set';
+    chip.hidden = false; chip.className = `steps${st.length ? '' : ' ok'}`; chip.textContent = st.length ? `${st.length} STEP${st.length === 1 ? '' : 'S'} LEFT` : 'READY';
+  }).catch(() => {});
+}
+
+// TVs on, par 3 cameras, teams scoring on phones (hidden when there's nothing to say)
+function drawTiles(S) {
+  const tvs = S.displays || [], on = tvs.filter((d) => (S.online?.[d.id] || 0) > 0);
+  const p3 = (S.course?.holes || []).filter((h) => h.par === 3).map((h) => h.n), cams = p3.filter((n) => S.cams?.[n]);
+  const scoring = (S.teams || []).filter((t) => Object.values(S.scores?.[t.id] || {}).some((a) => a.some((v) => v != null))).length;
+  const tile = (ic, color, v, l, s) => `<div class="raised tile"><span class="ic" style="background:${color}">${icon(ic, 17)}</span><div><b>${esc(v)}</b><span class="lbl">${esc(l)}</span><small>${esc(s)}</small></div></div>`;
+  const out = [];
+  if (tvs.length) out.push(tile('tv', on.length === tvs.length ? 'var(--ok)' : '#c9a227', `${on.length} of ${tvs.length}`, 'TVs on', (tvs.find((d) => !(S.online?.[d.id] > 0))?.name || '') ? `${tvs.find((d) => !(S.online?.[d.id] > 0)).name} is off` : 'All showing Flagcast'));
+  if (p3.length) out.push(tile('video', cams.length ? 'var(--ok)' : 'var(--muted)', `${cams.length} of ${p3.length}`, 'par 3 cameras', 'Set up by Flagcast'));
+  if ((S.teams || []).length) out.push(tile('phone', scoring ? 'var(--ok)' : 'var(--muted)', `${scoring} of ${S.teams.length}`, 'teams scoring on phones', scoring ? 'Scores coming in' : 'None yet'));
+  $('dayWrap').innerHTML = out.length ? `<div class="tiles3">${out.join('')}</div>` : '';
+}
+
+// Day of (the Mac's DayOfChecks): TVs on, par 3 cameras sending, carts keeping their scores up, each with a fix
+const nudged = new Set();
+async function drawDayOf(lead, S) {
+  const tvs = S.displays || [], off = tvs.filter((d) => !(S.online?.[d.id] > 0)).map((d) => d.name || 'A TV');
+  const holes = Object.keys(S.cams || {}).map(Number).sort((a, b) => a - b);
+  const slow = slowCarts(S), quiet = slow.filter((t) => !nudged.has(t.id));
+  const row = (ok, title, sub, btn) => `<div class="r"><span class="dot ${ok ? 'ok' : 'bad'}" aria-label="${ok ? 'OK' : 'Needs a look'}">${ok ? '✓' : '!'}</span><div><b>${esc(title)}</b><small>${esc(sub)}</small></div>${btn || ''}</div>`;
+  const list = (a) => `${a.slice(0, 3).join(', ')}${a.length > 3 ? ` and ${a.length - 3} more` : ''}`;
+  let cams = '';
+  if (holes.length) {
+    const live = await Promise.all(holes.map((h) => fetch(S.cams[h], { method: 'GET', cache: 'no-store' }).then((r) => r.ok).catch(() => false)));
+    const down = holes.filter((h, i) => !live[i]);
+    cams = row(!down.length, `${holes.length - down.length} of ${holes.length} par 3 cameras live`, down.length ? `Not sending: hole ${down.join(', ')}. Flagcast staff look after the cameras.` : 'Phones and TVs can watch every par 3.', '<button class="pbtn" data-act="cams">Check again</button>');
+  }
+  $('dayWrap').innerHTML = `<div class="raised dayof"><h3>Day of</h3>
+    ${row(!tvs.length || !off.length, tvs.length ? `${tvs.length - off.length} of ${tvs.length} TVs on` : 'No TVs set up', off.length ? `Off: ${list(off)}` : tvs.length ? 'Every TV is showing Flagcast.' : 'Add the club’s TVs on the Screens page.', !tvs.length || off.length ? `<a class="pbtn" href="${deskURL(lead.id, lead.key, 'screens')}">Screens</a>` : '')}
+    ${cams}
+    ${row(!slow.length, S.teams.length ? `${S.teams.length - slow.length} of ${S.teams.length} carts scored in the last 20 min` : 'No teams yet', slow.length ? `Quiet: ${list(slow.map(teamName))}` : 'Scores are coming in.', quiet.length ? `<button class="pbtn" data-act="nudge">Nudge ${quiet.length}</button>` : '')}
+  </div>`;
+  $('dayWrap').onclick = async (e) => {
+    const b = e.target.closest('[data-act]'); if (!b) return;
+    if (b.dataset.act === 'cams') return drawDayOf(lead, S);
+    if (b.dataset.act === 'nudge') {
+      b.disabled = true; let n = 0;
+      for (const t of quiet) {
+        const r = await fetch(`/golf/api/${lead.id}/desk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: lead.key, op: 'nudge', team: t.id, text: 'Don’t forget your scores: tap in each hole on your phone so the leaderboard stays live. Thank you!' }) });
+        if (r.ok) { nudged.add(t.id); n++; }
+      }
+      toast(`Nudged ${n} cart${n === 1 ? '' : 's'}. They see it on their scorecard.`); drawDayOf(lead, S);
+    }
+  };
+}
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-act="new"], [data-act="add"]'); if (!b) return;
+  b.dataset.act === 'new' ? openNew() : openAdd();
+});
+function openNew() { if (!canMake()) return toast(me?.club ? stateLine(me.club) : 'Sign in with your club to make a tournament.'); $('newState').textContent = me.club ? creditsText(me.club.credits) : ''; $('err').textContent = ''; $('newDlg').showModal(); $('name').focus(); }
+function openAdd() { $('addErr').textContent = ''; $('addDlg').showModal(); $('link').focus(); }
+$('newBtn').onclick = openNew; $('addBtn').onclick = openAdd; $('chooseLink').onclick = openAdd;
+$('chooseClub').onclick = () => { $('request').hidden = false; $('rName').focus(); };
+$('addForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const m = /\/g\/([a-z0-9]{8})\/(?:desk|map)?#(?:key=)?([a-z0-9]{12,})/i.exec($('link').value.trim());
+  if (!m) { $('addErr').textContent = 'That isn’t a desk link. It looks like flagcast.app/g/abcd1234/desk#…'; return; }
+  rememberLink({ id: m[1].toLowerCase(), key: m[2], name: 'Tournament' }, me?.email);
+  location.href = deskURL(m[1].toLowerCase(), m[2]);
+});
+
+async function brand(changes) { $('bErr').textContent = ''; try { me = await api('brand', changes); draw(); side?.refresh(); } catch (x) { $('bErr').textContent = x.message; } }
 $('bFile').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { await brand({ logo: await fileToLogo(f) }); } catch (x) { $('bErr').textContent = x.message; } });
 $('bRemove').addEventListener('click', () => brand({ logo: '' }));
 $('bColorSave').addEventListener('click', () => brand({ accent: $('bColor').value }));
-async function refresh() {
-  if (!token.get()) { me = null; return draw(); }
-  try { me = await api('me'); } catch { me = null; }
-  draw();
-}
+async function signOut(e) { e?.preventDefault(); await api('signout').catch(() => {}); token.set(''); location.href = '/golf/'; }
+$('out').onclick = signOut;
 
 if (signinError) $('sErr').textContent = signinError;
 api('config').then((c) => { if (c.google) $('googleBtn').hidden = false; if (c.apple) $('appleBtn').hidden = false; }).catch(() => {});
@@ -166,7 +311,7 @@ $('signin').addEventListener('submit', async (e) => {
   e.preventDefault(); $('sErr').textContent = '';
   const email = $('email').value.trim(), password = $('password').value;
   try {
-    if (password) { const j = await api('login', { email, password }); token.set(j.token); $('password').value = ''; return await refresh(); }
+    if (password) { const j = await api('login', { email, password }); token.set(j.token); location.reload(); return; }
     const j = await api('start', { email });
     $('sentTo').textContent = email; show('code'); $('codeIn').value = j.devCode || ''; $('codeIn').focus();
   } catch (x) { $('sErr').textContent = x.message; }
@@ -180,7 +325,7 @@ $('pw').addEventListener('submit', async (e) => {
 $('back').onclick = () => show('signin');
 $('code').addEventListener('submit', async (e) => {
   e.preventDefault(); $('cErr').textContent = '';
-  try { const j = await api('verify', { email: $('email').value.trim(), code: $('codeIn').value }); token.set(j.token); await refresh(); }
+  try { const j = await api('verify', { email: $('email').value.trim(), code: $('codeIn').value }); token.set(j.token); location.reload(); }
   catch (x) { $('cErr').textContent = x.message; }
 });
 $('request').addEventListener('submit', async (e) => {
@@ -192,7 +337,7 @@ $('f').addEventListener('submit', async (e) => {
   e.preventDefault(); $('err').textContent = '';
   const name = $('name').value.trim();
   try { const j = await api('new', { name }); location.href = `/g/${j.id}/desk#${j.key}&setup`; }
-  catch (x) { $('err').textContent = x.message; refresh(); }
+  catch (x) { $('err').textContent = x.message; }
 });
 $('invite').addEventListener('submit', async (e) => {
   e.preventDefault(); $('iErr').textContent = '';
@@ -202,7 +347,12 @@ $('members').addEventListener('click', async (e) => {
   const a = e.target.closest('[data-rm]'); if (!a) return; e.preventDefault();
   try { me = await api('uninvite', { email: a.dataset.rm }); draw(); } catch (x) { $('iErr').textContent = x.message; }
 });
-refresh();
+
+let side = null;
+me = await getMe();
+mountSidebar($('side'), { onNew: openNew }).then((s) => { side = s; });
+await draw();
+if (location.hash === '#new' && me) { history.replaceState(null, '', '/golf/'); openNew(); }
 </script>
 </body>
 </html>

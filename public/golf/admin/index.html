@@ -15,6 +15,7 @@
 <link rel="icon" href="/golf/brand/mark.svg" type="image/svg+xml">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
 <link rel="stylesheet" href="/golf/golf.css">
+<link rel="stylesheet" href="/golf/manager.css">
 <style>
 .topbar .in { max-width: 1240px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .topbar h1 { font-size: 2rem; display: flex; align-items: center; gap: 12px; }
@@ -24,7 +25,51 @@ nav.tabs { display: flex; gap: 4px; flex-wrap: wrap; }
 nav.tabs button { background: transparent; border: 0; color: var(--on-green-muted); font: 600 .95rem var(--f-body); padding: 8px 12px; border-radius: 8px; }
 nav.tabs button[aria-current="true"] { background: rgba(255,255,255,.12); color: var(--on-green); }
 nav.tabs .n { background: var(--flag); color: var(--on-flag); border-radius: 999px; font: 700 .7rem var(--f-mono); padding: 1px 6px; margin-left: 4px; }
-main { max-width: 1240px; margin: 0 auto; padding: 22px 16px 60px; }
+main { max-width: 1240px; padding: 18px 20px 60px; }
+/* the Mac's Admin: a dark red sidebar, a header bar on paper, photo cards for clubs */
+.side.admin { background: #2a1416; color: #f3e7e5; }
+.side.admin .sec { padding-left: 8px; color: #f3e7e5; background: none; border: 0; width: 100%; text-align: left; font: 500 13px var(--f-body); cursor: pointer; }
+.side.admin .sec svg { color: #c9a9a6; }
+.side.admin .sec[aria-current="true"] { background: #f3e7e5; color: #2a1416; font-weight: 600; }
+.side.admin .sec[aria-current="true"] svg { color: #2a1416; }
+.side.admin .sec .n { background: var(--flag); color: var(--on-flag); border-radius: 999px; font: 700 11px var(--f-body); padding: 1px 6px; }
+.side.admin .tag { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: .14em; color: #fff; background: var(--red); padding: 2px 5px; border-radius: 3px; margin-top: 3px; }
+.side.admin .mode a[aria-current="page"] { color: #2a1416; }
+.side.admin .who { display: flex; gap: 10px; align-items: center; padding: 0 6px; font-size: 12px; }
+.side.admin .who small { display: block; color: #c9a9a6; font-size: 11px; }
+.side.admin .who button { margin-left: auto; background: none; border: 1px solid rgba(255,255,255,.25); color: #f3e7e5; border-radius: 6px; padding: 3px 8px; font-size: 12px; }
+.ahead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 56px; padding: 8px 20px; background: #fbfcf9; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ahead { background: #131c17; } }
+.ahead b { font-size: 15px; } .ahead .s { font-size: 13px; color: var(--muted); margin-right: auto; }
+.seg { display: inline-flex; background: var(--paper-2); border-radius: 8px; padding: 2px; }
+.seg button { border: 0; background: none; padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.cgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.ccard { position: relative; height: 262px; border-radius: 14px; overflow: hidden; color: #fff; }
+.ccard .back { position: absolute; inset: 0; display: grid; place-items: center; padding: 40px 48px 118px; }
+.ccard .back img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.ccard::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(to top, rgba(var(--scrim), .92) 0%, rgba(var(--scrim), .35) 55%, rgba(var(--scrim), .1) 100%); z-index: 1; }
+.ccard > .st, .ccard > .lt, .ccard > .bt { position: absolute; z-index: 2; }
+.ccard .st { left: 12px; top: 12px; font-size: 11px; font-weight: 700; letter-spacing: .05em; padding: 2px 7px; border-radius: 4px; background: var(--flag); color: var(--on-flag); }
+.ccard .st.pending { background: #fff; } .ccard .st.off { background: var(--red); color: #fff; }
+.ccard .lt { right: 12px; top: 12px; }
+.ccard .bt { left: 16px; right: 16px; bottom: 16px; display: grid; gap: 10px; }
+.ccard .nm { font: 700 28px/1 var(--f-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ccard .town { font-size: 12px; color: #dfe8e1; }
+.ccard .nums { font-size: 12px; color: #cfdbd2; display: flex; gap: 16px; } .ccard .nums b { font-size: 15px; color: #fff; }
+.ccard .acts { display: flex; gap: 6px; } .ccard .acts .wbtn { flex: 1; justify-content: center; }
+.ltile { display: inline-grid; place-items: center; border-radius: 22%; background: #fff; overflow: hidden; flex: none; vertical-align: middle; }
+.ltile.none { background: var(--green-2); color: #fff; font-weight: 700; }
+.ltile img { width: 76%; height: 76%; object-fit: contain; }
+.banner { display: flex; align-items: center; gap: 16px; padding: 12px 16px; background: #fff8e1; border: 1px solid #ecd58a; border-radius: 12px; margin-bottom: 16px; color: #14201a; flex-wrap: wrap; }
+.banner .ex { width: 36px; height: 36px; border-radius: 50%; background: var(--flag); color: var(--on-flag); display: grid; place-items: center; font-weight: 700; flex: none; }
+.banner div { flex: 1; min-width: 180px; } .banner small { display: block; color: #56625a; }
+.erow { display: grid; gap: 8px; padding: 14px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); margin-bottom: 10px; text-decoration: none; color: var(--ink); }
+.erow .t { display: flex; align-items: center; gap: 12px; } .erow .t div { flex: 1; min-width: 0; } .erow .t small { display: block; color: var(--muted); font-size: 12px; }
+.erow .f { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted); } .erow .f .bad { color: #e08a1e; font-weight: 600; }
+.okdot { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 12px; font-weight: 700; background: var(--ok); } .okdot.bad { background: #e08a1e; }
+.camrow { display: grid; grid-template-columns: 64px 1fr 100px; gap: 10px; align-items: center; margin-top: 8px; }
+.sig { font-size: 12px; color: var(--muted); } .sig.on { color: var(--ok); font-weight: 600; } .sig.no { color: var(--red); font-weight: 600; }
 .grid { display: grid; grid-template-columns: 1fr 330px; gap: 22px; align-items: start; }
 .cols { display: grid; grid-template-columns: 340px 1fr; gap: 18px; align-items: start; }
 .cols.scr { grid-template-columns: 280px 1fr; }
@@ -42,7 +87,7 @@ textarea { min-height: 70px; resize: vertical; }
 .row > input, .row > select { flex: 1; min-width: 140px; width: auto; }
 .btn.sm { padding: 5px 10px; font-size: .85rem; }
 .sub { font: 700 .72rem var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 16px 0 6px; }
-.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 0 0 16px; background: none; box-shadow: none; overflow: visible; border-radius: 0; }
 .stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
 .stat b { display: block; font: 800 2.2rem var(--f-display); line-height: 1; }
 .stat span { color: var(--muted); font-size: .82rem; }
@@ -112,9 +157,14 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 </style>
 </head>
 <body>
-<header class="topbar"><div class="in"><h1><img src="/golf/brand/wide-on-dark.svg" alt="Flagcast"> Admin</h1>
-  <nav class="tabs" id="tabs" hidden></nav>
-  <button class="btn" id="lock" hidden>Lock</button></div></header>
+<div class="mgr"><aside class="side admin" id="aside" hidden>
+  <div class="mode" id="modeSw"><a href="/golf/">Manager</a><a href="/golf/admin/" aria-current="page">Admin</a></div>
+  <div class="brand"><img src="/golf/brand/mark.svg" alt=""><div><b>FLAGCAST</b><span class="tag">ADMIN</span></div></div>
+  <nav class="list" id="tabs" aria-label="Admin"></nav>
+  <hr>
+  <div class="who"><div><b id="whoName">Admin passcode</b><small>Flagcast staff</small></div><button id="lock" hidden title="Forget the passcode on this computer">Lock</button></div>
+</aside><div class="mgr-main">
+<div class="ahead" id="ahead" hidden><span id="menuSlot"></span><b id="aTitle">Overview</b><span class="s" id="aSub"></span><span id="aActs" class="row"></span></div>
 
 <form id="gate" class="box" hidden>
   <h2>Flagcast Admin</h2>
@@ -130,11 +180,13 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
   <div id="view"></div>
 </main>
 
+</div></div>
 <dialog id="dlg"><form method="dialog" id="dlgForm"></form></dialog>
 <div class="toast" id="toast" hidden></div>
 
 <script type="module">
 import { fileToLogo } from "/golf/brandmark.js";
+import { paintPhoto, icon, menuButton, today as todayStr } from "/golf/shell.js";
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const KEY = 'flagcast:admin-pass';
@@ -168,20 +220,122 @@ async function loadEvents() { const j = await call({ op: 'events' }); events = j
 async function loadLog() { const j = await call({ op: 'log' }); logRows = j.log; draw(); }
 
 // ---------- views ----------
-const TABS = [['overview', 'Overview'], ['clubs', 'Clubs'], ['events', 'Tournaments'], ['screens', 'Screens'], ['payments', 'Payments'], ['activity', 'Activity']];
+// the Mac's Admin sections (Manager → ⌥⌘A), plus Payments
+const TABS = [['overview', 'Overview', 'overview'], ['today', 'Event day', 'sun'], ['signups', 'Sign-ups', 'plus'], ['clubs', 'Clubs', 'club'], ['events', 'Tournaments', 'contests'],
+  ['cameras', 'Cameras', 'video'], ['screens', 'Screens & phones', 'tv'], ['payments', 'Payments', 'report'], ['activity', 'Activity', 'scores']];
+const EXTRA_ICONS = { sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  club: '<path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/>' };
+const ic = (k) => EXTRA_ICONS[k] ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${EXTRA_ICONS[k]}</svg>` : icon(k);
 function drawTabs() {
   const wait = clubs.filter((c) => c.status === 'pending').length;
-  $('tabs').innerHTML = TABS.map(([k, l]) => `<button data-tab="${k}" aria-current="${tab === k}">${l}${k === 'clubs' && wait ? `<span class="n">${wait}</span>` : ''}</button>`).join('');
+  $('tabs').innerHTML = TABS.map(([k, l, i]) => `<button class="sec" data-tab="${k}" aria-current="${tab === k}">${ic(i)}<span>${l}</span>${(k === 'signups' || k === 'clubs') && wait ? `<span class="n">${wait}</span>` : ''}</button>`).join('');
+}
+// the club's logo on a white tile, or its initials (the Mac's ClubLogoTile)
+const SKIP = new Set(['the', 'golf', 'club', 'country', 'gc', 'cc', 'and', 'of', '&']);
+const initials = (n) => { const w = String(n || '').split(/[^\p{L}\p{N}]+/u).filter(Boolean), k = w.filter((x) => !SKIP.has(x.toLowerCase())); return (k.length ? k : w).slice(0, 2).map((x) => x[0]).join('').toUpperCase() || '?'; };
+const logoOfClub = (id) => clubs.find((c) => c.id === id)?.logo || '';
+const tile = (logo, name, size = 32) => logo ? `<span class="ltile" style="width:${size}px;height:${size}px"><img src="${esc(logo)}" alt="${esc(name)} logo"></span>`
+  : `<span class="ltile none" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.36)}px" aria-label="${esc(name)} logo">${esc(initials(name))}</span>`;
+const LOOK = 'admin.clubLook';
+let look = (() => { try { return localStorage.getItem(LOOK) || 'photo'; } catch { return 'photo'; } })();
+const HEAD = { overview: ['Overview', () => `${clubs.filter((c) => c.status === 'active').length} active clubs`], today: ['Event day', () => 'Every club’s tournament on today, the ones needing a look first'],
+  signups: ['Sign-ups', () => `${clubs.filter((c) => c.status === 'pending').length} waiting`], clubs: ['Clubs', () => `${clubs.length} club${clubs.length === 1 ? '' : 's'} · ${clubs.filter((c) => c.status === 'pending').length} waiting`],
+  events: ['Tournaments', () => events ? `${events.length} tournaments` : ''], cameras: ['Cameras', () => 'Par 3 camera links for every club’s tournament'],
+  screens: ['Screens & phones', () => 'Route what every TV and phone shows'], payments: ['Payments', () => ''], activity: ['Activity', () => ''] };
+function drawHead() {
+  const [t, sub] = HEAD[tab] || [tab, () => ''];
+  $('aTitle').textContent = t; $('aSub').textContent = sub();
+  $('aActs').innerHTML = tab === 'clubs' && !sel ? `<span class="seg" title="How the club cards look: the logo on the place photo, or on the club’s colour"><button data-look="photo" aria-pressed="${look === 'photo'}">Logo on photo</button><button data-look="logo" aria-pressed="${look === 'logo'}">Logo on colour</button></span><button class="gbtn-green" data-newclub>+ New club</button>`
+    : tab === 'clubs' && sel ? '<button class="pbtn" data-allclubs>← All clubs</button>' : '';
 }
 function draw() {
-  drawTabs();
+  drawTabs(); drawHead();
   const v = $('view');
+  const needEvents = ['events', 'screens', 'today', 'cameras', 'clubs'].includes(tab);
   if (tab === 'overview') v.innerHTML = overview();
-  if (tab === 'clubs') v.innerHTML = clubsView();
-  if (tab === 'events') { v.innerHTML = eventsView(); if (!events) loadEvents().catch((x) => toast(x.message)); }
-  if (tab === 'screens') { v.innerHTML = screensView(); if (!events) loadEvents().catch((x) => toast(x.message)); }
+  if (tab === 'today') v.innerHTML = todayView();
+  if (tab === 'signups') v.innerHTML = signupsView();
+  if (tab === 'clubs') v.innerHTML = sel ? clubDetailWrap() : clubsView();
+  if (tab === 'events') v.innerHTML = eventsView();
+  if (tab === 'cameras') v.innerHTML = camerasView();
+  if (tab === 'screens') v.innerHTML = screensView();
   if (tab === 'payments') v.innerHTML = paymentsView();
   if (tab === 'activity') { v.innerHTML = activityView(); if (!logRows) loadLog().catch((x) => toast(x.message)); }
+  if (needEvents && !events && !loadingEvents) { loadingEvents = true; loadEvents().catch((x) => toast(x.message)).finally(() => { loadingEvents = false; }); }
+  for (const el of v.querySelectorAll('[data-photo]')) { try { paintPhoto(el, JSON.parse(el.dataset.photo)); } catch {} }
+  if (tab === 'cameras') checkCams();
+}
+let loadingEvents = false;
+const photoOf = (clubId) => (events || []).find((e) => e.club === clubId && e.photo)?.photo || null;
+
+// ---- Clubs: approvals in a yellow banner, then every club as a photo card (the Mac's ClubsView) ----
+function approvals() {
+  return clubs.filter((c) => c.status === 'pending').map((c) => `<div class="banner" data-club="${c.id}"><span class="ex">!</span><div><b>${esc(c.name)} asked to join</b><small>${esc([`Signed up ${date(c.created)}`, c.city, c.by, c.contact, c.phone].filter(Boolean).join(' · '))}</small></div>
+    <button class="pbtn" data-a="off">Decline</button><button class="gbtn-green" data-a="approve">Approve</button></div>`).join('');
+}
+function clubsView() {
+  const list = clubs.filter((c) => !q || `${c.name} ${c.city} ${c.contact} ${c.members.map((m) => m.email).join(' ')}`.toLowerCase().includes(q));
+  return `${approvals()}<div class="row" style="margin-bottom:14px"><input id="q" type="search" placeholder="Find a club" value="${esc(q)}" style="max-width:320px"></div>
+  <div class="cgrid">${list.map((c) => {
+    const ph = photoOf(c.id), back = look === 'logo' && c.logo;
+    return `<div class="ccard" data-club="${c.id}" ondblclick="this.querySelector('[data-open]').click()">
+      <div class="tilebox" ${ph ? `data-photo='${esc(JSON.stringify(ph))}'` : ''}></div>
+      ${back ? `<div class="back" style="background:${esc(c.accent || '#123628')}"><img src="${esc(c.logo)}" alt=""></div>` : ''}
+      <span class="st ${c.status}">${c.status === 'active' ? 'ACTIVE' : c.status === 'pending' ? 'WAITING' : 'OFF'}</span>
+      ${look === 'photo' && c.logo ? `<span class="lt">${tile(c.logo, c.name, 64)}</span>` : ''}
+      <div class="bt"><div><div class="nm">${esc(c.name)}</div><div class="town">${esc(c.city || 'No town on file')}</div></div>
+        <div class="nums"><span><b>${c.credits < 0 ? 'Unlimited' : c.credits}</b> left</span><span><b>${c.events.length}</b> tournaments</span><span><b>${c.members.length}</b> staff</span></div>
+        <div class="acts"><button class="gbtn" data-cr="1" ${c.credits < 0 ? 'disabled' : ''}>+1</button><button class="gbtn" data-cr="5" ${c.credits < 0 ? 'disabled' : ''}>+5</button><button class="wbtn" data-open="${c.id}">Open club</button></div></div></div>`;
+  }).join('') || '<div class="box empty">No club matches.</div>'}</div>`;
+}
+function clubDetailWrap() { const c = clubs.find((x) => x.id === sel); return c ? clubDetail(c) : (sel = null, clubsView()); }
+
+// ---- Sign-ups ----
+function signupsView() {
+  const wait = clubs.filter((c) => c.status === 'pending');
+  return wait.length ? approvals() : '<div class="box empty">No one is waiting. New sign-ups show here and in Clubs.</div>';
+}
+
+// ---- Event day (the Mac's EventDayList): every club's tournament on today, worst first ----
+const trouble = (e) => Math.max(0, e.screens - e.online) * 3 + (e.lastScore > 0 ? Math.max(0, e.teams - e.scoringNow) : 0);
+function todayView() {
+  if (!events) return '<div class="box empty">Loading every club’s tournaments…</div>';
+  const day = todayStr(), recent = Date.now() - 3 * 3600000;
+  const list = events.filter((e) => !e.gone && !e.archived && (e.date === day || e.lastScore > recent || e.online > 0)).sort((a, b) => trouble(b) - trouble(a));
+  if (!list.length) return '<div class="box empty"><b>Nothing on today</b><br>Tournaments show here on their day, or as soon as their carts start scoring.</div>';
+  const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`; };
+  return list.map((e) => {
+    const tvOK = !e.screens || e.online === e.screens, started = e.lastScore > 0, cartsOK = !started || e.scoringNow >= Math.floor(e.teams * 3 / 4), ok = tvOK && cartsOK;
+    const st = (t, good) => `<span class="${good ? '' : 'bad'}">${esc(t)}</span>`;
+    return `<a class="erow" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener"><div class="t">${tile(logoOfClub(e.club), e.clubName || e.name, 36)}<div><b>${esc(e.name)}</b><small>${esc([e.clubName, e.locked ? 'Results locked' : ''].filter(Boolean).join(' · '))}</small></div><span class="okdot ${ok ? '' : 'bad'}">${ok ? '✓' : '!'}</span></div>
+      <div class="f">${st(e.screens ? `${e.online}/${e.screens} TVs on` : 'No TVs', tvOK)}${st(Object.keys(e.cams || {}).length ? `${Object.keys(e.cams).length} camera${Object.keys(e.cams).length === 1 ? '' : 's'}` : 'No cameras', true)}
+        ${st(started ? `${e.scoringNow}/${e.teams} carts scoring` : `${e.teams} teams, not started`, cartsOK)}${started ? st(`last score ${ago(e.lastScore)}`, Date.now() - e.lastScore < 20 * 60000) : ''}</div></a>`;
+  }).join('');
+}
+
+// ---- Cameras (the Mac's CamerasView; NDI cameras are sent from the Mac Manager) ----
+let camQ = '';
+function camerasView() {
+  if (!events) return '<div class="box empty">Loading tournaments…</div>';
+  const day = todayStr();
+  const list = events.filter((e) => !e.gone && !e.archived && !e.hidden && e.p3.length && (!camQ || `${e.name} ${e.clubName}`.toLowerCase().includes(camQ)))
+    .sort((a, b) => ((a.date === day ? 0 : 1) - (b.date === day ? 0 : 1)) || (b.created - a.created));
+  return `<p class="help">Paste each par 3’s https link: an HLS stream (.m3u8) or a web player link such as a VDO.Ninja view link. Replays from the live feed need an HLS link that keeps a recording window (DVR); a web player link plays live only. NDI cameras are started from the Mac Manager (Admin → Cameras). Clubs see “Cameras are set up by Flagcast”.</p>
+  <div class="row" style="margin-bottom:12px"><input id="camq" type="search" placeholder="Find a tournament or club" value="${esc(camQ)}" style="max-width:320px"></div>
+  ${list.map((e) => `<form class="box" data-cams="${e.id}"><div class="row" style="justify-content:space-between">
+      <div class="row" style="gap:10px">${tile(logoOfClub(e.club), e.clubName || e.name, 32)}${e.date === day && !e.locked ? '<span class="chip-live">LIVE</span>' : ''}<b style="font:700 26px var(--f-display)">${esc(e.name)}</b><span class="help" style="margin:0">${esc(e.clubName || '')}${e.date ? ` · ${esc(e.date)}` : ''}</span></div>
+      <button class="gbtn-green">Save links</button></div>
+    ${e.p3.map((h) => `<div class="camrow"><b>Hole ${h}</b><input name="${h}" value="${esc((e.cams || {})[h] || '')}" placeholder="https://… (.m3u8 or a web player link)"><span class="sig" data-sig="${e.id}-${h}">${(e.cams || {})[h] ? ((e.cams[h].toLowerCase().includes('.m3u8')) ? 'Checking…' : 'Web player') : 'No camera'}</span></div>`).join('')}
+  </form>`).join('') || `<div class="box empty">${events.length ? 'No open tournaments with par 3s.' : 'No tournaments yet.'}</div>`}`;
+}
+// HLS links: fetch the playlist to see whether the camera is sending
+async function checkCams() {
+  for (const el of document.querySelectorAll('[data-sig]')) {
+    if (el.textContent !== 'Checking…') continue;
+    const [id, h] = el.dataset.sig.split('-'), url = events.find((e) => e.id === id)?.cams?.[h];
+    try { const r = await fetch(url, { cache: 'no-store' }); const t = r.ok ? (await r.text()).slice(0, 64) : ''; el.textContent = t.includes('#EXTM3U') ? '● Live' : '● No signal'; el.className = `sig ${t.includes('#EXTM3U') ? 'on' : 'no'}`; }
+    catch { el.textContent = 'Can’t check here'; }
+  }
 }
 
 function overview() {
@@ -199,7 +353,7 @@ function overview() {
   </div>
   <div class="grid"><div>
     <div class="box"><h2>Waiting for approval</h2>${wait.length ? `<table>${wait.map((c) => `<tr><td><b>${esc(c.name)}</b><small>${esc([c.city, c.contact, c.by, c.phone].filter(Boolean).join(' · '))} · asked ${date(c.created)}</small></td><td class="acts"><button class="btn sm primary" data-a="approve" data-club="${c.id}">Approve</button><button class="btn sm" data-open="${c.id}">Open</button></td></tr>`).join('')}</table>` : '<p class="help" style="margin:0">Nobody waiting.</p>'}</div>
-    <div class="box"><h2>Happening now</h2>${events ? (live.length ? `<table>${live.map((e) => `<tr><td><b>${esc(e.name)}</b><small>${esc(e.clubName || '')} · ${e.teams} teams · ${e.scored} scores${e.screens ? ` · <span class="dot ${e.online ? 'on' : ''}"></span>${e.online} of ${e.screens} screens on` : ''}</small></td><td class="acts"><a class="btn sm dark" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener">Desk</a><a class="btn sm" href="/g/${e.id}" target="_blank" rel="noopener">Live</a><a class="btn sm" href="/g/${e.id}/map#${e.key}&groups" target="_blank" rel="noopener">Groups</a></td></tr>`).join('')}</table>` : '<p class="help" style="margin:0">No tournaments are being played right now.</p>') : '<p class="help" style="margin:0">Loading…</p>'}</div>
+    <div class="box"><h2>Happening now</h2>${events ? (live.length ? `<table>${live.map((e) => `<tr><td><span class="row" style="gap:10px;flex-wrap:nowrap">${tile(logoOfClub(e.club), e.clubName || e.name, 28)}<span><b>${esc(e.name)}</b><small>${esc(e.clubName || '')} · ${e.teams} teams · ${e.scored} scores${e.screens ? ` · <span class="dot ${e.online ? 'on' : ''}"></span>${e.online} of ${e.screens} screens on` : ''}</small></span></span></td><td class="acts"><a class="btn sm dark" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener">Desk</a><a class="btn sm" href="/g/${e.id}" target="_blank" rel="noopener">Live</a><a class="btn sm" href="/g/${e.id}/map#${e.key}&groups" target="_blank" rel="noopener">Groups</a></td></tr>`).join('')}</table>` : '<p class="help" style="margin:0">No tournaments are being played right now.</p>') : '<p class="help" style="margin:0">Loading…</p>'}</div>
   </div><div>${newClubBox()}</div></div>`;
 }
 
@@ -213,16 +367,6 @@ function newClubBox() {
     <p class="help" style="margin:8px 0 0">The owner gets an email telling them to download Flagcast Manager and sign in.</p></form>`;
 }
 
-function clubsView() {
-  const list = clubs.filter((c) => (!filter || c.status === filter) && (!q || `${c.name} ${c.city} ${c.contact} ${c.members.map((m) => m.email).join(' ')}`.toLowerCase().includes(q)));
-  if (!sel && list.length) sel = list[0].id;
-  const c = clubs.find((x) => x.id === sel);
-  return `<div class="cols"><div>
-    <div class="row" style="margin-bottom:10px"><input id="q" type="search" placeholder="Find a club" value="${esc(q)}"><select id="filter" style="flex:0 0 auto;min-width:0"><option value="">All</option><option value="pending" ${filter === 'pending' ? 'selected' : ''}>Waiting</option><option value="active" ${filter === 'active' ? 'selected' : ''}>Active</option><option value="off" ${filter === 'off' ? 'selected' : ''}>Off</option></select></div>
-    <button class="btn" style="width:100%;margin-bottom:10px" data-newclub>+ Set up a club</button>
-    <div class="clist">${list.map((x) => `<button class="citem ${x.status}" data-open="${x.id}" aria-current="${x.id === sel}"><span><b>${esc(x.name)}</b><small>${esc(x.city || '')}${x.city ? ' · ' : ''}${x.events.length} made · ${credText(x.credits)}</small></span>${pillFor(x.status)}</button>`).join('') || '<div class="empty">No clubs match.</div>'}</div>
-  </div><div>${c ? clubDetail(c) : '<div class="box empty">Pick a club, or set one up.</div>'}</div></div>`;
-}
 const pillFor = (s) => s === 'pending' ? '<span class="pill wait">Waiting</span>' : s === 'active' ? '<span class="pill ok">Active</span>' : '<span class="pill off">Off</span>';
 
 function clubDetail(c) {
@@ -278,7 +422,7 @@ function eventsView() {
   const list = events.filter((e) => !q || `${e.name} ${e.clubName} ${e.id}`.toLowerCase().includes(q));
   return `<div class="row" style="margin-bottom:10px"><input id="q" type="search" placeholder="Find a tournament or club" value="${esc(q)}"><button class="btn" data-reload>Refresh</button></div>
   <div class="box" style="padding:6px 12px"><table class="evt"><thead><tr><th>Tournament</th><th>Club</th><th class="num">Teams</th><th class="num">Scores</th><th class="num">Screens on</th><th>Scoring</th><th></th></tr></thead><tbody>
-  ${list.map((e) => e.gone ? `<tr><td>${esc(e.name)}<small>${e.id.toUpperCase()} · can’t reach it</small></td><td>${esc(e.clubName || '')}</td><td colspan="5"></td></tr>` : `<tr style="${e.archived ? 'opacity:.55' : ''}"><td><b>${esc(e.name)}</b>${e.demo ? ' <span class="pill" style="background:#fff1d6;color:#9a5b00">DEMO</span>' : ''}<small>${e.id.toUpperCase()}${e.date ? ` · plays ${esc(e.date)}` : ''} · made ${date(e.created)}${e.archived ? ' · archived' : ''}${e.replays ? ` · ${e.replays} replays` : ''}</small></td><td>${esc(e.clubName || '')}</td>
+  ${list.map((e) => e.gone ? `<tr><td>${esc(e.name)}<small>${e.id.toUpperCase()} · can’t reach it</small></td><td>${esc(e.clubName || '')}</td><td colspan="5"></td></tr>` : `<tr style="${e.archived ? 'opacity:.55' : ''}"><td>${tile(logoOfClub(e.club), e.clubName || e.name, 26)} <b>${esc(e.name)}</b>${e.demo ? ' <span class="pill" style="background:#fff1d6;color:#9a5b00">DEMO</span>' : ''}<small>${e.id.toUpperCase()}${e.date ? ` · plays ${esc(e.date)}` : ''} · made ${date(e.created)}${e.archived ? ' · archived' : ''}${e.replays ? ` · ${e.replays} replays` : ''}</small></td><td>${esc(e.clubName || '')}</td>
     <td class="num">${e.teams}</td><td class="num">${e.scored}</td><td class="num">${e.screens ? `<span class="dot ${e.online ? 'on' : ''}"></span>${e.online}/${e.screens}` : '—'}</td>
     <td>${e.locked ? '<span class="pill gray">Final</span>' : '<span class="pill ok">Open</span>'}</td>
     <td class="acts"><a class="btn sm dark" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener">Desk</a><a class="btn sm" href="/g/${e.id}" target="_blank" rel="noopener">Live</a><a class="btn sm" href="/g/${e.id}/map#${e.key}&groups" target="_blank" rel="noopener">Groups</a>
@@ -313,7 +457,7 @@ function screensView() {
   const e = list.find((x) => x.id === scrOpen);
   return `<div class="cols scr"><div>
     <div class="row" style="margin-bottom:10px"><input id="scrq" type="search" placeholder="Find a tournament or club" value="${esc(scrQ)}"><button class="btn" data-reload title="Refresh">↻</button></div>
-    <div class="clist">${list.map((x) => `<button class="citem" data-scr="${x.id}" aria-current="${x.id === scrOpen}"><span><b>${esc(x.name)}</b><small>${esc(x.clubName || '')}</small></span><span class="help" style="margin:0;white-space:nowrap"><span class="dot ${x.online ? 'on' : ''}"></span>${x.online}/${x.screens}</span></button>`).join('') || '<div class="empty">No tournaments.</div>'}</div>
+    <div class="clist">${list.map((x) => `<button class="citem" data-scr="${x.id}" aria-current="${x.id === scrOpen}"><span class="row" style="gap:8px;flex-wrap:nowrap">${tile(logoOfClub(x.club), x.clubName || x.name, 26)}<span><b>${esc(x.name)}</b><small>${esc(x.clubName || '')}</small></span></span><span class="help" style="margin:0;white-space:nowrap"><span class="dot ${x.online ? 'on' : ''}"></span>${x.online}/${x.screens}</span></button>`).join('') || '<div class="empty">No tournaments.</div>'}</div>
   </div><div>${e ? routerBox(e) : '<div class="box empty">Pick a tournament.</div>'}</div></div>`;
 }
 function routerBox(e) {
@@ -389,8 +533,9 @@ function csv(rows) { return rows.map((r) => r.map((x) => `"${String(x ?? '').rep
 function download(name, text) { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv' })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); }
 
 // ---------- events ----------
-$('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (!b) return; tab = b.dataset.tab; q = ''; draw(); scrollTo(0, 0); });
+$('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (!b) return; tab = b.dataset.tab; q = ''; if (tab !== 'clubs') sel = null; draw(); scrollTo(0, 0); document.body.classList.remove('side-open'); });
 $('view').addEventListener('input', (e) => { if (e.target.id === 'scrq') { scrQ = e.target.value.trim().toLowerCase(); const pos = e.target.selectionStart; draw(); const n = $('scrq'); n.focus(); n.setSelectionRange(pos, pos); return; }
+  if (e.target.id === 'camq') { camQ = e.target.value.trim().toLowerCase(); const pos = e.target.selectionStart; draw(); const n = $('camq'); n.focus(); n.setSelectionRange(pos, pos); return; }
   if (e.target.id === 'q') { q = e.target.value.trim().toLowerCase(); const pos = e.target.selectionStart; draw(); const n = $('q'); n.focus(); n.setSelectionRange(pos, pos); } });
 $('view').addEventListener('change', async (e) => {
   if (e.target.id === 'filter') { filter = e.target.value; draw(); return; }
@@ -405,6 +550,11 @@ $('view').addEventListener('change', async (e) => {
     if (!confirm(`Move this tournament to ${clubName(to)}? It leaves this club’s list.`)) { e.target.value = ''; return; }
     try { await admin({ op: 'move', id: e.target.dataset.move, to }); toast('Moved.'); } catch (x) { toast(x.message); }
   }
+});
+document.addEventListener('click', (e) => {
+  const lk = e.target.closest('[data-look]'); if (lk) { look = lk.dataset.look; try { localStorage.setItem(LOOK, look); } catch {} draw(); return; }
+  if (e.target.closest('[data-allclubs]')) { sel = null; draw(); return; }
+  if (e.target.closest('#ahead [data-newclub]')) { tab = 'overview'; sel = null; draw(); document.querySelector('#newClub input')?.focus(); }
 });
 $('view').addEventListener('click', async (e) => {
   const sc = e.target.closest('[data-scr]'); if (sc) { scrOpen = sc.dataset.scr; draw(); return; }
@@ -471,6 +621,10 @@ $('view').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = e.target, club = f.closest('[data-club]')?.dataset.club;
   try {
+    if (f.dataset.cams) {
+      const cams = Object.fromEntries([...new FormData(f)].map(([h, u]) => [h, String(u).trim()]).filter(([, u]) => u));
+      await call({ op: 'cams', id: f.dataset.cams, cams }); toast('Cameras saved. TVs and phones have them now.'); events = null; await loadEvents(); return;
+    }
     if (f.id === 'newClub') {
       const v = Object.fromEntries(new FormData(f));
       const j = await admin({ op: 'create', name: v.name, email: v.email, city: v.city, credits: Number(v.credits) });
@@ -485,14 +639,19 @@ $('view').addEventListener('submit', async (e) => {
 });
 
 async function start() {
-  try { await admin({}); $('gate').hidden = true; $('app').hidden = false; $('lock').hidden = false; $('tabs').hidden = false; }
-  catch (x) { $('gate').hidden = false; $('app').hidden = true; $('lock').hidden = true; $('tabs').hidden = true; if (pass || clubToken()) $('gErr').textContent = pass ? x.message : 'That sign-in isn’t a Flagcast admin. Use the passcode.'; }
+  try {
+    await admin({}); $('gate').hidden = true; $('app').hidden = false; $('lock').hidden = !pass; $('aside').hidden = false; $('ahead').hidden = false;
+    $('modeSw').hidden = !clubToken();
+    if (clubToken()) fetch('/golf/api/club/me', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: clubToken() }) }).then((r) => r.json()).then((m) => { if (m.email) $('whoName').textContent = m.email; }).catch(() => {});
+  }
+  catch (x) { $('gate').hidden = false; $('app').hidden = true; $('lock').hidden = true; $('aside').hidden = true; $('ahead').hidden = true; if (pass || clubToken()) $('gErr').textContent = pass ? x.message : 'That sign-in isn’t a Flagcast admin. Use the passcode.'; }
 }
 $('gate').addEventListener('submit', async (e) => {
   e.preventDefault(); $('gErr').textContent = ''; pass = $('pass').value;
   try { ($('remember').checked ? localStorage : sessionStorage).setItem(KEY, pass); } catch {}
   await start();
 });
+$('menuSlot').innerHTML = menuButton().replace('gbtn', 'pbtn');
 $('lock').onclick = () => { try { localStorage.removeItem(KEY); sessionStorage.removeItem(KEY); } catch {} pass = ''; $('pass').value = ''; start(); };
 start();
 // keep it fresh while it's open (not while typing)
