@@ -18,6 +18,7 @@ struct CourseMapView: View {
     @State private var confirmRedo = false
     @State private var flying = false
     @State private var flyAll: Task<Void, Never>?
+    @State private var liveCam: MapCamera?   // where the map is now (a flight starts from here)
 
     enum Tool: Hashable { case tee, f, m, b, hzP(String), hzC(String)
         var label: String { switch self { case .tee: "tee"; case .f: "front of the green"; case .m: "middle of the green"; case .b: "back of the green"; case .hzP: "where the hazard starts (the near edge)"; case .hzC: "the far edge, where a shot carries it" } }
@@ -65,7 +66,7 @@ struct CourseMapView: View {
                 .mapStyle(.imagery(elevation: threeD ? .realistic : .flat))
                 .mapControls { MapCompass(); MapScaleView(); MapPitchToggle(); MapZoomStepper() }
                 .coordinateSpace(.named("map"))
-                .onMapCameraChange(frequency: .onEnd) { ctx in lastRegion = ctx.region }
+                .onMapCameraChange(frequency: .onEnd) { ctx in lastRegion = ctx.region; liveCam = ctx.camera }
                 #if DEBUG
                 .onMapCameraChange(frequency: .continuous) { ctx in
                     if ProcessInfo.processInfo.environment["FLAGCAST_FLYLOG"] != nil {
@@ -208,26 +209,45 @@ struct CourseMapView: View {
         let len = Double(yards(t, g)), mid = GeoPoint(lat: (t.lat + g.lat) / 2, lng: (t.lng + g.lng) / 2)
         return (p, g, MapCamera(centerCoordinate: mid.coordinate, distance: max(350, len * 2.6), heading: bearing(t, g), pitch: 55))
     }
-    /// The flight, step by step: the camera glides from stop to stop down the hole (the Mac's map doesn't run
-    /// keyframe camera animations, so each leg is its own animation), then settles on the green and the whole hole.
+    /// The flight, frame by frame: the camera is placed 60 times a second, start to finish, so nothing jumps: from
+    /// wherever the map is down to the tee box, the smooth path down the hole (FlyPath.camera), onto the green, and
+    /// back out to the whole hole. (The Mac's map doesn't run keyframe camera animations, and mixing in its own
+    /// animations made the camera jump between steps.)
     private func fly() async {
         guard let (p, g, end) = plan() else { return }
-        let cam = { (c: GeoPoint, h: Double, d: Double, pitch: Double) in MapCamera(centerCoordinate: c.coordinate, distance: d, heading: h, pitch: pitch) }
-        // low on the tee box, looking down the hole the way the golfer sees it, then climb away down the fairway
-        withAnimation(.easeInOut(duration: 2)) { camera = .camera(cam(p.start.at, p.start.heading, FlyPath.startMetres, FlyPath.startPitch)) }
-        try? await Task.sleep(for: .seconds(3.2))
-        withAnimation(.easeInOut(duration: 1.8)) { camera = .camera(cam(p.stops[0].at, p.stops[0].heading, p.cameraMetres, 60)) }
-        try? await Task.sleep(for: .seconds(1.8))
-        for s in p.stops.dropFirst() {
-            if Task.isCancelled || !flying { return }
-            withAnimation(.linear(duration: s.secs)) { camera = .camera(cam(s.at, s.heading, p.cameraMetres, 60)) }
-            try? await Task.sleep(for: .seconds(s.secs))
+        typealias Cam = (at: GeoPoint, heading: Double, metres: Double, pitch: Double)
+        let ease = { (u: Double) -> Double in let t = max(0, min(1, u)); return t * t * (3 - 2 * t) }
+        let mix = { (a: Cam, b: Cam, u: Double) -> Cam in
+            var dh = (b.heading - a.heading).truncatingRemainder(dividingBy: 360); if dh > 180 { dh -= 360 }; if dh < -180 { dh += 360 }
+            return (GeoPoint(lat: a.at.lat + (b.at.lat - a.at.lat) * u, lng: a.at.lng + (b.at.lng - a.at.lng) * u),
+                    a.heading + dh * u, a.metres + (b.metres - a.metres) * u, a.pitch + (b.pitch - a.pitch) * u)
         }
-        if Task.isCancelled || !flying { return }
-        withAnimation(.easeInOut(duration: 1.8)) { camera = .camera(cam(g, p.stops.last!.heading, 210, 45)) }
-        try? await Task.sleep(for: .seconds(1.8))
-        withAnimation(.easeInOut(duration: 1.2)) { camera = .camera(end) }
-        try? await Task.sleep(for: .seconds(1.2))
+        let now = liveCam.map { Cam(GeoPoint(lat: $0.centerCoordinate.latitude, lng: $0.centerCoordinate.longitude), $0.heading, $0.distance, $0.pitch) }
+            ?? Cam(p.start.at, p.start.heading, 1500, 45)
+        let tee: Cam = (p.start.at, p.start.heading, FlyPath.startMetres, FlyPath.startPitch)
+        let glideEnd = p.camera(at: p.totalSecs)
+        let green: Cam = (g, glideEnd.heading, 210, 45)
+        let whole: Cam = (GeoPoint(lat: end.centerCoordinate.latitude, lng: end.centerCoordinate.longitude), end.heading, end.distance, end.pitch)
+        let approach = 1.8, settle = 2.0, back = 1.8
+        let total = approach + p.totalSecs + settle + back
+        let begin = Date()
+        var last = now.heading
+        while !Task.isCancelled && flying {
+            let t = Date().timeIntervalSince(begin)
+            if t > total { break }
+            var c: Cam
+            if t < approach { c = mix(now, tee, ease(t / approach)) }
+            else if t < approach + p.totalSecs { let x = p.camera(at: t - approach); c = (x.at, x.heading, x.metres, x.pitch) }
+            else if t < approach + p.totalSecs + settle { c = mix(glideEnd, green, ease((t - approach - p.totalSecs) / settle)) }
+            else { c = mix(green, whole, ease((t - approach - p.totalSecs - settle) / back)) }
+            var h = c.heading                               // turn the short way round
+            while h - last > 180 { h -= 360 }
+            while h - last < -180 { h += 360 }
+            last = h
+            var tx = Transaction(); tx.disablesAnimations = true
+            withTransaction(tx) { camera = .camera(MapCamera(centerCoordinate: c.at.coordinate, distance: c.metres, heading: h, pitch: c.pitch)) }
+            try? await Task.sleep(for: .milliseconds(16))
+        }
     }
     @State private var flyTask: Task<Void, Never>?
     private func flyHole() {

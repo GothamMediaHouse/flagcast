@@ -85,13 +85,52 @@ struct FlyPath: Equatable {
         }
         let s0look = min(startLook, total * 0.6)
         var p = FlyPath(points: pts, stops: stops, back: back)
-        p.start = Stop(at: point(pts, at: s0look), heading: dir(min(s0look, 60)), secs: 0)
+        p.s0 = s0; p.s1 = s1; p.totalYds = total; p.travelSecs = seconds
+        p.start = Stop(at: point(pts, at: s0look), heading: p.smoothHeading(at: min(s0look, 40)), secs: 0)
         var h = p.start.heading
         while h - stops[0].heading > 180 { h -= 360 }
         while h - stops[0].heading < -180 { h += 360 }
         p.start.heading = h
         return p
     }
+    // ---- a smooth flight, frame by frame ----
+    // Phases: hold low on the tee (1.2 s), climb away (2.2 s), glide down the hole (`seconds`, easing in and out,
+    // facing the way the hole runs, averaged over 120 yds so bends turn gently), then the app settles on the green.
+    static let holdSecs = 1.2, climbSecs = 2.2
+    var travelSecs: Double = 6
+    var s0 = 0.0, s1 = 0.0, totalYds = 0.0
+    var totalSecs: Double { Self.holdSecs + Self.climbSecs + travelSecs }
+
+    /// the way the hole runs at `s` yards: bearings averaged as vectors over ±60 yds
+    func smoothHeading(at s: Double) -> Double {
+        var x = 0.0, y = 0.0
+        for k in stride(from: -60.0, through: 60.0, by: 10) {
+            let a = max(0, min(totalYds, s + k - 10)), b = max(0, min(totalYds, s + k + 10))
+            guard b > a else { continue }
+            let br = FlyPath.bearing(FlyPath.point(points, at: a), FlyPath.point(points, at: b)) * .pi / 180
+            let w = 1 - abs(k) / 70                      // nearer counts more
+            x += sin(br) * w; y += cos(br) * w
+        }
+        return (atan2(x, y) * 180 / .pi + 360).truncatingRemainder(dividingBy: 360)
+    }
+    private static func ease(_ u: Double) -> Double { let t = max(0, min(1, u)); return t * t * (3 - 2 * t) }
+    private static func lerp(_ a: Double, _ b: Double, _ t: Double) -> Double { a + (b - a) * t }
+    private static func turn(_ from: Double, _ to: Double) -> Double { var d = (to - from).truncatingRemainder(dividingBy: 360); if d > 180 { d -= 360 }; if d < -180 { d += 360 }; return d }
+
+    /// Where the camera is `t` seconds into the flight (until the glide ends): what it looks at, which way it faces,
+    /// how far back it is (metres along the line of sight, MapKit's distance) and its tilt.
+    func camera(at t: Double) -> (at: GeoPoint, heading: Double, metres: Double, pitch: Double) {
+        if t <= Self.holdSecs { return (start.at, start.heading, Self.startMetres, Self.startPitch) }
+        let first = FlyPath.point(points, at: s0), h0 = smoothHeading(at: s0)
+        if t <= Self.holdSecs + Self.climbSecs {
+            let u = Self.ease((t - Self.holdSecs) / Self.climbSecs)
+            let c = GeoPoint(lat: Self.lerp(start.at.lat, first.lat, u), lng: Self.lerp(start.at.lng, first.lng, u))
+            return (c, start.heading + Self.turn(start.heading, h0) * u, Self.lerp(Self.startMetres, cameraMetres, u), Self.lerp(Self.startPitch, 60, u))
+        }
+        let u = Self.ease((t - Self.holdSecs - Self.climbSecs) / travelSecs), s = Self.lerp(s0, s1, u)
+        return (FlyPath.point(points, at: s), smoothHeading(at: s), cameraMetres, 60)
+    }
+
     /// a heading in the same turn as the last stop
     func unwrap(_ h0: Double) -> Double {
         var h = h0

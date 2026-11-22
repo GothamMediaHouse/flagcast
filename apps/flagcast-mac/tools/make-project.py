@@ -12,7 +12,7 @@ def i(name): return hashlib.md5(('flagcast-mac:' + name).encode()).hexdigest()[:
 TEAM = 'C8KXPB4QNA'
 # (target, product name, bundle id, version, extra source folders)
 TARGETS = [
-    ('Manager', 'Flagcast Manager', 'app.flagcast.manager', '2.8.4'),
+    ('Manager', 'Flagcast Manager', 'app.flagcast.manager', '2.8.5'),
     ('Admin', 'Flagcast Admin', 'app.flagcast.admin', '2.2.0'),
 ]
 # Admin is retired (folded into Manager): its last version is only Admin/RetiredApp.swift, no shared code or updater
