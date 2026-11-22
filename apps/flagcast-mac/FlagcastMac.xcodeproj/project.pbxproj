@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		E4D032DD34500369D3770266 = {isa = PBXBuildFile; fileRef = F4D57C4521017BE73D8F5E1B; };
 		FAF5652DA53260BBF9075DE6 = {isa = PBXBuildFile; fileRef = 726CB379D3AA7CCFAD50641C; };
+		AF9726A5072B4461350976DA = {isa = PBXBuildFile; fileRef = B2652A6C89B2558E05469BAF; };
 		D48657414165AB11C472641F = {isa = PBXBuildFile; fileRef = E74CD2FD1A07E59432C86CAE; };
 		1C3F74AEB3DC3AD609D32AF1 = {isa = PBXBuildFile; fileRef = 379A05E62FF6D64D18D6F506; };
 		061D24816F2C6B76D185DE67 = {isa = PBXBuildFile; fileRef = 85A512E66350D728E9EB3D75; };
@@ -20,6 +21,7 @@
 		DEEA272F649E373E87AD99EC = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Flagcast Admin.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F4D57C4521017BE73D8F5E1B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Models.swift; path = "../flagcast-ios/Flagcast/Model/Models.swift"; sourceTree = SOURCE_ROOT; };
 		726CB379D3AA7CCFAD50641C = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Core.swift; path = "../flagcast-ios/Flagcast/Model/Core.swift"; sourceTree = SOURCE_ROOT; };
+		B2652A6C89B2558E05469BAF = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FlyPath.swift; path = "../flagcast-ios/Flagcast/Model/FlyPath.swift"; sourceTree = SOURCE_ROOT; };
 		E74CD2FD1A07E59432C86CAE = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Server.swift; path = "../flagcast-ios/Flagcast/Net/Server.swift"; sourceTree = SOURCE_ROOT; };
 		379A05E62FF6D64D18D6F506 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = EventFeed.swift; path = "../flagcast-ios/Flagcast/Net/EventFeed.swift"; sourceTree = SOURCE_ROOT; };
 		85A512E66350D728E9EB3D75 = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = Vendor/Sparkle.xcframework; sourceTree = "<group>"; };
@@ -72,6 +74,7 @@
 			files = (
 				E4D032DD34500369D3770266,
 				FAF5652DA53260BBF9075DE6,
+				AF9726A5072B4461350976DA,
 				D48657414165AB11C472641F,
 				1C3F74AEB3DC3AD609D32AF1,
 			);
@@ -152,6 +155,7 @@
 			children = (
 				F4D57C4521017BE73D8F5E1B,
 				726CB379D3AA7CCFAD50641C,
+				B2652A6C89B2558E05469BAF,
 				E74CD2FD1A07E59432C86CAE,
 				379A05E62FF6D64D18D6F506,
 			);

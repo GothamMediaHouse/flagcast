@@ -16,6 +16,9 @@ struct CourseMapView: View {
     @State private var search = ""
     @State private var busy = false
     @State private var confirmRedo = false
+    @State private var flyTick = 0          // "Fly the hole": each change starts a flight
+    @State private var flying = false
+    @State private var flyAll: Task<Void, Never>?
 
     enum Tool: Hashable { case tee, f, m, b, hzP(String), hzC(String)
         var label: String { switch self { case .tee: "tee"; case .f: "front of the green"; case .m: "middle of the green"; case .b: "back of the green"; case .hzP: "where the hazard starts (the near edge)"; case .hzC: "the far edge, where a shot carries it" } }
@@ -27,6 +30,14 @@ struct CourseMapView: View {
         VStack(spacing: 0) {
             MapHeader(title: "Course map", sub: doc.ev.course.name.isEmpty ? doc.ev.name : doc.ev.course.name) {
                 Text(saving ? "Saving…" : "Saves as you go").font(.system(size: 12, weight: .semibold)).foregroundStyle(FC.onGreenMuted)
+                if flying || flyAll != nil {
+                    Button { stopFlying() } label: { Label("Stop", systemImage: "stop.fill") }.buttonStyle(GlassButton())
+                } else if mappedHoles.count > 0 {
+                    Button { flyHole() } label: { Label("Fly the Hole", systemImage: "airplane") }.buttonStyle(GlassButton())
+                        .disabled(h.tee == nil || (h.m ?? h.f) == nil).help("Fly down this hole in 3D, as golfers see it in the app")
+                    Button { flyEvery() } label: { Label("Fly Every Hole", systemImage: "airplane.circle") }.buttonStyle(GlassButton())
+                        .help("Fly every mapped hole, 1 to 18, back to back (for a demo or a TV)")
+                }
                 Toggle(isOn: $threeD) { Label("3D", systemImage: "cube") }.toggleStyle(.button).buttonStyle(GlassButton()).help("Show the course in 3D where Apple has it")
             }
             holeStrip.background(FC.green).environment(\.colorScheme, .dark)
@@ -40,7 +51,7 @@ struct CourseMapView: View {
                             }
                         }
                     }
-                    if let t = h.tee, let g = h.m ?? h.f { MapPolyline(coordinates: [t.coordinate, g.coordinate]).stroke(.white.opacity(0.85), lineWidth: 2) }
+                    if let t = h.tee, let g = h.m ?? h.f { MapPolyline(coordinates: FlyPath.holePath(h, tee: t, green: g).map(\.coordinate)).stroke(.white.opacity(0.85), lineWidth: 2) }
                     ForEach(h.hz) { z in
                         if let c = z.c { MapPolyline(coordinates: [z.p.coordinate, c.coordinate]).stroke(hazardColor(z.k), lineWidth: 3) }
                         pin(z.p, color: hazardColor(z.k), text: "", proxy: proxy) { p in set { x in if let i = x.hz.firstIndex(where: { $0.id == z.id }) { x.hz[i].p = p } } }
@@ -53,6 +64,7 @@ struct CourseMapView: View {
                     UserAnnotation()
                 }
                 .mapStyle(.imagery(elevation: threeD ? .realistic : .flat))
+                .mapCameraKeyframeAnimator(trigger: flyTick) { _ in flight() }
                 .mapControls { MapCompass(); MapScaleView(); MapPitchToggle(); MapZoomStepper() }
                 .coordinateSpace(.named("map"))
                 .onMapCameraChange(frequency: .onEnd) { ctx in lastRegion = ctx.region }
@@ -177,6 +189,71 @@ struct CourseMapView: View {
         set { $0.hz.append(z) }
         tool = .hzP(z.id)
     }
+    // ---- Fly the hole (the same path as the players' app: FlyPath) ----
+    private var mappedHoles: [Int] { doc.ev.map.holes.keys.sorted().filter { doc.ev.map.holes[$0]?.tee != nil && (doc.ev.map.holes[$0]?.m ?? doc.ev.map.holes[$0]?.f) != nil } }
+    private func plan() -> (path: FlyPath, green: GeoPoint, end: MapCamera)? {
+        guard let t = h.tee, let g = h.m ?? h.f else { return nil }
+        let p = FlyPath.make(h, tee: t, green: g, look: 260 * sin(60 * .pi / 180) * FlyPath.YD)
+        let len = Double(yards(t, g)), mid = GeoPoint(lat: (t.lat + g.lat) / 2, lng: (t.lng + g.lng) / 2)
+        return (p, g, MapCamera(centerCoordinate: mid.coordinate, distance: max(350, len * 2.6), heading: bearing(t, g), pitch: 55))
+    }
+    @KeyframesBuilder<MapCamera>
+    private func flight() -> some Keyframes<MapCamera> {
+        // (with no hole mapped, a still camera where the map is: the buttons are off then anyway)
+        let (p, g, end) = plan() ?? {
+            let c = GeoPoint(lat: lastRegion?.center.latitude ?? 0, lng: lastRegion?.center.longitude ?? 0)
+            return (FlyPath.make(HoleMap(tee: c, m: c), tee: c, green: FlyPath.offset(c, yards: 100, bearing: 0), look: 200), c, MapCamera(centerCoordinate: c.coordinate, distance: 800))
+        }()
+        do {
+            KeyframeTrack(\MapCamera.centerCoordinate) {
+                CubicKeyframe(p.stops[0].at.coordinate, duration: 0.6)
+                for s in p.stops.dropFirst() { CubicKeyframe(s.at.coordinate, duration: s.secs) }
+                CubicKeyframe(g.coordinate, duration: 1.8)
+                CubicKeyframe(end.centerCoordinate, duration: 1.2)
+            }
+            KeyframeTrack(\MapCamera.heading) {
+                CubicKeyframe(p.stops[0].heading, duration: 0.6)
+                for s in p.stops.dropFirst() { CubicKeyframe(s.heading, duration: s.secs) }
+                CubicKeyframe(p.stops.last!.heading, duration: 1.8)
+                CubicKeyframe(p.unwrap(end.heading), duration: 1.2)
+            }
+            KeyframeTrack(\MapCamera.distance) {
+                CubicKeyframe(p.cameraMetres, duration: 0.6)
+                LinearKeyframe(p.cameraMetres, duration: p.flySecs)
+                CubicKeyframe(210, duration: 1.8)
+                CubicKeyframe(end.distance, duration: 1.2)
+            }
+            KeyframeTrack(\MapCamera.pitch) {
+                CubicKeyframe(60, duration: 0.6)
+                LinearKeyframe(60, duration: p.flySecs)
+                CubicKeyframe(45, duration: 1.8)
+                CubicKeyframe(55, duration: 1.2)
+            }
+        }
+    }
+    private func flyHole() {
+        guard let p = plan() else { return }
+        threeD = true; tool = nil; flying = true; flyTick += 1
+        let secs = p.path.flySecs + 3.8
+        Task { try? await Task.sleep(for: .seconds(secs)); flying = false }
+    }
+    private func flyEvery() {
+        threeD = true; tool = nil
+        flyAll = Task {
+            for n in mappedHoles {
+                if Task.isCancelled { break }
+                hole = n
+                try? await Task.sleep(for: .seconds(1.5))
+                guard let p = plan(), !Task.isCancelled else { continue }
+                flying = true; flyTick += 1
+                try? await Task.sleep(for: .seconds(p.path.flySecs + 4.5))
+                flying = false
+            }
+            flyAll = nil
+        }
+    }
+    private func stopFlying() { flyAll?.cancel(); flyAll = nil; flying = false; fit() }
+
     private func pick(_ n: Int) {
         hole = n
         let x = doc.ev.map.holes[n] ?? HoleMap()

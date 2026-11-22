@@ -17,7 +17,7 @@ TARGETS = [
 ]
 # Admin is retired (folded into Manager): its last version is only Admin/RetiredApp.swift, no shared code or updater
 FULL = {'Manager'}
-SHARED_IOS = ['Model/Models.swift', 'Model/Core.swift', 'Net/Server.swift', 'Net/EventFeed.swift']
+SHARED_IOS = ['Model/Models.swift', 'Model/Core.swift', 'Model/FlyPath.swift', 'Net/Server.swift', 'Net/EventFeed.swift']
 
 def settings(t, prod, bid, ver):
     # Manager: load the NDI runtime installed on the Mac (NDI cameras). No Sign in with Apple on the Mac: it needs a
