@@ -51,7 +51,9 @@ export async function open3D(box, opt) {
   };
   const hideCard = () => { card.style.opacity = '0'; card.style.transform = 'translateX(-14px)'; };
 
+  let pins = [];
   function drawHole(n) {
+    pins.forEach((m) => m.remove()); pins = [];
     const h = opt.holes()[n], g = green(h), f = [];
     if (h?.tee && g) f.push({ type: 'Feature', geometry: { type: 'LineString', coordinates: holePath(h, h.tee, g).map(ll) } });
     if (h?.tee) f.push({ type: 'Feature', properties: { c: '#e8c547' }, geometry: { type: 'Point', coordinates: ll(h.tee) } });
@@ -101,6 +103,25 @@ export async function open3D(box, opt) {
     for (const n of list) { if (me !== run) break; await fly(n, true); }
     if (me === run) { api.flying = false; show(list[list.length - 1]); }
   };
+  // Where the groups are, in 3D: each group's pin (its hole number) and name, the greens numbered
+  const el = (cls, html) => { const d = document.createElement('div'); d.className = cls; d.innerHTML = html; return d; };
+  api.groups = (list, onPick) => {
+    pins.forEach((m) => m.remove()); pins = [];
+    map.getSource('hole').setData({ type: 'FeatureCollection', features: [] });
+    for (const [n, h] of Object.entries(opt.holes())) { const g = green(h); if (g) pins.push(new ml.Marker({ element: el('g3n', n) }).setLngLat(ll(g)).addTo(map)); }
+    for (const g of list) {
+      const e = el('g3', `<div class="gpin ${Date.now() - g.t > 10 * 60000 ? 'old' : ''}">${g.hole || '?'}</div><span class="g3t">${String(g.name).split(' / ')[0].replace(/[<>&"]/g, '')}</span>`);
+      e.onclick = () => onPick?.(g);
+      pins.push(new ml.Marker({ element: e, anchor: 'left', offset: [-13, 0] }).setLngLat(ll(g.at)).addTo(map));
+    }
+  };
+  /** pulled back over the whole course (or the groups), tilted */
+  api.overview = (points) => {
+    const p = points.filter(Boolean); if (!p.length) return;
+    const b = p.reduce((bb, q) => bb.extend(ll(q)), new ml.LngLatBounds(ll(p[0]), ll(p[0])));
+    map.fitBounds(b, { padding: 70, maxZoom: 17, pitch: 55, bearing: map.getBearing(), duration: 1200 });
+  };
+  api.focus = (at) => map.easeTo({ center: ll(at), zoom: 17.6, pitch: 60, duration: 1200 });
   api.stop = () => { run++; api.flying = false; clearCard(); };
   api.destroy = () => { run++; map.remove(); };
   api.C = C;

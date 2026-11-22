@@ -81,6 +81,10 @@ body.groups .strip { display: none; }
 .grp small { color: var(--muted); }
 .gpin { display: grid; place-items: center; min-width: 26px; height: 26px; padding: 0 6px; border-radius: 13px; background: #3a8bff; color: #fff; border: 2px solid #fff; font: 700 11px var(--f-mono); box-shadow: 0 1px 5px rgba(0,0,0,.6); white-space: nowrap; }
 .gpin.old { background: #8a948d; }
+/* the groups on the 3D map */
+.g3 { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.g3t { background: rgba(10,24,16,.85); color: #fff; font: 600 11px var(--f-body); padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+.g3n { font: 700 10px var(--f-mono); color: #fff; background: rgba(0,0,0,.5); border-radius: 50%; width: 20px; height: 20px; display: grid; place-items: center; }
 .leaflet-tooltip.gtip { background: rgba(10,24,16,.85); color: #fff; border: 0; font: 600 11px var(--f-body); padding: 2px 6px; box-shadow: none; }
 .leaflet-tooltip.gtip::before { display: none; }
 .auto { margin-top: 16px; padding: 12px; border: 1.5px solid var(--flag); border-radius: 10px; background: var(--card); }
@@ -358,8 +362,9 @@ function drawGroups() {
     const old = Date.now() - g.t > 10 * 60000;
     L.marker(g.at, { icon: L.divIcon({ className: '', html: `<div class="gpin ${old ? 'old' : ''}">${g.hole || '?'}</div>`, iconSize: null, iconAnchor: [13, 13] }) })
       .bindTooltip(esc(String(g.name).split(' / ')[0]), { permanent: true, direction: 'right', offset: [12, 0], className: 'gtip' }).addTo(groupsLayer)
-      .on('click', () => map.setView(g.at, Math.max(map.getZoom(), 18)));
+      .on('click', () => pickGroup(g));
   }
+  if (d3on && D3 && mode === 'groups') D3.groups(GROUPS, pickGroup);
   const teams = (S?.teams || []).length;
   $('panel').innerHTML = `<h2>Groups on the course</h2>
     ${TRACK && TRACK.on === false ? `<div class="hint">Group tracking is off. ${TRACK.locked ? 'The results are final, so group spots were wiped.' : TRACK.date ? `It turns on on the tournament day (${esc(TRACK.date)}) and stops when the results are made final.` : 'Set the tournament date in Setup. Tracking turns on that day and stops when the results are made final.'}</div>` : ''}
@@ -370,7 +375,7 @@ function drawGroups() {
 function setMode(m) {
   mode = m; document.body.classList.toggle('groups', m === 'groups');
   $('maptitle').textContent = m === 'groups' ? 'Where the groups are' : 'Course map';
-  if (m === 'groups' && d3on) set3D(false); drawFly();
+  if (d3on && D3) { D3.stop(); if (m === 'groups') { D3.groups(GROUPS, pickGroup); D3.overview(groupPts()); } else D3.show(hole); } drawFly();
   $('mode').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === m)));
   clearInterval(gTimer);
   if (m === 'groups') {
@@ -380,7 +385,7 @@ function setMode(m) {
   } else { groupsLayer.clearLayers(); drawMap(); drawPanel(); }
 }
 $('mode').addEventListener('click', (e) => { const b = e.target.closest('[data-mode]'); if (b) setMode(b.dataset.mode); });
-$('panel').addEventListener('click', (e) => { const b = e.target.closest('[data-g]'); if (b) { const g = GROUPS[Number(b.dataset.g)]; map.setView(g.at, 18); } });
+$('panel').addEventListener('click', (e) => { const b = e.target.closest('[data-g]'); if (b) pickGroup(GROUPS[Number(b.dataset.g)]); });
 
 // ---- saving ----
 let timer = null, saving = false, again = false;
@@ -407,7 +412,7 @@ function drawFly() {
   const flying = !!D3?.flying, any = mode === 'holes' && mappedHoles().length > 0;
   $('fly').hidden = !any || flying; $('flyAll').hidden = !any || flying; $('stopFly').hidden = !flying;
   $('fly').disabled = !(H().tee && middle(H()));
-  $('d3').hidden = mode !== 'holes';
+  $('d3').hidden = false;
   $('d3').setAttribute('aria-pressed', String(d3on));
 }
 async function set3D(on) {
@@ -418,8 +423,10 @@ async function set3D(on) {
       D3 = await open3D($('map3d'), { holes: () => MAP.holes, card: (n) => S?.course?.holes?.[n - 1], onHole: (n) => { if (n !== hole) { hole = n; drawStrip(); drawPanel(); } } });
     } catch (e) { toast(e.message); d3on = false; $('map3d').hidden = true; drawFly(); return; }
   }
-  D3.show(hole);
+  if (mode === 'groups') { D3.groups(GROUPS, pickGroup); D3.overview(groupPts()); } else D3.show(hole);
 }
+const groupPts = () => (GROUPS.length ? GROUPS.map((g) => g.at) : Object.values(MAP.holes).flatMap((h) => [h.tee, middle(h)]));
+function pickGroup(g) { if (d3on && D3) D3.focus(g.at); else map.setView(g.at, Math.max(map.getZoom(), 18)); }
 $('d3').onclick = () => set3D(!d3on);
 $('fly').onclick = async () => { if (!d3on) await set3D(true); if (!D3) return; const p = D3.flyHole(hole); drawFly(); await p; drawFly(); };
 $('flyAll').onclick = async () => { if (!d3on) await set3D(true); if (!D3) return; const p = D3.flyEvery(mappedHoles()); drawFly(); await p; drawFly(); };
