@@ -80,8 +80,8 @@ const findEvent = (id) => allEvents().find((x) => x.id === id);
 handle('gl:list', () => ({ base: base(), events: allEvents(), signedIn: !!data.token }));
 // club account: sign in with an emailed code, then everything goes with the saved sign-in
 handle('gl:club', async (_e, op, body = {}) => {
-  if (!/^(start|verify|me|request|invite|uninvite|hide|signout|new|brand)$/.test(op)) throw new Error('Not allowed');
-  if (op !== 'start' && op !== 'verify' && !data.token) throw new Error('Please sign in.');
+  if (!/^(start|verify|me|request|invite|uninvite|hide|signout|new|brand|config)$/.test(op)) throw new Error('Not allowed');
+  if (op !== 'start' && op !== 'verify' && op !== 'config' && !data.token) throw new Error('Please sign in.');
   const r = await fetch(op === 'new' ? `${base()}/golf/api/new` : `${base()}/golf/api/club/${op}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, token: data.token }) });
   const j = await r.json().catch(() => ({}));
   if (op === 'signout' || r.status === 401) { data.token = ''; data.clubEvents = []; save(data); }
@@ -146,5 +146,20 @@ handle('gl:openScreen', (_e, { id, screenId, monitor }) => {
 });
 
 app.setName('Flagcast Manager');
+// Sign in with Google or Apple: the sign-in page opens in the computer's own browser (Google won't sign in inside an
+// app window), and flagcast.app hands the session back on flagcastmanager://signin?token=…, which Windows passes to
+// this app (a second copy starting with the link; this one takes it and the second one quits)
+app.setAsDefaultProtocolClient('flagcastmanager');
+if (!app.requestSingleInstanceLock()) app.quit();
+function signInLink(link) {
+  if (!String(link || '').startsWith('flagcastmanager://')) return;
+  const q = new URL(link).searchParams;
+  if (q.get('token')) { data.token = q.get('token'); save(data); }
+  if (win) { if (win.isMinimized()) win.restore(); win.focus(); win.webContents.send('gl:signedIn', q.get('token') ? '' : (q.get('error') || 'That sign-in didn’t work. Try again.')); }
+}
+app.on('second-instance', (_e, argv) => signInLink(argv.find((a) => String(a).startsWith('flagcastmanager://'))));
+app.on('open-url', (e, link) => { e.preventDefault(); signInLink(link); });
+handle('gl:webSignIn', (_e, p) => { if (!['google', 'apple'].includes(p)) throw new Error('Not allowed'); shell.openExternal(`${base()}/golf/signin/${p}/?app=1`); return true; });
+
 app.whenReady().then(() => { menu(); createWindow(); setTimeout(() => updates.check(true), 4000); app.on('activate', () => { if (!win) createWindow(); }); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

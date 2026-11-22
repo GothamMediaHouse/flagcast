@@ -58,6 +58,7 @@ struct HomeView: View {
 
     @ViewBuilder private var signIn: some View {
         SwiftUI.Section {
+            if model.appleWebOn { AppleWebSignInButton(height: 40, token: { t in run { await model.use(token: t) } }, failed: { err = $0 }) }
             if model.googleOn { GoogleSignInButton(height: 40, token: { t in run { await model.use(token: t) } }, failed: { err = $0 }) }
             if !useCode {
                 TextField("Email", text: $email, prompt: Text("you@yourclub.com")).textContentType(.username).focused($focus, equals: .email).onSubmit { focus = .password }
@@ -77,7 +78,7 @@ struct HomeView: View {
             }
             if let err { Text(err).foregroundStyle(.red).font(.callout) }
         } header: { Text("Sign in") } footer: {
-            Text("Your email and password\(model.googleOn ? ", or Google" : ""). First time? Use “Email Me a Code”, then set a password in Settings. Flagcast staff get Admin when they sign in.").foregroundStyle(.secondary)
+            Text("Your email and password\([model.appleWebOn ? "Apple" : nil, model.googleOn ? "Google" : nil].compactMap { $0 }.isEmpty ? "" : ", or " + [model.appleWebOn ? "Apple" : nil, model.googleOn ? "Google" : nil].compactMap { $0 }.joined(separator: " or ")). First time? Use “Email Me a Code”, then set a password in Settings. Flagcast staff get Admin when they sign in.").foregroundStyle(.secondary)
         }
     }
 

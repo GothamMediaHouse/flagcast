@@ -149,6 +149,8 @@ const clubName = (id) => clubs.find((c) => c.id === id)?.name || '—';
 
 // signed in on /golf/ with an admin email: that sign-in opens Admin (no passcode needed)
 const clubToken = () => { try { return localStorage.getItem('flagcast:club-token') || ''; } catch { return ''; } };
+// back from Sign in with Apple (?next=admin): the session in #signin=…
+try { const h = new URLSearchParams(location.hash.slice(1)); if (h.get('signin')) localStorage.setItem('flagcast:club-token', h.get('signin')); if (h.has('signin') || h.has('error')) history.replaceState(null, '', location.pathname); } catch {}
 async function call(body) {
   const r = await fetch('/golf/api/club/admin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pass, token: clubToken(), ...body }) });
   const j = await r.json().catch(() => ({}));

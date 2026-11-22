@@ -68,6 +68,20 @@ export async function golf(request, env) {
   }
   // Sign in with Google from the Manager apps: Google posts the ID token here (form, with its double-submit CSRF
   // cookie), and the app's sign-in sheet gets the Flagcast session back on flagcastmanager://signin
+  // Sign in with Apple on the web, Mac and Windows (Apple's JS, form_post): Apple posts the ID token here with the state
+  // the sign-in page made (and kept in a cookie, so nobody else's page can post a sign-in in). The apps get the session
+  // on flagcastmanager://signin; the website on /golf/#signin=… (the fragment never reaches a server)
+  if (url.pathname === '/golf/api/club/apple-web' && request.method === 'POST') {
+    const f = await request.formData().catch(() => null);
+    const state = String(f?.get('state') || ''), cookie = (request.headers.get('Cookie') || '').match(/(?:^|;\s*)fc_apple_state=([^;]+)/)?.[1];
+    const mode = state.split('.')[1] || 'web';
+    const back = (q) => mode === 'app' ? Response.redirect(`flagcastmanager://signin?${q}`, 302)
+      : new Response(null, { status: 302, headers: { Location: `/golf/${mode === 'admin' ? 'admin/' : ''}#${q.replace(/^token=/, 'signin=')}`, 'Set-Cookie': 'fc_apple_state=; Path=/golf/; Max-Age=0; Secure; SameSite=None' } });
+    if (!f || !cookie || !state || state !== decodeURIComponent(cookie)) return back('error=' + encodeURIComponent('That Apple sign-in didn’t work. Try again.'));
+    const r = await clubs(new Request(request.url, { method: 'POST', body: JSON.stringify({ identityToken: f.get('id_token') }) }), env, 'apple');
+    const j = await r.json().catch(() => ({}));
+    return back(j.token ? `token=${encodeURIComponent(j.token)}` : `error=${encodeURIComponent(j.error || 'That Apple sign-in didn’t work.')}`);
+  }
   if (url.pathname === '/golf/api/club/google-app' && request.method === 'POST') {
     const f = await request.formData().catch(() => null);
     const cookie = (request.headers.get('Cookie') || '').match(/(?:^|;\s*)g_csrf_token=([^;]+)/)?.[1];

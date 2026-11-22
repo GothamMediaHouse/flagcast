@@ -62,3 +62,38 @@ struct GoogleSignInButton: View {
         .buttonStyle(.plain)
     }
 }
+
+/// "Sign in with Apple" on the Mac: Apple's web sign-in in a sign-in sheet (the Mac app is signed for direct download,
+/// where Apple doesn't allow its built-in Sign in with Apple). The server hands the session back on flagcastmanager://signin.
+struct AppleWebSignInButton: View {
+    var height: CGFloat = 46
+    var token: (String) -> Void
+    var failed: (String) -> Void
+    @Environment(\.webAuthenticationSession) private var session
+    var body: some View {
+        Button {
+            Task {
+                do {
+                    let url = URL(string: "\(Server.base.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")))/golf/signin/apple/?app=1")!
+                    let back = try await session.authenticate(using: url, callbackURLScheme: "flagcastmanager", preferredBrowserSession: .ephemeral)
+                    let q = URLComponents(url: back, resolvingAgainstBaseURL: false)?.queryItems ?? []
+                    if let t = q.first(where: { $0.name == "token" })?.value, !t.isEmpty { token(t) }
+                    else { failed(q.first(where: { $0.name == "error" })?.value ?? "That Apple sign-in didn’t work. Try again.") }
+                } catch {
+                    if (error as? ASWebAuthenticationSessionError)?.code == .canceledLogin { return }
+                    failed(error.localizedDescription)
+                }
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "apple.logo").font(.system(size: 17, weight: .semibold))
+                Text("Sign in with Apple").font(.system(size: 16, weight: .semibold))
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity, minHeight: height)
+            .background(Color.black, in: RoundedRectangle(cornerRadius: 10))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}

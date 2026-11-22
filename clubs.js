@@ -28,7 +28,7 @@
 // comes back in the answer (devCode) so the pages can be tried without email.
 import { DurableObject } from 'cloudflare:workers';
 import { SEED, slug } from './courselib.js';
-import { hashPassword, checkPassword, passwordProblem, verifyAppleToken, appleKeys, verifyGoogleToken, googleKeys } from './auth.js';
+import { hashPassword, checkPassword, passwordProblem, verifyAppleToken, appleKeys, APPLE_AUDIENCES, verifyGoogleToken, googleKeys } from './auth.js';
 import { cleanLogo, cleanAccent, logoVersion } from './brand.js';
 import { streamReady, liveInput, inputState, deleteInput, listAll, deleteVideo } from './stream.js';
 
@@ -267,10 +267,12 @@ export class FlagcastClubs extends DurableObject {
       this.note(u.email, u.club?.id, old?.hash ? 'Changed password' : 'Set a password');
       return json({ ok: true });
     }
-    if (op === 'config') return json({ google: env.GOOGLE_CLIENT_ID || '' });
+    // which sign-ins are switched on: Google (its client id), and Sign in with Apple on the web, Mac and Windows (the
+    // Services ID; the iPhone app signs in with Apple natively without it)
+    if (op === 'config') return json({ google: env.GOOGLE_CLIENT_ID || '', apple: env.APPLE_SERVICE_ID || '' });
     if (op === 'apple') {
       let id;
-      try { id = await verifyAppleToken(b.identityToken, { keys: await appleKeys() }); }
+      try { id = await verifyAppleToken(b.identityToken, { keys: await appleKeys(), audiences: [...APPLE_AUDIENCES, ...(env.APPLE_SERVICE_ID ? [env.APPLE_SERVICE_ID] : [])] }); }
       catch (e) { this.fail(e.message === 'apple-keys' ? 'Apple didn’t answer. Try again in a minute.' : e.message, 401); }
       // the account linked to this Apple ID, or the verified email Apple shares (linked from now on)
       let a = this.one('SELECT * FROM accounts WHERE apple = ?', id.sub);

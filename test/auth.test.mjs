@@ -2,7 +2,7 @@
 //   node test/auth.test.mjs                         unit tests (auth.js), no server needed
 //   node test/auth.test.mjs http://127.0.0.1:8787   plus the club API on `npx wrangler dev` (local, no email key)
 import assert from 'node:assert/strict';
-import { hashPassword, checkPassword, passwordProblem, verifyAppleToken, appleKeys, resetAppleKeys, APPLE_ISS, verifyGoogleToken } from '../auth.js';
+import { hashPassword, checkPassword, passwordProblem, verifyAppleToken, appleKeys, resetAppleKeys, APPLE_ISS, APPLE_AUDIENCES, verifyGoogleToken } from '../auth.js';
 
 let n = 0; const ok = (name) => console.log(`ok ${++n} - ${name}`);
 const b64url = (buf) => Buffer.from(buf).toString('base64url');
@@ -31,6 +31,11 @@ const good = { iss: APPLE_ISS, aud: 'app.flagcast.manager', sub: '001234.abc', e
 const id = await verifyAppleToken(await token(good), { keys, now });
 assert.deepEqual(id, { sub: '001234.abc', email: 'pro@example.com', emailVerified: true });
 ok('a good Apple token gives the Apple ID and email');
+// Sign in with Apple on the web, Mac and Windows: the token's audience is Flagcast's Services ID, allowed only when set
+const web = { ...good, aud: 'app.flagcast.signin' };
+await assert.rejects(verifyAppleToken(await token(web), { keys, now }), /another app/);
+assert.equal((await verifyAppleToken(await token(web), { keys, now, audiences: [...APPLE_AUDIENCES, 'app.flagcast.signin'] })).sub, '001234.abc');
+ok('a web Apple sign-in is taken only for Flagcast’s own Services ID');
 await assert.rejects(verifyAppleToken(await token({ ...good, aud: 'com.someone.else' }), { keys, now }), /another app/);
 await assert.rejects(verifyAppleToken(await token({ ...good, iss: 'https://evil.example' }), { keys, now }));
 await assert.rejects(verifyAppleToken(await token({ ...good, exp: Math.floor(now / 1000) - 600 }), { keys, now }), /ran out/);

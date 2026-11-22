@@ -5,6 +5,16 @@ export const token = {
   get: () => { try { return localStorage.getItem(LS) || ''; } catch { return ''; } },
   set: (t) => { try { t ? localStorage.setItem(LS, t) : localStorage.removeItem(LS); } catch {} },
 };
+// back from Sign in with Apple (/golf/signin/apple/): the session arrives in the address's #signin=… (never sent to a
+// server) or a problem in #error=…; keep the one, show the other, and take both out of the address
+export const signinError = (() => {
+  try {
+    const h = new URLSearchParams(location.hash.slice(1));
+    if (h.get('signin')) token.set(h.get('signin'));
+    if (h.has('signin') || h.has('error')) history.replaceState(null, '', location.pathname + location.search);
+    return h.get('error') || '';
+  } catch { return ''; }
+})();
 export async function api(op, body = {}) {
   const path = op === 'new' ? '/golf/api/new' : `/golf/api/club/${op}`;
   const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token.get(), ...body }) });

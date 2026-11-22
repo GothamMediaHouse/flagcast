@@ -63,6 +63,11 @@ input, select { font: inherit; color: var(--ink); background: var(--paper); bord
   <aside>
     <div class="box" id="signBox" hidden>
       <h2>Sign in</h2>
+      <div id="webSigns" style="display:grid;gap:8px;margin-bottom:12px">
+        <button class="btn" type="button" id="appleSign" hidden style="width:100%;background:#000;color:#fff;border-color:#000">Sign in with Apple</button>
+        <button class="btn" type="button" id="googleSign" hidden style="width:100%;background:#fff;color:#1f1f1f">Sign in with Google</button>
+        <p class="help" id="webSignNote" hidden style="margin:0">Your browser opens to sign in, then brings you back here.</p>
+      </div>
       <form id="signForm">
         <p class="help">Sign in with your club email. We’ll email you a 6-digit code, no password needed.</p>
         <label>Email<input id="sEmail" type="email" autocomplete="email" required placeholder="you@yourclub.com"></label>
@@ -175,6 +180,13 @@ async function brand(changes, done) { errBox('bErr2'); try { await gl.club('bran
 $('bFile').addEventListener('change', async (e) => { const f = e.target.files[0]; e.target.value = ''; if (!f) return; try { await brand({ logo: await fileToLogo(f) }, 'Logo saved. Your tournaments show it now.'); } catch (x) { errBox('bErr2', x); } });
 $('bRemove').addEventListener('click', () => brand({ logo: '' }, 'Logo removed. Golfers see the Flagcast logo until there’s a new one.'));
 $('bColorSave').addEventListener('click', () => brand({ accent: $('bColor').value }, 'Colour saved.'));
+
+// Sign in with Apple or Google (when switched on): in the computer's browser, back here when done
+gl.club('config', {}).then((c) => {
+  $('appleSign').hidden = !c.apple; $('googleSign').hidden = !c.google; $('webSignNote').hidden = !(c.apple || c.google);
+}).catch(() => {});
+for (const [id, p] of [['appleSign', 'apple'], ['googleSign', 'google']]) $(id).addEventListener('click', () => gl.webSignIn(p).then(() => toast('Finish signing in in your browser.')).catch((x) => toast(msg(x))));
+gl.onSignedIn((err) => { if (err) toast(err); else { toast('Signed in.'); account(); } });
 
 async function draw() {
   const { base, events } = await gl.list();

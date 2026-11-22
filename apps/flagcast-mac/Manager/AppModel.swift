@@ -164,7 +164,12 @@ final class AppModel {
     }
     /// Sign in with Google is switched on on the server (GOOGLE_CLIENT_ID set).
     var googleOn = false
-    func loadConfig() async { googleOn = ((try? Net.json(await Net.post("/golf/api/club/config", [:])))?["google"] as? String ?? "") != "" }
+    /// Sign in with Apple on the web (the Mac's): switched on when the server has Apple's Services ID
+    var appleWebOn = false
+    func loadConfig() async {
+        let c = (try? Net.json(await Net.post("/golf/api/club/config", [:]))) ?? [:]
+        googleOn = (c["google"] as? String ?? "") != ""; appleWebOn = (c["apple"] as? String ?? "") != ""
+    }
     /// A Flagcast session handed back by the website's sign-in (Google).
     func use(token: String) async {
         saved.token = token
