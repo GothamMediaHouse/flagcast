@@ -67,6 +67,14 @@
         "from": "build/app-update.yml",
         "to": "app-update.yml"
       }
+    ],
+    "protocols": [
+      {
+        "name": "Flagcast Manager sign-in",
+        "schemes": [
+          "flagcastmanager"
+        ]
+      }
     ]
   },
   "dependencies": {

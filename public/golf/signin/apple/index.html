@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in with Apple · Flagcast</title>
+<link rel="icon" href="/golf/brand/mark.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/golf/golf.css">
+<style>
+  body { background: #123628; color: #eef3ec; display: grid; place-items: center; min-height: 100vh; margin: 0; font-family: Inter, system-ui, sans-serif; }
+  .card { background: #fff; color: #14201a; border-radius: 16px; padding: 28px; width: min(420px, 92vw); box-shadow: 0 10px 40px rgba(0,0,0,.3); text-align: center; }
+  .card h1 { margin: 0 0 6px; font-size: 24px; }
+  .card p { color: #56625a; margin: 0 0 18px; }
+  #appleid-signin { height: 44px; width: 280px; margin: 0 auto; cursor: pointer; }
+  .err { color: #c8312b; margin-top: 12px; min-height: 1.2em; }
+</style>
+</head>
+<body>
+<!-- Sign in with Apple for Flagcast club accounts on the website, the Mac Manager and the Windows Manager (the iPhone app
+     signs in with Apple natively). ?app=1: the Manager apps, which get the session back on flagcastmanager://signin;
+     ?next=admin: back to Flagcast Admin. Apple posts the sign-in to /golf/api/club/apple-web. -->
+<div class="card">
+  <img src="/golf/brand/mark.svg" alt="" width="48" height="48" style="border-radius:12px">
+  <h1>Sign in to Flagcast</h1>
+  <p id="msg">With your Apple ID.</p>
+  <div id="appleid-signin" data-color="black" data-border="false" data-type="sign in" data-border-radius="50" hidden></div>
+  <div class="err" id="err" role="alert"></div>
+</div>
+<script type="module">
+const q = new URLSearchParams(location.search), $ = (id) => document.getElementById(id);
+const err = new URLSearchParams(location.hash.slice(1)).get('error'); if (err) $('err').textContent = err;
+const cfg = await fetch('/golf/api/club/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then((r) => r.json()).catch(() => ({}));
+if (!cfg.apple) { $('msg').textContent = 'Sign in with Apple isn’t switched on yet. Use your email instead.'; }
+else {
+  // a one-time state, kept in a cookie so only this page's sign-in is taken, and which way to go back
+  const mode = q.get('app') === '1' ? 'app' : q.get('next') === 'admin' ? 'admin' : 'web';
+  const state = `${crypto.randomUUID().replace(/-/g, '')}.${mode}`;
+  document.cookie = `fc_apple_state=${encodeURIComponent(state)}; Path=/golf/; Max-Age=600; Secure; SameSite=None`;
+  const s = document.createElement('script');
+  s.src = 'https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js';
+  s.onload = () => {
+    window.AppleID.auth.init({ clientId: cfg.apple, scope: 'email', redirectURI: `${location.origin}/golf/api/club/apple-web`, state, usePopup: false });
+    $('appleid-signin').hidden = false;
+  };
+  s.onerror = () => { $('err').textContent = 'Apple’s sign-in didn’t load. Check the connection and try again.'; };
+  document.head.appendChild(s);
+}
+</script>
+</body>
+</html>

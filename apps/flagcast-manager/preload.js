@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld('gl', {
   setBase: (b) => ipcRenderer.invoke('gl:setBase', b),
   create: (o) => ipcRenderer.invoke('gl:create', o),
   club: (op, body) => ipcRenderer.invoke('gl:club', op, body),
+  webSignIn: (p) => ipcRenderer.invoke('gl:webSignIn', p),
+  onSignedIn: (fn) => ipcRenderer.on('gl:signedIn', (_e, err) => fn(err)),
   add: (link) => ipcRenderer.invoke('gl:add', link),
   remove: (id) => ipcRenderer.invoke('gl:remove', id),
   info: (id) => ipcRenderer.invoke('gl:info', id),

@@ -48,6 +48,7 @@ h2 { font-size: 1.5rem; margin: 30px 0 10px; }
     <label>Password<input id="password" type="password" autocomplete="current-password" placeholder="Leave empty to get a code"></label>
     <button class="btn primary" type="submit" id="signBtn">Email me a code</button>
     <a class="btn" id="googleBtn" href="/golf/signin/google/" hidden style="text-align:center">Sign in with Google</a>
+    <a class="btn" id="appleBtn" href="/golf/signin/apple/" hidden style="text-align:center;background:#000;color:#fff;border-color:#000"> Sign in with Apple</a>
     <div class="err" id="sErr" role="alert"></div>
   </form>
   <form id="code" hidden>
@@ -111,7 +112,7 @@ h2 { font-size: 1.5rem; margin: 30px 0 10px; }
   <div id="mineWrap" hidden><h2>Tournaments on this computer</h2><div class="mine" id="mine"></div></div>
 </main>
 <script type="module">
-import { api, token, esc, creditsText } from '/golf/club.js';
+import { api, token, esc, creditsText, signinError } from '/golf/club.js';
 import { fileToLogo } from '/golf/brandmark.js';
 const $ = (id) => document.getElementById(id);
 const show = (id) => { for (const x of ['signin', 'code', 'request', 'club']) $(x).hidden = x !== id; };
@@ -158,7 +159,8 @@ async function refresh() {
   draw();
 }
 
-api('config').then((c) => { if (c.google) $('googleBtn').hidden = false; }).catch(() => {});
+if (signinError) $('sErr').textContent = signinError;
+api('config').then((c) => { if (c.google) $('googleBtn').hidden = false; if (c.apple) $('appleBtn').hidden = false; }).catch(() => {});
 $('password').addEventListener('input', () => { $('signBtn').textContent = $('password').value ? 'Sign in' : 'Email me a code'; });
 $('signin').addEventListener('submit', async (e) => {
   e.preventDefault(); $('sErr').textContent = '';
