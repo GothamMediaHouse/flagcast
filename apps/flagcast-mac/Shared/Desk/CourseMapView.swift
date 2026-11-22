@@ -81,6 +81,7 @@ struct CourseMapView: View {
                 .overlay(alignment: .top) {
                     if let tool { Text("Click the map to set the \(tool.label).").font(.callout.weight(.medium)).padding(.horizontal, 12).padding(.vertical, 6).background(.regularMaterial, in: Capsule()).padding(10) }
                 }
+                .overlay(alignment: .bottomLeading) { holeCard }
                 .overlay(alignment: .bottomLeading) {
                     if doc.ev.map.src == "osm" { Text(OSM.credit).font(.caption2).padding(4).background(.black.opacity(0.4)).foregroundStyle(.white).padding(6) }
                 }
@@ -205,16 +206,18 @@ struct CourseMapView: View {
     private var mappedHoles: [Int] { doc.ev.map.holes.keys.sorted().filter { doc.ev.map.holes[$0]?.tee != nil && (doc.ev.map.holes[$0]?.m ?? doc.ev.map.holes[$0]?.f) != nil } }
     private func plan() -> (path: FlyPath, green: GeoPoint, end: MapCamera)? {
         guard let t = h.tee, let g = h.m ?? h.f else { return nil }
-        let p = FlyPath.make(h, tee: t, green: g, look: 260 * sin(60 * .pi / 180) * FlyPath.YD)
+        let p = FlyPath.make(h, tee: t, green: g)
         let len = Double(yards(t, g)), mid = GeoPoint(lat: (t.lat + g.lat) / 2, lng: (t.lng + g.lng) / 2)
         return (p, g, MapCamera(centerCoordinate: mid.coordinate, distance: max(350, len * 2.6), heading: bearing(t, g), pitch: 55))
     }
-    /// The flight, frame by frame: the camera is placed 60 times a second, start to finish, so nothing jumps: from
-    /// wherever the map is down to the tee box, the smooth path down the hole (FlyPath.camera), onto the green, and
-    /// back out to the whole hole. (The Mac's map doesn't run keyframe camera animations, and mixing in its own
-    /// animations made the camera jump between steps.)
-    private func fly() async {
-        guard let (p, g, end) = plan() else { return }
+    /// The flight, frame by frame, like a drone flyover on TV: the camera is placed 60 times a second so nothing
+    /// jumps. It drops from wherever the map is to the tee box (or, flying every hole, cuts straight to it, the way
+    /// the broadcast cuts from hole to hole), pushes off low down the hole (FlyPath.camera, the same path as the
+    /// players' app), eases to a stop short of the green looking at it, then pulls back to the whole hole (not when
+    /// flying every hole: the next hole cuts in). (The Mac's map doesn't run keyframe camera animations, and mixing
+    /// in its own animations made the camera jump between steps.)
+    private func fly(cut: Bool = false) async {
+        guard let (p, _, end) = plan() else { return }
         typealias Cam = (at: GeoPoint, heading: Double, metres: Double, pitch: Double)
         let ease = { (u: Double) -> Double in let t = max(0, min(1, u)); return t * t * (3 - 2 * t) }
         let mix = { (a: Cam, b: Cam, u: Double) -> Cam in
@@ -222,24 +225,31 @@ struct CourseMapView: View {
             return (GeoPoint(lat: a.at.lat + (b.at.lat - a.at.lat) * u, lng: a.at.lng + (b.at.lng - a.at.lng) * u),
                     a.heading + dh * u, a.metres + (b.metres - a.metres) * u, a.pitch + (b.pitch - a.pitch) * u)
         }
-        let now = liveCam.map { Cam(GeoPoint(lat: $0.centerCoordinate.latitude, lng: $0.centerCoordinate.longitude), $0.heading, $0.distance, $0.pitch) }
-            ?? Cam(p.start.at, p.start.heading, 1500, 45)
-        let tee: Cam = (p.start.at, p.start.heading, FlyPath.startMetres, FlyPath.startPitch)
-        let glideEnd = p.camera(at: p.totalSecs)
-        let green: Cam = (g, glideEnd.heading, 210, 45)
+        let tee: Cam = p.camera(at: 0)
+        let now = liveCam.map { Cam(GeoPoint(lat: $0.centerCoordinate.latitude, lng: $0.centerCoordinate.longitude), $0.heading, $0.distance, $0.pitch) } ?? tee
+        let arrived = p.camera(at: p.totalSecs)
         let whole: Cam = (GeoPoint(lat: end.centerCoordinate.latitude, lng: end.centerCoordinate.longitude), end.heading, end.distance, end.pitch)
-        let approach = 1.8, settle = 2.0, back = 1.8
-        let total = approach + p.totalSecs + settle + back
+        // a cut gives the map a moment on the tee to draw before it moves
+        let approach = cut ? 0.0 : 1.8, settle = cut ? 0.6 : 0.0, back = cut ? 0.0 : 2.2
+        let total = approach + settle + p.totalSecs + back
         let begin = Date()
-        var last = now.heading
+        var last = cut ? tee.heading : now.heading
+        titleTask?.cancel()
+        titleTask = Task {      // the hole's name card, as the camera pushes off the tee
+            try? await Task.sleep(for: .seconds(approach + settle + 0.5)); if Task.isCancelled { return }
+            withAnimation(.easeOut(duration: 0.6)) { titleCard = hole }
+            try? await Task.sleep(for: .seconds(5.5)); if Task.isCancelled { return }
+            withAnimation(.easeIn(duration: 0.6)) { titleCard = nil }
+        }
+        defer { titleTask?.cancel(); titleCard = nil }
         while !Task.isCancelled && flying {
             let t = Date().timeIntervalSince(begin)
             if t > total { break }
             var c: Cam
             if t < approach { c = mix(now, tee, ease(t / approach)) }
-            else if t < approach + p.totalSecs { let x = p.camera(at: t - approach); c = (x.at, x.heading, x.metres, x.pitch) }
-            else if t < approach + p.totalSecs + settle { c = mix(glideEnd, green, ease((t - approach - p.totalSecs) / settle)) }
-            else { c = mix(green, whole, ease((t - approach - p.totalSecs - settle) / back)) }
+            else if t < approach + settle { c = tee }
+            else if t < approach + settle + p.totalSecs { c = p.camera(at: t - approach - settle) }
+            else { c = mix(arrived, whole, ease((t - approach - settle - p.totalSecs) / back)) }
             var h = c.heading                               // turn the short way round
             while h - last > 180 { h -= 360 }
             while h - last < -180 { h += 360 }
@@ -250,6 +260,8 @@ struct CourseMapView: View {
         }
     }
     @State private var flyTask: Task<Void, Never>?
+    @State private var titleTask: Task<Void, Never>?
+    @State private var titleCard: Int?      // the hole whose name card is showing
     private func flyHole() {
         guard plan() != nil else { return }
         let was3D = threeD
@@ -261,20 +273,39 @@ struct CourseMapView: View {
             flying = false
         }
     }
+    /// Every mapped hole back to back, cutting from one to the next like the broadcast does; it starts with the
+    /// first hole's tee, and ends pulled back on the last hole.
     private func flyEvery() {
+        let was3D = threeD
         threeD = true; tool = nil
         flyAll = Task {
+            if !was3D { try? await Task.sleep(for: .seconds(1.2)) }
             for n in mappedHoles {
                 if Task.isCancelled { break }
-                flying = false; hole = n; fit()
-                try? await Task.sleep(for: .seconds(1.5))
+                flying = true; hole = n          // (flying first, so changing the hole doesn't re-frame the map)
                 guard plan() != nil, !Task.isCancelled else { continue }
-                flying = true
-                await fly()
-                try? await Task.sleep(for: .seconds(1))
-                flying = false
+                await fly(cut: true)
             }
+            flying = false
+            if !Task.isCancelled { fit() }
             flyAll = nil
+        }
+    }
+    /// "Hole 6 / 402 Yards / Par 4", bottom left, while the camera leaves the tee
+    @ViewBuilder private var holeCard: some View {
+        if let n = titleCard, n >= 1, n <= doc.ev.course.holes.count {
+            let H = doc.ev.course.holes[n - 1]
+            let m = doc.ev.map.holes[n]
+            let yds = H.yds > 0 ? H.yds : m.flatMap { m in m.tee.flatMap { t in (m.m ?? m.f).map { g in Int(FlyPath.length(FlyPath.holePath(m, tee: t, green: g)).rounded()) } } } ?? 0
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Hole \(n)").font(.system(size: 40, weight: .bold, design: .serif))
+                if yds > 0 { Text("\(yds) Yards").font(.system(size: 17, weight: .semibold, design: .serif)) }
+                Text("Par \(H.par)").font(.system(size: 17, weight: .semibold, design: .serif))
+            }
+            .italic().foregroundStyle(.white).shadow(color: .black.opacity(0.55), radius: 8, y: 1)
+            .padding(.leading, 28).padding(.bottom, 34)
+            .transition(.opacity.combined(with: .offset(x: -14)))
+            .allowsHitTesting(false)
         }
     }
     private func stopFlying() { flyAll?.cancel(); flyAll = nil; flyTask?.cancel(); flying = false; fit() }

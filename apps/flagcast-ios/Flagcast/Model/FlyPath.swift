@@ -4,19 +4,26 @@ import Foundation
 /// Its bends come from the course map's line (OpenStreetMap's hole line, kept when the course was mapped); a hole
 /// without one uses its lay-up spots, and failing that flies straight. Kept free of MapKit so tests can check it.
 struct FlyPath: Equatable {
-    struct Stop: Equatable { var at: GeoPoint; var heading: Double; var secs: Double }
-    var points: [GeoPoint]     // tee, bends, green
-    var stops: [Stop]          // where the camera looks, which way it faces, and how long it takes to get there
-    var back: Double = 0       // yards from the camera to where it looks, along the ground
-    /// The opening shot: low on the tee box, nearly level, looking down the hole the way the golfer sees it; then the
-    /// flight climbs away down the fairway.
-    var start: Stop = Stop(at: GeoPoint(lat: 0, lng: 0), heading: 0, secs: 0)
-    static let startPitch = 78.0, startLook = 70.0      // degrees from straight down; yards from the tee to where it looks
-    /// camera distance for the opening shot: about 10 yds behind the tee, some 25 m up
-    static var startMetres: Double { (startLook + 10) / YD / sin(startPitch * .pi / 180) }
-    var flySecs: Double { stops.dropFirst().reduce(0) { $0 + $1.secs } }
-    /// MapKit's camera distance (metres, along the 60° line of sight) that puts the camera `back` yards behind
-    var cameraMetres: Double { back / FlyPath.YD / sin(60 * .pi / 180) }
+    var points: [GeoPoint]     // tee, bends, green (as mapped)
+    var path: [GeoPoint]       // the same with its corners rounded off: the line the camera flies along
+    var totalYds = 0.0         // tee to green along the path
+    var travelSecs = 8.0       // the glide from the tee to the green
+
+    // ---- the look, from Golf Digest's "Every Hole at Pinehurst No. 2" drone flyovers ----
+    // The drone sits on the tee box nearly level with the golfer, then pushes off down the middle of the hole at an
+    // even speed, rising a little and tilted just below the horizon. It eases off as the green fills the frame and
+    // ends low, short of the green, looking straight at it. One continuous move, no cuts, no swoops.
+    // Apple's 3D map won't go lower than that: it stops tilting at 74° and won't come closer than about 81 m to
+    // what it looks at (checked on the Mac, Torrey Pines South), so the camera keeps just inside those limits,
+    // where it's still smooth, which puts it some 25 to 45 m up.
+    static let startPitch = 73.0, startLook = 85.0      // on the tee: degrees from straight down; yards ahead it looks
+    static let cruisePitch = 72.0, cruiseLook = 150.0   // down the fairway: ~45 m up, looking 150 yds ahead
+    static let endPitch = 68.0, endLook = 90.0          // at the green: ~33 m up, 90 yds short of the middle
+    static let nearest = 88.0                            // metres: never asks Apple's map to come closer than this
+    static let behindTee = 10.0                          // the camera starts this far behind the tee marker
+    static let speed = 24.0                              // yds a second, cruising (the video flies at ~13)
+    static let holdSecs = 1.0, arriveSecs = 1.6          // still on the tee before it moves; still on the green at the end
+    var totalSecs: Double { Self.holdSecs + travelSecs + Self.arriveSecs }
 
         // distances on the course (the same sums as Geo, kept here so the Mac Manager can share this file)
     static let YD = 1.0936133, R = 6371008.8
@@ -62,81 +69,78 @@ struct FlyPath: Equatable {
     }
     static func length(_ pts: [GeoPoint]) -> Double { zip(pts, pts.dropFirst()).reduce(0) { $0 + (FlyPath.yds($1.0, $1.1) ?? 0) } }
 
-    /// The camera looks at a point that travels down the hole (never past the green), facing the way the hole runs
-    /// there, and sits `back` yards behind it. `look` is how far behind it sits on a long hole; on a short one it
-    /// comes in closer, so it starts just behind the tee and the whole flight stays over the hole.
-    static func make(_ h: HoleMap, tee: GeoPoint, green g: GeoPoint, look: Double, seconds: Double = 6) -> FlyPath {
-        let pts = holePath(h, tee: tee, green: g), total = max(40, length(pts))
-        let back = min(look, total * 0.45 + 30)              // camera to look point, along the ground
-        let s0 = max(10, back - 30), s1 = max(s0 + 10, total - 25)
-        let dir: (Double) -> Double = { s in FlyPath.bearing(point(pts, at: max(0, s - 35)), point(pts, at: min(total, s + 35))) }
-        let n = max(3, Int(((s1 - s0) / 35).rounded(.up)))
-        var stops: [Stop] = []
-        for i in 0...n {
-            let s = s0 + (s1 - s0) * Double(i) / Double(n)
-            stops.append(Stop(at: point(pts, at: s), heading: dir(s), secs: i == 0 ? 0 : seconds / Double(n)))
+    /// The point `s` yards along a path, carried on past either end in a straight line.
+    static func along(_ pts: [GeoPoint], at s: Double, total: Double) -> GeoPoint {
+        if s < 0, pts.count > 1 { return offset(pts[0], yards: -s, bearing: bearing(pts[1], pts[0])) }
+        if s > total, pts.count > 1 { return offset(pts[pts.count - 1], yards: s - total, bearing: bearing(pts[pts.count - 2], pts[pts.count - 1])) }
+        return point(pts, at: s)
+    }
+    /// Corners rounded off (Chaikin, three passes), ends kept, so the camera banks round a dogleg instead of
+    /// snapping to a new direction at the corner.
+    static func rounded(_ pts: [GeoPoint]) -> [GeoPoint] {
+        var p = pts
+        for _ in 0..<3 where p.count > 2 {
+            var q = [p[0]]
+            for (a, b) in zip(p, p.dropFirst()) {
+                q.append(GeoPoint(lat: a.lat * 0.75 + b.lat * 0.25, lng: a.lng * 0.75 + b.lng * 0.25))
+                q.append(GeoPoint(lat: a.lat * 0.25 + b.lat * 0.75, lng: a.lng * 0.25 + b.lng * 0.75))
+            }
+            q.append(p[p.count - 1])
+            p = q
         }
-        // headings without the 359° → 1° jump, so the camera turns the short way
-        for i in 1..<stops.count {
-            var h = stops[i].heading
-            while h - stops[i - 1].heading > 180 { h -= 360 }
-            while h - stops[i - 1].heading < -180 { h += 360 }
-            stops[i].heading = h
-        }
-        let s0look = min(startLook, total * 0.6)
-        var p = FlyPath(points: pts, stops: stops, back: back)
-        p.s0 = s0; p.s1 = s1; p.totalYds = total; p.travelSecs = seconds
-        p.start = Stop(at: point(pts, at: s0look), heading: p.smoothHeading(at: min(s0look, 40)), secs: 0)
-        var h = p.start.heading
-        while h - stops[0].heading > 180 { h -= 360 }
-        while h - stops[0].heading < -180 { h += 360 }
-        p.start.heading = h
         return p
     }
-    // ---- a smooth flight, frame by frame ----
-    // Phases: hold low on the tee (1.2 s), climb away (2.2 s), glide down the hole (`seconds`, easing in and out,
-    // facing the way the hole runs, averaged over 120 yds so bends turn gently), then the app settles on the green.
-    static let holdSecs = 1.2, climbSecs = 2.2
-    var travelSecs: Double = 6
-    var s0 = 0.0, s1 = 0.0, totalYds = 0.0
-    var totalSecs: Double { Self.holdSecs + Self.climbSecs + travelSecs }
 
-    /// the way the hole runs at `s` yards: bearings averaged as vectors over ±60 yds
-    func smoothHeading(at s: Double) -> Double {
-        var x = 0.0, y = 0.0
-        for k in stride(from: -60.0, through: 60.0, by: 10) {
-            let a = max(0, min(totalYds, s + k - 10)), b = max(0, min(totalYds, s + k + 10))
-            guard b > a else { continue }
-            let br = FlyPath.bearing(FlyPath.point(points, at: a), FlyPath.point(points, at: b)) * .pi / 180
-            let w = 1 - abs(k) / 70                      // nearer counts more
-            x += sin(br) * w; y += cos(br) * w
-        }
-        return (atan2(x, y) * 180 / .pi + 360).truncatingRemainder(dividingBy: 360)
+    static func make(_ h: HoleMap, tee: GeoPoint, green g: GeoPoint) -> FlyPath {
+        let pts = holePath(h, tee: tee, green: g)
+        var p = FlyPath(points: pts, path: rounded(pts))
+        p.totalYds = max(40, length(p.path))
+        // an even cruise, with the speeding up and slowing down on top; a short par 3 still takes 7 s
+        p.travelSecs = min(22, max(7, p.travelYds / Self.speed + 2.4))
+        return p
     }
-    private static func ease(_ u: Double) -> Double { let t = max(0, min(1, u)); return t * t * (3 - 2 * t) }
+
+    /// how far ahead the camera looks once it's flying: 150 yds, less on a short hole so the green isn't in the
+    /// opening shot already
+    var cruiseLook: Double { max(Self.endLook, min(Self.cruiseLook, totalYds * 0.5)) }
+    var endLook: Double { min(Self.endLook, totalYds * 0.45) }
+    /// the camera's run along the ground: from behind the tee to `endLook` short of the green
+    var travelYds: Double { max(20, totalYds - endLook + Self.behindTee) }
+
+    private static func smooth(_ u: Double) -> Double { let t = max(0, min(1, u)); return t * t * (3 - 2 * t) }
     private static func lerp(_ a: Double, _ b: Double, _ t: Double) -> Double { a + (b - a) * t }
-    private static func turn(_ from: Double, _ to: Double) -> Double { var d = (to - from).truncatingRemainder(dividingBy: 360); if d > 180 { d -= 360 }; if d < -180 { d += 360 }; return d }
 
-    /// Where the camera is `t` seconds into the flight (until the glide ends): what it looks at, which way it faces,
-    /// how far back it is (metres along the line of sight, MapKit's distance) and its tilt.
+    /// How far along the run the camera is, 0...1, `u` of the way through the glide: it speeds up gently over the
+    /// first 18%, holds an even speed, and slows over the last 30% (velocity eased with half a cosine each end).
+    static func progress(_ u: Double) -> Double {
+        let A = 0.18, D = 0.30, v = 1 / (1 - (A + D) / 2), t = max(0, min(1, u))
+        if t < A { return v * (t / 2 - A / (2 * .pi) * sin(.pi * t / A)) }
+        if t > 1 - D { let r = 1 - t; return 1 - v * (r / 2 - D / (2 * .pi) * sin(.pi * r / D)) }
+        return v * (A / 2 + (t - A))
+    }
+
+    /// Where the camera is `s` yards along its run (its eye on the ground below it, what it looks at, its tilt).
+    func shot(_ s: Double) -> (eye: GeoPoint, look: GeoPoint, pitch: Double) {
+        let se = s - Self.behindTee                                 // the eye, yards from the tee
+        let climb = Self.smooth(s / min(140, max(40, travelYds * 0.35)))
+        let ahead = FlyPath.lerp(Self.startLook + Self.behindTee, cruiseLook, climb)
+        let sl = min(totalYds, se + ahead)                          // looks down the hole, never past the green
+        // closing on the green: the look stays on it and the camera comes down to `endLook` short of it
+        let left = totalYds - se, near = Self.smooth(1 - (left - endLook) / max(40, cruiseLook - endLook))
+        var pitch = FlyPath.lerp(Self.startPitch, Self.cruisePitch, climb)
+        pitch = FlyPath.lerp(pitch, Self.endPitch, near)
+        return (FlyPath.along(path, at: se, total: totalYds), FlyPath.point(path, at: sl), pitch)
+    }
+
+    /// The camera `t` seconds into the flight, as MapKit wants it: the point it looks at, which way it faces, its
+    /// distance from that point (metres along the line of sight) and its tilt. The eye and the look point both stay
+    /// on the hole, and the heading is the line between them, so it turns smoothly round a dogleg.
     func camera(at t: Double) -> (at: GeoPoint, heading: Double, metres: Double, pitch: Double) {
-        if t <= Self.holdSecs { return (start.at, start.heading, Self.startMetres, Self.startPitch) }
-        let first = FlyPath.point(points, at: s0), h0 = smoothHeading(at: s0)
-        if t <= Self.holdSecs + Self.climbSecs {
-            let u = Self.ease((t - Self.holdSecs) / Self.climbSecs)
-            let c = GeoPoint(lat: Self.lerp(start.at.lat, first.lat, u), lng: Self.lerp(start.at.lng, first.lng, u))
-            return (c, start.heading + Self.turn(start.heading, h0) * u, Self.lerp(Self.startMetres, cameraMetres, u), Self.lerp(Self.startPitch, 60, u))
-        }
-        let u = Self.ease((t - Self.holdSecs - Self.climbSecs) / travelSecs), s = Self.lerp(s0, s1, u)
-        return (FlyPath.point(points, at: s), smoothHeading(at: s), cameraMetres, 60)
+        let u = (t - Self.holdSecs) / travelSecs
+        let c = shot(FlyPath.progress(u) * travelYds)
+        let ground = max(20, FlyPath.yds(c.eye, c.look) ?? 20) / FlyPath.YD
+        return (c.look, FlyPath.bearing(c.eye, c.look), max(Self.nearest, ground / sin(c.pitch * .pi / 180)), c.pitch)
     }
-
-    /// a heading in the same turn as the last stop
-    func unwrap(_ h0: Double) -> Double {
-        var h = h0
-        let last = stops.last?.heading ?? 0
-        while h - last > 180 { h -= 360 }
-        while h - last < -180 { h += 360 }
-        return h
-    }
+    /// how high the camera is, in metres, `t` seconds in
+    func height(at t: Double) -> Double { let c = camera(at: t); return c.metres * cos(c.pitch * .pi / 180) }
 }

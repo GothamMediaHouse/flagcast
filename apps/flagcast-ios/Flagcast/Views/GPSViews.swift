@@ -94,6 +94,7 @@ struct CourseView: View {
     @AppStorage("flagcast.course3d") private var threeD = false
     @State private var fly = 0          // bumps to run "Fly the hole"
     @State private var flying = false
+    @State private var titleCard = false   // the hole's name card during a flight
 
     private var h: HoleMap? { state.map.holes[hole] }
     private var origin: (at: GeoPoint, me: Bool)? { h.flatMap { Geo.origin($0, loc.fix?.at) } }
@@ -131,8 +132,9 @@ struct CourseView: View {
             }
             topBar
         }
-        .overlay(alignment: .topTrailing) { yardageBox.padding(.top, 76).padding(.trailing, 12) }
+        .overlay(alignment: .topTrailing) { yardageBox.padding(.top, 76).padding(.trailing, 12).opacity(flying ? 0 : 1) }
         .overlay(alignment: .bottomLeading) { flyButton.padding(.leading, 12).padding(.bottom, 12) }
+        .overlay(alignment: .bottomLeading) { holeCard.padding(.leading, 18).padding(.bottom, 66) }
         .safeAreaInset(edge: .bottom) { footer }
         .preferredColorScheme(.dark)
         .onAppear { if loc.on { loc.resume() } }
@@ -239,68 +241,68 @@ struct CourseView: View {
         return MapCamera(centerCoordinate: look.coordinate, distance: metres, heading: up, pitch: Self.pitch3D)
     }
 
-    /// "Fly the hole": from behind the tee along the hole as it's played (round its doglegs, from the course map's
-    /// line) to just short of the green (about 6 s), then it settles on the green.
+    /// "Fly the hole", like a drone flyover on TV: it drops to the tee box, pushes off low down the hole as it's
+    /// played (round its doglegs, from the course map's line), eases to a stop short of the green looking at it, then
+    /// pulls back to the whole hole. The camera path is FlyPath, the same one the Mac Manager's course map flies.
     private func flightPlan(_ h: HoleMap, _ g: GeoPoint) -> FlyPath {
-        FlyPath.make(h, tee: h.tee ?? origin?.at ?? g, green: g, look: Self.flyLow * sin(60 * .pi / 180) * Geo.YD)
+        FlyPath.make(h, tee: h.tee ?? origin?.at ?? g, green: g)
     }
-    static let flyLow = 260.0, flySettle = 210.0   // metres from the camera to the point it looks at
+    static let flyIn = 1.2, flyOut = 2.0     // seconds: dropping to the tee, pulling back at the end
 
-    /// the flight as frames every 0.2 s along the smooth path (FlyPath.camera), headings turning the short way
-    private func flightFrames(_ h: HoleMap, _ g: GeoPoint) -> (frames: [(GeoPoint, Double, Double, Double)], end: MapCamera, last: Double) {
+    /// the flight as frames every 0.1 s along the path (FlyPath.camera), headings turning the short way
+    private func flightFrames(_ h: HoleMap, _ g: GeoPoint) -> (frames: [(GeoPoint, Double, Double, Double)], end: MapCamera) {
         let p = flightPlan(h, g), end = view3D(from: h.tee ?? origin?.at ?? g, to: g)
-        var out: [(GeoPoint, Double, Double, Double)] = [], last = p.start.heading
-        var t = 0.0
-        while t <= p.totalSecs {
+        var out: [(GeoPoint, Double, Double, Double)] = []
+        var last = p.camera(at: 0).heading, t = 0.0
+        while t <= p.totalSecs + 0.001 {
             let c = p.camera(at: t)
             var hd = c.heading
             while hd - last > 180 { hd -= 360 }
             while hd - last < -180 { hd += 360 }
-            last = hd; out.append((c.at, hd, c.metres, c.pitch)); t += 0.2
+            last = hd; out.append((c.at, hd, c.metres, c.pitch)); t += 0.1
         }
         var e = end.heading
         while e - last > 180 { e -= 360 }
         while e - last < -180 { e += 360 }
         var endCam = end; endCam.heading = e
-        return (out, endCam, last)
+        return (out, endCam)
     }
 
     @KeyframesBuilder<MapCamera>
     private func flight(_ h: HoleMap, _ g: GeoPoint) -> some Keyframes<MapCamera> {
         let f = flightFrames(h, g)
         KeyframeTrack(\MapCamera.centerCoordinate) {
-            CubicKeyframe(f.frames[0].0.coordinate, duration: 0.8)
-            for fr in f.frames.dropFirst() { LinearKeyframe(fr.0.coordinate, duration: 0.2) }
-            CubicKeyframe(g.coordinate, duration: 1.8)
-            CubicKeyframe(f.end.centerCoordinate, duration: 1.4)
+            CubicKeyframe(f.frames[0].0.coordinate, duration: Self.flyIn)
+            for fr in f.frames.dropFirst() { LinearKeyframe(fr.0.coordinate, duration: 0.1) }
+            CubicKeyframe(f.end.centerCoordinate, duration: Self.flyOut)
         }
         KeyframeTrack(\MapCamera.heading) {
-            CubicKeyframe(f.frames[0].1, duration: 0.8)
-            for fr in f.frames.dropFirst() { LinearKeyframe(fr.1, duration: 0.2) }
-            CubicKeyframe(f.last, duration: 1.8)
-            CubicKeyframe(f.end.heading, duration: 1.4)
+            CubicKeyframe(f.frames[0].1, duration: Self.flyIn)
+            for fr in f.frames.dropFirst() { LinearKeyframe(fr.1, duration: 0.1) }
+            CubicKeyframe(f.end.heading, duration: Self.flyOut)
         }
         KeyframeTrack(\MapCamera.distance) {
-            CubicKeyframe(f.frames[0].2, duration: 0.8)
-            for fr in f.frames.dropFirst() { LinearKeyframe(fr.2, duration: 0.2) }
-            CubicKeyframe(Self.flySettle, duration: 1.8)
-            CubicKeyframe(f.end.distance, duration: 1.4)
+            CubicKeyframe(f.frames[0].2, duration: Self.flyIn)
+            for fr in f.frames.dropFirst() { LinearKeyframe(fr.2, duration: 0.1) }
+            CubicKeyframe(f.end.distance, duration: Self.flyOut)
         }
         KeyframeTrack(\MapCamera.pitch) {
-            CubicKeyframe(f.frames[0].3, duration: 0.8)
-            for fr in f.frames.dropFirst() { LinearKeyframe(fr.3, duration: 0.2) }
-            CubicKeyframe(45, duration: 1.8)
-            CubicKeyframe(Self.pitch3D, duration: 1.4)
+            CubicKeyframe(f.frames[0].3, duration: Self.flyIn)
+            for fr in f.frames.dropFirst() { LinearKeyframe(fr.3, duration: 0.1) }
+            CubicKeyframe(f.end.pitch, duration: Self.flyOut)
         }
     }
 
     @ViewBuilder private var flyButton: some View {
-        if threeD, let h, Geo.middle(h) != nil {
+        if threeD, let h, let g = Geo.middle(h) {
             Button {
                 flying = true; fly += 1
-                let secs = (h.tee ?? origin?.at).flatMap { t in Geo.middle(h).map { g in flightPlan(h, g).totalSecs } } ?? 9.4
-                DispatchQueue.main.asyncAfter(deadline: .now() + secs + 4.4) {
-                    flying = false
+                let secs = flightPlan(h, g).totalSecs
+                // the hole's name card, as the camera pushes off the tee
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.flyIn + 0.5) { withAnimation(.easeOut(duration: 0.6)) { titleCard = true } }
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.flyIn + 6) { withAnimation(.easeIn(duration: 0.6)) { titleCard = false } }
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.flyIn + secs + Self.flyOut + 0.2) {
+                    flying = false; titleCard = false
                     if let h = self.h, let g = Geo.middle(h) { camera = .camera(view3D(from: h.tee ?? origin?.at ?? g, to: g)); frame(h, g) }
                 }
             } label: {
@@ -310,6 +312,22 @@ struct CourseView: View {
                     .shadow(color: .black.opacity(0.4), radius: 4, y: 1)
             }
             .disabled(flying)
+        }
+    }
+
+    /// "Hole 6 / 402 Yards / Par 4", bottom left, while the camera leaves the tee
+    @ViewBuilder private var holeCard: some View {
+        if titleCard, hole >= 1, hole <= state.course.holes.count {
+            let H = state.course.holes[hole - 1]
+            let yds = H.yds > 0 ? H.yds : h.flatMap { m in Geo.middle(m).map { g in Int(FlyPath.length(FlyPath.holePath(m, tee: m.tee ?? g, green: g)).rounded()) } } ?? 0
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Hole \(hole)").font(.system(size: 30, weight: .bold, design: .serif))
+                if yds > 0 { Text("\(yds) Yards").font(.system(size: 14, weight: .semibold, design: .serif)) }
+                Text("Par \(H.par)").font(.system(size: 14, weight: .semibold, design: .serif))
+            }
+            .italic().foregroundStyle(.white).shadow(color: .black.opacity(0.55), radius: 6, y: 1)
+            .transition(.opacity.combined(with: .offset(x: -12)))
+            .allowsHitTesting(false)
         }
     }
 
