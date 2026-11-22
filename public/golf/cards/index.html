@@ -17,7 +17,11 @@ body { background: #e9ece6; color: var(--ink); }
 .bar p { margin: 0; color: var(--on-green-muted); font-size: .9rem; }
 .sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 3.9in), 1fr)); gap: 16px; padding: 16px; max-width: 8.5in; margin: 0 auto; }
 .card { background: #fff; border: 1.5px dashed var(--line); border-radius: 6px; padding: .3in; display: grid; grid-template-columns: 1fr auto; gap: .2in; break-inside: avoid; min-height: 4.6in; align-content: start; }
-.card .ev { grid-column: 1 / -1; font-family: var(--f-mono); font-size: .66rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); padding-bottom: .08in; }
+/* the top of each card: the club's logo (Flagcast's for a demo or a club with no logo) and the tournament, over a line in the club's colour */
+.card .head { grid-column: 1 / -1; display: flex; align-items: center; gap: .15in; border-bottom: 3px solid var(--club, #c9d1c5); padding-bottom: .1in; }
+.card .head img { height: .55in; width: auto; max-width: 1.6in; object-fit: contain; flex: none; }
+.card .ev { font-family: var(--f-display); font-weight: 700; font-size: 1.05rem; line-height: 1.1; text-transform: uppercase; }
+.card .ev small { display: block; font-family: var(--f-mono); font-weight: 500; font-size: .66rem; letter-spacing: .12em; color: var(--muted); margin-top: 2px; }
 .card h2 { font-size: 1.9rem; line-height: 1; }
 .card ul { list-style: none; padding: 0; margin: .1in 0 0; font-size: .92rem; }
 .card li { padding: 2px 0; }
@@ -29,6 +33,10 @@ body { background: #e9ece6; color: var(--ink); }
 /* Big print: one card a page, the cart number and start hole huge, for reading from the seat of a cart */
 .big .sheet { grid-template-columns: 1fr; max-width: 8.5in; }
 .big .card { grid-template-columns: 1fr; text-align: center; justify-items: center; min-height: 10in; padding: .5in; gap: .25in; }
+.big .card .head { flex-direction: column; justify-content: center; text-align: center; width: 100%; }
+.big .card .head img { height: 1.1in; max-width: 4in; }
+.big .card .ev { font-size: 1.8rem; }
+.big .card .ev small { font-size: .9rem; }
 .big .card .cartno { font-family: var(--f-display); font-weight: 800; font-size: 2.2in; line-height: .9; }
 .big .card .cartlbl { font-family: var(--f-mono); font-size: 1rem; letter-spacing: .3em; color: var(--muted); }
 .big .card h2 { font-size: 3.2rem; }
@@ -56,7 +64,7 @@ body { background: #e9ece6; color: var(--ink); }
 <div class="sheet" id="sheet"></div>
 <script src="/golf/qrcode.js"></script>
 <script type="module">
-import { post, eventId, esc } from '/golf/client.js';
+import { post, eventId, esc, api } from '/golf/client.js';
 const key = location.hash.slice(1).split('&')[0];
 const sheet = document.getElementById('sheet');
 // big print: four cards a page, or one big one (also with #…&big in the link)
@@ -65,13 +73,19 @@ const setBig = (on) => { document.body.classList.toggle('big', on); bigBox.check
 setBig(location.hash.includes('&big'));
 bigBox.addEventListener('change', () => setBig(bigBox.checked));
 try {
-  const ev = await post('desk', { key, op: 'get' });
+  // the desk has the cart codes; the public state has the branding golfers see (the club's logo and colour, or Flagcast's)
+  const [ev, pub] = await Promise.all([post('desk', { key, op: 'get' }), fetch(api('state')).then((r) => r.json()).catch(() => ({}))]);
+  const brand = pub.brand || {};
+  if (brand.accent) document.documentElement.style.setProperty('--club', brand.accent);
+  const logo = brand.logo
+    ? `<img src="${esc(brand.logo)}" alt="${esc(brand.club || 'Club logo')}">`
+    : '<img src="/golf/brand/wide-on-light.svg" alt="Flagcast">';
   const title = ev.screens?.title || ev.name;
   document.getElementById('sub').textContent = `${ev.teams.length} team${ev.teams.length === 1 ? '' : 's'} · ${title}. Cut along the dashed lines and clip one to each cart.`;
   sheet.innerHTML = ev.teams.map((t) => {
     const url = `${location.origin}/g/${eventId()}/s/${t.code}`;
     const qr = qrcode(0, 'M'); qr.addData(url); qr.make();
-    return `<div class="card"><div class="ev">${esc(title)}${ev.date ? ` · ${esc(ev.date)}` : ''}</div>
+    return `<div class="card"><div class="head">${logo}<div class="ev">${esc(title)}${ev.date || brand.club ? `<small>${[brand.club && brand.club !== title ? brand.club : '', ev.date].filter(Boolean).map(esc).join(' · ')}</small>` : ''}</div></div>
       <div><div class="cartlbl">CART</div><div class="cartno">${esc(t.cart || '–')}</div><h2>${esc(t.name || t.players.map((p) => p.name.split(' ').pop()).join(' / '))}</h2>
       <ul>${t.players.map((p) => `<li>${esc(p.name)}</li>`).join('')}</ul>
       <div class="start">Start: hole ${t.start || 1}${t.flight ? ` · Flight ${esc(t.flight)}` : ''}</div></div>
