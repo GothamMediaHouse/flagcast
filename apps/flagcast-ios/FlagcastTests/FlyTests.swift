@@ -41,6 +41,11 @@ final class FlyTests: XCTestCase {
                 XCTAssertLessThan(turn(s.heading, way), 30, "hole \(n): stop \(i) faces down the hole")
                 XCTAssertLessThanOrEqual(Geo.yds(tee, s.at) ?? 0, (Geo.yds(tee, g) ?? 0) + 40, "hole \(n): never looks past the green")
             }
+            // it opens low on the tee box: the camera about 10 yds behind the tee, looking down the hole
+            let low = FlyPath.offset(p.start.at, yards: FlyPath.startLook + 10, bearing: p.start.heading + 180)
+            if (Geo.yds(tee, g) ?? 0) > FlyPath.startLook / 0.6 { XCTAssertLessThan(Geo.yds(low, tee) ?? 999, 25, "hole \(n): opens on the tee box") }
+            XCTAssertLessThan(off(p.start.at, osm), 30, "hole \(n): opens looking down the hole")
+            XCTAssertLessThan(FlyPath.startMetres * cos(FlyPath.startPitch * .pi / 180), 30, "hole \(n): opens low (under 30 m up)")
             // the camera starts just behind the tee
             let eye = Geo.offset(p.stops[0].at, yards: p.back, bearing: p.stops[0].heading + 180)
             XCTAssertLessThan(Geo.yds(eye, tee) ?? 999, 45, "hole \(n): starts behind the tee")

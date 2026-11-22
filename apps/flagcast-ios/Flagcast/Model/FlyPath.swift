@@ -8,6 +8,12 @@ struct FlyPath: Equatable {
     var points: [GeoPoint]     // tee, bends, green
     var stops: [Stop]          // where the camera looks, which way it faces, and how long it takes to get there
     var back: Double = 0       // yards from the camera to where it looks, along the ground
+    /// The opening shot: low on the tee box, nearly level, looking down the hole the way the golfer sees it; then the
+    /// flight climbs away down the fairway.
+    var start: Stop = Stop(at: GeoPoint(lat: 0, lng: 0), heading: 0, secs: 0)
+    static let startPitch = 78.0, startLook = 70.0      // degrees from straight down; yards from the tee to where it looks
+    /// camera distance for the opening shot: about 10 yds behind the tee, some 25 m up
+    static var startMetres: Double { (startLook + 10) / YD / sin(startPitch * .pi / 180) }
     var flySecs: Double { stops.dropFirst().reduce(0) { $0 + $1.secs } }
     /// MapKit's camera distance (metres, along the 60° line of sight) that puts the camera `back` yards behind
     var cameraMetres: Double { back / FlyPath.YD / sin(60 * .pi / 180) }
@@ -77,7 +83,14 @@ struct FlyPath: Equatable {
             while h - stops[i - 1].heading < -180 { h += 360 }
             stops[i].heading = h
         }
-        return FlyPath(points: pts, stops: stops, back: back)
+        let s0look = min(startLook, total * 0.6)
+        var p = FlyPath(points: pts, stops: stops, back: back)
+        p.start = Stop(at: point(pts, at: s0look), heading: dir(min(s0look, 60)), secs: 0)
+        var h = p.start.heading
+        while h - stops[0].heading > 180 { h -= 360 }
+        while h - stops[0].heading < -180 { h += 360 }
+        p.start.heading = h
+        return p
     }
     /// a heading in the same turn as the last stop
     func unwrap(_ h0: Double) -> Double {

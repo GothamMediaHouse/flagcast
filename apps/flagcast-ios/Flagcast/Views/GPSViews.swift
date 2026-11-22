@@ -250,25 +250,33 @@ struct CourseView: View {
     private func flight(_ h: HoleMap, _ g: GeoPoint) -> some Keyframes<MapCamera> {
         let p = flightPlan(h, g), end = view3D(from: h.tee ?? origin?.at ?? g, to: g)
         KeyframeTrack(\MapCamera.centerCoordinate) {
-            CubicKeyframe(p.stops[0].at.coordinate, duration: 0.6)
+            CubicKeyframe(p.start.at.coordinate, duration: 0.8)      // low on the tee box
+            LinearKeyframe(p.start.at.coordinate, duration: 1.2)
+            CubicKeyframe(p.stops[0].at.coordinate, duration: 1.6)   // climbing away down the fairway
             for s in p.stops.dropFirst() { CubicKeyframe(s.at.coordinate, duration: s.secs) }
             CubicKeyframe(g.coordinate, duration: 1.8)
             CubicKeyframe(end.centerCoordinate, duration: 1.2)
         }
         KeyframeTrack(\MapCamera.heading) {
-            CubicKeyframe(p.stops[0].heading, duration: 0.6)
+            CubicKeyframe(p.start.heading, duration: 0.8)
+            LinearKeyframe(p.start.heading, duration: 1.2)
+            CubicKeyframe(p.stops[0].heading, duration: 1.6)
             for s in p.stops.dropFirst() { CubicKeyframe(s.heading, duration: s.secs) }
             CubicKeyframe(p.stops.last!.heading, duration: 1.8)
             CubicKeyframe(p.unwrap(end.heading), duration: 1.2)
         }
         KeyframeTrack(\MapCamera.distance) {
-            CubicKeyframe(p.cameraMetres, duration: 0.6)
+            CubicKeyframe(FlyPath.startMetres, duration: 0.8)
+            LinearKeyframe(FlyPath.startMetres, duration: 1.2)
+            CubicKeyframe(p.cameraMetres, duration: 1.6)
             LinearKeyframe(p.cameraMetres, duration: p.flySecs)
             CubicKeyframe(Self.flySettle, duration: 1.8)
             CubicKeyframe(end.distance, duration: 1.2)
         }
         KeyframeTrack(\MapCamera.pitch) {
-            CubicKeyframe(60, duration: 0.6)
+            CubicKeyframe(FlyPath.startPitch, duration: 0.8)
+            LinearKeyframe(FlyPath.startPitch, duration: 1.2)
+            CubicKeyframe(60, duration: 1.6)
             LinearKeyframe(60, duration: p.flySecs)
             CubicKeyframe(45, duration: 1.8)
             CubicKeyframe(Self.pitch3D, duration: 1.2)
@@ -280,7 +288,7 @@ struct CourseView: View {
             Button {
                 flying = true; fly += 1
                 let secs = (h.tee ?? origin?.at).flatMap { t in Geo.middle(h).map { g in flightPlan(h, g).flySecs } } ?? 6
-                DispatchQueue.main.asyncAfter(deadline: .now() + secs + 3.8) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + secs + 6.6) {
                     flying = false
                     if let h = self.h, let g = Geo.middle(h) { camera = .camera(view3D(from: h.tee ?? origin?.at ?? g, to: g)); frame(h, g) }
                 }

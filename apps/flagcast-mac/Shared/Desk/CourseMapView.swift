@@ -213,9 +213,11 @@ struct CourseMapView: View {
     private func fly() async {
         guard let (p, g, end) = plan() else { return }
         let cam = { (c: GeoPoint, h: Double, d: Double, pitch: Double) in MapCamera(centerCoordinate: c.coordinate, distance: d, heading: h, pitch: pitch) }
-        // down to just behind the tee first
-        withAnimation(.easeInOut(duration: 2)) { camera = .camera(cam(p.stops[0].at, p.stops[0].heading, p.cameraMetres, 60)) }
-        try? await Task.sleep(for: .seconds(2.2))
+        // low on the tee box, looking down the hole the way the golfer sees it, then climb away down the fairway
+        withAnimation(.easeInOut(duration: 2)) { camera = .camera(cam(p.start.at, p.start.heading, FlyPath.startMetres, FlyPath.startPitch)) }
+        try? await Task.sleep(for: .seconds(3.2))
+        withAnimation(.easeInOut(duration: 1.8)) { camera = .camera(cam(p.stops[0].at, p.stops[0].heading, p.cameraMetres, 60)) }
+        try? await Task.sleep(for: .seconds(1.8))
         for s in p.stops.dropFirst() {
             if Task.isCancelled || !flying { return }
             withAnimation(.linear(duration: s.secs)) { camera = .camera(cam(s.at, s.heading, p.cameraMetres, 60)) }

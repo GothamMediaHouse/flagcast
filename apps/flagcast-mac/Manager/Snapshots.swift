@@ -22,7 +22,7 @@ enum Snapshots {
             try? await Task.sleep(for: .seconds(5))
             log("flytest: flying")
             NotificationCenter.default.post(name: .init("FlagcastFlyTest"), object: Int(env["FLAGCAST_FLYHOLE"] ?? "") ?? 2)
-            try? await Task.sleep(for: .seconds(20))
+            try? await Task.sleep(for: .seconds(26))
             NSApp.terminate(nil)
         }
     }
