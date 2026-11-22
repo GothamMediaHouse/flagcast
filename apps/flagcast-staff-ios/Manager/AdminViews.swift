@@ -39,6 +39,7 @@ struct ClubsView: View {
     @State private var search = ""
     @State private var opened: AdminClub?
     @State private var adding = false
+    @AppStorage(ClubLook.key) private var look = ClubLook.photo
     private var shown: [AdminClub] {
         let q = search.lowercased()
         return admin.clubs.filter { q.isEmpty || $0.name.lowercased().contains(q) || $0.city.lowercased().contains(q) }
@@ -63,6 +64,7 @@ struct ClubsView: View {
                     }
                     .padding(14).background(Color(hex: 0xfff8e1), in: RoundedRectangle(cornerRadius: 14)).overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(hex: 0xecd58a)))
                 }
+                Picker("Club cards", selection: $look) { ForEach(ClubLook.allCases) { Text($0.title).tag($0) } }.pickerStyle(.segmented)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 300, maximum: 460), spacing: 14)], spacing: 14) {
                     ForEach(shown) { c in ClubCard(club: c) { opened = c } }
                 }
@@ -88,9 +90,11 @@ private struct ClubCard: View {
     let club: AdminClub
     var open: () -> Void
     @State private var image: UIImage?
+    @AppStorage(ClubLook.key) private var look = ClubLook.photo
     var body: some View {
         ZStack(alignment: .topLeading) {
             CourseHeroImage(image: image)
+            if look == .logo { ClubLogoBackdrop(club: club) }
             LinearGradient(stops: [.init(color: FC.scrim.opacity(0.92), location: 0), .init(color: FC.scrim.opacity(0.35), location: 0.6), .init(color: FC.scrim.opacity(0.1), location: 1)], startPoint: .bottom, endPoint: .top)
             Text(club.statusText.uppercased()).font(.system(size: 11, weight: .bold)).tracking(0.6).padding(.horizontal, 7).padding(.vertical, 3)
                 .background(club.status == "active" ? FC.flag : club.status == "pending" ? Color.white : FC.red, in: RoundedRectangle(cornerRadius: 4))
@@ -111,6 +115,7 @@ private struct ClubCard: View {
             }
             .foregroundStyle(.white).padding(16)
         }
+        .overlay(alignment: .topTrailing) { if look == .photo, let u = logoURL(club.logo) { ClubLogoTile(url: u, name: club.name, size: 60).padding(12) } }
         .frame(height: 250).frame(maxWidth: .infinity).clipShape(RoundedRectangle(cornerRadius: 16))
         .contentShape(Rectangle()).onTapGesture(perform: open)
         .task(id: club.id) { image = await CourseImages.place([club.name, club.city].filter { !$0.isEmpty }.joined(separator: " "), key: club.id) }
@@ -229,7 +234,7 @@ private struct AdminTournaments: View {
                 if shown.isEmpty { Text("No tournaments match.").foregroundStyle(FC.muted).padding(14) }
                 ForEach(Array(shown.enumerated()), id: \.element.id) { i, e in
                     Button { model.openAdmin(id: e.id, key: e.key, name: e.name, club: e.clubName) } label: {
-                        ListRow(icon: "flag.fill", iconColor: e.locked || e.archived ? FC.muted : (e.online > 0 ? FC.ok : FC.primary), title: e.name,
+                        ListRow(icon: "flag.fill", iconColor: e.locked || e.archived ? FC.muted : (e.online > 0 ? FC.ok : FC.primary), club: (admin.logo(club: e.club), e.clubName), title: e.name,
                                 sub: [e.clubName, e.date, "\(e.teams) teams", e.screens > 0 ? "\(e.online)/\(e.screens) TVs on" : "", e.gone ? "Gone" : e.archived ? "Archived" : e.locked ? "Final" : e.hidden ? "Hidden" : ""].filter { !$0.isEmpty }.joined(separator: " · "),
                                 last: i == shown.count - 1) {
                             if e.demo { DemoChip() }

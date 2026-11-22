@@ -186,3 +186,56 @@ struct TournamentLogoField: View {
     }
 }
 #endif
+
+// ---- club logos in Admin (Mac and iPhone) ----
+
+/// How Admin's club cards look (a trial of two, flipped on the Clubs page): the club's logo on a tile over its place
+/// photo, or the logo big on the club's own colour. A club with no logo yet keeps its photo either way.
+enum ClubLook: String, CaseIterable, Identifiable {
+    case photo, logo
+    var id: String { rawValue }
+    var title: String { self == .photo ? "Logo on photo" : "Logo on colour" }
+    static let key = "admin.clubLook"
+}
+
+extension AdminModel {
+    /// a club's logo address by its id (nil when it has none, or the clubs haven't loaded)
+    func logo(club id: String) -> URL? { logoURL(clubs.first { $0.id == id }?.logo) }
+}
+
+/// "Oak Hollow Golf Club" → "OH": for a club with no logo yet
+func clubInitials(_ name: String) -> String {
+    let skip: Set<String> = ["the", "golf", "club", "country", "gc", "cc", "and", "of", "&"]
+    let words = name.split(whereSeparator: { !$0.isLetter && !$0.isNumber }).map(String.init)
+    let keep = words.filter { !skip.contains($0.lowercased()) }
+    return String((keep.isEmpty ? words : keep).prefix(2).compactMap(\.first)).uppercased()
+}
+
+/// The club's logo on a white tile (or its initials when it has none): Admin's club cards and tournament rows.
+struct ClubLogoTile: View {
+    var url: URL?
+    var name: String
+    var size: CGFloat = 32
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: size * 0.22).fill(url == nil ? FC.green2 : Color.white)
+            if let url { RemoteLogo(url: url).padding(size * 0.12) }
+            else { Text(clubInitials(name)).font(.system(size: size * 0.36, weight: .bold)).foregroundStyle(Color.white) }
+        }
+        .frame(width: size, height: size)
+        .accessibilityLabel("\(name) logo")
+    }
+}
+
+/// Option B behind a club card: the club's colour with its logo big in the middle (nothing when it has no logo, so the photo shows).
+struct ClubLogoBackdrop: View {
+    let club: AdminClub
+    var body: some View {
+        if let u = logoURL(club.logo) {
+            ZStack {
+                Color(hex: club.accent) ?? FC.green
+                RemoteLogo(url: u).padding(.horizontal, 48).padding(.top, 40).padding(.bottom, 118)
+            }
+        }
+    }
+}

@@ -40,13 +40,15 @@ struct EventDayList: View {
 }
 
 struct EventDayRow: View {
+    @Environment(AdminModel.self) private var admin
     let e: AdminEvent, now: Date
     var body: some View {
         let tvOK = e.screens == 0 || e.online == e.screens
         let started = e.lastScore > 0
         let cartsOK = !started || e.scoringNow >= e.teams * 3 / 4
         VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .center, spacing: 12) {
+                ClubLogoTile(url: admin.logo(club: e.club), name: e.clubName, size: 36)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(e.name).font(.headline).lineLimit(1)
                     Text([e.clubName, e.locked ? "Results locked" : nil].compactMap { $0 }.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary)

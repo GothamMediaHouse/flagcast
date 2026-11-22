@@ -32,6 +32,7 @@ struct AdminHeader<Actions: View>: View {
 /// Clubs: the ones waiting for approval in a yellow banner, then every club as a photo card.
 struct ClubsView: View {
     @Environment(AdminModel.self) private var model
+    @AppStorage(ClubLook.key) private var look = ClubLook.photo
     @State private var search = ""
     @State private var opened: AdminClub?
     private var shown: [AdminClub] {
@@ -42,6 +43,7 @@ struct ClubsView: View {
         @Bindable var model = model
         VStack(spacing: 0) {
             AdminHeader(title: "Clubs", sub: "\(model.clubs.count) club\(model.clubs.count == 1 ? "" : "s") · \(model.clubs.filter { $0.status == "pending" }.count) waiting", search: $search, prompt: "Find a club") {
+                Picker("Club cards", selection: $look) { ForEach(ClubLook.allCases) { Text($0.title).tag($0) } }.pickerStyle(.segmented).labelsHidden().frame(width: 230).help("Try both looks for the club cards")
                 Button { model.newClub = true } label: { Label("New club", systemImage: "plus") }.buttonStyle(GreenButton()).help("Set up a club")
             }
             ScrollView {
@@ -91,9 +93,11 @@ struct ClubCard: View {
     let club: AdminClub
     var open: () -> Void
     @State private var image: NSImage?
+    @AppStorage(ClubLook.key) private var look = ClubLook.photo
     var body: some View {
         ZStack(alignment: .topLeading) {
             CourseHeroImage(image: image)
+            if look == .logo { ClubLogoBackdrop(club: club) }
             LinearGradient(stops: [.init(color: FC.scrim.opacity(0.92), location: 0), .init(color: FC.scrim.opacity(0.35), location: 0.55), .init(color: FC.scrim.opacity(0.1), location: 1)], startPoint: .bottom, endPoint: .top)
             Text(club.statusText.uppercased()).font(.system(size: 11, weight: .bold)).tracking(0.6).padding(.horizontal, 7).padding(.vertical, 3)
                 .background(club.status == "active" ? FC.flag : club.status == "pending" ? Color.white : FC.red, in: RoundedRectangle(cornerRadius: 4))
@@ -115,6 +119,7 @@ struct ClubCard: View {
             }
             .foregroundStyle(.white).padding(16)
         }
+        .overlay(alignment: .topTrailing) { if look == .photo, let u = logoURL(club.logo) { ClubLogoTile(url: u, name: club.name, size: 64).padding(12) } }
         .frame(maxWidth: .infinity).frame(height: 262).clipShape(RoundedRectangle(cornerRadius: 14))
         .contentShape(Rectangle()).onTapGesture(count: 2, perform: open)
         .task(id: club.id) {
@@ -248,7 +253,7 @@ struct TournamentsView: View {
     var body: some View {
         Table(shown, selection: $selection, sortOrder: $sort) {
             TableColumn("Tournament", value: \.name) { e in VStack(alignment: .leading) { HStack(spacing: 6) { Text(e.name).fontWeight(.medium); if e.demo { DemoChip() } }; Text(e.id.uppercased()).font(.caption.monospaced()).foregroundStyle(.secondary) } }.width(min: 180, ideal: 260)
-            TableColumn("Club", value: \.clubName) { e in Text(e.clubName) }.width(min: 120, ideal: 180)
+            TableColumn("Club", value: \.clubName) { e in HStack(spacing: 8) { ClubLogoTile(url: model.logo(club: e.club), name: e.clubName, size: 22); Text(e.clubName) } }.width(min: 120, ideal: 180)
             TableColumn("Date", value: \.date) { e in Text(e.date) }.width(90)
             TableColumn("Teams", value: \.teams) { e in Text("\(e.teams)").monospacedDigit() }.width(50)
             TableColumn("Scores", value: \.scored) { e in Text("\(e.scored)").monospacedDigit() }.width(55)

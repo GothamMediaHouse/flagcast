@@ -236,13 +236,16 @@ struct CardBox<Content: View>: View {
 struct ListRow<Trailing: View>: View {
     var icon: String? = nil
     var iconColor: Color = FC.primary
+    /// a club's logo (or initials) in place of the icon: Admin's tournament rows
+    var club: (logo: URL?, name: String)? = nil
     var title: String
     var sub: String? = nil
     var last = false
     @ViewBuilder var trailing: Trailing
     var body: some View {
         HStack(spacing: 12) {
-            if let icon {
+            if let club { ClubLogoTile(url: club.logo, name: club.name, size: 32) }
+            else if let icon {
                 Image(systemName: icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
                     .frame(width: 32, height: 32).background(iconColor, in: RoundedRectangle(cornerRadius: 8))
             }
