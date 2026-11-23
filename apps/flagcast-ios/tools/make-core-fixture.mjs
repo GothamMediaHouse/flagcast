@@ -80,6 +80,12 @@ const SIDE_CFGS = [
   { skins: { on: true, amt: 5, net: true, carry: true }, nassau: { on: true, amt: 10, net: true, sides: {} }, birdies: { on: true, amt: 2, net: false } },
   { skins: { on: true, amt: 3, net: false, carry: false }, nassau: { on: true, amt: 7, net: false, sides: {} }, birdies: { on: true, amt: 1.5, net: true } },
   { skins: { on: false, amt: 5, net: true }, nassau: { on: true, amt: 10, net: true, sides: { 't0x:p00': 'B', 't0x:p01': 'B', 't0x:p02': 'A', 't0x:p03': 'A' } }, birdies: { on: false, amt: 2 } },
+  // the newer games: Stableford, Vegas, Wolf, closest to the pin and long drive (picks name players that may not be in the cart)
+  { skins: { on: true, amt: 1, net: true, carry: true }, stableford: { on: true, net: true }, vegas: { on: true, amt: 1, net: true },
+    wolf: { on: true, amt: 2, net: false, picks: { 1: 't0x:p01', 2: 'lone', 3: 't1x:p10', 5: 'lone', 6: 't2x:p21', 10: 't3x:p30', 11: 'lone' } },
+    closest: { on: true, amt: 2, picks: { 4: 't0x:p00', 7: 't1x:p11', 11: 't2x:p20', 16: 't3x:p31' } }, longDrive: { on: true, amt: 3, picks: { 2: 't1x:p10', 8: 't0x:p01', 13: 't2x:p21' } } },
+  { stableford: { on: true, net: false }, vegas: { on: true, amt: 0.5, net: false, sides: { 't2x:p20': 'B', 't3x:p30': 'A' } },
+    wolf: { on: true, amt: 1, net: true, picks: { 1: 'lone', 2: 't0x:p00', 4: 't2x:p20', 9: 'lone', 18: 't3x:p31' } } },
 ];
 
 const cases = [];

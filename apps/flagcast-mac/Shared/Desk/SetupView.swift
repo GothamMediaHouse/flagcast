@@ -180,7 +180,7 @@ struct SetupView: View {
                         .textFieldStyle(.roundedBorder)
                 }
             }
-            Toggle("Side games on the scorecard (skins, Nassau and birdies)", isOn: $doc.ev.sideGames)
+            Toggle("Side games on the scorecard (skins, Nassau, Wolf and more, for points)", isOn: $doc.ev.sideGames)
             Help("Handicaps are each player’s course handicap; the allowance is applied to it and strokes fall by stroke index. A picked-up ball counts as net double bogey. Ties are broken on the back 9, 6, 3 and last hole.")
         }
         .raisedCard(padding: 18)

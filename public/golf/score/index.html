@@ -88,7 +88,7 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
 .sg .box { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin-top: 14px; }
 .sg .box h3 { font-size: 1.25rem; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .sg .sw { display: flex; align-items: center; gap: 8px; font: 500 .9rem var(--f-body); text-transform: none; letter-spacing: 0; }
-.sg .sw input { width: 22px; height: 22px; accent-color: var(--green-2); }
+.sg .sw input { width: 22px; height: 22px; accent-color: #2f8a57; }
 .sg .opts { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 10px; font-size: .88rem; color: var(--muted); align-items: center; }
 .sg .opts label { display: flex; align-items: center; gap: 6px; }
 .sg .opts input[type=number] { width: 76px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); color: var(--ink); font: 600 1rem var(--f-mono); }
@@ -99,7 +99,12 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
 .sg td.r, .sg th.r { text-align: right; }
 .sg .holes { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
 .sg .holes span { font-family: var(--f-mono); font-size: .72rem; padding: 4px 6px; border-radius: 6px; background: var(--paper-2); color: var(--muted); min-width: 2.4em; text-align: center; }
-.sg .holes span.won { background: var(--green-2); color: var(--on-green); }
+.sg .holes span.won { background: #2f8a57; color: var(--on-green); }
+.sg .box > .help { margin-top: 6px; font-size: .85rem; color: var(--muted); }
+.sg .picks { display: grid; gap: 6px; margin-top: 10px; }
+.sg .picks div { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: .9rem; }
+.sg .picks small { display: block; font-size: .75rem; color: var(--muted); }
+.sg td.up { color: var(--ok); } .sg td.down { color: var(--red); }
 .sg .holes span.tie { color: var(--ink); }
 .sg .sides { display: grid; gap: 6px; margin-top: 10px; }
 .sg .sides div { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: .9rem; }
@@ -141,7 +146,12 @@ let S = null, teams = store.get('teams', []), teamId = store.get('team', null), 
 let pending = store.get('pending', []); // [{ team, p, h, v, at }] not yet saved on the server
 let online = false, sending = false, view = 'card', offSince = Date.now();
 // side games: this cart's own settings, kept on this phone
-let side = store.get('side', { skins: { on: false, amt: 5, net: true, carry: true }, nassau: { on: false, amt: 10, net: true, sides: {} }, birdies: { on: false, amt: 2, net: false } });
+const SIDE_DEFAULTS = { skins: { on: false, amt: 5, net: true, carry: true }, nassau: { on: false, amt: 10, net: true, sides: {} }, birdies: { on: false, amt: 2, net: false },
+  stableford: { on: false, net: true }, vegas: { on: false, amt: 1, net: true, sides: {} }, wolf: { on: false, amt: 1, net: true, picks: {} },
+  closest: { on: false, amt: 2, picks: {} }, longDrive: { on: false, amt: 2, picks: {} } };
+let side = store.get('side', {});
+for (const [g, d] of Object.entries(SIDE_DEFAULTS)) side[g] = { ...d, ...(side[g] || {}) }; // older saved settings gain the newer games, turned off
+const sideOn = () => Object.keys(SIDE_DEFAULTS).some((g) => side[g].on);
 const $ = (id) => document.getElementById(id);
 
 function toast(t) { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), 3200); }
@@ -296,7 +306,7 @@ function render() {
     <div class="summary"><div><div class="label">${S.format.show === 'gross' ? 'Gross' : 'Net'} to par</div><div class="big ${lb && lb.score < 0 && S.format.type !== 'stableford' ? 'under' : ''}">${lb && lb.played ? fmtPar(lb.score, S.format.type === 'stableford') : '—'}</div></div>
       <div style="text-align:right"><div class="label">Position</div><div class="big">${lb && lb.pos ? lb.pos : '—'}</div></div></div>
     <a class="btn" style="width:100%;margin-top:10px" href="/g/${eventId()}">Full leaderboard</a>
-    ${sideOK() ? `<button class="btn" style="width:100%;margin-top:10px" data-view="side">Side games${side.skins.on || side.nassau.on || side.birdies.on ? ' · playing' : ''}</button>` : ''}
+    ${sideOK() ? `<button class="btn" style="width:100%;margin-top:10px" data-view="side">Side games${sideOn() ? ' · playing' : ''}</button>` : ''}
     <div class="card"><table><thead><tr><th>Hole</th>${holes.filter(inRound).map((h) => `<th>${h.n}</th>`).join('')}<th>Tot</th></tr>
       <tr><th>Par</th>${holes.filter(inRound).map((h) => `<th>${h.par}</th>`).join('')}<th>${holes.filter(inRound).reduce((a, h) => a + h.par, 0)}</th></tr></thead>
       <tbody>${ps.map((p) => { const arr = mine[p.id] || []; const tot = arr.reduce((a, v) => a + (v > 0 ? v : 0), 0);
@@ -310,45 +320,92 @@ function render() {
   document.querySelector('.strip [aria-current="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
 }
 
-const money = (v) => { const a = Math.abs(v); return `$${Number.isInteger(a) ? a : a.toFixed(2)}`; };
+const pts = (v) => { const a = Math.round(Math.abs(v) * 10) / 10; return `${a} pts`; };
 function renderSide() {
   $('strip').hidden = true; $('bar').hidden = true;
   const sc = myScores(), r = sideGames(S, sc, teams, side), P = Object.fromEntries(r.players.map((p) => [p.key, p]));
   const nm = (k) => esc(P[k]?.short || '');
-  const sw = (g) => `<label class="sw"><input type="checkbox" data-sg="${g}.on" ${side[g].on ? 'checked' : ''}> Play</label>`;
-  const amt = (g, label) => `<label>$<input type="number" min="0" step="1" inputmode="decimal" data-sg="${g}.amt" value="${side[g].amt}"> ${label}</label>`;
+  const n = r.players.length;
+  const sw = (g, label) => `<label class="sw"><input type="checkbox" data-sg="${g}.on" ${side[g].on ? 'checked' : ''}> ${label || 'Play'}</label>`;
+  const amt = (g, label) => `<label><input type="number" min="0" step="1" inputmode="decimal" data-sg="${g}.amt" value="${side[g].amt}"> pts ${label}</label>`;
   const netSel = (g) => `<select data-sg="${g}.net" aria-label="Net or gross"><option value="1" ${side[g].net ? 'selected' : ''}>Net (with strokes)</option><option value="" ${side[g].net ? '' : 'selected'}>Gross</option></select>`;
-  let html = `<div class="sg"><h2>Side games</h2><p class="help" style="color:var(--muted)">Games among the ${r.players.length} players in your cart. The scores you enter play every game, and the money adds up at the bottom.</p>`;
-  if (r.players.length < 2) html += `<div class="note">Side games need at least two players in your cart.</div>`;
-  // skins
-  html += `<div class="box"><h3>Skins ${sw('skins')}</h3><div class="opts">${amt('skins', 'a skin, from each player')}${netSel('skins')}<label class="sw"><input type="checkbox" data-sg="skins.carry" ${side.skins.carry !== false ? 'checked' : ''}> Ties carry over</label></div>`;
-  if (r.skins) {
-    html += `<div class="holes">${r.skins.rows.map((x) => x.open ? `<span title="Not played yet">${x.hole}</span>` : x.winner ? `<span class="won">${x.hole} ${nm(x.winner)}${x.worth > 1 ? ` ×${x.worth}` : ''}</span>` : `<span class="tie">${x.hole} tie</span>`).join('')}</div>`;
-    html += `<table><tr><th>Player</th><th class="r">Skins</th></tr>${r.players.map((p) => `<tr><td>${esc(p.short)}</td><td class="r">${r.skins.won[p.key] || 0}</td></tr>`).join('')}</table>`;
-    if (r.skins.carrying) html += `<p class="help" style="margin-top:6px">${r.skins.carrying} skin${r.skins.carrying > 1 ? 's' : ''} carrying to the next hole.</p>`;
+  const sidesFor = (g, sides) => { const inA = new Set(sides.A); return `<div class="sides">${r.players.map((p) => `<div><span>${esc(p.short)}</span><select data-side="${g}:${p.key}" aria-label="Side for ${esc(p.short)}"><option value="A" ${inA.has(p.key) ? 'selected' : ''}>Side A</option><option value="B" ${inA.has(p.key) ? '' : 'selected'}>Side B</option></select></div>`).join('')}</div>`; };
+  const pickSel = (g, hole, cur, opts) => `<select data-pick="${g}:${hole}" aria-label="Hole ${hole}"><option value="">Not yet</option>${opts.map(([v, t]) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
+  const box = (g, title, about, body) => `<div class="box"><h3>${title} ${sw(g)}</h3>${side[g].on ? body : `<p class="help">${about}</p>`}</div>`;
+  let html = `<div class="sg"><h2>Side games</h2>`;
+  if (n < 2) {
+    html += `<div class="note"><b>${n === 1 ? 'You’re the only player in your cart.' : 'Nobody is in your cart yet.'}</b><br>Side games need at least two players. They open up here once your cart has two or more.</div>`;
+    html += `<button class="btn primary" style="width:100%;margin-top:16px;padding:14px" data-view="card">Back to the scorecard</button></div>`;
+    $('main').innerHTML = html; return;
   }
-  html += `</div>`;
+  html += `<p class="help" style="color:var(--muted)">Games among the ${n} players in your cart. The scores you enter play every game, and the points add up at the bottom.</p>`;
+
+  // skins
+  let b = `<div class="opts">${amt('skins', 'a skin, from each player')}${netSel('skins')}<label class="sw"><input type="checkbox" data-sg="skins.carry" ${side.skins.carry !== false ? 'checked' : ''}> Ties carry over</label></div>`;
+  if (r.skins) {
+    b += `<div class="holes">${r.skins.rows.map((x) => x.open ? `<span title="Not played yet">${x.hole}</span>` : x.winner ? `<span class="won">${x.hole} ${nm(x.winner)}${x.worth > 1 ? ` ×${x.worth}` : ''}</span>` : `<span class="tie">${x.hole} tie</span>`).join('')}</div>`;
+    b += `<table><tr><th>Player</th><th class="r">Skins</th></tr>${r.players.map((p) => `<tr><td>${esc(p.short)}</td><td class="r">${r.skins.won[p.key] || 0}</td></tr>`).join('')}</table>`;
+    if (r.skins.carrying) b += `<p class="help" style="margin-top:6px">${r.skins.carrying} skin${r.skins.carrying > 1 ? 's' : ''} carrying to the next hole.</p>`;
+  }
+  html += box('skins', 'Skins', 'Lowest score alone wins the hole.', b);
+
   // Nassau
-  html += `<div class="box"><h3>Nassau ${sw('nassau')}</h3><div class="opts">${amt('nassau', 'each on the front 9, back 9 and overall')}${netSel('nassau')}</div>`;
+  b = `<div class="opts">${amt('nassau', 'each on the front 9, back 9 and overall')}${netSel('nassau')}</div>`;
   if (r.nassau) {
-    const inA = new Set(r.nassau.sides.A);
-    html += `<div class="sides">${r.players.map((p) => `<div><span>${esc(p.short)}</span><select data-side="${p.key}" aria-label="Side for ${esc(p.short)}"><option value="A" ${inA.has(p.key) ? 'selected' : ''}>Side A</option><option value="B" ${inA.has(p.key) ? '' : 'selected'}>Side B</option></select></div>`).join('')}</div>`;
-    const sideName = (s) => r.nassau.sides[s].map(nm).join(' & ');
-    html += r.nassau.segs.map((g) => {
-      const st = !g.played ? 'Not started' : g.done ? (g.winner ? `${sideName(g.winner)} win, ${Math.abs(g.diff)} up` : 'Tied, no money') : g.diff ? `${sideName(g.diff > 0 ? 'A' : 'B')} ${Math.abs(g.diff)} up thru ${g.played}` : `All square thru ${g.played}`;
+    b += sidesFor('nassau', r.nassau.sides);
+    const sideName = (x) => r.nassau.sides[x].map(nm).join(' &amp; ');
+    b += r.nassau.segs.map((g) => {
+      const st = !g.played ? 'Not started' : g.done ? (g.winner ? `${sideName(g.winner)} win, ${Math.abs(g.diff)} up` : 'Tied, no points') : g.diff ? `${sideName(g.diff > 0 ? 'A' : 'B')} ${Math.abs(g.diff)} up thru ${g.played}` : `All square thru ${g.played}`;
       return `<div class="seg"><span>${g.label}</span><b>${st}</b></div>`;
     }).join('');
-  } else if (side.nassau.on && r.players.length >= 2) html += `<p class="help" style="margin-top:8px">Put at least one player on each side.</p>`;
-  html += `</div>`;
+  } else b += `<p class="help" style="margin-top:8px">Put at least one player on each side.</p>`;
+  html += box('nassau', 'Nassau', 'Two sides, three matches: the front 9, the back 9 and the whole round.', b);
+
   // birdies
-  html += `<div class="box"><h3>Birdies ${sw('birdies')}</h3><div class="opts">${amt('birdies', 'a birdie, from each player (an eagle counts twice)')}${netSel('birdies')}</div>`;
-  if (r.birdies) html += r.birdies.list.length ? `<div class="holes">${r.birdies.list.map((b) => `<span class="won">${b.hole} ${nm(b.key)}${b.eagle ? ' eagle' : ''}</span>`).join('')}</div>` : `<p class="help" style="margin-top:8px">No birdies yet.</p>`;
-  html += `</div>`;
-  // settle up
-  if (r.skins || r.nassau || r.birdies) {
-    html += `<div class="box"><h3>Who owes who</h3>${r.settle.length ? r.settle.map((x) => `<div class="owe"><span>${nm(x.from)} pays ${nm(x.to)}</span><b>${money(x.amt)}</b></div>`).join('') : `<p class="help" style="margin-top:8px">Nobody owes anything yet.</p>`}
-      <table><tr><th>Player</th><th class="r">Up or down</th></tr>${r.players.map((p) => { const v = Math.round(r.ledger[p.key] * 100) / 100; return `<tr><td>${esc(p.short)}</td><td class="r" style="${v < 0 ? 'color:var(--red)' : ''}">${v ? `${v > 0 ? '+' : '−'}${money(v)}` : 'Even'}</td></tr>`; }).join('')}</table>
-      <p class="fine">Running totals so far. Settle up among yourselves after the round. Flagcast doesn’t take, hold or pay out any money. These game settings are kept on this phone.</p></div>`;
+  b = `<div class="opts">${amt('birdies', 'a birdie, from each player (an eagle counts twice)')}${netSel('birdies')}</div>`;
+  if (r.birdies) b += r.birdies.list.length ? `<div class="holes">${r.birdies.list.map((x) => `<span class="won">${x.hole} ${nm(x.key)}${x.eagle ? ' eagle' : ''}</span>`).join('')}</div>` : `<p class="help" style="margin-top:8px">No birdies yet.</p>`;
+  html += box('birdies', 'Birdies', 'Every birdie collects from each other player. An eagle counts twice.', b);
+
+  // Stableford
+  const sfAbout = 'Points against par on every hole: double bogey or worse 0, bogey 1, par 2, birdie 3, eagle 4. Most points wins.';
+  b = `<div class="opts">${netSel('stableford')}</div><p class="help">${sfAbout} Its points stay in this table.</p>`;
+  if (r.stableford) b += `<table><tr><th>Player</th><th class="r">Points</th></tr>${[...r.stableford].sort((x, y) => y.points - x.points).map((x) => `<tr><td>${nm(x.key)}</td><td class="r">${x.thru ? `${x.points} thru ${x.thru}` : '–'}</td></tr>`).join('')}</table>`;
+  html += box('stableford', 'Stableford', sfAbout, b);
+
+  // Vegas
+  b = `<div class="opts">${amt('vegas', 'each point of difference')}${netSel('vegas')}</div>`;
+  if (r.vegas && n === 4) b += sidesFor('vegas', r.vegas.sides);
+  if (r.vegas && !r.vegasNeedsFour) {
+    const sideName = (x) => r.vegas.sides[x].map(nm).join(' &amp; ');
+    b += r.vegas.holes.length ? `<div class="holes">${r.vegas.holes.map((h) => `<span class="${h.a !== h.b ? 'won' : 'tie'}">${h.hole} ${h.a}–${h.b}</span>`).join('')}</div>
+      <div class="seg"><span>Running</span><b>${r.vegas.total ? `${sideName(r.vegas.total > 0 ? 'A' : 'B')} +${Math.abs(r.vegas.total)}` : 'All square'}</b></div>` : `<p class="help" style="margin-top:8px">No holes finished yet.</p>`;
+  } else b += `<p class="help" style="margin-top:8px">${n === 4 ? 'Put two players on each side.' : 'Vegas needs exactly four players, two on each side.'}</p>`;
+  html += box('vegas', 'Vegas', 'Two against two. Each side’s scores make a number, low score first (a 4 and a 5 make 45). The lower number wins the difference.', b);
+
+  // Wolf
+  b = `<div class="opts">${amt('wolf', 'each hole (a lone wolf plays for double)')}${netSel('wolf')}</div>`;
+  if (r.wolf) {
+    b += `<p class="help">The wolf goes in cart order. Pick the wolf’s call after the tee shots. The hole scores once everyone’s score is in.</p><div class="picks">${r.wolf.holes.map((h) => {
+      const res = h.result === 'wolf' ? 'Wolf won' : h.result === 'others' ? 'Wolf lost' : h.result === 'tie' ? 'Halved' : '';
+      const opts = [...r.players.filter((p) => p.key !== h.wolf).map((p) => [p.key, `With ${esc(p.short)}`]), ['lone', 'Lone wolf']];
+      return `<div><span>Hole ${h.hole}: ${nm(h.wolf)}${res ? `<small>${res}</small>` : ''}</span>${pickSel('wolf', h.hole, h.partner || '', opts)}</div>`;
+    }).join('')}</div>`;
+  } else b += `<p class="help" style="margin-top:8px">Wolf needs three or four players.</p>`;
+  html += box('wolf', 'Wolf', 'The wolf rotates each hole. After the tee shots the wolf takes a partner or goes it alone, then the best ball on each side wins the hole.', b);
+
+  // closest to the pin, long drive
+  const pickBox = (g, title, rows, empty, about) => {
+    let x = `<div class="opts">${amt(g, 'each hole, from each player')}</div>`;
+    if (rows) x += rows.length ? `<div class="picks">${rows.map((h) => `<div><span>Hole ${h.hole}</span>${pickSel(g, h.hole, h.winner || '', r.players.map((p) => [p.key, esc(p.short)]))}</div>`).join('')}</div>` : `<p class="help" style="margin-top:8px">${empty}</p>`;
+    return box(g, title, about, x);
+  };
+  html += pickBox('closest', 'Closest to the pin', r.closest, 'This course has no par 3s.', 'On each par 3, pick who’s closest. Everyone else gives them the points.');
+  html += pickBox('longDrive', 'Long drive', r.longDrive, 'This course has no par 5s.', 'On each par 5, pick who hit the longest drive in the fairway.');
+
+  if (r.skins || r.nassau || r.birdies || r.vegas || r.wolf || r.closest || r.longDrive) {
+    html += `<div class="box"><h3>Points</h3>
+      <table><tr><th>Player</th><th class="r">Up or down</th></tr>${[...r.players].sort((x, y) => r.ledger[y.key] - r.ledger[x.key]).map((p) => { const v = Math.round(r.ledger[p.key] * 100) / 100; return `<tr><td>${esc(p.short)}</td><td class="r ${v > 0 ? 'up' : v < 0 ? 'down' : ''}">${v ? `${v > 0 ? '+' : '−'}${pts(v)}` : 'Even'}</td></tr>`; }).join('')}</table>
+      <p class="fine">Running totals from every game you’re playing (Stableford has its own table). For points and bragging rights only: Flagcast has no money in it. These game settings are kept on this phone.</p></div>`;
   }
   html += `<button class="btn primary" style="width:100%;margin-top:16px;padding:14px" data-view="card">Back to the scorecard</button></div>`;
   $('main').innerHTML = html;
@@ -357,9 +414,15 @@ document.addEventListener('change', (e) => {
   const el = e.target;
   if (el.dataset.sg) {
     const [g, k] = el.dataset.sg.split('.');
-    side[g][k] = el.type === 'checkbox' ? el.checked : k === 'amt' ? Math.max(0, Math.min(10000, Number(el.value) || 0)) : !!el.value;
-  } else if (el.dataset.side) side.nassau.sides = { ...side.nassau.sides, [el.dataset.side]: el.value };
-  else return;
+    side[g][k] = el.type === 'checkbox' ? el.checked : k === 'amt' ? Math.max(0, Math.min(1000, Number(el.value) || 0)) : !!el.value;
+  } else if (el.dataset.side) {
+    const at = el.dataset.side.indexOf(':'), g = el.dataset.side.slice(0, at), key = el.dataset.side.slice(at + 1);
+    side[g].sides = { ...side[g].sides, [key]: el.value };
+  } else if (el.dataset.pick) {
+    const [g, hole] = el.dataset.pick.split(':'), picks = { ...side[g].picks };
+    if (el.value) picks[hole] = el.value; else delete picks[hole];
+    side[g].picks = picks;
+  } else return;
   store.set('side', side); render();
 });
 

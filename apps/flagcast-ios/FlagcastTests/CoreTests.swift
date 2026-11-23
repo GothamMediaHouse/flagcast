@@ -87,6 +87,13 @@ final class CoreTests: XCTestCase {
             o["nassau"] = ["sides": n.sides, "segs": n.segs.map { ["label": $0.label, "played": $0.played, "holes": $0.holes, "diff": $0.diff, "done": $0.done, "winner": $0.winner] as [String: Any?] }] as [String: Any]
         }
         if let b = r.birdies { o["birdies"] = ["list": b.map { ["key": $0.key, "hole": $0.hole, "count": $0.count, "eagle": $0.eagle] }] }
+        if let s = r.stableford { o["stableford"] = s.map { ["key": $0.key, "points": $0.points, "thru": $0.thru] } }
+        if let v = r.vegas { o["vegas"] = ["sides": v.sides, "holes": v.holes.map { ["hole": $0.hole, "a": $0.a, "b": $0.b] }, "total": v.total] as [String: Any] }
+        if r.vegasNeedsFour { o["vegasNeedsFour"] = true }
+        if let w = r.wolf { o["wolf"] = ["holes": w.holes.map { ["hole": $0.hole, "wolf": $0.wolf, "partner": $0.partner, "result": $0.result] as [String: Any?] }] }
+        if let c = r.closest { o["closest"] = c.map { ["hole": $0.hole, "winner": $0.winner] as [String: Any?] } }
+        if let l = r.longDrive { o["longDrive"] = l.map { ["hole": $0.hole, "winner": $0.winner] as [String: Any?] } }
+        o["tally"] = r.tally
         return o
     }
 
@@ -161,5 +168,55 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(s.cams[4], "https://x/a.m3u8")
         XCTAssertEqual(s.course.holes.count, 18)
         XCTAssertEqual(s.scores["a1b2"]?["p1"]?[1], .some(nil))
+    }
+
+    // ---- the app-only side games (no core.js answers for these yet, so worked out by hand) ----
+    func cart() throws -> EventState {
+        let json = #"{"name":"X","teams":[{"id":"ta","players":[{"id":"p1","name":"Ann","hcp":0},{"id":"p2","name":"Bob","hcp":0}],"start":1},{"id":"tb","players":[{"id":"p3","name":"Cy","hcp":0},{"id":"p4","name":"Dee","hcp":0}],"start":1}],"scores":{"ta":{"p1":[4,5,3],"p2":[5,6,4]},"tb":{"p3":[4,4,4],"p4":[6,5,5]}}}"#
+        return try JSONDecoder().decode(EventState.self, from: Data(json.utf8))
+    }
+
+    func testStablefordVegasWolfAndPicks() throws {
+        let ev = try cart()
+        var cfg = SideConfig()
+        cfg.stableford.on = true; cfg.vegas.on = true; cfg.wolf.on = true; cfg.closest.on = true
+        cfg.wolf.picks = ["1": "tb:p3", "2": "lone"]
+        cfg.closest.picks = ["4": "tb:p4"]
+        let r = Core.sideGames(ev, ev.scores, ["ta", "tb"], cfg)
+        XCTAssertEqual(Dictionary(uniqueKeysWithValues: r.stableford!.map { ($0.key, $0.points) }), ["ta:p1": 7, "ta:p2": 4, "tb:p3": 7, "tb:p4": 3])
+        XCTAssertEqual(r.stableford!.first!.thru, 3)
+        XCTAssertFalse(r.vegasNeedsFour)
+        XCTAssertEqual(r.vegas!.holes.map { [$0.a, $0.b] }, [[45, 46], [56, 45], [34, 45]])
+        XCTAssertEqual(r.vegas!.total, 1)
+        XCTAssertEqual(r.tally["vegas"], ["ta:p1": 1, "ta:p2": 1, "tb:p3": -1, "tb:p4": -1])
+        XCTAssertEqual(r.wolf!.holes.prefix(3).map(\.result), ["wolf", "others", nil])
+        XCTAssertEqual(r.wolf!.holes[2].wolf, "tb:p3")
+        XCTAssertEqual(r.tally["wolf"], ["ta:p1": 3, "ta:p2": -7, "tb:p3": 3, "tb:p4": 1])
+        XCTAssertEqual(r.closest!.map(\.hole), [4, 7, 11, 16])
+        XCTAssertEqual(r.tally["closest"]?["tb:p4"], 6)
+        XCTAssertEqual(r.ledger.values.reduce(0, +), 0, accuracy: 1e-9)
+        XCTAssertEqual(r.ledger["tb:p4"]!, -1 + 1 + 6, accuracy: 1e-9)
+    }
+
+    func testSideGamesNeedEnoughPlayers() throws {
+        let ev = try cart()
+        var cfg = SideConfig()
+        cfg.vegas.on = true; cfg.wolf.on = true; cfg.stableford.on = true; cfg.skins.on = true
+        let two = Core.sideGames(ev, ev.scores, ["ta"], cfg)
+        XCTAssertTrue(two.vegasNeedsFour)
+        XCTAssertNil(two.wolf)
+        XCTAssertNotNil(two.stableford)
+        let one = Core.sideGames(ev, ["ta": ["p1": [4]]], [], cfg)
+        XCTAssertNil(one.skins); XCTAssertNil(one.stableford)
+    }
+
+    func testSideConfigKeepsNewGames() throws {
+        var cfg = SideConfig()
+        cfg.wolf.on = true; cfg.wolf.picks = ["3": "lone"]; cfg.longDrive.amt = 4
+        let back = try JSONDecoder().decode(SideConfig.self, from: JSONEncoder().encode(cfg))
+        XCTAssertEqual(back, cfg)
+        // an old saved config (before these games) still opens, with them off
+        let old = try JSONDecoder().decode(SideConfig.self, from: Data(#"{"skins":{"on":true,"amt":5}}"#.utf8))
+        XCTAssertTrue(old.skins.on); XCTAssertFalse(old.wolf.on); XCTAssertEqual(old.closest.amt, 2)
     }
 }

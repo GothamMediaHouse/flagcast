@@ -123,7 +123,7 @@ struct ScorecardScreen: View {
                         Button { router.go(.live(id: model.id)) } label: { Label("Full leaderboard", systemImage: "list.number") }.buttonStyle(.fcPlain)
                         if s.sideGamesAllowed {
                             Button { sideGames = true } label: {
-                                Label("Side games" + (model.side.anyOn ? " · playing" : ""), systemImage: "dollarsign.circle")
+                                Label("Side games" + (model.side.anyOn ? " · playing" : ""), systemImage: "trophy")
                             }.buttonStyle(.fcPlain)
                         }
                         CardGrid(holes: s.course.holes.filter { Core.playHoles(s).contains($0.n) },

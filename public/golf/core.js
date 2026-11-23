@@ -229,9 +229,11 @@ export function mark(v, par) {
   return d <= -2 ? 'eagle' : d === -1 ? 'birdie' : d === 1 ? 'bogey' : d >= 2 ? 'double' : '';
 }
 
-// ---- side games: a cart's own skins, Nassau and birdies, with who owes who at the end ----
-// Played among the players in one cart (every team on its cart code). Flagcast only does the math; players settle up themselves.
-// cfg = { skins: { on, amt, net, carry }, nassau: { on, amt, net, sides: { [playerKey]: 'A' | 'B' } }, birdies: { on, amt, net } }
+// ---- side games: a cart's own games, scored in points (no money), with each player's running total ----
+// Played among the players in one cart (every team on its cart code). Points only: Flagcast has no money in it.
+// cfg = { skins: { on, amt, net, carry }, nassau: { on, amt, net, sides: { [playerKey]: 'A' | 'B' } }, birdies: { on, amt, net },
+//   stableford: { on, net }, vegas: { on, amt, net, sides }, wolf: { on, amt, net, picks: { [hole]: playerKey | 'lone' } },
+//   closest / longDrive: { on, amt, picks: { [hole]: playerKey } } }. Same math as the players' app (Core.swift).
 export function sideGames(ev, scores, teamIds, cfg = {}) {
   const allow = ev.format?.allowance ?? 100, holes = ev.course.holes;
   const teams = teamIds.map((id) => (ev.teams || []).find((t) => t.id === id)).filter(Boolean);
@@ -256,12 +258,17 @@ export function sideGames(ev, scores, teamIds, cfg = {}) {
   const ph = playHoles(ev).map((h) => h - 1), k0 = Math.max(0, ph.indexOf(start - 1));
   const order = [...ph.slice(k0), ...ph.slice(0, k0)]; // hole indexes this round plays, from the starting hole
   const ledger = Object.fromEntries(players.map((p) => [p.key, 0]));
-  const pay = (from, to, amt) => { if (!amt || from === to) return; ledger[from] -= amt; ledger[to] += amt; };
+  const tally = {}; let game = '';
+  const pay = (from, to, amt) => {
+    if (!amt || from === to) return;
+    ledger[from] -= amt; ledger[to] += amt;
+    const t = (tally[game] ||= {}); t[from] = (t[from] || 0) - amt; t[to] = (t[to] || 0) + amt;
+  };
   const out = { players, ledger, settle: [] };
   const n = players.length;
 
   // skins: a hole is a skin when one player has the lowest score alone; ties carry the skin to the next hole
-  const sk = cfg.skins || {};
+  const sk = cfg.skins || {}; game = 'skins';
   if (sk.on && n >= 2) {
     const amt = Number(sk.amt) || 0, rows = []; let pot = 1, won = Object.fromEntries(players.map((p) => [p.key, 0]));
     for (const i of order) {
@@ -280,7 +287,7 @@ export function sideGames(ev, scores, teamIds, cfg = {}) {
   }
 
   // Nassau: side A against side B, match play on the best score of each side; front 9, back 9 and all 18 are three bets
-  const na = cfg.nassau || {};
+  const na = cfg.nassau || {}; game = 'nassau';
   if (na.on && n >= 2) {
     const sides = { A: [], B: [] };
     const set = na.sides || {};
@@ -311,7 +318,7 @@ export function sideGames(ev, scores, teamIds, cfg = {}) {
   }
 
   // birdies: each birdie (an eagle or better counts twice) collects from every other player in the cart
-  const bi = cfg.birdies || {};
+  const bi = cfg.birdies || {}; game = 'birdies';
   if (bi.on && n >= 2) {
     const amt = Number(bi.amt) || 0, list = [];
     for (const p of players) for (const i of order) {
@@ -324,6 +331,85 @@ export function sideGames(ev, scores, teamIds, cfg = {}) {
     }
     out.birdies = { list };
   }
+
+  const hasScore = (p, i) => isScore(raw(p, i)) && raw(p, i) > 0;
+  const sideOf = (g, p, k) => (g.sides || {})[p.key] || (teams.length >= 2 ? (p.team === teams[0].id ? 'A' : 'B') : (k < Math.ceil(n / 2) ? 'A' : 'B'));
+  const stake = (g, d) => { const v = Number(g.amt ?? d); return Number.isFinite(v) ? v : 0; };
+
+  // Stableford: points against par on each hole (net double bogey or worse 0, bogey 1, par 2, birdie 3, eagle 4).
+  // Its own table: these points don't change hands.
+  const sf = cfg.stableford || {};
+  if (sf.on && n >= 2) {
+    const net = sf.net !== false;
+    out.stableford = players.map((p) => {
+      let points = 0, thru = 0;
+      for (const i of order) {
+        if (!entered(p, i)) continue;
+        thru++;
+        if (!hasScore(p, i)) continue; // a pick-up scores nothing
+        const v = raw(p, i), s = net ? v - strokesOn(p.hcp, holes[i].hcp) : v;
+        points += Math.max(0, 2 + holes[i].par - s);
+      }
+      return { key: p.key, points, thru };
+    });
+  }
+
+  // Vegas: two against two. Each side's two scores make a number, low score first (a 4 and a 5 make 45); the lower number wins the difference.
+  const vg = cfg.vegas || {}; game = 'vegas';
+  if (vg.on && n >= 2) {
+    const net = vg.net !== false, amt = stake(vg, 1), A = [], B = [];
+    players.forEach((p, k) => (sideOf(vg, p, k) === 'B' ? B : A).push(p));
+    const sides = { A: A.map((p) => p.key), B: B.map((p) => p.key) };
+    if (A.length === 2 && B.length === 2) {
+      const num = (s, i) => { const v = s.map((p) => val(p, i, net)).sort((x, y) => x - y); return Number(`${v[0]}${v[1]}`); };
+      const rows = []; let total = 0;
+      for (const i of order) {
+        if (![...A, ...B].every((p) => entered(p, i))) continue;
+        const a = num(A, i), b = num(B, i);
+        rows.push({ hole: i + 1, a, b });
+        total += b - a; // positive is good for side A
+        if (a !== b) { const W = b > a ? A : B, L = b > a ? B : A; W.forEach((w, k) => pay(L[k].key, w.key, Math.abs(b - a) * amt)); }
+      }
+      out.vegas = { sides, holes: rows, total };
+    } else { out.vegas = { sides, holes: [], total: 0 }; out.vegasNeedsFour = true; }
+  }
+
+  // Wolf: the wolf rotates in cart order. After the tee shots the wolf takes a partner or goes it alone ("lone"),
+  // then the best ball on each side wins the hole. A lone wolf plays for double, both ways.
+  const wf = cfg.wolf || {}; game = 'wolf';
+  if (wf.on && n >= 3) {
+    const net = wf.net !== false, amt = stake(wf, 1), picks = wf.picks || {};
+    out.wolf = { holes: order.map((i, k) => {
+      const wolf = players[k % n], pick = picks[i + 1];
+      const partner = pick === 'lone' ? 'lone' : players.find((p) => p.key === pick && p.key !== wolf.key)?.key ?? null;
+      let result = null;
+      if (partner && players.every((p) => entered(p, i))) {
+        const mine = players.filter((p) => p.key === wolf.key || p.key === partner), rest = players.filter((p) => !mine.includes(p));
+        const best = (s) => Math.min(...s.filter((p) => hasScore(p, i)).map((p) => val(p, i, net)));
+        const x = best(mine), y = best(rest), st = partner === 'lone' ? amt * 2 : amt;
+        if (x < y) { result = 'wolf'; for (const l of rest) for (const w of mine) pay(l.key, w.key, st / mine.length); }
+        else if (y < x) { result = 'others'; for (const l of mine) for (const w of rest) pay(l.key, w.key, st / mine.length); }
+        else result = 'tie';
+      }
+      return { hole: i + 1, wolf: wolf.key, partner, result };
+    }) };
+  }
+
+  // closest to the pin on the par 3s, long drive on the par 5s: the cart picks who won, everyone else gives the stake
+  const pickGame = (g, par, name) => {
+    game = name;
+    if (!g?.on || n < 2) return undefined;
+    const amt = stake(g, 2), picks = g.picks || {};
+    return order.filter((i) => holes[i].par === par).map((i) => {
+      const w = players.find((p) => p.key === picks[i + 1])?.key ?? null;
+      if (w) for (const p of players) pay(p.key, w, amt);
+      return { hole: i + 1, winner: w };
+    });
+  };
+  const ctp = pickGame(cfg.closest, 3, 'closest'), ld = pickGame(cfg.longDrive, 5, 'longDrive');
+  if (ctp) out.closest = ctp;
+  if (ld) out.longDrive = ld;
+  out.tally = tally;
 
   // who pays who: the fewest payments that settle everyone up
   const round = (x) => Math.round(x * 100) / 100;

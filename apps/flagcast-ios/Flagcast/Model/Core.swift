@@ -75,17 +75,40 @@ struct SideConfig: Codable, Hashable {
             sides = (try? c.decodeIfPresent([String: String].self, forKey: .sides)) ?? [:]
         }
     }
+    /// A game the cart scores with a pick on some holes (the wolf's partner, who was closest, who hit it longest).
+    /// `picks` maps a hole number ("7") to a player key, or to "lone" for a lone wolf, or "none" when nobody won it.
+    struct Picks: Codable, Hashable {
+        var on = false, amt: Double = 1, net = true, picks: [String: String] = [:], sides: [String: String] = [:]
+        init(on: Bool = false, amt: Double = 1, net: Bool = true) { self.on = on; self.amt = amt; self.net = net }
+        init(from d: Decoder) throws {
+            let c = try d.container(keyedBy: CodingKeys.self)
+            on = c.bool(.on, false); amt = c.dbl(.amt, 1); net = c.bool(.net, true)
+            picks = (try? c.decodeIfPresent([String: String].self, forKey: .picks)) ?? [:]
+            sides = (try? c.decodeIfPresent([String: String].self, forKey: .sides)) ?? [:]
+        }
+    }
     var skins = Game(on: false, amt: 5, net: true, carry: true)
     var nassau = Nassau()
     var birdies = Game(on: false, amt: 2, net: false)
+    // the newer games (the web scorecard has them too)
+    var stableford = Picks(on: false, amt: 1, net: true)
+    var vegas = Picks(on: false, amt: 1, net: true)
+    var wolf = Picks(on: false, amt: 1, net: true)
+    var closest = Picks(on: false, amt: 2, net: false)
+    var longDrive = Picks(on: false, amt: 2, net: false)
     init() {}
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         skins = (try? c.decodeIfPresent(Game.self, forKey: .skins)) ?? Game()
         nassau = (try? c.decodeIfPresent(Nassau.self, forKey: .nassau)) ?? { var n = Nassau(); n.amt = 0; n.net = false; return n }()
         birdies = (try? c.decodeIfPresent(Game.self, forKey: .birdies)) ?? Game()
+        stableford = (try? c.decodeIfPresent(Picks.self, forKey: .stableford)) ?? Picks(net: true)
+        vegas = (try? c.decodeIfPresent(Picks.self, forKey: .vegas)) ?? Picks(net: true)
+        wolf = (try? c.decodeIfPresent(Picks.self, forKey: .wolf)) ?? Picks(net: true)
+        closest = (try? c.decodeIfPresent(Picks.self, forKey: .closest)) ?? Picks(amt: 2, net: false)
+        longDrive = (try? c.decodeIfPresent(Picks.self, forKey: .longDrive)) ?? Picks(amt: 2, net: false)
     }
-    var anyOn: Bool { skins.on || nassau.on || birdies.on }
+    var anyOn: Bool { skins.on || nassau.on || birdies.on || stableford.on || vegas.on || wolf.on || closest.on || longDrive.on }
 }
 
 struct SidePlayer: Hashable { var key: String, id: String, team: String, name: String, hcp: Int, short: String }
@@ -100,6 +123,14 @@ struct NassauSeg: Hashable { var label: String, played: Int, holes: Int, diff: I
 struct SideNassau: Hashable { var sides: [String: [String]]; var segs: [NassauSeg] }
 struct BirdieHit: Hashable { var key: String, hole: Int, count: Int, eagle: Bool }
 struct Settle: Hashable { var from: String, to: String, amt: Double }
+struct StablefordRow: Hashable { var key: String, points: Int, thru: Int }
+/// Vegas: each side's two scores make a number, low score first (a 4 and a 5 make 45). Points are the difference.
+struct VegasHole: Hashable { var hole: Int, a: Int, b: Int }
+struct SideVegas: Hashable { var sides: [String: [String]]; var holes: [VegasHole]; var total: Int }
+/// Wolf: the wolf rotates each hole. `partner` is a player key, "lone", or nil until the cart picks.
+struct WolfHole: Hashable { var hole: Int, wolf: String, partner: String?, result: String? }  // result: "wolf", "others", "tie"
+struct SideWolf: Hashable { var holes: [WolfHole] }
+struct PickHole: Hashable { var hole: Int, winner: String? }
 struct SideResult: Hashable {
     var players: [SidePlayer]
     var ledger: [String: Double]
@@ -107,6 +138,14 @@ struct SideResult: Hashable {
     var skins: SideSkins?
     var nassau: SideNassau?
     var birdies: [BirdieHit]?
+    var stableford: [StablefordRow]?
+    var vegas: SideVegas?
+    var vegasNeedsFour = false
+    var wolf: SideWolf?
+    var closest: [PickHole]?
+    var longDrive: [PickHole]?
+    /// each game's own points per player (the ledger is the sum of these, Stableford aside)
+    var tally: [String: [String: Double]] = [:]
 }
 
 enum Core {
@@ -333,7 +372,7 @@ enum Core {
         n.trimmingCharacters(in: .whitespacesAndNewlines).split(whereSeparator: \.isWhitespace).first.map(String.init) ?? ""
     }
 
-    /// A cart's own skins, Nassau and birdies, with who owes who. Flagcast only does the math; players settle up themselves.
+    /// A cart's own side games, scored in points (no money), with each player's running total. Same math as core.js sideGames.
     static func sideGames(_ ev: EventState, _ scores: Scores, _ teamIds: [String], _ cfg: SideConfig) -> SideResult {
         let allow = ev.format.allowance, holes = ev.course.holes
         let teams = teamIds.compactMap { id in ev.teams.first { $0.id == id } }
@@ -359,11 +398,18 @@ enum Core {
         let ph = playHoles(ev).map { $0 - 1 }, k0 = max(0, ph.firstIndex(of: start - 1) ?? 0)
         let order = Array(ph[k0...] + ph[..<k0])
         var ledger = Dictionary(uniqueKeysWithValues: players.map { ($0.key, 0.0) })
-        func pay(_ from: String, _ to: String, _ amt: Double) { if amt == 0 || from == to { return }; ledger[from]! -= amt; ledger[to]! += amt }
+        var tally: [String: [String: Double]] = [:]
+        var game = ""
+        func pay(_ from: String, _ to: String, _ amt: Double) {
+            if amt == 0 || from == to { return }
+            ledger[from]! -= amt; ledger[to]! += amt
+            tally[game, default: [:]][from, default: 0] -= amt; tally[game, default: [:]][to, default: 0] += amt
+        }
         var out = SideResult(players: players, ledger: [:])
         let n = players.count
 
         let sk = cfg.skins
+        game = "skins"
         if sk.on && n >= 2 {
             let amt = sk.amt
             var rows: [SideSkinRow] = [], pot = 1
@@ -388,6 +434,7 @@ enum Core {
         }
 
         let na = cfg.nassau
+        game = "nassau"
         if na.on && n >= 2 {
             var A: [SidePlayer] = [], B: [SidePlayer] = []
             for (k, p) in players.enumerated() {
@@ -417,6 +464,7 @@ enum Core {
         }
 
         let bi = cfg.birdies
+        game = "birdies"
         if bi.on && n >= 2 {
             let amt = bi.amt
             var list: [BirdieHit] = []
@@ -430,6 +478,89 @@ enum Core {
             } }
             out.birdies = list
         }
+
+        func hasScore(_ p: SidePlayer, _ i: Int) -> Bool { (raw(p, i) ?? 0) > 0 }
+        func sideOf(_ g: SideConfig.Picks, _ p: SidePlayer, _ k: Int) -> String {
+            g.sides[p.key] ?? (teams.count >= 2 ? (p.team == teams[0].id ? "A" : "B") : (k < (n + 1) / 2 ? "A" : "B"))
+        }
+
+        // Stableford: points against par on each hole (net double bogey or worse 0, bogey 1, par 2, birdie 3, eagle 4).
+        // It is its own table, not part of the points that change hands.
+        let sf = cfg.stableford
+        if sf.on && n >= 2 {
+            out.stableford = players.map { p in
+                var pts = 0, thru = 0
+                for i in order where entered(p, i) {
+                    thru += 1
+                    guard let v = raw(p, i), v > 0 else { continue }  // a pick-up scores nothing
+                    let s = sf.net ? v - strokesOn(p.hcp, holes[i].hcp) : v
+                    pts += max(0, 2 + holes[i].par - s)
+                }
+                return StablefordRow(key: p.key, points: pts, thru: thru)
+            }
+        }
+
+        // Vegas: two against two
+        let vg = cfg.vegas
+        game = "vegas"
+        if vg.on && n >= 2 {
+            var A: [SidePlayer] = [], B: [SidePlayer] = []
+            for (k, p) in players.enumerated() { if sideOf(vg, p, k) == "B" { B.append(p) } else { A.append(p) } }
+            if A.count == 2 && B.count == 2 {
+                func number(_ s: [SidePlayer], _ i: Int) -> Int {
+                    let v = s.map { val($0, i, vg.net) }.sorted()
+                    return Int("\(v[0])\(v[1])") ?? 0
+                }
+                var rows: [VegasHole] = [], total = 0
+                for i in order where (A + B).allSatisfy({ entered($0, i) }) {
+                    let a = number(A, i), b = number(B, i)
+                    rows.append(VegasHole(hole: i + 1, a: a, b: b))
+                    total += b - a  // a lower number wins: positive is good for side A
+                    let d = Double(abs(b - a)), W = b > a ? A : B, L = b > a ? B : A
+                    if b != a { for (w, l) in zip(W, L) { pay(l.key, w.key, d * vg.amt) } }
+                }
+                out.vegas = SideVegas(sides: ["A": A.map(\.key), "B": B.map(\.key)], holes: rows, total: total)
+            } else { out.vegas = SideVegas(sides: ["A": A.map(\.key), "B": B.map(\.key)], holes: [], total: 0); out.vegasNeedsFour = true }
+        }
+
+        // Wolf: the wolf rotates in cart order. After the tee shots the wolf takes a partner or goes it alone.
+        let wf = cfg.wolf
+        game = "wolf"
+        if wf.on && n >= 3 {
+            var rows: [WolfHole] = []
+            for (k, i) in order.enumerated() {
+                let wolf = players[k % n]
+                let pick = wf.picks["\(i + 1)"]
+                let partner = pick.flatMap { pk in pk == "lone" ? "lone" : players.first { $0.key == pk && $0.key != wolf.key }?.key }
+                var result: String?
+                if let partner, players.allSatisfy({ entered($0, i) }) {
+                    let mine = players.filter { $0.key == wolf.key || $0.key == partner }
+                    let rest = players.filter { p in !mine.contains { $0.key == p.key } }
+                    let x = mine.filter { hasScore($0, i) }.map { val($0, i, wf.net) }.min() ?? Int.max
+                    let y = rest.filter { hasScore($0, i) }.map { val($0, i, wf.net) }.min() ?? Int.max
+                    let stake = partner == "lone" ? wf.amt * 2 : wf.amt  // going it alone doubles the hole, both ways
+                    if x < y { result = "wolf"; for l in rest { for w in mine { pay(l.key, w.key, stake / Double(mine.count)) } } }
+                    else if y < x { result = "others"; for l in mine { for w in rest { pay(l.key, w.key, stake / Double(mine.count)) } } }
+                    else { result = "tie" }
+                }
+                rows.append(WolfHole(hole: i + 1, wolf: wolf.key, partner: partner, result: result))
+            }
+            out.wolf = SideWolf(holes: rows)
+        }
+
+        // Closest to the pin on the par 3s, long drive on the par 5s: the cart picks who won, everyone else gives the stake.
+        func pickGame(_ g: SideConfig.Picks, _ par: Int, _ name: String) -> [PickHole]? {
+            game = name
+            guard g.on && n >= 2 else { return nil }
+            return order.filter { holes[$0].par == par }.map { i in
+                let w = g.picks["\(i + 1)"].flatMap { pk in players.first { $0.key == pk }?.key }
+                if let w { for p in players { pay(p.key, w, g.amt) } }
+                return PickHole(hole: i + 1, winner: w)
+            }
+        }
+        out.closest = pickGame(cfg.closest, 3, "closest")
+        out.longDrive = pickGame(cfg.longDrive, 5, "longDrive")
+        out.tally = tally
 
         // who pays who: the fewest payments that settle everyone up
         func round2(_ x: Double) -> Double { jsRound(x * 100) / 100 }
