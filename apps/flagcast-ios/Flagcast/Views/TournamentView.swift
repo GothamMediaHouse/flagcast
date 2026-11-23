@@ -142,7 +142,7 @@ struct TourTitle: View {
     }
 }
 
-/// The Course tab: the hole you're on, full screen, following the scorecard.
+/// The Course tab: the hole you're on, following the scorecard, with the scores at the bottom.
 struct CourseTab: View {
     @Bindable var model: ScorecardModel
     let state: EventState
@@ -152,7 +152,6 @@ struct CourseTab: View {
             guard let t = model.team else { return }
             let ord = model.order(t), i = ord.firstIndex(of: model.currentHole()) ?? 0
             model.hole = ord[(i + d + ord.count) % ord.count]
-        }, embedded: true)
-        .id(h)
+        }, embedded: true, scorer: model)
     }
 }

@@ -7,8 +7,8 @@ struct GPSCard: View {
     var state: EventState
     var hole: Int
     var onHole: (Int) -> Void
-    /// inside a tournament: open the Course tab instead of a full-screen cover
-    var openMap: (() -> Void)? = nil
+    /// the cart's scorecard: the full-screen map then has the scores too
+    var scorer: ScorecardModel? = nil
     @State private var loc = Locator.shared
     @State private var courseView = false
 
@@ -47,7 +47,7 @@ struct GPSCard: View {
                 }
                 .font(.footnote).foregroundStyle(Color.fcMuted)
                 HStack(spacing: 8) {
-                    Button { if let openMap { openMap() } else { courseView = true } } label: { Label("Course map", systemImage: "map.fill") }
+                    Button { courseView = true } label: { Label(scorer == nil ? "Course map" : "Full screen GPS", systemImage: "arrow.up.left.and.arrow.down.right") }
                         .buttonStyle(.fc(.dark, full: true))
                     if !loc.on {
                         Button { loc.start() } label: { Label("Use my GPS", systemImage: "location.fill") }
@@ -62,7 +62,7 @@ struct GPSCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .fcCard(padding: 14)
         .fullScreenCover(isPresented: $courseView) {
-            CourseView(state: state, hole: hole, onHole: onHole)
+            CourseView(state: state, hole: hole, onHole: onHole, scorer: scorer)
         }
     }
 
@@ -88,6 +88,10 @@ struct CourseView: View {
     var onHole: (Int) -> Void
     /// in the Course tab: no close button, and the yards in a big panel at the bottom
     var embedded = false
+    /// the cart's scorecard: score each player without leaving the map
+    var scorer: ScorecardModel? = nil
+    @State private var scoresOpen = true
+    @State private var fullScreen = false
     @Environment(\.dismiss) private var dismiss
     @State private var loc = Locator.shared
     @State private var camera: MapCameraPosition = .automatic
@@ -136,11 +140,21 @@ struct CourseView: View {
             }
             topBar
         }
-        .overlay(alignment: .topTrailing) { if !embedded { yardageBox.padding(.top, 76).padding(.trailing, 12).opacity(flying ? 0 : 1) } }
+        .overlay(alignment: .topTrailing) { if !bigYards { yardageBox.padding(.top, 76).padding(.trailing, 12).opacity(flying ? 0 : 1) } }
         .overlay(alignment: .bottomLeading) { flyButton.padding(.leading, 12).padding(.bottom, 12) }
         .overlay(alignment: .bottomLeading) { holeCard.padding(.leading, 18).padding(.bottom, 66) }
-        .safeAreaInset(edge: .bottom) { VStack(spacing: 0) { if embedded { yardPanel }; footer } }
+        .safeAreaInset(edge: .bottom) {
+            VStack(spacing: 0) {
+                if bigYards { yardPanel }
+                if let scorer { scorePanel(scorer) } else { footer }
+            }
+        }
         .modifier(DarkScheme(local: embedded))
+        // follow the scorecard when its hole changes elsewhere
+        .onChange(of: scorer?.currentHole()) { _, n in if let n, n != hole { hole = n } }
+        .fullScreenCover(isPresented: $fullScreen) {
+            CourseView(state: state, hole: hole, onHole: onHole, scorer: scorer)
+        }
         .onAppear { if loc.on { loc.resume() } }
     }
 
@@ -349,6 +363,13 @@ struct CourseView: View {
                 Text("Par \(H.par)\(H.yds > 0 ? " · \(H.yds) yds" : "")").font(.caption.monospaced()).foregroundStyle(Color(UIColor(hex: 0xa9bdb0)))
             }
             Spacer()
+            if embedded {
+                Button { fullScreen = true } label: {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right").font(.headline).frame(width: 40, height: 40)
+                        .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+                }
+                .accessibilityLabel("Full screen")
+            }
             Button { threeD.toggle() } label: {
                 Text("3D").font(.subheadline.weight(.heavy)).frame(width: 44, height: 40)
                     .background(threeD ? Color(UIColor(hex: 0xf2d04f)) : .white.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
@@ -386,6 +407,75 @@ struct CourseView: View {
             .background(Color(UIColor(hex: 0x0b1a12)).opacity(0.85), in: RoundedRectangle(cornerRadius: 12))
             .allowsHitTesting(false)
         }
+    }
+
+    private var bigYards: Bool { embedded || scorer != nil }
+
+    /// Scores on the map: each player's score for this hole with − and +, tap the number for par.
+    /// Folds down to one line to show more of the hole.
+    private func scorePanel(_ m: ScorecardModel) -> some View {
+        let H = state.course.holes[hole - 1]
+        let ps = m.team.map { state.scorers($0) } ?? []
+        return VStack(spacing: 8) {
+            HStack(spacing: 10) {
+                Button { withAnimation(.snappy) { scoresOpen.toggle() } } label: {
+                    HStack(spacing: 6) {
+                        Text("Scores · hole \(hole)").font(.subheadline.weight(.bold))
+                        Image(systemName: scoresOpen ? "chevron.down" : "chevron.up").font(.caption.weight(.bold))
+                    }
+                    .frame(minHeight: 36).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                if !scoresOpen {
+                    Text(ps.map { p in "\(Fmt.firstName(p.name)) \(m.value(p.id, hole).map { $0 == 0 ? "PU" : "\($0)" } ?? "–")" }.joined(separator: " · "))
+                        .font(.subheadline.monospacedDigit()).foregroundStyle(Color(UIColor(hex: 0xcfdcd3))).lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                if !loc.on {
+                    Button("Use my GPS") { loc.start() }.font(.subheadline.weight(.bold))
+                        .padding(.horizontal, 12).frame(minHeight: 36).background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+                }
+            }
+            if scoresOpen {
+                ForEach(ps) { p in
+                    let v = m.value(p.id, hole), set = v != nil
+                    let mark = Core.mark(v, H.par)
+                    HStack(spacing: 10) {
+                        Text(Fmt.firstName(p.name)).font(.headline).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                        mapStep("minus", "One fewer for \(p.name)") { score(m, p.id, -1) }
+                        Button { score(m, p.id, 0) } label: {
+                            Text(!set ? "\(H.par)" : v == 0 ? "PU" : "\(v!)")
+                                .font(FCType.display(34)).frame(width: 54, height: 46)
+                                .foregroundStyle(!set ? Color.white.opacity(0.45) : mark == .birdie || mark == .eagle ? Color(UIColor(hex: 0xff8a80)) : .white)
+                                .background(set ? Color.white.opacity(0.14) : .clear, in: RoundedRectangle(cornerRadius: 12))
+                                .overlay { if !set { RoundedRectangle(cornerRadius: 12).stroke(.white.opacity(0.35), style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])) } }
+                                .contentTransition(.numericText())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(set ? "\(p.name) score \(v == 0 ? "picked up" : "\(v!)")" : "Tap to enter par for \(p.name)")
+                        mapStep("plus", "One more for \(p.name)") { score(m, p.id, 1) }
+                    }
+                }
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(Color(UIColor(hex: 0x0b1a12)).opacity(0.94))
+        .sensoryFeedback(.selection, trigger: m.changes)
+        .animation(.snappy(duration: 0.2), value: m.changes)
+    }
+    /// scores go on the hole the map shows
+    private func score(_ m: ScorecardModel, _ p: String, _ d: Int) {
+        if m.currentHole() != hole { m.hole = hole }
+        m.step(p, d)
+    }
+    private func mapStep(_ icon: String, _ label: String, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon).font(.title3.weight(.bold)).frame(width: 46, height: 46)
+                .background(.white.opacity(0.14), in: Circle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
     }
 
     /// Course tab: front, middle and back in big numbers, the middle on a green tile

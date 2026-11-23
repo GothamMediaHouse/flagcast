@@ -138,7 +138,7 @@ struct ScorecardScreen: View {
             GPSCard(state: s, hole: h, onHole: { d in
                 let ord = model.order(t), i = ord.firstIndex(of: model.currentHole()) ?? 0
                 model.hole = ord[max(0, min(ord.count - 1, i + d))]
-            }, openMap: { nav.tab = .course })
+            }, scorer: model)
         }
         // no course map: nothing here (golfers can't map it; the desk sees that in Setup)
         sponsors(s, h)
