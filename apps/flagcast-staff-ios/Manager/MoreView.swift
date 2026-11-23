@@ -153,6 +153,10 @@ struct StaffView: View {
     @Bindable var doc: DeskDoc
     var body: some View {
         CardPage(image: doc.picture.image, kicker: doc.ev.name, title: "Pros & marshals") {
+            CardBox(title: "Tournament code", footer: "Pros and marshals type the tournament code and their PIN.") {
+                Text(doc.id.uppercased()).font(.system(size: 32, weight: .bold, design: .monospaced)).foregroundStyle(FC.ink).textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 14).padding(.vertical, 12)
+            }
             CardBox(footer: "A golf pro can fix scores, switch the TVs and nudge a cart. A marshal can only post contest results. PINs are 4 to 8 digits.") {
                 if doc.ev.pins.isEmpty { Text("Nobody yet.").foregroundStyle(FC.muted).padding(14) }
                 ForEach($doc.ev.pins) { $p in

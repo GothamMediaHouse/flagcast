@@ -81,6 +81,18 @@ table.t .n { width: 64px; }
 .photos .ph button { position: absolute; top: 4px; right: 4px; border: 0; border-radius: 6px; background: rgba(0, 0, 0, .6); color: #fff; font-size: .75rem; padding: 3px 6px; cursor: pointer; }
 .photos .ph.busy { opacity: .5; pointer-events: none; }
 .lock-on { background: var(--red) !important; border-color: var(--red) !important; color: #fff !important; }
+.codes { margin-top: 16px; min-height: 0; }
+.codes .b { display: flex; flex-wrap: wrap; gap: 14px 32px; padding: 14px 20px 0 16px; border-top: 1px solid var(--hairline); }
+.codes .b > div { min-width: 0; }
+.codes .b > .who { flex: 1; min-width: 260px; }
+.codes .l { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+.codes .big-code { font-size: 2rem; font-weight: 700; user-select: all; }
+.codes .pin { display: flex; align-items: center; gap: 10px; padding: 3px 0; font-size: 14px; }
+.codes .pin .n { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.codes .pin .r { font-size: 12px; color: var(--muted); }
+.codes .pin .c { margin-left: auto; font: 600 15px var(--f-mono); user-select: all; }
+.codes .none { color: var(--muted); font-size: 14px; }
+.codes .help { padding: 12px 20px 14px 16px; margin: 0; }
 .gate { max-width: 460px; margin: 60px auto; text-align: center; }
 @media (max-width: 760px) { .link { grid-template-columns: 1fr; } .sponsor { grid-template-columns: 1fr 1fr; } }
 </style>
@@ -99,6 +111,7 @@ table.t .n { width: 64px; }
 <section id="s-overview" class="ov" hidden>
   <div class="stats" id="ovStats"></div>
   <div class="ovgrid"><div class="raised lb" id="ovLb"></div><a class="ctp" id="ovCtp" href="#contests"><div class="tilebox" id="ovCtpPic"></div><div class="tx" id="ovCtpTx"></div></a></div>
+  <div class="raised lb codes" id="ovCodes"></div>
 </section>
 
 <section id="s-setup" hidden>
@@ -324,6 +337,18 @@ function drawOverview() {
     <div class="d">${esc(lead ? fmtDist(c, lead.dist) + (c.sponsor ? ` · presented by ${c.sponsor}` : '') : c ? 'Marshals post results from the phone app.' : 'Add one on the Contests page.')}</div>`;
   const pv = (c && holeView(ev, c.hole)) || courseView(ev), sig = JSON.stringify(pv);
   if ($('ovCtpPic').dataset.sig !== sig) { $('ovCtpPic').dataset.sig = sig; paintPhoto($('ovCtpPic'), pv); }
+  drawCodes();
+}
+// the codes golfers and staff type on the join screen (read-only here; PINs are changed on Staff)
+function drawCodes() {
+  if (!EV) return;
+  const pins = EV.pins || [], role = (x) => (x.role === 'marshal' ? 'Marshal' : 'Golf pro');
+  $('ovCodes').innerHTML = `<div class="h"><span>Codes</span><a class="lnk" href="#links">Cart codes ›</a></div>
+    <div class="b"><div><div class="l">Tournament code</div><div class="big-code">${esc(eventId().toUpperCase())}</div></div>
+    <div class="who"><div class="l">Golf pros and marshals</div>${pins.length
+      ? pins.map((x) => `<div class="pin"><span class="n">${esc(x.name || role(x))}</span><span class="r">${role(x)}</span><span class="c">PIN ${esc(x.pin)}</span></div>`).join('')
+      : `<div class="none">No golf pros or marshals yet. <a class="lnk" href="#staff">Add them on Staff ›</a></div>`}</div></div>
+    <p class="help">Golfers type the tournament code and their cart code. Pros and marshals type the tournament code and their PIN.</p>`;
 }
 
 // ---- form <-> setup ----
@@ -605,6 +630,7 @@ const pinGen = () => String(1000 + Math.floor(Math.random() * 9000));
 function drawStaff() {
   EV.pins = EV.pins || []; EV.displays = EV.displays || []; EV.schedule = EV.schedule || [];
   $('evcode').textContent = eventId().toUpperCase();
+  drawCodes();
   $('staff').innerHTML = EV.pins.map((x, i) => `<div class="staff"><input data-pin="${i}" data-pk="name" value="${esc(x.name)}" placeholder="Name"><select data-pin="${i}" data-pk="role"><option value="pro" ${x.role === 'pro' ? 'selected' : ''}>Golf pro</option><option value="marshal" ${x.role === 'marshal' ? 'selected' : ''}>Marshal</option></select><input data-pin="${i}" data-pk="pin" class="mono" value="${esc(x.pin)}" inputmode="numeric" maxlength="8" aria-label="PIN"><button class="btn danger" data-delpin="${i}">Remove</button></div>`).join('') || '<p class="help">No one yet.</p>';
   const base = `${location.origin}/g/${eventId()}/board?screen=`;
   const p3 = EV.course.holes.filter((h) => h.par === 3);

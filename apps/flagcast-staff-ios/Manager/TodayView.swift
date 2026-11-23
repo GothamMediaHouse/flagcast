@@ -87,6 +87,7 @@ private struct HomePage: View {
                 HStack(alignment: .top, spacing: 14) { leaderboard(doc).frame(minWidth: 380); contestTile(doc).frame(width: 300) }
                 VStack(spacing: 14) { leaderboard(doc); contestTile(doc).frame(height: 190) }
             }
+            CodesCard(doc: doc)
             // on the day: the checks with their fixes (they cover what the status card shows on other days)
             if DayOfChecks.isEventDay(doc) { DayOfChecks(doc: doc) { tabs.tab = .screens }.card(padding: 16) } else { tiles(doc) }
             if !coming.isEmpty {
@@ -312,3 +313,34 @@ private struct ClubRequestView: View {
 }
 
 extension String { var nilIfEmpty: String? { isEmpty ? nil : self } }
+
+/// The codes golfers and staff type on the join screen: the tournament code, each golf pro's and marshal's PIN,
+/// and the way to the cart codes (on Links). Read-only here: PINs are changed on Pros & marshals.
+struct CodesCard: View {
+    let doc: DeskDoc
+    var body: some View {
+        CardBox(title: "Codes", footer: "Golfers type the tournament code and their cart code. Pros and marshals type the tournament code and their PIN.") {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Tournament code").font(.system(size: 12, weight: .semibold)).foregroundStyle(FC.muted)
+                Text(doc.id.uppercased()).font(.system(size: 32, weight: .bold, design: .monospaced)).foregroundStyle(FC.ink).textSelection(.enabled)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 12)
+            .overlay(alignment: .bottom) { Rectangle().fill(FC.hairline).frame(height: 1) }
+            if doc.ev.pins.isEmpty {
+                NavigationLink { WithTournament { StaffView(doc: $0) } } label: {
+                    ListRow(icon: "person.badge.key.fill", iconColor: FC.blue, title: "No golf pros or marshals yet", sub: "Add them on Pros & marshals") { Chevron() }
+                }
+            }
+            ForEach(doc.ev.pins) { p in
+                ListRow(icon: p.role == "marshal" ? "flag.fill" : "person.badge.key.fill", iconColor: p.role == "marshal" ? FC.flag.opacity(0.9) : FC.blue,
+                        title: p.name.isEmpty ? (p.role == "marshal" ? "Marshal" : "Golf pro") : p.name, sub: p.role == "marshal" ? "Marshal" : "Golf pro") {
+                    Text("PIN \(p.pin)").font(.system(size: 16, weight: .semibold, design: .monospaced)).foregroundStyle(FC.ink).textSelection(.enabled)
+                }
+            }
+            NavigationLink { WithTournament { LinksView(doc: $0) } } label: {
+                ListRow(icon: "square.and.pencil", iconColor: FC.primary, title: "Cart codes", sub: "Each team’s code, on Links", last: true) { Chevron() }
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}

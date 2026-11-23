@@ -39,7 +39,8 @@ struct OverviewView: View {
                         contestTile.frame(maxWidth: .infinity).frame(height: 220)
                     }
                 }
-                .padding(.horizontal, 24).padding(.bottom, 22)
+                .padding(.horizontal, 24)
+                codesTile.padding(.horizontal, 24).padding(.bottom, 22)
             }
         }
     }
@@ -136,5 +137,49 @@ struct OverviewView: View {
         .frame(minHeight: 260)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .contentShape(Rectangle()).onTapGesture { nav.section = .contests }
+    }
+
+    // ---- the codes golfers and staff type on the join screen ----
+    private var codesTile: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Codes").font(.system(size: 14, weight: .bold))
+                Spacer()
+                Button("Cart codes ›") { nav.section = .links }.buttonStyle(.plain).font(.system(size: 13, weight: .semibold)).foregroundStyle(FC.link)
+            }
+            .padding(.leading, 16).padding(.trailing, 20).padding(.vertical, 12)
+            Divider().overlay(FC.hairline)
+            HStack(alignment: .top, spacing: 28) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Tournament code").font(.system(size: 12, weight: .semibold)).foregroundStyle(FC.muted)
+                    Text(doc.id.uppercased()).font(.system(size: 34, weight: .bold, design: .monospaced)).foregroundStyle(FC.ink).textSelection(.enabled)
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Golf pros and marshals").font(.system(size: 12, weight: .semibold)).foregroundStyle(FC.muted)
+                    if ev.pins.isEmpty {
+                        HStack(spacing: 10) {
+                            Text("No golf pros or marshals yet").font(.system(size: 14)).foregroundStyle(FC.muted)
+                            Button("Add them on Staff ›") { nav.section = .staff }.buttonStyle(.plain).font(.system(size: 13, weight: .semibold)).foregroundStyle(FC.link)
+                        }
+                    }
+                    ForEach(ev.pins) { p in
+                        HStack(spacing: 10) {
+                            Image(systemName: p.role == "marshal" ? "flag" : "person.badge.key").foregroundStyle(FC.muted).frame(width: 18)
+                            Text(p.name.isEmpty ? (p.role == "marshal" ? "Marshal" : "Golf pro") : p.name).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                            Text(p.role == "marshal" ? "Marshal" : "Golf pro").font(.system(size: 12)).foregroundStyle(FC.muted)
+                            Spacer(minLength: 12)
+                            Text("PIN \(p.pin)").font(.system(size: 15, weight: .semibold, design: .monospaced)).textSelection(.enabled)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 16).padding(.top, 14)
+            Text("Golfers type the tournament code and their cart code. Pros and marshals type the tournament code and their PIN.")
+                .font(.system(size: 12)).foregroundStyle(FC.muted).fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 14)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .raisedCard()
     }
 }
