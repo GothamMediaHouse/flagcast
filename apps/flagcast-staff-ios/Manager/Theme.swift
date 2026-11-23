@@ -214,6 +214,8 @@ struct PhotoPage<Accessory: View, Content: View>: View {
     var title: String
     var sub: String? = nil
     var height: CGFloat = 250
+    /// how wide the cards go (wide pages like Screens & sponsors use two columns on iPad)
+    var maxWidth: CGFloat = 820
     @ViewBuilder var accessory: Accessory
     @ViewBuilder var content: Content
 
@@ -223,7 +225,7 @@ struct PhotoPage<Accessory: View, Content: View>: View {
                 PhotoHeader(image: image, kicker: kicker, live: live, title: title, sub: sub, height: height) { accessory }
                 VStack(alignment: .leading, spacing: 14) { content }
                     .padding(.horizontal, 16).padding(.top, 16).padding(.bottom, 100)
-                    .frame(maxWidth: 820).frame(maxWidth: .infinity)
+                    .frame(maxWidth: maxWidth).frame(maxWidth: .infinity)
             }
         }
         .ignoresSafeArea(edges: .top)

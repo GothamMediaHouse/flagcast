@@ -20,7 +20,13 @@ struct ManagerApp: App {
 }
 
 /// Which tab shows.
-enum Tab: String, Hashable { case today, teams, scores, screens, more, admin }
+enum Tab: String, Hashable {
+    case today, teams, scores, screens, more, admin
+    /// the iPad sidebar's other sections (the Mac's): on iPhone they live under More
+    case setup, contests, staff, links, report, map, groups
+    /// the tabs the iPhone's tab bar has
+    var onTabBar: Bool { [.today, .teams, .scores, .screens, .more, .admin].contains(self) }
+}
 
 /// The tab bar's selection, so Home's buttons can jump to Scores, Screens or Teams.
 @MainActor @Observable final class Tabs { var tab: Tab = .today }
@@ -49,6 +55,8 @@ struct RootView: View {
         } message: { Text(model.error ?? "") }
         .onAppear { if model.selection == nil { model.selection = model.shownEvents.first?.id } }
         .onChange(of: model.selection) { _, _ in if tab == .admin || tab == .more { tabs.tab = .today } }
+        // iPad going narrow (Split View): a sidebar-only section isn't on the tab bar, so show More
+        .onChange(of: size) { _, s in if s != .regular && !tab.onTabBar { tabs.tab = model.isAdmin ? .admin : .more } }
         .onChange(of: model.events.count) { _, _ in if model.selection == nil { model.selection = model.shownEvents.first?.id } }
     }
 
@@ -79,7 +87,10 @@ struct SidebarRoot: View {
     @State private var adding = false
     @State private var making = false
 
-    private static let sections: [(Tab, String, String)] = [(.today, "Overview", "square.grid.2x2"), (.teams, "Teams", "person.2"), (.scores, "Scores", "list.number"), (.screens, "Screens & sponsors", "tv")]
+    /// the Mac's sections, in the Mac's order
+    private static let sections: [(Tab, String, String)] = [(.today, "Overview", "square.grid.2x2"), (.setup, "Setup", "gearshape"), (.teams, "Teams", "person.2"),
+        (.scores, "Scores", "list.number"), (.contests, "Contests", "trophy"), (.screens, "Screens & sponsors", "tv"), (.staff, "Staff", "person.crop.circle"),
+        (.links, "Links & cart cards", "link"), (.report, "Report", "chart.bar"), (.map, "Course map", "map"), (.groups, "Where the groups are", "mappin.and.ellipse")]
 
     var body: some View {
         HStack(spacing: 0) {
@@ -101,6 +112,13 @@ struct SidebarRoot: View {
         case .screens: ScreensView()
         case .admin: AdminHome()
         case .more: MoreView()
+        case .setup: WithTournament { DetailsView(doc: $0) }
+        case .contests: ContestsView()
+        case .staff: WithTournament { StaffView(doc: $0) }
+        case .links: WithTournament { LinksView(doc: $0) }
+        case .report: ReportView()
+        case .map: CourseMapScreen()
+        case .groups: GroupsScreen()
         }
     }
 

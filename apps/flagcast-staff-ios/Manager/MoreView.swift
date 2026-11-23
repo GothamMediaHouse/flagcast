@@ -11,7 +11,10 @@ struct MoreView: View {
                     NavigationLink { ContestsView() } label: { ListRow(icon: "trophy.fill", iconColor: FC.flag.opacity(0.9), title: "Contests", sub: "Closest to the pin, long drive") { Chevron() } }
                     NavigationLink { WithTournament { DetailsView(doc: $0) } } label: { ListRow(icon: "gearshape.fill", title: "Tournament details", sub: "Name, date, holes, flights, ticker") { Chevron() } }
                     NavigationLink { WithTournament { StaffView(doc: $0) } } label: { ListRow(icon: "person.badge.key.fill", iconColor: FC.blue, title: "Golf pros and marshals", sub: "Their PINs for the phone app") { Chevron() } }
-                    NavigationLink { WithTournament { LinksView(doc: $0) } } label: { ListRow(icon: "link", iconColor: FC.ok, title: "Links to share", sub: "Leaderboard, board, scorecards", last: true) { Chevron() } }
+                    NavigationLink { WithTournament { LinksView(doc: $0) } } label: { ListRow(icon: "link", iconColor: FC.ok, title: "Links & cart cards", sub: "Leaderboard, board, scorecards, cards to print") { Chevron() } }
+                    NavigationLink { ReportView() } label: { ListRow(icon: "chart.bar.fill", iconColor: FC.green2, title: "Report", sub: "Results, sponsors, GHIN posting") { Chevron() } }
+                    NavigationLink { CourseMapScreen() } label: { ListRow(icon: "map.fill", iconColor: FC.ok, title: "Course map", sub: "Tees and greens for the yardages") { Chevron() } }
+                    NavigationLink { GroupsScreen() } label: { ListRow(icon: "mappin.and.ellipse", iconColor: FC.blue, title: "Where the groups are", sub: "Each group on the course map", last: true) { Chevron() } }
                 }
             }
             CardBox(title: "You") {
@@ -187,7 +190,7 @@ struct StaffView: View {
 struct LinksView: View {
     let doc: DeskDoc
     var body: some View {
-        CardPage(image: doc.picture.image, kicker: doc.ev.name, title: "Links") {
+        CardPage(image: doc.picture.image, kicker: doc.ev.name, title: "Links & cart cards") {
             CardBox(title: "For everyone") {
                 link("Live leaderboard", doc.liveURL, "Players and guests, on their phones", "list.number", FC.ok)
                 link("The board", doc.boardURL, "For a TV (or set up each TV on Screens)", "tv.fill", FC.green2, last: true)
@@ -195,6 +198,17 @@ struct LinksView: View {
             CardBox(title: "Organizers only", footer: "Anyone with the desk link can change this tournament.") {
                 link("Desk link", doc.deskURL, "Opens this tournament’s desk", "key.fill", FC.red, last: true)
             }
+            CardBox(title: "More board links", footer: "For a TV that should show just one thing.") {
+                let p3 = doc.ev.course.holes.first { $0.par == 3 }?.n ?? 1
+                link("One par 3 only", URL(string: "\(doc.boardURL.absoluteString)?hole=\(p3)")!, "For a TV at that tee (hole \(p3))", "video.fill", FC.green2)
+                link("Leaderboard only", URL(string: "\(doc.boardURL.absoluteString)?show=leaderboard")!, "Just the standings", "list.number", FC.green2, last: true)
+            }
+            CardBox(title: "Tournament code", footer: "Golf pros and marshals sign in to the Flagcast phone app with this code and their PIN (on Staff).") {
+                Text(doc.id.uppercased()).font(.system(size: 28, weight: .bold, design: .monospaced)).foregroundStyle(FC.ink).textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 14).padding(.vertical, 12)
+            }
+            CartCardsBox(doc: doc)
+            AcesBox(doc: doc)
             let teams = doc.ev.teams.filter { !$0.code.isEmpty }
             if !teams.isEmpty {
                 CardBox(title: "Team scorecards") {

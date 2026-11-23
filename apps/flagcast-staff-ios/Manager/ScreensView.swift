@@ -1,12 +1,19 @@
 import SwiftUI
 
-/// Screens: every TV at the club as a card. "What should this TV show?" picture tiles, Show something else for a bit
-/// and Back to normal, Where is it?, Set up this TV, and the detail under Customize. (Engineering is Flagcast's: Admin.)
+/// Screens & sponsors (the Mac's page): every TV at the club as a card ("What should this TV show?" picture tiles, Show
+/// something else for a bit and Back to normal, Where is it?, Set up this TV, the detail under Customize), and beside
+/// them on a wide iPad (or under "Sponsors & more" on iPhone) the board as it is now, the announcement, sponsors, the
+/// big screens' settings, par 3 cameras and replays, and fundraising. (Engineering is Flagcast's: Admin.)
 struct ScreensView: View {
     var body: some View {
         WithTournament { doc in ScreensPage(doc: doc) }
             .toolbar { ToolbarItem(placement: .topBarTrailing) { TournamentMenu() } }
     }
+}
+
+private struct PageWidthKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
 }
 
 private struct ScreensPage: View {
@@ -23,25 +30,66 @@ private struct ScreensPage: View {
         return seen
     }
 
+    @Environment(\.horizontalSizeClass) private var size
+    @Environment(\.openURL) private var openURL
+    @AppStorage("screens.tab") private var tab = "screens"
+    @State private var width: CGFloat = 0
+    /// two columns (TVs | board, sponsors and more) when the page is wide enough: iPad landscape, or a big iPad
+    private var wide: Bool { size == .regular && width >= 860 }
+    private var onCount: Int { doc.ev.displays.filter { (doc.live?.online[$0.id] ?? 0) > 0 }.count }
+
     var body: some View {
-        PhotoPage(image: doc.picture.image, kicker: "\(doc.ev.displays.filter { (doc.live?.online[$0.id] ?? 0) > 0 }.count) of \(doc.ev.displays.count) on",
-                  title: "TVs", sub: "What the TVs at the club show", height: 220) {
-            EmptyView()
-        } content: {
-            if doc.ev.displays.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "tv").font(.system(size: 40)).foregroundStyle(FC.muted)
-                    Text("No TVs yet").font(FC.display(32))
-                    Text("Add each TV at the club. You’ll pick what it shows, and we’ll show you how to put Flagcast on it.")
-                        .font(.subheadline).foregroundStyle(FC.muted).multilineTextAlignment(.center)
-                    Button("Add Your First TV") { addTV() }.buttonStyle(GreenButton())
-                }
-                .frame(maxWidth: .infinity).card(padding: 24)
-            } else {
-                if doc.ev.displays.count > 1 { allAtOnce }
-                ForEach($doc.ev.displays) { $d in TVCard(display: $d, doc: doc, saved: saved.contains(d.id), places: Self.PLACES + places.filter { !Self.PLACES.contains($0) }) }
-                Button { addTV() } label: { Label("Add Another TV", systemImage: "plus") }.buttonStyle(PlainCardButton(full: true))
+        PhotoPage(image: doc.picture.image, kicker: doc.ev.displays.isEmpty ? doc.ev.name : "\(onCount) of \(doc.ev.displays.count) TVs on",
+                  title: "Screens & sponsors", sub: "The TVs at the club, what they show, and your sponsors", height: 220, maxWidth: wide ? 1320 : 820) {
+            HStack(spacing: 8) {
+                Button { openURL(doc.boardURL) } label: { Label("Open the Board", systemImage: "tv") }.buttonStyle(GlassButton())
+                ShareLink(item: doc.boardURL) { Label("Send the Link", systemImage: "square.and.arrow.up") }.buttonStyle(GlassButton())
             }
+        } content: {
+            Group {
+                if wide {
+                    HStack(alignment: .top, spacing: 18) {
+                        VStack(alignment: .leading, spacing: 14) {
+                            CardTitle("TVs at the club").padding(.leading, 4)
+                            tvs
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 18) { ScreensSide(doc: doc) }
+                            .frame(width: min(440, max(360, width * 0.4)))
+                    }
+                } else {
+                    Picker("Show", selection: Binding(get: { tab == "settings" ? "settings" : "screens" }, set: { tab = $0 })) {
+                        Text("TVs").tag("screens"); Text("Sponsors & more").tag("settings")
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.bottom, 4)
+                    if tab == "settings" { VStack(alignment: .leading, spacing: 18) { ScreensSide(doc: doc) } }
+                    else { VStack(alignment: .leading, spacing: 14) { tvs } }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(GeometryReader { g in Color.clear.preference(key: PageWidthKey.self, value: g.size.width) })
+            .onPreferenceChange(PageWidthKey.self) { width = $0 }
+        }
+    }
+
+    @ViewBuilder private var tvs: some View {
+        if doc.ev.displays.isEmpty {
+            VStack(spacing: 12) {
+                Image(systemName: "tv").font(.system(size: 40)).foregroundStyle(FC.muted)
+                Text("No TVs yet").font(FC.display(32))
+                Text("Add each TV at the club. You’ll pick what it shows, and we’ll show you how to put Flagcast on it.")
+                    .font(.subheadline).foregroundStyle(FC.muted).multilineTextAlignment(.center)
+                Button("Add Your First TV") { addTV() }.buttonStyle(GreenButton())
+            }
+            .frame(maxWidth: .infinity).card(padding: 24)
+        } else {
+            if doc.ev.displays.count > 1 { allAtOnce }
+            // a big iPad's TV column fits two cards side by side
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 380), spacing: 14, alignment: .top)], spacing: 14) {
+                ForEach($doc.ev.displays) { $d in TVCard(display: $d, doc: doc, saved: saved.contains(d.id), places: Self.PLACES + places.filter { !Self.PLACES.contains($0) }) }
+            }
+            Button { addTV() } label: { Label("Add Another TV", systemImage: "plus") }.buttonStyle(PlainCardButton(full: true))
         }
     }
 
@@ -105,6 +153,15 @@ private struct TVCard: View {
                         Text(online > 0 ? screenStatus(force, playlist: display.playlist, choices: doc.pageChoices) : "This TV isn’t showing Flagcast yet.")
                             .font(.footnote).foregroundStyle(FC.muted).fixedSize(horizontal: false, vertical: true)
                     }
+                }
+                Spacer(minLength: 0)
+                // the Mac's link menu: once the TV is on, its link is tucked away here
+                if online > 0 {
+                    Menu {
+                        ShareLink(item: url) { Label("Send the TV’s Link", systemImage: "square.and.arrow.up") }
+                        Button { copy(url.absoluteString); doc.flash("Link copied.") } label: { Label("Copy the TV’s Link", systemImage: "doc.on.doc") }
+                    } label: { Image(systemName: "ellipsis.circle").font(.title3).foregroundStyle(FC.link) }
+                    .accessibilityLabel("This TV’s link")
                 }
             }
             HStack(spacing: 8) {
