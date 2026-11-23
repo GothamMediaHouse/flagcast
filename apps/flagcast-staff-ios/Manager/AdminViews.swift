@@ -273,7 +273,7 @@ private struct AdminTournaments: View {
                 if shown.isEmpty { Text("No tournaments match.").foregroundStyle(FC.muted).padding(14) }
                 ForEach(Array(shown.enumerated()), id: \.element.id) { i, e in
                     Button { model.openAdmin(id: e.id, key: e.key, name: e.name, club: e.clubName) } label: {
-                        ListRow(icon: "flag.fill", iconColor: e.locked || e.archived ? FC.muted : (e.online > 0 ? FC.ok : FC.primary), club: (admin.logo(club: e.club), e.clubName), title: e.name,
+                        ListRow(icon: "flag.fill", iconColor: e.locked || e.archived ? FC.muted : (e.online > 0 ? FC.ok : FC.primary), club: (admin.logo(for: e), e.clubName), title: e.name,
                                 sub: [e.clubName, e.date, "\(e.teams) teams", e.screens > 0 ? "\(e.online)/\(e.screens) TVs on" : "", e.gone ? "Gone" : e.archived ? "Archived" : e.locked ? "Final" : e.hidden ? "Hidden" : ""].filter { !$0.isEmpty }.joined(separator: " · "),
                                 last: i == shown.count - 1) {
                             if e.demo { DemoChip() }

@@ -326,6 +326,8 @@ enum ClubLook: String, CaseIterable, Identifiable {
 extension AdminModel {
     /// a club's logo address by its id (nil when it has none, or the clubs haven't loaded)
     func logo(club id: String) -> URL? { logoURL(clubs.first { $0.id == id }?.logo) }
+    /// the logo to show beside a tournament in Admin: its club's uploaded logo, else the one the tournament itself shows
+    func logo(for e: AdminEvent) -> URL? { logo(club: e.club) ?? logoURL(e.logo) }
 }
 
 /// "Oak Hollow Golf Club" → "OH": for a club with no logo yet
@@ -336,19 +338,55 @@ func clubInitials(_ name: String) -> String {
     return String((keep.isEmpty ? words : keep).prefix(2).compactMap(\.first)).uppercased()
 }
 
-/// The club's logo on a white tile (or its initials when it has none): Admin's club cards and tournament rows.
+/// The club's logo on a tile (or its initials when it has none): Admin's club cards and tournament rows.
+/// Dark logos sit on white; a light logo (a white one, say) sits on dark green so it doesn't vanish.
 struct ClubLogoTile: View {
     var url: URL?
     var name: String
     var size: CGFloat = 32
+    @State private var loaded: TileLogo?
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: size * 0.22).fill(url == nil ? FC.green2 : Color.white)
-            if let url { RemoteLogo(url: url).padding(size * 0.12) }
+            RoundedRectangle(cornerRadius: size * 0.22).fill(url == nil ? FC.green2 : (loaded?.light == true ? FC.green : Color.white))
+            if url != nil { if let loaded { loaded.image.resizable().scaledToFit().padding(size * 0.12) } }
             else { Text(clubInitials(name)).font(.system(size: size * 0.36, weight: .bold)).foregroundStyle(Color.white) }
         }
         .frame(width: size, height: size)
         .accessibilityLabel("\(name) logo")
+        .task(id: url) { loaded = nil; if let url { loaded = await TileLogo.load(url) } }
+    }
+}
+
+/// a logo for a ClubLogoTile, and whether it's mostly light (so it goes on a dark tile)
+struct TileLogo {
+    let image: Image, light: Bool
+    @MainActor private static var cache: [URL: TileLogo] = [:]
+    @MainActor static func load(_ url: URL) async -> TileLogo? {
+        if let c = cache[url] { return c }
+        guard let (d, r) = try? await Net.session.data(from: url), (r as? HTTPURLResponse)?.statusCode == 200 else { return nil }
+        #if canImport(AppKit)
+        guard let n = NSImage(data: d) else { return nil }; let img = Image(nsImage: n); let cg = n.cgImage(forProposedRect: nil, context: nil, hints: nil)
+        #else
+        guard let u = UIImage(data: d) else { return nil }; let img = Image(uiImage: u); let cg = u.cgImage
+        #endif
+        let t = TileLogo(image: img, light: cg.map(isLight) ?? false)
+        if cache.count > 80 { cache.removeAll() }
+        cache[url] = t; return t
+    }
+    /// shrinks the logo to 24×24 and averages the brightness of the pixels that aren't see-through
+    static func isLight(_ cg: CGImage) -> Bool {
+        let w = 24, h = 24; var px = [UInt8](repeating: 0, count: w * h * 4)
+        guard let ctx = CGContext(data: &px, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        var sum = 0.0, weight = 0.0, clear = 0
+        for i in stride(from: 0, to: px.count, by: 4) {
+            let a = Double(px[i + 3]) / 255; guard a > 0.15 else { clear += 1; continue }
+            let lum = (0.299 * Double(px[i]) + 0.587 * Double(px[i + 1]) + 0.114 * Double(px[i + 2])) / 255 / a   // undo premultiplying
+            sum += min(lum, 1) * a; weight += a
+        }
+        // a logo with no see-through background (a JPEG, say) brings its own backdrop: leave it on white
+        return clear > w * h / 20 && weight > 0 && sum / weight > 0.82
     }
 }
 

@@ -253,7 +253,7 @@ struct TournamentsView: View {
     var body: some View {
         Table(shown, selection: $selection, sortOrder: $sort) {
             TableColumn("Tournament", value: \.name) { e in VStack(alignment: .leading) { HStack(spacing: 6) { Text(e.name).fontWeight(.medium); if e.demo { DemoChip() } }; Text(e.id.uppercased()).font(.caption.monospaced()).foregroundStyle(.secondary) } }.width(min: 180, ideal: 260)
-            TableColumn("Club", value: \.clubName) { e in HStack(spacing: 8) { ClubLogoTile(url: model.logo(club: e.club), name: e.clubName, size: 22); Text(e.clubName) } }.width(min: 120, ideal: 180)
+            TableColumn("Club", value: \.clubName) { e in HStack(spacing: 8) { ClubLogoTile(url: model.logo(for: e), name: e.clubName, size: 22); Text(e.clubName) } }.width(min: 120, ideal: 180)
             TableColumn("Date", value: \.date) { e in Text(e.date) }.width(90)
             TableColumn("Teams", value: \.teams) { e in Text("\(e.teams)").monospacedDigit() }.width(50)
             TableColumn("Scores", value: \.scored) { e in Text("\(e.scored)").monospacedDigit() }.width(55)

@@ -60,6 +60,7 @@ main { max-width: 1240px; padding: 18px 20px 60px; }
 .ccard .acts { display: flex; gap: 6px; } .ccard .acts .wbtn { flex: 1; justify-content: center; }
 .ltile { display: inline-grid; place-items: center; border-radius: 22%; background: #fff; overflow: hidden; flex: none; vertical-align: middle; }
 .ltile.none { background: var(--green-2); color: #fff; font-weight: 700; }
+.ltile.light { background: var(--green, #123628); }
 .ltile img { width: 76%; height: 76%; object-fit: contain; }
 .banner { display: flex; align-items: center; gap: 16px; padding: 12px 16px; background: #fff8e1; border: 1px solid #ecd58a; border-radius: 12px; margin-bottom: 16px; color: #14201a; flex-wrap: wrap; }
 .banner .ex { width: 36px; height: 36px; border-radius: 50%; background: var(--flag); color: var(--on-flag); display: grid; place-items: center; font-weight: 700; flex: none; }
@@ -235,6 +236,23 @@ function drawTabs() {
 const SKIP = new Set(['the', 'golf', 'club', 'country', 'gc', 'cc', 'and', 'of', '&']);
 const initials = (n) => { const w = String(n || '').split(/[^\p{L}\p{N}]+/u).filter(Boolean), k = w.filter((x) => !SKIP.has(x.toLowerCase())); return (k.length ? k : w).slice(0, 2).map((x) => x[0]).join('').toUpperCase() || '?'; };
 const logoOfClub = (id) => clubs.find((c) => c.id === id)?.logo || '';
+// beside a tournament: its club's uploaded logo, else the logo the tournament itself shows (its own, from Setup)
+const logoOfEvent = (e) => logoOfClub(e.club) || e.brand?.logo || '';
+// a light logo (a white one, say) goes on a dark tile so it doesn't vanish on white; worked out once per address
+const LIGHT = new Map();
+function tintTile(img) {
+  const t = img.parentElement, src = img.currentSrc || img.src;
+  const set = (v) => t?.classList.toggle('light', v);
+  if (LIGHT.has(src)) return set(LIGHT.get(src));
+  try {
+    const n = 24, c = document.createElement('canvas'); c.width = c.height = n; const x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(img, 0, 0, n, n); const d = x.getImageData(0, 0, n, n).data;
+    let sum = 0, w = 0, clear = 0;
+    for (let i = 0; i < d.length; i += 4) { const a = d[i + 3] / 255; if (a <= 0.15) { clear++; continue; } sum += (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]) / 255 * a; w += a; }
+    const v = clear > n * n / 20 && w > 0 && sum / w > 0.82; LIGHT.set(src, v); set(v);
+  } catch { LIGHT.set(src, false); }
+}
+document.addEventListener('load', (ev) => { if (ev.target instanceof HTMLImageElement && ev.target.parentElement?.classList.contains('ltile')) tintTile(ev.target); }, true);
 const tile = (logo, name, size = 32) => logo ? `<span class="ltile" style="width:${size}px;height:${size}px"><img src="${esc(logo)}" alt="${esc(name)} logo"></span>`
   : `<span class="ltile none" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.36)}px" aria-label="${esc(name)} logo">${esc(initials(name))}</span>`;
 const LOOK = 'admin.clubLook';
@@ -309,7 +327,7 @@ function todayView() {
   return list.map((e) => {
     const tvOK = !e.screens || e.online === e.screens, started = e.lastScore > 0, cartsOK = !started || e.scoringNow >= Math.floor(e.teams * 3 / 4), ok = tvOK && cartsOK;
     const st = (t, good) => `<span class="${good ? '' : 'bad'}">${esc(t)}</span>`;
-    return `<a class="erow" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener"><div class="t">${tile(logoOfClub(e.club), e.clubName || e.name, 36)}<div><b>${esc(e.name)}</b><small>${esc([e.clubName, e.locked ? 'Results locked' : ''].filter(Boolean).join(' · '))}</small></div><span class="okdot ${ok ? '' : 'bad'}">${ok ? '✓' : '!'}</span></div>
+    return `<a class="erow" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener"><div class="t">${tile(logoOfEvent(e), e.clubName || e.name, 36)}<div><b>${esc(e.name)}</b><small>${esc([e.clubName, e.locked ? 'Results locked' : ''].filter(Boolean).join(' · '))}</small></div><span class="okdot ${ok ? '' : 'bad'}">${ok ? '✓' : '!'}</span></div>
       <div class="f">${st(e.screens ? `${e.online}/${e.screens} TVs on` : 'No TVs', tvOK)}${st(Object.keys(e.cams || {}).length ? `${Object.keys(e.cams).length} camera${Object.keys(e.cams).length === 1 ? '' : 's'}` : 'No cameras', true)}
         ${st(started ? `${e.scoringNow}/${e.teams} carts scoring` : `${e.teams} teams, not started`, cartsOK)}${started ? st(`last score ${ago(e.lastScore)}`, Date.now() - e.lastScore < 20 * 60000) : ''}</div></a>`;
   }).join('');
@@ -325,7 +343,7 @@ function camerasView() {
   return `<p class="help">Paste each par 3’s https link: an HLS stream (.m3u8) or a web player link such as a VDO.Ninja view link. Replays from the live feed need an HLS link that keeps a recording window (DVR); a web player link plays live only. NDI cameras are started from the Mac Manager (Admin → Cameras). Clubs see “Cameras are set up by Flagcast”.</p>
   <div class="row" style="margin-bottom:12px"><input id="camq" type="search" placeholder="Find a tournament or club" value="${esc(camQ)}" style="max-width:320px"></div>
   ${list.map((e) => `<form class="box" data-cams="${e.id}"><div class="row" style="justify-content:space-between">
-      <div class="row" style="gap:10px">${tile(logoOfClub(e.club), e.clubName || e.name, 32)}${e.date === day && !e.locked ? '<span class="chip-live">LIVE</span>' : ''}<b style="font:700 26px var(--f-display)">${esc(e.name)}</b><span class="help" style="margin:0">${esc(e.clubName || '')}${e.date ? ` · ${esc(e.date)}` : ''}</span></div>
+      <div class="row" style="gap:10px">${tile(logoOfEvent(e), e.clubName || e.name, 32)}${e.date === day && !e.locked ? '<span class="chip-live">LIVE</span>' : ''}<b style="font:700 26px var(--f-display)">${esc(e.name)}</b><span class="help" style="margin:0">${esc(e.clubName || '')}${e.date ? ` · ${esc(e.date)}` : ''}</span></div>
       <button class="gbtn-green">Save links</button></div>
     ${e.p3.map((h) => `<div class="camrow"><b>Hole ${h}</b><input name="${h}" value="${esc((e.cams || {})[h] || '')}" placeholder="https://… (.m3u8 or a web player link)"><span class="sig" data-sig="${e.id}-${h}">${(e.cams || {})[h] ? ((e.cams[h].toLowerCase().includes('.m3u8')) ? 'Checking…' : 'Web player') : 'No camera'}</span></div>`).join('')}
   </form>`).join('') || `<div class="box empty">${events.length ? 'No open tournaments with par 3s.' : 'No tournaments yet.'}</div>`}`;
@@ -355,7 +373,7 @@ function overview() {
   </div>
   <div class="grid"><div>
     <div class="box"><h2>Waiting for approval</h2>${wait.length ? `<table>${wait.map((c) => `<tr><td><b>${esc(c.name)}</b><small>${esc([c.city, c.contact, c.by, c.phone].filter(Boolean).join(' · '))} · asked ${date(c.created)}</small></td><td class="acts"><button class="btn sm primary" data-a="approve" data-club="${c.id}">Approve</button><button class="btn sm" data-open="${c.id}">Open</button></td></tr>`).join('')}</table>` : '<p class="help" style="margin:0">Nobody waiting.</p>'}</div>
-    <div class="box"><h2>Happening now</h2>${events ? (live.length ? `<table>${live.map((e) => `<tr><td><span class="row" style="gap:10px;flex-wrap:nowrap">${tile(logoOfClub(e.club), e.clubName || e.name, 28)}<span><b>${esc(e.name)}</b><small>${esc(e.clubName || '')} · ${e.teams} teams · ${e.scored} scores${e.screens ? ` · <span class="dot ${e.online ? 'on' : ''}"></span>${e.online} of ${e.screens} screens on` : ''}</small></span></span></td><td class="acts"><a class="btn sm dark" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener">Desk</a><a class="btn sm" href="/g/${e.id}" target="_blank" rel="noopener">Live</a><a class="btn sm" href="/g/${e.id}/map#${e.key}&groups" target="_blank" rel="noopener">Groups</a></td></tr>`).join('')}</table>` : '<p class="help" style="margin:0">No tournaments are being played right now.</p>') : '<p class="help" style="margin:0">Loading…</p>'}</div>
+    <div class="box"><h2>Happening now</h2>${events ? (live.length ? `<table>${live.map((e) => `<tr><td><span class="row" style="gap:10px;flex-wrap:nowrap">${tile(logoOfEvent(e), e.clubName || e.name, 28)}<span><b>${esc(e.name)}</b><small>${esc(e.clubName || '')} · ${e.teams} teams · ${e.scored} scores${e.screens ? ` · <span class="dot ${e.online ? 'on' : ''}"></span>${e.online} of ${e.screens} screens on` : ''}</small></span></span></td><td class="acts"><a class="btn sm dark" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener">Desk</a><a class="btn sm" href="/g/${e.id}" target="_blank" rel="noopener">Live</a><a class="btn sm" href="/g/${e.id}/map#${e.key}&groups" target="_blank" rel="noopener">Groups</a></td></tr>`).join('')}</table>` : '<p class="help" style="margin:0">No tournaments are being played right now.</p>') : '<p class="help" style="margin:0">Loading…</p>'}</div>
   </div><div>${newClubBox()}</div></div>`;
 }
 
@@ -424,7 +442,7 @@ function eventsView() {
   const list = events.filter((e) => !q || `${e.name} ${e.clubName} ${e.id}`.toLowerCase().includes(q));
   return `<div class="row" style="margin-bottom:10px"><input id="q" type="search" placeholder="Find a tournament or club" value="${esc(q)}"><button class="btn" data-reload>Refresh</button></div>
   <div class="box" style="padding:6px 12px"><table class="evt"><thead><tr><th>Tournament</th><th>Club</th><th class="num">Teams</th><th class="num">Scores</th><th class="num">Screens on</th><th>Scoring</th><th></th></tr></thead><tbody>
-  ${list.map((e) => e.gone ? `<tr><td>${esc(e.name)}<small>${e.id.toUpperCase()} · can’t reach it</small></td><td>${esc(e.clubName || '')}</td><td colspan="5"></td></tr>` : `<tr style="${e.archived ? 'opacity:.55' : ''}"><td>${tile(logoOfClub(e.club), e.clubName || e.name, 26)} <b>${esc(e.name)}</b>${e.demo ? ' <span class="pill" style="background:#fff1d6;color:#9a5b00">DEMO</span>' : ''}<small>${e.id.toUpperCase()}${e.date ? ` · plays ${esc(e.date)}` : ''} · made ${date(e.created)}${e.archived ? ' · archived' : ''}${e.replays ? ` · ${e.replays} replays` : ''}</small></td><td>${esc(e.clubName || '')}</td>
+  ${list.map((e) => e.gone ? `<tr><td>${esc(e.name)}<small>${e.id.toUpperCase()} · can’t reach it</small></td><td>${esc(e.clubName || '')}</td><td colspan="5"></td></tr>` : `<tr style="${e.archived ? 'opacity:.55' : ''}"><td>${tile(logoOfEvent(e), e.clubName || e.name, 26)} <b>${esc(e.name)}</b>${e.demo ? ' <span class="pill" style="background:#fff1d6;color:#9a5b00">DEMO</span>' : ''}<small>${e.id.toUpperCase()}${e.date ? ` · plays ${esc(e.date)}` : ''} · made ${date(e.created)}${e.archived ? ' · archived' : ''}${e.replays ? ` · ${e.replays} replays` : ''}</small></td><td>${esc(e.clubName || '')}</td>
     <td class="num">${e.teams}</td><td class="num">${e.scored}</td><td class="num">${e.screens ? `<span class="dot ${e.online ? 'on' : ''}"></span>${e.online}/${e.screens}` : '—'}</td>
     <td>${e.locked ? '<span class="pill gray">Final</span>' : '<span class="pill ok">Open</span>'}</td>
     <td class="acts"><a class="btn sm dark" href="/g/${e.id}/desk#${e.key}" target="_blank" rel="noopener">Desk</a><a class="btn sm" href="/g/${e.id}" target="_blank" rel="noopener">Live</a><a class="btn sm" href="/g/${e.id}/map#${e.key}&groups" target="_blank" rel="noopener">Groups</a>
@@ -459,7 +477,7 @@ function screensView() {
   const e = list.find((x) => x.id === scrOpen);
   return `<div class="cols scr"><div>
     <div class="row" style="margin-bottom:10px"><input id="scrq" type="search" placeholder="Find a tournament or club" value="${esc(scrQ)}"><button class="btn" data-reload title="Refresh">↻</button></div>
-    <div class="clist">${list.map((x) => `<button class="citem" data-scr="${x.id}" aria-current="${x.id === scrOpen}"><span class="row" style="gap:8px;flex-wrap:nowrap">${tile(logoOfClub(x.club), x.clubName || x.name, 26)}<span><b>${esc(x.name)}</b><small>${esc(x.clubName || '')}</small></span></span><span class="help" style="margin:0;white-space:nowrap"><span class="dot ${x.online ? 'on' : ''}"></span>${x.online}/${x.screens}</span></button>`).join('') || '<div class="empty">No tournaments.</div>'}</div>
+    <div class="clist">${list.map((x) => `<button class="citem" data-scr="${x.id}" aria-current="${x.id === scrOpen}"><span class="row" style="gap:8px;flex-wrap:nowrap">${tile(logoOfEvent(x), x.clubName || x.name, 26)}<span><b>${esc(x.name)}</b><small>${esc(x.clubName || '')}</small></span></span><span class="help" style="margin:0;white-space:nowrap"><span class="dot ${x.online ? 'on' : ''}"></span>${x.online}/${x.screens}</span></button>`).join('') || '<div class="empty">No tournaments.</div>'}</div>
   </div><div>${e ? routerBox(e) : '<div class="box empty">Pick a tournament.</div>'}</div></div>`;
 }
 function routerBox(e) {
