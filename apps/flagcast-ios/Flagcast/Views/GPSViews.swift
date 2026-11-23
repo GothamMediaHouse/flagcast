@@ -1,53 +1,35 @@
 import SwiftUI
 import MapKit
 
-/// The hole GPS card on the scorecard (public/golf/gpscard.js): middle in big numbers, front and back,
-/// the hazards ahead, and Course view. Yards are from the tee until GPS is on and you're on the hole.
+/// The hole's yards on the scorecard (public/golf/gpscard.js): front, middle and back in big numbers, the hazards
+/// ahead, and the course map. Yards are from the tee until GPS is on and you're on the hole.
 struct GPSCard: View {
     var state: EventState
     var hole: Int
     var onHole: (Int) -> Void
+    /// inside a tournament: open the Course tab instead of a full-screen cover
+    var openMap: (() -> Void)? = nil
     @State private var loc = Locator.shared
     @State private var courseView = false
 
     var body: some View {
         let h = state.map.holes[hole]
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
             if let h, Geo.middle(h) != nil {
                 let me = loc.fix?.at
                 let o = Geo.origin(h, me)
                 let y = o.map { Geo.yardages(h, from: $0.at) }
-                HStack(alignment: .center, spacing: 14) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(y?.m.map(String.init) ?? "—")
-                            .font(FCType.display(46)).monospacedDigit()
-                            .contentTransition(.numericText())
-                        Text(o?.me == true ? "to the middle" : "middle, from the tee").fcLabel().foregroundStyle(Color.fcOnGreenMuted)
-                    }
-                    VStack(alignment: .leading, spacing: 3) {
-                        if let f = y?.f { (Text("Front ").foregroundStyle(Color.fcOnGreenMuted) + Text("\(f)").bold()) }
-                        if let b = y?.b { (Text("Back ").foregroundStyle(Color.fcOnGreenMuted) + Text("\(b)").bold()) }
-                    }
-                    .font(.subheadline.monospaced())
-                    Spacer(minLength: 4)
-                    VStack(spacing: 6) {
-                        Button { courseView = true } label: { Text("Course view").lineLimit(1).fixedSize() }
-                            .font(.subheadline.weight(.bold)).padding(.horizontal, 12).frame(minHeight: 38)
-                            .background(Color.fcFlag, in: RoundedRectangle(cornerRadius: 8)).foregroundStyle(Color.fcOnFlag)
-                        if !loc.on {
-                            Button { loc.start() } label: { Text("Use my GPS").lineLimit(1).fixedSize() }
-                                .font(.subheadline.weight(.bold)).padding(.horizontal, 12).frame(minHeight: 38)
-                                .background(Color.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
-                        }
-                    }
-                    .buttonStyle(.plain)
+                HStack(spacing: 6) {
+                    yard("Front", y?.f, big: false)
+                    yard(o?.me == true ? "To the middle" : "Middle, from tee", y?.m, big: true)
+                    yard("Back", y?.b, big: false)
                 }
                 if let hz = y?.hz, !hz.isEmpty {
                     FlowLayout(spacing: 6) {
                         ForEach(hz.prefix(6)) { z in
                             (Text(z.name + " ") + Text("\(z.reach)").bold().monospacedDigit() + Text(z.carry.map { "–\($0)" } ?? "").bold().monospacedDigit())
-                                .font(.caption).padding(.horizontal, 9).padding(.vertical, 4)
-                                .background(Color.white.opacity(0.1), in: Capsule())
+                                .font(.caption).padding(.horizontal, 9).padding(.vertical, 5)
+                                .background(Color.fcPaper2, in: Capsule())
                         }
                     }
                 }
@@ -63,18 +45,38 @@ struct GPSCard: View {
                         }
                     }
                 }
-                .font(.footnote).foregroundStyle(Color.fcOnGreenMuted)
+                .font(.footnote).foregroundStyle(Color.fcMuted)
+                HStack(spacing: 8) {
+                    Button { if let openMap { openMap() } else { courseView = true } } label: { Label("Course map", systemImage: "map.fill") }
+                        .buttonStyle(.fc(.dark, full: true))
+                    if !loc.on {
+                        Button { loc.start() } label: { Label("Use my GPS", systemImage: "location.fill") }
+                            .buttonStyle(.fc(.plain, full: true))
+                    }
+                }
             } else {
-                Text("Hole \(hole) isn’t on the course map yet.").font(.footnote).foregroundStyle(Color.fcOnGreenMuted)
+                Text("Hole \(hole) isn’t on the course map yet.").font(.footnote).foregroundStyle(Color.fcMuted)
             }
         }
-        .foregroundStyle(Color.fcOnGreen)
-        .padding(.horizontal, 14).padding(.vertical, 12)
+        .foregroundStyle(Color.fcInk)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.fcGreen, in: RoundedRectangle(cornerRadius: 12))
+        .fcCard(padding: 14)
         .fullScreenCover(isPresented: $courseView) {
             CourseView(state: state, hole: hole, onHole: onHole)
         }
+    }
+
+    private func yard(_ label: String, _ v: Int?, big: Bool) -> some View {
+        VStack(spacing: 3) {
+            Text(label).font(.caption2.weight(.semibold)).tracking(0.8).textCase(.uppercase).lineLimit(1).minimumScaleFactor(0.7)
+                .foregroundStyle(big ? Color.fcFlag : Color.fcMuted)
+            Text(v.map(String.init) ?? "—").font(FCType.display(big ? 50 : 32)).monospacedDigit()
+                .foregroundStyle(big ? Color.white : Color.fcInk)
+                .contentTransition(.numericText())
+        }
+        .frame(maxWidth: .infinity).padding(.vertical, big ? 8 : 4)
+        .background(big ? Color(UIColor(hex: 0x123628)) : .clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -84,6 +86,8 @@ struct CourseView: View {
     var state: EventState
     @State var hole: Int
     var onHole: (Int) -> Void
+    /// in the Course tab: no close button, and the yards in a big panel at the bottom
+    var embedded = false
     @Environment(\.dismiss) private var dismiss
     @State private var loc = Locator.shared
     @State private var camera: MapCameraPosition = .automatic
@@ -132,11 +136,11 @@ struct CourseView: View {
             }
             topBar
         }
-        .overlay(alignment: .topTrailing) { yardageBox.padding(.top, 76).padding(.trailing, 12).opacity(flying ? 0 : 1) }
+        .overlay(alignment: .topTrailing) { if !embedded { yardageBox.padding(.top, 76).padding(.trailing, 12).opacity(flying ? 0 : 1) } }
         .overlay(alignment: .bottomLeading) { flyButton.padding(.leading, 12).padding(.bottom, 12) }
         .overlay(alignment: .bottomLeading) { holeCard.padding(.leading, 18).padding(.bottom, 66) }
-        .safeAreaInset(edge: .bottom) { footer }
-        .preferredColorScheme(.dark)
+        .safeAreaInset(edge: .bottom) { VStack(spacing: 0) { if embedded { yardPanel }; footer } }
+        .modifier(DarkScheme(local: embedded))
         .onAppear { if loc.on { loc.resume() } }
     }
 
@@ -336,8 +340,10 @@ struct CourseView: View {
     private var topBar: some View {
         let H = state.course.holes[hole - 1]
         return HStack(spacing: 10) {
-            Button { dismiss() } label: { Image(systemName: "xmark").font(.headline).frame(width: 40, height: 40).background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 8)) }
-                .accessibilityLabel("Close")
+            if !embedded {
+                Button { dismiss() } label: { Image(systemName: "xmark").font(.headline).frame(width: 40, height: 40).background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 8)) }
+                    .accessibilityLabel("Close")
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text("Hole \(hole)").font(FCType.display(30)).textCase(.uppercase)
                 Text("Par \(H.par)\(H.yds > 0 ? " · \(H.yds) yds" : "")").font(.caption.monospaced()).foregroundStyle(Color(UIColor(hex: 0xa9bdb0)))
@@ -382,6 +388,33 @@ struct CourseView: View {
         }
     }
 
+    /// Course tab: front, middle and back in big numbers, the middle on a green tile
+    @ViewBuilder private var yardPanel: some View {
+        if let h, let o = origin {
+            let y = Geo.yardages(h, from: o.at)
+            HStack(spacing: 8) {
+                yard("Front", y.f, big: false)
+                yard(o.me ? "Middle" : "Middle, from the tee", y.m, big: true)
+                yard("Back", y.b, big: false)
+            }
+            .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 4)
+            .background(Color(UIColor(hex: 0x0b1a12)).opacity(0.92))
+            .opacity(flying ? 0 : 1)
+            .allowsHitTesting(false)
+        }
+    }
+    private func yard(_ label: String, _ v: Int?, big: Bool) -> some View {
+        VStack(spacing: 3) {
+            Text(label).font(.caption2.weight(.semibold)).tracking(1).textCase(.uppercase).lineLimit(1).minimumScaleFactor(0.7)
+                .foregroundStyle(big ? Color(UIColor(hex: 0xf2d04f)) : Color(UIColor(hex: 0xa9bdb0)))
+            Text(v.map(String.init) ?? "—").font(FCType.display(big ? 52 : 34)).monospacedDigit().foregroundStyle(.white)
+                .contentTransition(.numericText())
+        }
+        .frame(maxWidth: .infinity).padding(.vertical, big ? 8 : 4)
+        .background(big ? Color(UIColor(hex: 0x123628)) : .clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .combine)
+    }
+
     private var footer: some View {
         HStack(spacing: 10) {
             Group {
@@ -405,5 +438,13 @@ struct CourseView: View {
         .overlay(alignment: .topTrailing) {
             Text(state.map.src == "osm" ? "Course data © OpenStreetMap" : "").font(.system(size: 10)).foregroundStyle(.white.opacity(0.6)).padding(.trailing, 8).offset(y: -16)
         }
+    }
+}
+
+/// Full screen (a cover) sets the whole presentation dark; inside a tab only this view goes dark.
+private struct DarkScheme: ViewModifier {
+    var local: Bool
+    func body(content: Content) -> some View {
+        if local { content.environment(\.colorScheme, .dark) } else { content.preferredColorScheme(.dark) }
     }
 }

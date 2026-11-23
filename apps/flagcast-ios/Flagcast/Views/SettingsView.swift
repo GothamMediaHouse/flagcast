@@ -21,8 +21,24 @@ struct PlayerSettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    Picker("Text size", selection: $textSize) { ForEach(TextSize.allCases) { Text($0.label).tag($0.rawValue) } }
-                        .pickerStyle(.segmented)
+                    HStack(spacing: 8) {
+                        ForEach(Array(TextSize.allCases.enumerated()), id: \.element) { i, t in
+                            let on = textSize == t.rawValue
+                            Button { textSize = t.rawValue } label: {
+                                VStack(spacing: 4) {
+                                    Text("Aa").font(.system(size: [16, 21, 26][i], weight: .bold))
+                                    Text(t.label).font(.caption.weight(.semibold))
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 66)
+                                .background(on ? Color(UIColor(hex: 0x123628)) : Color.fcPaper2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .foregroundStyle(on ? Color.white : Color.fcInk)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(on ? .isSelected : [])
+                        }
+                    }
+                    .dynamicTypeSize(...DynamicTypeSize.xLarge)
+                    .listRowInsets(EdgeInsets(top: 10, leading: 12, bottom: 10, trailing: 12))
                 } header: { Text("Text size") } footer: { Text("Makes the scorecard and leaderboard easier to read in the sun. Your iPhone’s own text size works too.") }
 
                 Section {
@@ -58,6 +74,7 @@ struct PlayerSettingsView: View {
             }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
+            .tint(Color.fcPrimary)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .task { await load() }
         }

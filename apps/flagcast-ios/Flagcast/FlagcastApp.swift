@@ -46,8 +46,9 @@ struct RootView: View {
             HomeView()
                 .navigationDestination(for: Route.self) { r in
                     switch r {
-                    case let .score(id, code): ScorecardScreen(id: id, code: code)
-                    case let .live(id): LeaderboardScreen(id: id)
+                    case let .score(id, code): TournamentScreen(id: id, code: code, start: .score)
+                    // a spectator link: this phone's cart for the tournament, if it has one, gets every tab
+                    case let .live(id): TournamentScreen(id: id, code: Recents.all().first { $0.id == id && !$0.code.isEmpty }?.code, start: .leaders)
                     case let .pro(id): ProScreen(id: id)
                     }
                 }

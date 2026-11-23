@@ -17,6 +17,8 @@ struct HomeView: View {
     @State private var pros: [ProSignIn] = []
     @State private var serverSheet = false
     @State private var settings = false
+    @State private var typing = false
+    @State private var proOpen = false
     @FocusState private var focus: Field?
     enum Field { case event, cart, proEvent, pin }
 
@@ -26,19 +28,20 @@ struct HomeView: View {
                 hero
                 VStack(spacing: 14) {
                     playCard
-                    if !recents.isEmpty || !pros.isEmpty { recentCard }
+                    if let r = recents.first(where: { !$0.code.isEmpty }) { resumeCard(r) }
+                    if !others.isEmpty || !pros.isEmpty { recentCard }
                     proCard
                     footer
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, -18)
+                .padding(.top, -56)
                 .padding(.bottom, 32)
                 .frame(maxWidth: 520)
             }
             .frame(maxWidth: .infinity)
         }
         .scrollDismissesKeyboard(.interactively)
-        .background { VStack(spacing: 0) { Color.fcGreen.frame(height: 280); Color.fcPaper }.ignoresSafeArea() }
+        .background { VStack(spacing: 0) { Color.fcGreen.frame(height: 320); Color.fcPaper }.ignoresSafeArea() }
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .onAppear { recents = Recents.all(); pros = ProSignIns.all() }
@@ -68,40 +71,78 @@ struct HomeView: View {
         }
     }
 
+    /// the tournament this phone last scored in goes in its own card; the rest are listed below it
+    private var others: [Recent] {
+        let first = recents.first { !$0.code.isEmpty }?.id
+        return recents.filter { $0.id != first }
+    }
+
     private var hero: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Image("Logo").resizable().scaledToFit().frame(height: 30).accessibilityLabel("Flagcast")
-            Text("Your tournament, live").font(FCType.display(44)).textCase(.uppercase).foregroundStyle(.white).padding(.top, 18)
-            Text("Scorecard, leaderboard and par 3 cameras, right here.")
-                .font(.callout).foregroundStyle(Color.fcOnGreen.opacity(0.85))
+        VStack(alignment: .leading, spacing: 10) {
+            Image("Logo").resizable().scaledToFit().frame(height: 28).accessibilityLabel("Flagcast")
+            Text(Date.now.formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                .font(.caption.weight(.semibold)).tracking(1.4).textCase(.uppercase).foregroundStyle(Color.fcFlag).padding(.top, 14)
+            Text("Your round,\nlive").font(FCType.display(52)).textCase(.uppercase).foregroundStyle(.white).lineSpacing(-6)
+            Text("Score your cart, follow the leaderboard and watch the par 3s.")
+                .font(.callout).foregroundStyle(Color.fcOnGreenMuted)
         }
-        .padding(.top, 34).padding(.bottom, 46).padding(.horizontal, 22)
+        .padding(.top, 20).padding(.bottom, 84).padding(.horizontal, 22)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            ZStack {
-                LinearGradient(colors: [Color.fcGreen2, Color.fcGreen], startPoint: .topLeading, endPoint: .bottomTrailing)
-                Image(systemName: "flag.fill").font(.system(size: 220)).foregroundStyle(.white.opacity(0.05)).offset(x: 120, y: 10)
-            }
-        }
-        .clipped()
+        .background(Color.fcGreen)
     }
 
     private var playCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Playing today?").fcHeading(.title2)
-            Text("Scan the QR code on the card in your cart.").font(.subheadline).foregroundStyle(Color.fcMuted)
-            Button { scanning = true } label: { Label("Scan the cart card", systemImage: "qrcode.viewfinder").font(.title3.weight(.semibold)) }
-                .buttonStyle(.fcPrimary).padding(.top, 10)
-            HStack { line; Text("or type the codes").font(.footnote).foregroundStyle(Color.fcMuted).fixedSize(); line }.padding(.vertical, 8)
-            HStack(alignment: .top, spacing: 10) {
-                codeField("Tournament code", "ABCD2345", $eventCode, 8, .event)
-                codeField("Cart code", "Optional", $cartCode, 6, .cart)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 14) {
+                Image(systemName: "qrcode.viewfinder").font(.system(size: 26, weight: .semibold))
+                    .frame(width: 54, height: 54).background(Color.fcFlag, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .foregroundStyle(Color.fcOnFlag)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Playing today?").font(.title3.weight(.bold))
+                    Text("Scan the QR code on your cart card.").font(.subheadline).foregroundStyle(Color.fcMuted)
+                }
             }
-            Button { Task { await join() } } label: { if joining { ProgressView().tint(Color.fcOnGreen) } else { Text("Open") } }
-                .buttonStyle(.fcDark).padding(.top, 8).disabled(joining)
-            if let joinError { Text(joinError).font(.subheadline).foregroundStyle(Color.fcRed).accessibilityAddTraits(.isStaticText) }
+            Button { scanning = true } label: { Text("Scan cart card").font(.title3.weight(.semibold)) }
+                .buttonStyle(.fcDark)
+            if typing {
+                HStack(alignment: .top, spacing: 10) {
+                    codeField("Tournament code", "ABCD2345", $eventCode, 8, .event)
+                    codeField("Cart code", "Optional", $cartCode, 6, .cart)
+                }
+                Button { Task { await join() } } label: { if joining { ProgressView() } else { Text("Open") } }
+                    .buttonStyle(.fcPlain).disabled(joining)
+                if let joinError { Text(joinError).font(.subheadline).foregroundStyle(Color.fcRed).accessibilityAddTraits(.isStaticText) }
+            } else {
+                Button("Type the codes instead") { withAnimation(.snappy) { typing = true }; focus = .event }
+                    .font(.subheadline.weight(.semibold)).tint(Color.fcPrimary).frame(maxWidth: .infinity)
+            }
         }
         .fcCard(padding: 18)
+    }
+
+    private func resumeCard(_ r: Recent) -> some View {
+        let s = Cache.load(r.id)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Back to your round").fcLabel().padding(.horizontal, 4)
+            Button { router.go(.score(id: r.id, code: r.code)) } label: {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(r.name).font(.headline).foregroundStyle(Color.fcInk).lineLimit(2).multilineTextAlignment(.leading)
+                        Text(["Cart \(r.code)", s?.course.name ?? ""].filter { !$0.isEmpty }.joined(separator: " · "))
+                            .font(.subheadline).foregroundStyle(Color.fcMuted).lineLimit(1)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right").font(.headline).foregroundStyle(Color.fcMuted)
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .overlay(alignment: .leading) { Rectangle().fill(Color.fcFlag).frame(width: 5) }
+                .fcCard(padding: 0)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .contextMenu { Button("Remove", systemImage: "trash", role: .destructive) { Recents.forget(r.id); recents = Recents.all() } }
+        }
     }
 
     private var line: some View { Rectangle().fill(Color.fcLine).frame(height: 1) }
@@ -136,13 +177,13 @@ struct HomeView: View {
 
     private var recentCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Your tournaments").fcHeading(.title2)
+            Text("Your tournaments").fcLabel()
             ForEach(pros) { p in
                 recentRow(title: recents.first { $0.id == p.event }?.name ?? Cache.load(p.event)?.name ?? p.name,
                           detail: p.role == "pro" ? "Golf pro" : "Marshal", icon: "person.badge.key") { router.go(.pro(id: p.event)) }
                     .contextMenu { Button("Sign out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) { ProSignIns.remove(p.id); pros = ProSignIns.all() } }
             }
-            ForEach(recents.prefix(6)) { r in
+            ForEach(others.prefix(6)) { r in
                 recentRow(title: r.name, detail: r.code.isEmpty ? "Leaderboard" : "Cart \(r.code)", icon: r.code.isEmpty ? "list.number" : "flag") {
                     router.go(r.code.isEmpty ? .live(id: r.id) : .score(id: r.id, code: r.code))
                 }
@@ -169,19 +210,32 @@ struct HomeView: View {
     }
 
     private var proCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Golf pro or marshal").fcHeading(.title2)
-            Text("Sign in with the PIN the tournament desk gave you.").font(.subheadline).foregroundStyle(Color.fcMuted)
-            HStack(alignment: .top, spacing: 10) {
-                codeField("Tournament code", "", $proEvent, 8, .proEvent)
-                codeField("PIN", "", $pin, 8, .pin, secure: true)
+        VStack(alignment: .leading, spacing: 10) {
+            Button { withAnimation(.snappy) { proOpen.toggle() } } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "person.badge.key.fill").font(.headline).foregroundStyle(Color.fcPrimary).frame(width: 28)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Golf pro or marshal?").font(.body.weight(.semibold)).foregroundStyle(Color.fcInk)
+                        Text("Sign in with the PIN the tournament desk gave you.").font(.footnote).foregroundStyle(Color.fcMuted)
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: proOpen ? "chevron.up" : "chevron.down").font(.footnote.weight(.bold)).foregroundStyle(Color.fcMuted)
+                }
+                .contentShape(Rectangle())
             }
-            .padding(.top, 6)
-            Button { Task { await signIn() } } label: { if signingIn { ProgressView().tint(Color.fcOnGreen) } else { Text("Sign in") } }
-                .buttonStyle(.fcDark).padding(.top, 8).disabled(signingIn)
-            if let proError { Text(proError).font(.subheadline).foregroundStyle(Color.fcRed) }
+            .buttonStyle(.plain)
+            if proOpen {
+                HStack(alignment: .top, spacing: 10) {
+                    codeField("Tournament code", "", $proEvent, 8, .proEvent)
+                    codeField("PIN", "", $pin, 8, .pin, secure: true)
+                }
+                .padding(.top, 4)
+                Button { Task { await signIn() } } label: { if signingIn { ProgressView().tint(Color.fcOnGreen) } else { Text("Sign in") } }
+                    .buttonStyle(.fcDark).disabled(signingIn)
+                if let proError { Text(proError).font(.subheadline).foregroundStyle(Color.fcRed) }
+            }
         }
-        .fcCard(padding: 18)
+        .fcCard(padding: 16)
     }
 
     private var footer: some View {

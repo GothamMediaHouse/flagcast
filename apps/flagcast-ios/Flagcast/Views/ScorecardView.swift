@@ -1,20 +1,20 @@
 import SwiftUI
 import UIKit
 
-/// The cart scorecard: a hole strip in playing order, the hole's facts and sponsor, each player's score with
-/// − / + buttons, the team's standing and full card. Works with no signal: scores wait on the phone and send
-/// when the connection comes back.
+/// The cart scorecard: "This hole" (the hole strip in playing order, the hole, its yards and sponsor, and each
+/// player's score with − / +) and "Your round" (where the team stands, the teams around it, and the card).
+/// Works with no signal: scores wait on the phone and send when the connection comes back.
+/// The tournament screen starts and stops the model, so scores keep sending from any tab.
 struct ScorecardScreen: View {
-    @State private var model: ScorecardModel
-    @State private var sideGames = false
+    @Bindable var model: ScorecardModel
     @State private var camera: CameraLink?
     @State private var dismissed = 0.0
     @State private var replay: Replay?
     @State private var replaySeen = 0.0
+    @State private var page = Page.hole
     @Environment(Router.self) private var router
-    @Environment(\.dynamicTypeSize) private var typeSize
-
-    init(id: String, code: String) { _model = State(initialValue: ScorecardModel(id: id, code: code)) }
+    @Environment(TourNav.self) private var nav
+    enum Page: Hashable { case hole, round }
 
     var body: some View {
         Group {
@@ -30,32 +30,6 @@ struct ScorecardScreen: View {
                 ProgressView("Getting your scorecard").frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.fcPaper)
             }
         }
-        .navigationTitle(model.state?.title ?? "Scorecard")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color.fcGreen, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) { syncPill }
-            // the club's logo in the bar when it has one; the tournament's name otherwise
-            ToolbarItem(placement: .principal) {
-                if let u = model.state?.brand.logoURL {
-                    ClubLogo(url: u).frame(width: 180, height: 30).accessibilityLabel(model.state?.title ?? "Scorecard")
-                } else {
-                    Text(model.state?.title ?? "Scorecard").font(.headline).foregroundStyle(.white).lineLimit(1)
-                }
-            }
-        }
-        .onAppear {
-            model.start()
-            UIApplication.shared.isIdleTimerDisabled = true   // keep the screen on while scoring
-            Locator.shared.resume()
-        }
-        .onDisappear {
-            model.stop()
-            UIApplication.shared.isIdleTimerDisabled = false
-            Locator.shared.pause()
-        }
         .toast($model.toast)
         .sensoryFeedback(.selection, trigger: model.changes)
         .sensoryFeedback(.success, trigger: model.aces)
@@ -64,7 +38,6 @@ struct ScorecardScreen: View {
         .alert(model.nudge.map { _ in "A note for your cart" } ?? "", isPresented: Binding(get: { model.nudge != nil }, set: { if !$0 { model.nudge = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(model.nudge?.text ?? "") }
-        .sheet(isPresented: $sideGames) { SideGamesSheet(model: model) }
         .fullScreenCover(item: $replay) { r in
             ReplayFullscreen(replay: r, camURL: model.state?.cams[r.hole].flatMap(URL.init(string:)).flatMap { CameraLink(hole: r.hole, url: $0).isHLS ? $0 : nil },
                              replays: model.state?.replays.filter { $0.hole == r.hole } ?? [])
@@ -73,10 +46,15 @@ struct ScorecardScreen: View {
     }
 
     private var syncPill: some View {
-        Text(model.syncText)
-            .font(.caption2.monospaced().weight(.semibold)).textCase(.uppercase)
-            .foregroundStyle(model.synced ? Color.fcOnGreenMuted : Color.fcFlag)
-            .accessibilityLabel(model.synced ? "All scores saved" : model.syncText)
+        HStack(spacing: 5) {
+            Circle().fill(model.synced ? Color(UIColor(hex: 0x5cc48a)) : Color.fcFlag).frame(width: 7, height: 7)
+            Text(model.synced ? "Saved" : model.syncText).lineLimit(1)
+        }
+        .font(.caption2.weight(.bold)).tracking(0.8).textCase(.uppercase)
+        .padding(.horizontal, 9).padding(.vertical, 6)
+        .background((model.synced ? Color(UIColor(hex: 0x5cc48a)) : Color.fcFlag).opacity(0.18), in: Capsule())
+        .foregroundStyle(model.synced ? Color(UIColor(hex: 0x8fe0b0)) : Color.fcFlag)
+        .accessibilityLabel(model.synced ? "All scores saved" : model.syncText)
     }
 
     private func message(_ title: String, _ text: String, icon: String) -> some View {
@@ -91,45 +69,23 @@ struct ScorecardScreen: View {
         let h = model.currentHole()
         let H = s.course.holes[h - 1]
         return VStack(spacing: 0) {
-            if model.teams.count > 1 { teamTabs(s) }
+            TourHeader(state: s, title: s.title, subtitle: "Cart \(model.code) · " + s.scorers(t).map { Fmt.firstName($0.name) }.joined(separator: " & ")) {
+                syncPill
+            } below: {
+                VStack(spacing: 10) {
+                    if model.teams.count > 1 { teamTabs(s) }
+                    HeaderSwitch(options: [(Page.hole, "This hole"), (Page.round, "Your round")], selection: $page)
+                    if page == .hole { strip(s, t, h) }
+                }
+            }
             if s.locked {
                 Text("Scoring is closed. The results are final.").font(.subheadline.weight(.semibold)).foregroundStyle(.white)
                     .frame(maxWidth: .infinity).padding(8).background(Color.fcRed)
             }
-            strip(s, t, h)
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        // the club's cover photo welcomes the cart until its first score
-                        if s.photos.coverURL != nil, !s.scorers(t).contains(where: { p in (model.myScores()[t.id]?[p.id] ?? []).contains { $0 != nil } }) {
-                            CoverCard(state: s)
-                        }
-                        holeHeader(s, H).id("top")
-                        if Geo.mapped(s) {
-                            GPSCard(state: s, hole: h) { d in
-                                let ord = model.order(t), i = ord.firstIndex(of: model.currentHole()) ?? 0
-                                model.hole = ord[max(0, min(ord.count - 1, i + d))]
-                            }
-                        }
-                        // no course map: nothing here (golfers can't map it; the desk sees that in Setup)
-                        sponsors(s, h)
-                        ForEach(s.contests.filter { $0.hole == h }) { c in contestNote(c) }
-                        if let cam = s.cams[h], let u = URL(string: cam) {
-                            Button { camera = CameraLink(hole: h, url: u) } label: { Label("Watch the hole \(h) camera", systemImage: "video.fill") }
-                                .buttonStyle(.fcPlain)
-                        }
-                        VStack(spacing: 10) { ForEach(s.scorers(t)) { p in playerRow(s, p, H) } }
-                        standing(s)
-                        Button { router.go(.live(id: model.id)) } label: { Label("Full leaderboard", systemImage: "list.number") }.buttonStyle(.fcPlain)
-                        if s.sideGamesAllowed {
-                            Button { sideGames = true } label: {
-                                Label("Side games" + (model.side.anyOn ? " · playing" : ""), systemImage: "trophy")
-                            }.buttonStyle(.fcPlain)
-                        }
-                        CardGrid(holes: s.course.holes.filter { Core.playHoles(s).contains($0.n) },
-                                 rows: s.scorers(t).map { p in (Fmt.firstName(p.name), (model.myScores()[t.id]?[p.id]) ?? []) },
-                                 showTotal: true)
-                            .padding(.top, 8)
+                    VStack(alignment: .leading, spacing: 12) {
+                        if page == .hole { holePage(s, t, h, H).id("top") } else { roundPage(s, t) }
                     }
                     .padding(16)
                     .frame(maxWidth: 560)
@@ -142,7 +98,7 @@ struct ScorecardScreen: View {
                 if let r = PhoneCast.current(s, id: model.id), dismissed >= 0 {
                     PhoneBanner(state: s, route: r, go: { r in
                         PhoneCast.pending[model.id] = r
-                        router.go(.live(id: model.id))
+                        nav.tab = r.k == "cam" || r.k == "p3" ? .cameras : .leaders
                     }, close: { PhoneCast.dismiss(r, id: model.id); withAnimation { dismissed += 1 } })
                     .padding(.bottom, 8)
                 }
@@ -157,9 +113,102 @@ struct ScorecardScreen: View {
                 }
             }
             .animation(.spring(duration: 0.35), value: s.replays.first?.id)
-            bottomBar(t, h)
+            if page == .hole { bottomBar(t, h) }
         }
         .background(Color.fcPaper)
+    }
+
+    // ---- this hole ----
+    @ViewBuilder private func holePage(_ s: EventState, _ t: Team, _ h: Int, _ H: Hole) -> some View {
+        // the club's cover photo welcomes the cart until its first score
+        if s.photos.coverURL != nil, !s.scorers(t).contains(where: { p in (model.myScores()[t.id]?[p.id] ?? []).contains { $0 != nil } }) {
+            CoverCard(state: s)
+        }
+        HolePhotoHeader(state: s, hole: H)
+        VStack(spacing: 0) {
+            let ps = s.scorers(t)
+            ForEach(Array(ps.enumerated()), id: \.element.id) { i, p in
+                playerRow(s, p, H)
+                if i < ps.count - 1 { Divider().overlay(Color.fcLine) }
+            }
+        }
+        .padding(.horizontal, 14)
+        .fcCard(padding: 0)
+        if Geo.mapped(s) {
+            GPSCard(state: s, hole: h, onHole: { d in
+                let ord = model.order(t), i = ord.firstIndex(of: model.currentHole()) ?? 0
+                model.hole = ord[max(0, min(ord.count - 1, i + d))]
+            }, openMap: { nav.tab = .course })
+        }
+        // no course map: nothing here (golfers can't map it; the desk sees that in Setup)
+        sponsors(s, h)
+        ForEach(s.contests.filter { $0.hole == h }) { c in contestNote(c) }
+        if let cam = s.cams[h], let u = URL(string: cam) {
+            Button { camera = CameraLink(hole: h, url: u) } label: { Label("Watch the hole \(h) camera", systemImage: "video.fill") }
+                .buttonStyle(.fcPlain)
+        }
+    }
+
+    // ---- your round ----
+    @ViewBuilder private func roundPage(_ s: EventState, _ t: Team) -> some View {
+        let l = model.line(), stab = s.format.isStableford
+        let lb = Core.leaderboard(s, model.myScores())
+        HStack(alignment: .top, spacing: 0) {
+            summary(stab ? "Points" : s.format.show == "gross" ? "Gross to par" : "Net to par",
+                    l.map { $0.played > 0 ? Core.fmtPar($0.score, stab).replacingOccurrences(of: " pts", with: "") : "—" } ?? "—",
+                    red: (l?.score ?? 0) < 0 && !stab && (l?.played ?? 0) > 0)
+            Rectangle().fill(Color.fcLine).frame(width: 1).padding(.vertical, 4)
+            summary("Position", l.map { $0.pos.isEmpty ? "—" : $0.pos } ?? "—", sub: lb.isEmpty ? "" : "of \(lb.count)")
+            Rectangle().fill(Color.fcLine).frame(width: 1).padding(.vertical, 4)
+            summary("Thru", l.map { $0.played > 0 ? $0.thru : "—" } ?? "—")
+        }
+        .fcCard(padding: 14)
+        .accessibilityElement(children: .combine)
+
+        if let k = lb.firstIndex(where: { $0.teamId == t.id }) {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack {
+                    Text("Around you").fcLabel()
+                    Spacer()
+                    Button("Full leaderboard") { nav.tab = .leaders }.font(.subheadline.weight(.semibold)).tint(Color.fcPrimary)
+                }
+                .padding(.bottom, 6)
+                ForEach(Array(lb[max(0, k - 1)...min(lb.count - 1, k + 1)].enumerated()), id: \.element.key) { _, x in
+                    let me = x.teamId == t.id
+                    HStack(spacing: 10) {
+                        Text(x.pos.isEmpty ? "—" : x.pos).font(.subheadline.weight(.bold)).foregroundStyle(me ? Color.fcInk : Color.fcMuted).frame(width: 32, alignment: .leading)
+                        Text(x.name).font(.body.weight(me ? .bold : .semibold)).lineLimit(1)
+                        if me { YouTag() }
+                        Spacer(minLength: 4)
+                        Text(x.played > 0 ? Core.fmtPar(x.score, stab).replacingOccurrences(of: " pts", with: "") : "—")
+                            .font(.body.weight(.bold)).foregroundStyle(!stab && x.played > 0 && x.score < 0 ? Color.fcRed : Color.fcInk)
+                        Text(x.thru).font(.footnote.monospacedDigit()).foregroundStyle(Color.fcMuted).frame(width: 30, alignment: .trailing)
+                    }
+                    .padding(.vertical, 10).padding(.horizontal, me ? 14 : 0)
+                    .background(me ? Color.fcFlag.opacity(0.22) : .clear)
+                    .padding(.horizontal, me ? -14 : 0)
+                }
+            }
+            .fcCard(padding: 14)
+        }
+
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Your card").fcLabel()
+            CardGrid(holes: s.course.holes.filter { Core.playHoles(s).contains($0.n) },
+                     rows: s.scorers(t).map { p in (Fmt.firstName(p.name), (model.myScores()[t.id]?[p.id]) ?? []) },
+                     showTotal: true)
+        }
+        .fcCard(padding: 14)
+    }
+
+    private func summary(_ label: String, _ value: String, sub: String = "", red: Bool = false) -> some View {
+        VStack(spacing: 4) {
+            Text(label).fcLabel().lineLimit(1).minimumScaleFactor(0.7)
+            Text(value).font(FCType.display(48)).foregroundStyle(red ? Color.fcRed : Color.fcInk).lineLimit(1).minimumScaleFactor(0.5)
+                .contentTransition(.numericText())
+            if !sub.isEmpty { Text(sub).font(.caption).foregroundStyle(Color.fcMuted) }
+        }
+        .frame(maxWidth: .infinity)
     }
 
     private func teamTabs(_ s: EventState) -> some View {
@@ -180,9 +229,7 @@ struct ScorecardScreen: View {
                     }
                 }
             }
-            .padding(.horizontal, 16).padding(.vertical, 8)
         }
-        .background(Color.fcGreen)
     }
 
     private func strip(_ s: EventState, _ t: Team, _ cur: Int) -> some View {
@@ -192,18 +239,15 @@ struct ScorecardScreen: View {
                     ForEach(model.order(t), id: \.self) { n in
                         let par = s.course.holes[n - 1].par, on = n == cur, done = model.holeDone(n)
                         Button { model.hole = n } label: {
-                            VStack(spacing: 0) {
+                            VStack(spacing: 2) {
                                 Text("\(n)").font(FCType.display(24))
-                                Text("P\(par)").font(.system(size: 9, weight: .medium, design: .monospaced))
-                                    .foregroundStyle(on ? Color.fcOnFlag : par == 3 ? Color.fcFlag : Color.fcOnGreenMuted)
+                                Text(on ? "PAR \(par)" : "P\(par)").font(.system(size: 9, weight: .semibold))
+                                    .foregroundStyle(on ? Color.fcOnFlag.opacity(0.8) : done ? Color.white.opacity(0.85) : par == 3 ? Color.fcFlag : Color.fcOnGreenMuted)
                             }
-                            .frame(width: 44, height: 48)
+                            .frame(width: on ? 52 : 44, height: 52)
                             .foregroundStyle(on ? Color.fcOnFlag : Color.fcOnGreen)
-                            .background(on ? Color.fcFlag : done ? Color.white.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 8))
-                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(on ? Color.fcFlag : Color.white.opacity(0.25)))
-                            .overlay(alignment: .topTrailing) {
-                                if done && !on { Circle().fill(Color.fcFlag).frame(width: 6, height: 6).padding(4) }
-                            }
+                            .background(on ? Color.fcFlag : done ? Color(UIColor(hex: 0x2f8a57)) : Color.white.opacity(0.1),
+                                        in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                         }
                         .buttonStyle(.plain)
                         .id(n)
@@ -211,16 +255,11 @@ struct ScorecardScreen: View {
                         .accessibilityAddTraits(on ? .isSelected : [])
                     }
                 }
-                .padding(.horizontal, 16).padding(.vertical, 10)
             }
-            .background(Color.fcGreen2)
+            .padding(.horizontal, -16).contentMargins(.horizontal, 16, for: .scrollContent)
             .onAppear { proxy.scrollTo(cur, anchor: .center) }
             .onChange(of: cur) { _, n in withAnimation { proxy.scrollTo(n, anchor: .center) } }
         }
-    }
-
-    private func holeHeader(_ s: EventState, _ H: Hole) -> some View {
-        HolePhotoHeader(state: s, hole: H)
     }
 
     @ViewBuilder private func sponsors(_ s: EventState, _ h: Int) -> some View {
@@ -236,21 +275,24 @@ struct ScorecardScreen: View {
                 SponsorLine(sponsor: turn, banner: s.photos.sponsor(turn.id)) { model.hits.tap(turn.id) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(12).background(Color.fcPaper2, in: RoundedRectangle(cornerRadius: 10))
+            .fcCard(padding: 12)
             .onAppear { model.hits.view(turn.id, once: "\(turn.id):turn") }
         }
     }
 
     private func contestNote(_ c: Contest) -> some View {
         let top = Core.contestLeader(c).first
-        return VStack(alignment: .leading, spacing: 4) {
-            Text((c.isLongDrive ? "Long drive" : "Closest to the pin") + (c.sponsor.isEmpty ? "" : " · \(c.sponsor)")).fcHeading(.subheadline)
-            Text(top.map { "Leader: \($0.name), \(Core.fmtDist(c, $0.dist))." } ?? "No one on the board yet.")
-                + Text(" A marshal measures at the green.").foregroundStyle(Color.fcMuted)
+        return HStack(alignment: .top, spacing: 12) {
+            Image(systemName: c.isLongDrive ? "arrow.up.right" : "scope").font(.headline)
+                .frame(width: 40, height: 40).background(Color.fcFlag.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
+            VStack(alignment: .leading, spacing: 3) {
+                Text((c.isLongDrive ? "Long drive" : "Closest to the pin") + (c.sponsor.isEmpty ? "" : " · \(c.sponsor)")).fcLabel()
+                Text(top.map { "\($0.name), \(Core.fmtDist(c, $0.dist))" } ?? "No one on the board yet").font(.body.weight(.semibold))
+                Text("A marshal measures at the green.").font(.footnote).foregroundStyle(Color.fcMuted)
+            }
         }
-        .font(.subheadline)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12).background(Color.fcPaper2, in: RoundedRectangle(cornerRadius: 10))
+        .fcCard(padding: 12)
     }
 
     private func playerRow(_ s: EventState, _ p: Player, _ H: Hole) -> some View {
@@ -259,16 +301,18 @@ struct ScorecardScreen: View {
         let set = v != nil
         let shown = !set ? "\(H.par)" : v == 0 ? "PU" : "\(v!)"
         let m = Core.mark(v, H.par)
-        return VStack(spacing: 8) {
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(p.name).font(.body.weight(.semibold)).lineLimit(1)
+        let under = m == .birdie || m == .eagle
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(p.name).font(.title3.weight(.bold)).lineLimit(1).minimumScaleFactor(0.7)
                     Group {
-                        if st > 0 { Text(String(repeating: "●", count: st)).foregroundStyle(Color.fcRed) + Text(" gets \(st) stroke\(st > 1 ? "s" : "")") }
+                        if st > 0 { Text(String(repeating: "●", count: st)).foregroundStyle(Color.fcRed) + Text(" gets \(st) stroke\(st > 1 ? "s" : "") here") }
                         else if st < 0 { Text("gives a stroke back") }
+                        else if !set { Text("Tap the number for par") }
                         else { Text("no strokes here") }
                     }
-                    .font(.caption).foregroundStyle(Color.fcMuted)
+                    .font(.footnote).foregroundStyle(Color.fcMuted)
                     if let ix = p.index {
                         // GHIN: Handicap Index, tee and the course handicap the server worked out from them
                         let tee = s.course.tees.first { $0.id == p.tee }?.name ?? ""
@@ -276,17 +320,18 @@ struct ScorecardScreen: View {
                             .font(.caption2.monospaced()).foregroundStyle(Color.fcMuted).lineLimit(1).minimumScaleFactor(0.75)
                     }
                 }
-                Spacer(minLength: 4)
+                Spacer(minLength: 2)
                 stepButton("minus", "One fewer for \(p.name)") { model.step(p.id, -1) }
                 Button { model.step(p.id, 0) } label: {
                     Text(shown)
-                        .font(.system(size: 26, weight: .semibold, design: .monospaced))
-                        .frame(width: 58, height: 58)
-                        .foregroundStyle(!set ? Color.fcMuted : (m == .birdie || m == .eagle) ? Color.fcRed : Color.fcInk)
+                        .font(FCType.display(v == 0 ? 30 : 42))
+                        .frame(width: 62, height: 62)
+                        .foregroundStyle(!set ? Color.fcMuted : under ? Color.fcRed : Color.fcInk)
                         .background {
-                            if m == .birdie || m == .eagle { Circle().stroke(Color.fcRed, lineWidth: 2) }
-                            else if set { RoundedRectangle(cornerRadius: 10).stroke(m == .none ? Color.fcLine : Color.fcInk, lineWidth: m == .none ? 1.5 : 2) }
-                            else { RoundedRectangle(cornerRadius: 10).stroke(Color.fcLine, style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])) }
+                            if under { Circle().stroke(Color.fcRed, lineWidth: 3) }
+                            else if m == .bogey || m == .double { RoundedRectangle(cornerRadius: 12).stroke(Color.fcInk, lineWidth: m == .double ? 3 : 2) }
+                            else if set { Circle().fill(Color.fcPaper2) }
+                            else { RoundedRectangle(cornerRadius: 14).stroke(Color.fcLine, style: StrokeStyle(lineWidth: 2, dash: [5, 4])) }
                         }
                         .contentTransition(.numericText())
                 }
@@ -294,69 +339,59 @@ struct ScorecardScreen: View {
                 .accessibilityLabel(set ? "\(p.name) score \(shown)" : "Tap to enter par for \(p.name)")
                 stepButton("plus", "One more for \(p.name)") { model.step(p.id, 1) }
             }
-            HStack {
-                Text(set ? "" : "Tap the number for par")
+            HStack(spacing: 14) {
                 Spacer()
-                if set { Button("Clear") { withAnimation { model.clear(p.id) } } ; Text("·") }
+                if set { Button("Clear") { withAnimation { model.clear(p.id) } } }
                 Button("Picked up") { withAnimation { model.pickedUp(p.id) } }
             }
-            .font(.footnote).foregroundStyle(Color.fcMuted).tint(Color.fcMuted)
+            .font(.footnote.weight(.semibold)).tint(Color.fcPrimary)
         }
-        .padding(12)
-        .background(Color.fcCard, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.fcLine))
+        .padding(.vertical, 14)
         .animation(.snappy(duration: 0.2), value: v)
     }
 
     private func stepButton(_ icon: String, _ label: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon).font(.title2.weight(.semibold)).frame(width: 50, height: 50)
-                .background(Color.fcPaper, in: Circle()).overlay(Circle().stroke(Color.fcLine, lineWidth: 1.5))
+            Image(systemName: icon).font(.title2.weight(.semibold)).frame(width: 52, height: 52)
+                .background(Color.fcPaper2, in: Circle())
                 .foregroundStyle(Color.fcInk)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
     }
 
-    private func standing(_ s: EventState) -> some View {
-        let l = model.line(), stab = s.format.isStableford
-        return HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(stab ? "Points" : s.format.show == "gross" ? "Gross to par" : "Net to par").fcLabel()
-                Text(l.map { $0.played > 0 ? Core.fmtPar($0.score, stab) : "—" } ?? "—")
-                    .font(FCType.display(44))
-                    .foregroundStyle((l?.score ?? 0) < 0 && !stab && (l?.played ?? 0) > 0 ? Color.fcRed : Color.fcInk)
-            }
-            Spacer()
-            VStack(alignment: .trailing, spacing: 2) {
-                Text("Position").fcLabel()
-                Text(l.map { $0.pos.isEmpty ? "—" : $0.pos } ?? "—").font(FCType.display(44))
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .padding(.top, 4)
-    }
-
     private func bottomBar(_ t: Team, _ h: Int) -> some View {
         let ord = model.order(t), i = ord.firstIndex(of: h) ?? 0, last = ord.count - 1
         return HStack(spacing: 10) {
-            Button { model.hole = ord[max(0, i - 1)] } label: { Label("Back", systemImage: "chevron.left") }
+            Button { model.hole = ord[max(0, i - 1)] } label: { Text(i == 0 ? "Back" : "Hole \(ord[max(0, i - 1)])") }
                 .buttonStyle(.fcPlain).disabled(i == 0)
+                .frame(maxWidth: 130)
             Button {
-                if i == last { router.go(.live(id: model.id)); return }
+                if i == last { page = .round; return }
                 if let s = model.state {
                     let missing = s.scorers(t).filter { model.value($0.id, h) == nil }
                     if !missing.isEmpty { model.toast = "No score yet for \(missing.map { Fmt.firstName($0.name) }.joined(separator: " and ")) on hole \(h)." }
                 }
                 model.hole = ord[min(last, i + 1)]
             } label: {
-                Label(i == last ? "Done" : "Hole \(ord[min(last, i + 1)])", systemImage: i == last ? "flag.checkered" : "chevron.right")
+                Label(i == last ? "See your round" : "Next: hole \(ord[min(last, i + 1)])", systemImage: i == last ? "flag.checkered" : "chevron.right")
                     .labelStyle(TrailingIcon())
             }
-            .buttonStyle(.fcPrimary)
+            .buttonStyle(.fcDark)
         }
-        .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 6)
-        .background(Rectangle().fill(Color.fcCard.shadow(.drop(color: .black.opacity(0.08), radius: 6, y: -2))).ignoresSafeArea(edges: .bottom))
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .background(Color.fcPaper)
+    }
+}
+
+/// The YOU tag on your own team.
+struct YouTag: View {
+    var body: some View {
+        Text("YOU").font(.system(size: 10, weight: .heavy)).tracking(0.6)
+            .padding(.horizontal, 6).padding(.vertical, 3)
+            .background(Color.fcFlag, in: RoundedRectangle(cornerRadius: 4))
+            .foregroundStyle(Color.fcOnFlag)
+            .accessibilityLabel("Your team")
     }
 }
 
@@ -419,29 +454,37 @@ struct HolePhotoHeader: View {
     let hole: Hole
     @State private var photo: UIImage?
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            LinearGradient(colors: [Color.fcGreen2, Color.fcGreen], startPoint: .topLeading, endPoint: .bottomTrailing)
+        ZStack(alignment: .leading) {
+            LinearGradient(colors: [Color(UIColor(hex: 0x2c5a3d)), Color(UIColor(hex: 0x123628))], startPoint: .topTrailing, endPoint: .bottomLeading)
                 .overlay { if let photo { Image(uiImage: photo).resizable().aspectRatio(contentMode: .fill).transition(.opacity) } }
                 .clipped()
-            LinearGradient(colors: [Color.fcScrim.opacity(0.85), Color.fcScrim.opacity(0)], startPoint: .bottom, endPoint: .center)
-            HStack(alignment: .lastTextBaseline) {
-                Text("Hole \(hole.n)").font(FCType.display(48)).textCase(.uppercase)
-                Spacer()
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text("Par \(hole.par)").font(FCType.display(26))
-                    Text((hole.yds > 0 ? "\(hole.yds) yds · " : "") + "SI \(hole.hcp)").font(.footnote.weight(.semibold)).opacity(0.85)
+            LinearGradient(colors: [Color.fcScrim.opacity(0.85), Color.fcScrim.opacity(0.25), Color.fcScrim.opacity(0)], startPoint: .leading, endPoint: .trailing)
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Hole \(hole.n)").font(FCType.display(56)).textCase(.uppercase).lineLimit(1).minimumScaleFactor(0.6)
+                Spacer(minLength: 8)
+                HStack(spacing: 18) {
+                    stat("Par", "\(hole.par)")
+                    if hole.yds > 0 { stat("Yards", "\(hole.yds)") }
+                    stat("Index", "\(hole.hcp)")
                 }
             }
-            .foregroundStyle(.white).shadow(color: .black.opacity(0.4), radius: 6, y: 1)
-            .padding(.horizontal, 16).padding(.bottom, 12)
+            .foregroundStyle(.white).shadow(color: .black.opacity(0.35), radius: 6, y: 1)
+            .padding(16)
         }
-        .frame(height: photo == nil ? 96 : 170)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .frame(height: 178)
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: Color.fcScrim.opacity(0.10), radius: 10, y: 4)
         .animation(.easeOut(duration: 0.35), value: photo != nil)
         // the club's own photo of the hole when it added one, else the satellite picture
         .task(id: "\(state.id)-\(hole.n)-\(state.photos.holes[String(hole.n)] ?? "")") {
             if let p = await ClubPhoto.load(state.photos.hole(hole.n)) { photo = p } else { photo = await CoursePhoto.hole(state, hole.n) }
         }
         .accessibilityElement(children: .combine)
+    }
+    private func stat(_ label: String, _ v: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label).font(.caption2.weight(.semibold)).tracking(1).textCase(.uppercase).foregroundStyle(Color(UIColor(hex: 0xa9bdb0)))
+            Text(v).font(FCType.display(30))
+        }
     }
 }

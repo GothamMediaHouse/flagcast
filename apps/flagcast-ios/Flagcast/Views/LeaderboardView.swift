@@ -4,6 +4,11 @@ import SwiftUI
 /// news flash, and tabs for the par 3 cameras, contests and skins.
 struct LeaderboardScreen: View {
     let id: String
+    /// the Leaders tab (teams, contests, skins) or the Cameras tab (the par 3s)
+    var mode: Mode = .leaders
+    /// this cart's teams, marked YOU
+    var mine: Set<String> = []
+    enum Mode { case leaders, cameras }
     @State private var feed: EventFeed
     @State private var tab: Tab = .board
     @State private var flight = ""
@@ -13,16 +18,43 @@ struct LeaderboardScreen: View {
     @State private var scrollTo: String?
     @State private var allPar3s = false
     @Environment(Router.self) private var router
-    enum Tab: String, CaseIterable { case board = "Leaderboard", par3 = "Par 3s", contests = "Contests", skins = "Skins" }
+    @Environment(TourNav.self) private var nav
+    enum Tab: String, CaseIterable { case board = "Teams", par3 = "Par 3s", contests = "Contests", skins = "Skins" }
 
-    init(id: String) { self.id = id; _feed = State(initialValue: Feeds.feed(id)) }
+    init(id: String, mode: Mode = .leaders, mine: Set<String> = []) {
+        self.id = id; self.mode = mode; self.mine = mine
+        _feed = State(initialValue: Feeds.feed(id))
+        _tab = State(initialValue: mode == .cameras ? .par3 : .board)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             if let s = feed.state {
                 VStack(spacing: 0) {
-                GreenHeader(title: s.title, subtitle: [s.club, s.course.name != s.club ? s.course.name : "", s.dayText].filter { !$0.isEmpty }.joined(separator: " · "), state: s, height: 320) {
-                    LivePill(online: feed.online)
+                if mode == .cameras {
+                    TourHeader(state: s, title: s.title) { LivePill(online: feed.online) } below: {
+                        TourTitle(title: s.cams.isEmpty ? "Par 3s" : "Par 3 cameras",
+                                  sub: s.cams.isEmpty ? "Scoring on the short holes" : "Live on \(s.cams.count) hole\(s.cams.count == 1 ? "" : "s") · tap ⟲ 30s to rewind")
+                    }
+                } else {
+                    VStack(spacing: 0) {
+                        GreenHeader(title: s.title, subtitle: [s.club, s.course.name != s.club ? s.course.name : "", s.dayText].filter { !$0.isEmpty }.joined(separator: " · "), state: s, height: 250) {
+                            HStack(spacing: 8) {
+                                LivePill(online: feed.online)
+                                ShareLink(item: Server.page("g/\(id)")) {
+                                    Image(systemName: "square.and.arrow.up").font(.subheadline.weight(.bold)).foregroundStyle(.white)
+                                        .frame(width: 36, height: 36).background(Color.black.opacity(0.3), in: Circle())
+                                }
+                                .accessibilityLabel("Share the leaderboard")
+                            }
+                        }
+                        if tabs(s).count > 1 {
+                            HeaderSwitch(options: tabs(s).map { ($0, $0.rawValue) }, selection: $tab)
+                                .padding(.horizontal, 16).padding(.vertical, 10)
+                                .background(Color.fcGreen)
+                        }
+                    }
+                    .ignoresSafeArea(edges: .top)
                 }
                 if let f = s.flash, Date().timeIntervalSince1970 * 1000 - f.at < 30 * 60_000 {
                     Label(f.text, systemImage: "megaphone.fill").font(.subheadline.weight(.semibold))
@@ -30,7 +62,6 @@ struct LeaderboardScreen: View {
                         .background(Color.fcFlag).foregroundStyle(Color.fcOnFlag)
                         .transition(.move(edge: .top).combined(with: .opacity))
                 }
-                tabBar(s)
                 ScrollViewReader { proxy in
                     ScrollView {
                         VStack(alignment: .leading, spacing: 12) {
@@ -60,8 +91,6 @@ struct LeaderboardScreen: View {
                 }
                 .animation(.spring(duration: 0.35), value: s.live.phone)
                 }
-                // the photo runs up behind the status bar and the back button, with the tabs right under it
-                .ignoresSafeArea(edges: .top)
             } else if let m = feed.missing {
                 ContentUnavailableView("Not found", systemImage: "questionmark.circle", description: Text(m))
             } else {
@@ -70,19 +99,15 @@ struct LeaderboardScreen: View {
         }
         .background(Color.fcPaper)
         .animation(.default, value: feed.state?.flash)
-        .navigationTitle("Leaderboard")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(.hidden, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
-        .toolbar {
-            if let code = Recents.all().first(where: { $0.id == id })?.code, !code.isEmpty,
-               !router.path.contains(.score(id: id, code: code)) {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { router.go(.score(id: id, code: code)) } label: { Label("Scorecard", systemImage: "square.and.pencil") }
+        .overlay(alignment: .topLeading) {
+            // the cover photo runs up behind the status bar: a way home on top of it
+            if mode == .leaders, feed.state != nil {
+                Button { router.path = [] } label: {
+                    Image(systemName: "chevron.left").font(.headline.weight(.bold)).foregroundStyle(.white)
+                        .frame(width: 40, height: 40).background(Color.black.opacity(0.3), in: Circle())
                 }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                ShareLink(item: Server.page("g/\(id)")) { Label("Share", systemImage: "square.and.arrow.up") }
+                .accessibilityLabel("Home")
+                .padding(.leading, 16).padding(.top, 6)
             }
         }
         .onAppear {
@@ -99,9 +124,11 @@ struct LeaderboardScreen: View {
 
     /// "See it" / "Watch" on a phone banner: the matching tab (a camera → Par 3s, scrolled to its hole).
     private func follow(_ r: PhoneRoute, _ s: EventState) {
+        let cam = r.k == "cam" || r.k == "p3"
+        if cam != (mode == .cameras) { PhoneCast.pending[id] = r; nav.tab = cam ? .cameras : .leaders; return }
         switch r.k {
         case "cam", "p3": tab = .par3; scrollTo = "p3-\(r.hole)"
-        case "contests": tab = .contests
+        case "contests": tab = s.contests.isEmpty ? .board : .contests
         case "skins": tab = tabs(s).contains(.skins) ? .skins : .board
         case "lb": tab = .board; flight = s.flights.contains(r.fl) ? r.fl : ""
         default: tab = .board
@@ -109,15 +136,8 @@ struct LeaderboardScreen: View {
     }
 
     private func tabs(_ s: EventState) -> [Tab] {
-        Tab.allCases.filter { $0 != .skins || (s.screens.skins && !s.format.isScramble) }
-    }
-
-    private func tabBar(_ s: EventState) -> some View {
-        Picker("View", selection: $tab) { ForEach(tabs(s), id: \.self) { Text($0.rawValue).tag($0) } }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 16).padding(.vertical, 10)
-            .background(Color.fcGreen)
-            .colorScheme(.dark)
+        if mode == .cameras { return [.par3] }
+        return [Tab.board, .contests, .skins].filter { ($0 != .skins || (s.screens.skins && !s.format.isScramble)) && ($0 != .contests || !s.contests.isEmpty) }
     }
 
     // ---- leaderboard ----
@@ -149,8 +169,9 @@ struct LeaderboardScreen: View {
                     row(s, l, stab)
                 }
             }
-            .background(Color.fcCard, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.fcLine))
+            .background(Color.fcCard)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .shadow(color: Color.fcScrim.opacity(0.10), radius: 10, y: 4)
             Text("\(s.format.name) · \(stab ? "points" : s.format.show == "gross" ? "gross" : "net")\(s.locked ? " · final results" : "") · tap a team for its card")
                 .fcLabel()
         }
@@ -162,14 +183,25 @@ struct LeaderboardScreen: View {
         return VStack(alignment: .leading, spacing: 0) {
             Button { withAnimation(.snappy) { open = isOpen ? nil : l.key } } label: {
                 HStack(spacing: 8) {
-                    Text(l.pos).font(.subheadline.monospaced()).foregroundStyle(Color.fcMuted).frame(width: 36, alignment: .leading)
+                    Group {
+                        if l.pos == "1" {
+                            Text("1").font(FCType.display(20)).foregroundStyle(Color.fcOnFlag)
+                                .frame(width: 28, height: 28).background(Color.fcFlag, in: Circle())
+                        } else {
+                            Text(l.pos).font(.subheadline.weight(.bold)).foregroundStyle(Color.fcMuted)
+                        }
+                    }
+                    .frame(width: 36, alignment: .leading)
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(l.name).font(.body.weight(.semibold)).foregroundStyle(Color.fcInk).lineLimit(1)
+                        HStack(spacing: 6) {
+                            Text(l.name).font(.body.weight(mine.contains(l.teamId) ? .bold : .semibold)).foregroundStyle(Color.fcInk).lineLimit(1)
+                            if mine.contains(l.teamId) { YouTag() }
+                        }
                         if !l.sub.isEmpty && l.sub != l.name { Text(l.sub).font(.caption).foregroundStyle(Color.fcMuted).lineLimit(1) }
                     }
                     Spacer(minLength: 4)
                     Text(l.played > 0 ? Core.fmtPar(l.score, stab).replacingOccurrences(of: " pts", with: "") : "—")
-                        .font(.title3.monospaced().weight(.semibold))
+                        .font(FCType.display(28))
                         .foregroundStyle(!stab && l.played > 0 && l.score < 0 ? Color.fcRed : Color.fcInk)
                         .frame(width: 64, alignment: .trailing)
                         .contentTransition(.numericText())
@@ -188,7 +220,7 @@ struct LeaderboardScreen: View {
                     .background(Color.fcPaper2)
             }
         }
-        .background(isOpen ? Color.fcPaper2 : .clear)
+        .background(isOpen ? Color.fcPaper2 : mine.contains(l.teamId) ? Color.fcFlag.opacity(0.22) : .clear)
     }
 
     private func fundBox(_ f: Fund) -> some View {
@@ -255,9 +287,9 @@ struct LeaderboardScreen: View {
                 }
                 .padding(14)
             }
-            .background(Color.fcCard, in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.fcLine))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .background(Color.fcCard, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .shadow(color: Color.fcScrim.opacity(0.10), radius: 10, y: 4)
             .id("p3-\(h.n)")
         }
     }
@@ -335,7 +367,7 @@ struct LeaderboardScreen: View {
                 .padding(.horizontal, 12).frame(minHeight: 46)
             }
         }
-        .background(Color.fcCard, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.fcLine))
+        .background(Color.fcCard, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: Color.fcScrim.opacity(0.10), radius: 10, y: 4)
     }
 }
