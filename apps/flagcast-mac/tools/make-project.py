@@ -12,9 +12,12 @@ def i(name): return hashlib.md5(('flagcast-mac:' + name).encode()).hexdigest()[:
 TEAM = 'C8KXPB4QNA'
 # (target, product name, bundle id, version, extra source folders)
 TARGETS = [
-    ('Manager', 'Flagcast Manager', 'app.flagcast.manager', '2.8.8'),
+    ('Manager', 'Flagcast Manager', 'app.flagcast.manager', '2.8.9'),
     ('Admin', 'Flagcast Admin', 'app.flagcast.admin', '2.2.0'),
 ]
+# the build number (CFBundleVersion): raise it by one for every Manager release. Sparkle offers an update only when the
+# feed's build is higher than the installed one (the version alone isn't enough); tools/release.sh checks this.
+BUILDS = {'Manager': '2', 'Admin': '1'}
 # Admin is retired (folded into Manager): its last version is only Admin/RetiredApp.swift, no shared code or updater
 FULL = {'Manager'}
 SHARED_IOS = ['Model/Models.swift', 'Model/Core.swift', 'Model/FlyPath.swift', 'Net/Server.swift', 'Net/EventFeed.swift']
@@ -27,7 +30,7 @@ def settings(t, prod, bid, ver):
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 {ent}				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = {BUILDS[t]};
 				DEVELOPMENT_TEAM = {TEAM};
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;

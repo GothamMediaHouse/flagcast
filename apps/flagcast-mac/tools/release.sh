@@ -36,6 +36,9 @@ xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportOptionsPlist build/expo
 APP="build/export-$APP_T/$NAME.app"
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist")
 BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Contents/Info.plist")
+# Sparkle only offers an update whose build number is higher than the installed one: refuse a build that isn't
+LIVE_BUILD=$(curl -fsL "https://flagcast.app/updates/$LOWER/appcast.xml" | sed -n 's:.*<sparkle\:version>\([0-9]*\)<.*:\1:p' | head -1)
+[ -z "$LIVE_BUILD" ] || [ "$BUILD" -gt "$LIVE_BUILD" ] || { echo "Build $BUILD isn't higher than the published build $LIVE_BUILD: installed copies wouldn't see this update. Raise BUILDS in tools/make-project.py, then run this again."; exit 1; }
 lipo -archs "$APP/Contents/MacOS/$NAME"
 codesign --verify --deep --strict "$APP"
 
