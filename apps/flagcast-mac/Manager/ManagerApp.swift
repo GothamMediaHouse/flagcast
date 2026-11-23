@@ -256,6 +256,7 @@ struct AdminPage: View {
             case .tournaments: TournamentsView()
             case .cameras: CamerasView()
             case .screens: ScreenControlView()
+            case .staff: AdminStaffView()
             case .activity: ActivityView()
             }
         }

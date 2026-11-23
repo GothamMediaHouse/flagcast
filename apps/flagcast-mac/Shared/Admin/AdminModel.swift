@@ -82,25 +82,34 @@ struct LogLine: Decodable, Hashable, Identifiable {
     enum CodingKeys: String, CodingKey { case n, at, who, club, what }
 }
 
+/// Someone with Flagcast Admin: fixed when it comes from the server's ADMIN_EMAIL (changed in Cloudflare), else added in Staff
+struct StaffMember: Decodable, Hashable, Identifiable {
+    var email: String, fixed: Bool, added: Double, by: String, seen: Double
+    var id: String { email }
+    init(from d: Decoder) throws { let c = try d.container(keyedBy: CodingKeys.self); email = c.str(.email); fixed = (try? c.decode(Bool.self, forKey: .fixed)) ?? false; added = c.dbl(.added, 0); by = c.str(.by); seen = c.dbl(.seen, 0) }
+    enum CodingKeys: String, CodingKey { case email, fixed, added, by, seen }
+}
+
 enum AdminSection: String, CaseIterable, Identifiable {
-    case overview, today, signups, clubs, tournaments, cameras, screens, activity
+    case overview, today, signups, clubs, tournaments, cameras, screens, staff, activity
     var id: String { rawValue }
     var title: String {
-        switch self { case .overview: "Overview"; case .today: "Event day"; case .signups: "Sign-ups"; case .clubs: "Clubs"; case .tournaments: "Tournaments"; case .cameras: "Cameras"; case .screens: "Screens & phones"; case .activity: "Activity" }
+        switch self { case .overview: "Overview"; case .today: "Event day"; case .signups: "Sign-ups"; case .clubs: "Clubs"; case .tournaments: "Tournaments"; case .cameras: "Cameras"; case .screens: "Screens & phones"; case .staff: "Staff"; case .activity: "Activity" }
     }
     var icon: String {
-        switch self { case .overview: "square.grid.2x2"; case .today: "sun.max"; case .signups: "person.badge.plus"; case .clubs: "building.2"; case .tournaments: "flag.2.crossed"; case .cameras: "video"; case .screens: "tv.and.mediabox"; case .activity: "list.bullet.rectangle" }
+        switch self { case .overview: "square.grid.2x2"; case .today: "sun.max"; case .signups: "person.badge.plus"; case .clubs: "building.2"; case .tournaments: "flag.2.crossed"; case .cameras: "video"; case .screens: "tv.and.mediabox"; case .staff: "checkmark.shield"; case .activity: "list.bullet.rectangle" }
     }
 }
 
 /// Flagcast Admin inside the Manager: every club and tournament, through POST /golf/api/club/admin { token, op, … }
-/// with the Manager's own sign-in (the server lets in the emails in its ADMIN_EMAIL list). Clubs never see it.
+/// with the Manager's own sign-in (the server lets in staff: its ADMIN_EMAIL list plus the ones added in Staff). Clubs never see it.
 @MainActor @Observable
 final class AdminModel {
     var section: AdminSection = .clubs
     var clubs: [AdminClub] = []
     var events: [AdminEvent] = []
     var log: [LogLine] = []
+    var staff: [StaffMember] = []
     var mail = true
     var loading = false
     var error: String?
@@ -131,7 +140,7 @@ final class AdminModel {
     }
     func forget() { pass = nil; Keychain.pass = nil; clear() }
     /// drop every club's data from memory (sign-out, or another account signing in)
-    func clear() { clubs = []; events = []; log = []; error = nil; notice = nil }
+    func clear() { clubs = []; events = []; log = []; staff = []; error = nil; notice = nil }
 
     @discardableResult
     func call(_ op: String?, _ extra: [String: Any] = [:]) async throws -> [String: Any] {
@@ -141,9 +150,9 @@ final class AdminModel {
     func refresh() async throws {
         loading = true; defer { loading = false }
         let d = try await Net.post("/golf/api/club/admin", body([:]))
-        struct R: Decodable { var clubs: [Lenient<AdminClub>]; var mail: Bool? }
+        struct R: Decodable { var clubs: [Lenient<AdminClub>]; var mail: Bool?; var staff: [Lenient<StaffMember>]? }
         let r = try JSONDecoder().decode(R.self, from: d)
-        clubs = r.clubs.compactMap(\.value); mail = r.mail ?? true
+        clubs = r.clubs.compactMap(\.value); mail = r.mail ?? true; staff = (r.staff ?? []).compactMap(\.value)
     }
     func refreshEvents() async {
         do {

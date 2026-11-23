@@ -19,7 +19,7 @@
 //   POST /golf/api/club/signout   { token }
 //   POST /golf/api/club/admin     { pass | token, op, … }   Flagcast Admin (passcode, or signed in with an ADMIN_EMAIL address): list, approve, on, off, delete, create (a club + its owner),
 //                                 credits (tournaments a club may make: a number, or -1 for unlimited), invite, uninvite,
-//                                 event (make a tournament for a club, no credit used), hide
+//                                 event (make a tournament for a club, no credit used), hide, staff-add / staff-remove { email } (who gets Admin)
 // Credits: a club makes tournaments while it has credits (each new one uses one); -1 means unlimited (a season deal).
 //   POST /golf/api/new            { token, name }  (a signed-in, approved club)  or  { pass, name, club? }  (Flagcast)
 //
@@ -48,7 +48,8 @@ function same(a, b) {
   return d === 0;
 }
 export const isAdmin = (env, pass) => !!env.GOLF_CREATE_PASS && same(pass, env.GOLF_CREATE_PASS);
-// Flagcast staff: the emails in ADMIN_EMAIL (comma-separated, set in the Cloudflare dashboard) get Admin when signed in
+// Flagcast staff: the emails in ADMIN_EMAIL (comma-separated, set in the Cloudflare dashboard) get Admin when signed in,
+// and so do the ones added in Admin → Staff (the staff table; FlagcastClubs.staffEmail checks both)
 export const adminEmail = (env, email) => !!email && String(env.ADMIN_EMAIL || '').toLowerCase().split(/[\s,]+/).filter(Boolean).includes(String(email).toLowerCase());
 
 async function sendMail(env, to, subject, text) {
@@ -95,7 +96,8 @@ export class FlagcastClubs extends DurableObject {
       CREATE TABLE IF NOT EXISTS log (n INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER, who TEXT, club TEXT, what TEXT);
       CREATE TABLE IF NOT EXISTS accounts (email TEXT PRIMARY KEY, hash TEXT, salt TEXT, iter INTEGER, apple TEXT, updated INTEGER);
       CREATE TABLE IF NOT EXISTS fails (k TEXT PRIMARY KEY, n INTEGER, since INTEGER);
-      CREATE TABLE IF NOT EXISTS streams (event TEXT, hole INTEGER, uid TEXT, updated INTEGER, PRIMARY KEY (event, hole));`);
+      CREATE TABLE IF NOT EXISTS streams (event TEXT, hole INTEGER, uid TEXT, updated INTEGER, PRIMARY KEY (event, hole));
+      CREATE TABLE IF NOT EXISTS staff (email TEXT PRIMARY KEY, added INTEGER, by TEXT);`);
     // columns added after the first release
     for (const q of ['ALTER TABLE accounts ADD COLUMN google TEXT', 'ALTER TABLE clubs ADD COLUMN notes TEXT', 'ALTER TABLE events ADD COLUMN archived INTEGER DEFAULT 0', 'ALTER TABLE clubs ADD COLUMN course TEXT',
       'ALTER TABLE clubs ADD COLUMN logo TEXT', 'ALTER TABLE clubs ADD COLUMN accent TEXT', 'ALTER TABLE clubs ADD COLUMN powered INTEGER DEFAULT 0']) { try { this.sql.exec(q); } catch {} }
@@ -116,11 +118,19 @@ export class FlagcastClubs extends DurableObject {
     const r = await this.env.GOLF.get(this.env.GOLF.idFromName(id)).fetch(new Request(`https://golf/${path}`, body ? { method: 'POST', body: JSON.stringify(body) } : {}));
     const j = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(j.error || 'That tournament didn’t answer.'), { status: r.status }); return j;
   }
-  // Admin: the passcode, or a sign-in whose email is in ADMIN_EMAIL
+  // Flagcast staff: an email in ADMIN_EMAIL (Cloudflare) or one added in Admin → Staff
+  staffEmail(email) { return adminEmail(this.env, email) || (!!email && !!this.one('SELECT email FROM staff WHERE email = ?', String(email).toLowerCase())); }
+  // Admin: the passcode, or a sign-in whose email is staff
   isStaff(b) {
     if (isAdmin(this.env, b.pass)) return true;
     if (!b.token) return false;
-    try { return adminEmail(this.env, this.who(b.token).email); } catch { return false; }
+    try { return this.staffEmail(this.who(b.token).email); } catch { return false; }
+  }
+  staffList() {
+    const fixed = String(this.env.ADMIN_EMAIL || '').toLowerCase().split(/[\s,]+/).filter(Boolean);
+    const seen = Object.fromEntries(this.all('SELECT email, MAX(seen) AS seen FROM sessions GROUP BY email').map((s) => [s.email, s.seen]));
+    return [...fixed.map((email) => ({ email, fixed: true, added: 0, by: '' })),
+      ...this.all('SELECT * FROM staff ORDER BY added').filter((r) => !fixed.includes(r.email)).map((r) => ({ ...r, fixed: false }))].map((r) => ({ ...r, seen: seen[r.email] || 0 }));
   }
   // club branding (brand.js): what its tournaments show instead of the Flagcast logo
   brandOf(c) { return { logo: c?.logo || '', accent: c?.accent || '', powered: !!c?.powered }; }
@@ -459,6 +469,19 @@ export class FlagcastClubs extends DurableObject {
         this.sql.exec('UPDATE members SET role = ? WHERE email = ?', b.role === 'owner' ? 'owner' : 'staff', email);
       }
       if (b.op === 'signout') this.sql.exec('DELETE FROM sessions WHERE email = ?', clip(b.email, 254).toLowerCase());
+      // Staff: who else gets Admin when they sign in (ADMIN_EMAIL ones stay; they're set in Cloudflare)
+      if (b.op === 'staff-add' || b.op === 'staff-remove') {
+        const email = clip(b.email, 254).toLowerCase();
+        let me = ''; try { me = b.token ? this.who(b.token).email : ''; } catch {}
+        if (b.op === 'staff-add') {
+          if (!EMAIL.test(email)) this.fail('Type a full email address.');
+          if (!this.staffEmail(email)) this.sql.exec('INSERT INTO staff (email, added, by) VALUES (?, ?, ?)', email, Date.now(), me || 'passcode');
+        } else {
+          if (adminEmail(env, email)) this.fail('That email is set in Cloudflare (ADMIN_EMAIL). Take it off there.');
+          if (me && email === me) this.fail('You can’t take yourself off. Ask another admin.');
+          this.sql.exec('DELETE FROM staff WHERE email = ?', email);
+        }
+      }
       // a club's branding: logo, colour, and a small "Powered by Flagcast" (off unless Flagcast turns it on)
       if (b.op === 'brand') {
         need(); this.setBrand(cid, b);
@@ -589,7 +612,7 @@ export class FlagcastClubs extends DurableObject {
         events: this.all('SELECT id, key, name, created, hidden, archived FROM events WHERE club = ? ORDER BY created DESC', x.id),
         payments: this.all('SELECT * FROM payments WHERE club = ? ORDER BY at DESC', x.id),
       }));
-      return json({ clubs, made, mail: !!env.RESEND_API_KEY });
+      return json({ clubs, made, mail: !!env.RESEND_API_KEY, staff: this.staffList() });
     }
     this.fail('Not found', 404);
   }
@@ -598,7 +621,7 @@ export class FlagcastClubs extends DurableObject {
 
   me(u) {
     const acct = this.one('SELECT hash, apple, google FROM accounts WHERE email = ?', u.email);
-    const out = { email: u.email, role: u.role, admin: adminEmail(this.env, u.email), password: !!acct?.hash, apple: !!acct?.apple, google: !!acct?.google, club: null, members: [], events: [] };
+    const out = { email: u.email, role: u.role, admin: this.staffEmail(u.email), password: !!acct?.hash, apple: !!acct?.apple, google: !!acct?.google, club: null, members: [], events: [] };
     if (!u.club) return out;
     const { id, name, status, city, credits } = u.club;
     out.club = { id, name, status, city, credits, logo: this.logoURL(u.club), accent: u.club.accent || '' };

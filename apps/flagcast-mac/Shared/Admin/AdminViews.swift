@@ -331,3 +331,57 @@ struct ActivityView: View {
     private func clubName(_ id: String) -> String { model.clubs.first { $0.id == id }?.name ?? "" }
 }
 
+
+// MARK: - staff
+
+/// Who gets Admin when they sign in (the web Admin's Staff tab). ADMIN_EMAIL ones are listed but changed in Cloudflare.
+struct AdminStaffView: View {
+    @Environment(AdminModel.self) private var model
+    @State private var email = ""
+    @State private var search = ""
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Anyone here gets Admin, in the Manager and on the web, when they sign in with that email. Club owners never see Admin.")
+                    .font(.system(size: 13)).foregroundStyle(FC.muted).padding(14)
+                ForEach(model.staff.filter { search.isEmpty || $0.email.localizedCaseInsensitiveContains(search) }) { m in
+                    Divider()
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(m.email).font(.system(size: 13, weight: .semibold))
+                            Text(detail(m)).font(.system(size: 12)).foregroundStyle(FC.muted)
+                        }
+                        Spacer()
+                        if !m.fixed {
+                            Button("Remove") { Task { await model.act("staff-remove", ["email": m.email], done: "Removed from staff.") } }.buttonStyle(PlainCardButton())
+                        }
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                }
+                Divider()
+                HStack {
+                    TextField("name@example.com", text: $email).textFieldStyle(.roundedBorder).onSubmit(add)
+                    Button("Add to staff", action: add).buttonStyle(.borderedProminent).disabled(!email.contains("@"))
+                }
+                .padding(14)
+            }
+            .background(FC.card).clipShape(RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(FC.line))
+            .frame(maxWidth: 720, alignment: .leading)
+            .padding(20)
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            AdminHeader(title: "Staff", sub: "\(model.staff.count) with Admin", search: $search, prompt: "Find someone") { EmptyView() }
+        }
+        .background(FC.paper)
+        .task { try? await model.refresh() }
+    }
+    private func add() {
+        let e = email.trimmingCharacters(in: .whitespacesAndNewlines); guard !e.isEmpty else { return }
+        Task { await model.act("staff-add", ["email": e], done: "Added. They get Admin the next time they sign in."); if !model.staff.contains(where: { $0.email == e.lowercased() }) { return }; email = "" }
+    }
+    private func detail(_ m: StaffMember) -> String {
+        let seen = m.seen > 0 ? Date(timeIntervalSince1970: m.seen / 1000).formatted(date: .abbreviated, time: .shortened) : "never"
+        let from = m.fixed ? "Set in Cloudflare (ADMIN_EMAIL)" : "Added \(Date(timeIntervalSince1970: m.added / 1000).formatted(date: .abbreviated, time: .omitted))\(m.by.isEmpty ? "" : " by \(m.by)")"
+        return "\(from) · last signed in \(seen)"
+    }
+}

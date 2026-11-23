@@ -212,7 +212,7 @@ async function call(body) {
 }
 async function admin(body) {
   const j = await call(body);
-  if (j.clubs) { clubs = j.clubs; $('nomail').hidden = j.mail; }
+  if (j.clubs) { clubs = j.clubs; $('nomail').hidden = j.mail; staff = j.staff || []; }
   if (body.op && !['events', 'log'].includes(body.op)) { events = null; logRows = null; }
   draw(); return j;
 }
@@ -222,9 +222,10 @@ async function loadLog() { const j = await call({ op: 'log' }); logRows = j.log;
 // ---------- views ----------
 // the Mac's Admin sections (Manager → ⌥⌘A), plus Payments
 const TABS = [['overview', 'Overview', 'overview'], ['today', 'Event day', 'sun'], ['signups', 'Sign-ups', 'plus'], ['clubs', 'Clubs', 'club'], ['events', 'Tournaments', 'contests'],
-  ['cameras', 'Cameras', 'video'], ['screens', 'Screens & phones', 'tv'], ['payments', 'Payments', 'report'], ['activity', 'Activity', 'scores']];
+  ['cameras', 'Cameras', 'video'], ['screens', 'Screens & phones', 'tv'], ['payments', 'Payments', 'report'], ['staff', 'Staff', 'staff'], ['activity', 'Activity', 'scores']];
 const EXTRA_ICONS = { sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
-  club: '<path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/>' };
+  club: '<path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6"/>',
+  staff: '<path d="M12 2l8 3v6c0 5-3.5 9-8 11-4.5-2-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/>' };
 const ic = (k) => EXTRA_ICONS[k] ? `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${EXTRA_ICONS[k]}</svg>` : icon(k);
 function drawTabs() {
   const wait = clubs.filter((c) => c.status === 'pending').length;
@@ -241,7 +242,7 @@ let look = (() => { try { return localStorage.getItem(LOOK) || 'photo'; } catch 
 const HEAD = { overview: ['Overview', () => `${clubs.filter((c) => c.status === 'active').length} active clubs`], today: ['Event day', () => 'Every club’s tournament on today, the ones needing a look first'],
   signups: ['Sign-ups', () => `${clubs.filter((c) => c.status === 'pending').length} waiting`], clubs: ['Clubs', () => `${clubs.length} club${clubs.length === 1 ? '' : 's'} · ${clubs.filter((c) => c.status === 'pending').length} waiting`],
   events: ['Tournaments', () => events ? `${events.length} tournaments` : ''], cameras: ['Cameras', () => 'Par 3 camera links for every club’s tournament'],
-  screens: ['Screens & phones', () => 'Route what every TV and phone shows'], payments: ['Payments', () => ''], activity: ['Activity', () => ''] };
+  screens: ['Screens & phones', () => 'Route what every TV and phone shows'], payments: ['Payments', () => ''], staff: ['Staff', () => `${staff.length} with Admin`], activity: ['Activity', () => ''] };
 function drawHead() {
   const [t, sub] = HEAD[tab] || [tab, () => ''];
   $('aTitle').textContent = t; $('aSub').textContent = sub();
@@ -260,6 +261,7 @@ function draw() {
   if (tab === 'cameras') v.innerHTML = camerasView();
   if (tab === 'screens') v.innerHTML = screensView();
   if (tab === 'payments') v.innerHTML = paymentsView();
+  if (tab === 'staff') v.innerHTML = staffView();
   if (tab === 'activity') { v.innerHTML = activityView(); if (!logRows) loadLog().catch((x) => toast(x.message)); }
   if (needEvents && !events && !loadingEvents) { loadingEvents = true; loadEvents().catch((x) => toast(x.message)).finally(() => { loadingEvents = false; }); }
   for (const el of v.querySelectorAll('[data-photo]')) { try { paintPhoto(el, JSON.parse(el.dataset.photo)); } catch {} }
@@ -503,6 +505,16 @@ function paymentsView() {
   ${pays.length ? `<table><thead><tr><th>Date</th><th>Club</th><th>For</th><th class="num">Tournaments</th><th class="num">Amount</th></tr></thead><tbody>${pays.map((p) => `<tr><td>${date(p.at)}</td><td><a href="#" data-open="${p.club}">${esc(p.clubName)}</a></td><td>${esc(p.what || '')}${p.note ? `<small>${esc(p.note)}</small>` : ''}</td><td class="num">${p.credits < 0 ? 'Unlimited' : p.credits || ''}</td><td class="num"><b>${money(p.amount)}</b></td></tr>`).join('')}</tbody></table>` : ''}</div>`;
 }
 
+// ---- Staff: who gets Admin when they sign in (Cloudflare's ADMIN_EMAIL ones are listed but changed there) ----
+let staff = [];
+function staffView() {
+  return `<div class="box"><h2>Flagcast staff</h2>
+  <p class="help">Anyone here gets this Admin, in the Manager and on the web, when they sign in with that email. Club owners never see Admin.</p>
+  <table><tbody>${staff.map((m) => `<tr><td><b>${esc(m.email)}</b><small>${m.fixed ? 'Set in Cloudflare (ADMIN_EMAIL)' : `Added ${date(m.added)}${m.by ? ` by ${esc(m.by)}` : ''}`} · last signed in ${when(m.seen)}</small></td>
+    <td class="acts">${m.fixed ? '' : `<button class="btn sm" data-unstaff="${esc(m.email)}">Remove</button>`}</td></tr>`).join('') || '<tr><td class="empty">Only the passcode opens Admin.</td></tr>'}</tbody></table>
+  <form class="row" data-staff style="margin-top:12px"><input type="email" placeholder="name@example.com" required autocomplete="off" style="flex:1;min-width:220px"><button class="btn primary">Add to staff</button></form></div>`;
+}
+
 function activityView() {
   if (!logRows) return '<div class="box empty">Loading…</div>';
   return `<div class="box"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Activity</h2><div class="row"><button class="btn sm" data-reload>Refresh</button><button class="btn sm" data-csv="log">Download CSV</button></div></div>
@@ -580,7 +592,7 @@ $('view').addEventListener('click', async (e) => {
     } catch (x) { toast(x.message); }
     return;
   }
-  const el = e.target.closest('[data-open],[data-a],[data-cr],[data-set],[data-rm],[data-owner],[data-signout],[data-unpay],[data-pay],[data-archive],[data-lock],[data-unhide],[data-copy],[data-reload],[data-csv],[data-newclub],[data-nologo],[data-saveaccent],[data-noaccent],[data-demo]');
+  const el = e.target.closest('[data-open],[data-a],[data-cr],[data-set],[data-rm],[data-owner],[data-signout],[data-unpay],[data-pay],[data-archive],[data-lock],[data-unhide],[data-copy],[data-reload],[data-csv],[data-newclub],[data-nologo],[data-saveaccent],[data-noaccent],[data-demo],[data-unstaff]');
   if (!el) return;
   if (el.tagName === 'A' && el.dataset.open) e.preventDefault();
   const club = el.dataset.club || el.closest('[data-club]')?.dataset.club;
@@ -600,6 +612,7 @@ $('view').addEventListener('click', async (e) => {
     if (el.dataset.rm) { if (confirm(`Remove ${el.dataset.rm} from the club?`)) await admin({ op: 'uninvite', club, email: el.dataset.rm }); return; }
     if (el.dataset.owner) { await admin({ op: 'role', club, email: el.dataset.owner, role: 'owner' }); toast('Owner changed.'); return; }
     if (el.dataset.signout) { await admin({ op: 'signout', email: el.dataset.signout }); toast('Signed out everywhere.'); return; }
+    if (el.dataset.unstaff) { if (confirm(`Take ${el.dataset.unstaff} off staff? They lose Admin.`)) { await admin({ op: 'staff-remove', email: el.dataset.unstaff }); toast('Removed from staff.'); } return; }
     if (el.dataset.unhide) { await admin({ op: 'unhide', id: el.dataset.unhide }); return; }
     if (el.dataset.archive) {
       const on = !!el.dataset.on;
@@ -632,6 +645,7 @@ $('view').addEventListener('submit', async (e) => {
     }
     if (f.hasAttribute('data-edit')) { const v = Object.fromEntries(new FormData(f)); await admin({ op: 'edit', club, ...v }); toast('Saved.'); return; }
     const v = f.querySelector('input').value.trim();
+    if (f.hasAttribute('data-staff')) { await admin({ op: 'staff-add', email: v }); toast('Added. They get Admin the next time they sign in.'); return; }
     if (f.hasAttribute('data-invite')) { await admin({ op: 'invite', club, email: v }); toast('Added. They’ve been emailed.'); }
     if (f.hasAttribute('data-claim')) { await admin({ op: 'claim', club, link: v }); toast('Added to this club.'); }
     if (f.hasAttribute('data-event')) { const j = await admin({ op: 'event', club, name: v }); toast('Tournament made. It’s in the club’s Manager now.'); if (j.made) window.open(`/g/${j.made.id}/desk#${j.made.key}&setup`, '_blank', 'noopener'); }
@@ -658,7 +672,7 @@ start();
 setInterval(() => {
   const a = document.activeElement;
   if ($('app').hidden || document.visibilityState !== 'visible' || $('dlg').open || (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName))) return;
-  call({}).then((j) => { clubs = j.clubs; $('nomail').hidden = j.mail; if (tab === 'overview' || tab === 'events') events = null; draw(); }).catch(() => {});
+  call({}).then((j) => { clubs = j.clubs; staff = j.staff || []; $('nomail').hidden = j.mail; if (tab === 'overview' || tab === 'events') events = null; draw(); }).catch(() => {});
 }, 60000);
 // screens tab: refresh who's connected every 15 seconds
 setInterval(() => {
