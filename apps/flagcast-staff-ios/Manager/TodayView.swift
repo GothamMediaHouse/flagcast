@@ -51,33 +51,12 @@ private struct HomePage: View {
         return model.shownEvents.filter { $0.id != doc?.id && (($0.date ?? "") >= today || ($0.date ?? "").isEmpty) }.sorted { ($0.date ?? "9999") < ($1.date ?? "9999") }
     }
 
+    @Environment(\.openURL) private var openURL
+    @Environment(\.horizontalSizeClass) private var horizontal
+
     var body: some View {
-        PhotoPage(image: doc?.picture.image, kicker: [model.me?.club?.name, model.me?.club?.city].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "),
-                  title: greeting, height: 260) {
-            // the club's own logo, once it has one (Settings → Your club)
-            if let u = logoURL(model.me?.club?.logo) { RemoteLogo(url: u).frame(width: 160, height: 40, alignment: .leading).shadow(color: .black.opacity(0.3), radius: 6) }
-            HStack(spacing: 8) {
-                Button { adding = true } label: { Label("Add by link", systemImage: "link") }.buttonStyle(WhiteButton())
-                if model.me?.club?.canMake == true { Button { making = true } label: { Label("New", systemImage: "plus") }.buttonStyle(WhiteButton()) }
-            }
-        } content: {
-            if let doc {
-                lead(doc)
-                // on the day: the checks with their fixes (they cover what the status card shows on other days)
-                if DayOfChecks.isEventDay(doc) { DayOfChecks(doc: doc) { tabs.tab = .screens }.card(padding: 16) } else { tiles(doc) }
-            }
-            else {
-                VStack(spacing: 10) {
-                    Image(systemName: "flag.2.crossed").font(.system(size: 30)).foregroundStyle(FC.muted)
-                    Text("No tournaments yet").font(FC.display(28))
-                    Text("Make one, or add one you were sent a link for.").font(.subheadline).foregroundStyle(FC.muted)
-                }
-                .frame(maxWidth: .infinity).card(padding: 24)
-            }
-            if !coming.isEmpty {
-                CardBox(title: "Coming up") { ForEach(Array(coming.prefix(6).enumerated()), id: \.element.id) { i, e in ComingRow(ref: e, last: i == min(coming.count, 6) - 1) } }
-            }
-            if let doc { announce(doc); lockButton(doc) }
+        Group {
+            if let doc { page(doc) } else { emptyPage }
         }
         .navigationTitle("").navigationBarTitleDisplayMode(.inline)
         .refreshable { await model.refresh(); if let doc { await doc.feed.refresh(); await doc.refreshDay() } }
@@ -89,39 +68,134 @@ private struct HomePage: View {
         } message: { Text("Scoring closes on every scorecard and the leaderboard becomes final. You can unlock again.") }
     }
 
-    /// The live (or next) tournament: photo, LIVE, name and format, numbers, and the ways in.
-    private func lead(_ doc: DeskDoc) -> some View {
+    /// Overview (the Mac's design/Main.dc.html): the course photo with LIVE · date, the name and the course line,
+    /// the frosted numbers on the photo's edge, the leaderboard and the closest-to-the-pin tile, then the day's tools.
+    private func page(_ doc: DeskDoc) -> some View {
         let ev = doc.ev
-        let board = doc.live.map { Core.leaderboard($0, $0.scores) } ?? []
         let isToday = ev.date == ISO8601DateFormatter.day.string(from: Date())
-        let played = board.reduce(0) { $0 + $1.played }, most = board.map(\.played).max() ?? 0
-        let behind = board.filter { most > 0 && $0.played < most - 2 }.count
-        return VStack(alignment: .leading, spacing: 0) {
-            ZStack(alignment: .topLeading) {
-                CourseHeroImage(image: doc.picture.image).frame(height: 130).clipped()
-                if isToday && !ev.locked { LiveChip().padding(10) }
+        return PhotoPage(image: doc.picture.image, kicker: (dayLine(ev.date) ?? "NO DATE SET") + (ev.locked ? " · FINAL" : ""), live: isToday && !ev.locked,
+                         title: ev.name.isEmpty ? doc.ref.name : ev.name, sub: subtitle(ev), height: 380) {
+            if let u = logoURL(doc.live?.brand.logo) { RemoteLogo(url: u).frame(width: 160, height: 40, alignment: .leading).shadow(color: .black.opacity(0.3), radius: 6) }
+            HStack(spacing: 8) {
+                Button { openURL(doc.boardURL) } label: { Label("Open the board", systemImage: "tv") }.buttonStyle(WhiteButton())
+                Button { adding = true } label: { Label("Add by link", systemImage: "link") }.buttonStyle(GlassButton())
+                if model.me?.club?.canMake == true { Button { making = true } label: { Image(systemName: "plus").accessibilityLabel("New tournament") }.buttonStyle(GlassButton()) }
             }
-            VStack(alignment: .leading, spacing: 10) {
-                Text((dayLine(ev.date) ?? "NO DATE SET") + (ev.locked ? " · FINAL" : "")).font(.system(size: 11, weight: .bold)).tracking(1.2).foregroundStyle(FC.muted)
-                Text(ev.name.isEmpty ? doc.ref.name : ev.name).font(FC.display(32)).lineLimit(2).minimumScaleFactor(0.6)
-                if let f = [ev.course.name.isEmpty ? nil : ev.course.name, formatName(ev.format)].compactMap({ $0 }).joined(separator: " · ").nilIfEmpty { Text(f).font(.subheadline).foregroundStyle(FC.muted) }
-                HStack(spacing: 18) {
-                    num("\(ev.teams.count)", "teams")
-                    if played > 0 { num("\(played)", "holes played") }
-                    if let l = board.first(where: { $0.played > 0 }) { num(ev.format.isStableford ? "\(l.score)" : Core.fmtPar(l.score), l.name, color: l.score < 0 && !ev.format.isStableford ? FC.red : FC.ink) }
-                    if behind > 0 { num("\(behind)", "carts behind on scores", color: FC.flag) }   // 3+ holes behind the furthest cart: a nudge may help
-                }
-                HStack(spacing: 8) {
-                    Button("Scores") { tabs.tab = .scores }.buttonStyle(GreenButton(full: true))
-                    Button("Screens") { tabs.tab = .screens }.buttonStyle(PlainCardButton(full: true))
-                    Button("Teams") { tabs.tab = .teams }.buttonStyle(PlainCardButton(full: true))
-                }
+        } content: {
+            StatsStrip(cells: stats(doc), columns: horizontal == .regular ? 4 : 2).padding(.top, -6)
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 14) { leaderboard(doc).frame(minWidth: 380); contestTile(doc).frame(width: 300) }
+                VStack(spacing: 14) { leaderboard(doc); contestTile(doc).frame(height: 190) }
             }
-            .padding(16)
+            // on the day: the checks with their fixes (they cover what the status card shows on other days)
+            if DayOfChecks.isEventDay(doc) { DayOfChecks(doc: doc) { tabs.tab = .screens }.card(padding: 16) } else { tiles(doc) }
+            if !coming.isEmpty {
+                CardBox(title: "Coming up") { ForEach(Array(coming.prefix(6).enumerated()), id: \.element.id) { i, e in ComingRow(ref: e, last: i == min(coming.count, 6) - 1) } }
+            }
+            announce(doc); lockButton(doc)
         }
-        .background(FC.card, in: RoundedRectangle(cornerRadius: 14)).clipShape(RoundedRectangle(cornerRadius: 14))
-        .shadow(color: FC.scrim.opacity(0.12), radius: 12, y: 5)
     }
+
+    private var emptyPage: some View {
+        PhotoPage(image: nil, kicker: [model.me?.club?.name, model.me?.club?.city].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "), title: greeting, height: 260) {
+            if let u = logoURL(model.me?.club?.logo) { RemoteLogo(url: u).frame(width: 160, height: 40, alignment: .leading).shadow(color: .black.opacity(0.3), radius: 6) }
+            HStack(spacing: 8) {
+                Button { adding = true } label: { Label("Add by link", systemImage: "link") }.buttonStyle(GlassButton())
+                if model.me?.club?.canMake == true { Button { making = true } label: { Label("New", systemImage: "plus") }.buttonStyle(WhiteButton()) }
+            }
+        } content: {
+            VStack(spacing: 10) {
+                Image(systemName: "flag.2.crossed").font(.system(size: 30)).foregroundStyle(FC.muted)
+                Text("No tournaments yet").font(FC.display(28))
+                Text("Make one, or add one you were sent a link for.").font(.subheadline).foregroundStyle(FC.muted)
+            }
+            .frame(maxWidth: .infinity).card(padding: 24)
+            if !coming.isEmpty {
+                CardBox(title: "Coming up") { ForEach(Array(coming.prefix(6).enumerated()), id: \.element.id) { i, e in ComingRow(ref: e, last: i == min(coming.count, 6) - 1) } }
+            }
+        }
+    }
+
+    private func subtitle(_ ev: DeskEvent) -> String {
+        let holes = ev.course.holes.filter { ev.playHoles.contains($0.n) }
+        let nine = ev.format.nine == "front" ? "Front 9" : ev.format.nine == "back" ? "Back 9" : "18 holes"
+        let par = holes.reduce(0) { $0 + $1.par }, yds = holes.reduce(0) { $0 + $1.yds }
+        return [ev.course.name.isEmpty ? (ev.club.isEmpty ? nil : ev.club) : ev.course.name, holes.isEmpty ? nil : nine, par > 0 ? "Par \(par)" : nil,
+                yds > 0 ? "\(ev.course.tees.first.map { "\($0.name) tees " } ?? "")\(yds.formatted()) yds" : nil, formatName(ev.format)].compactMap { $0 }.joined(separator: " · ")
+    }
+    private func board(_ doc: DeskDoc) -> [Line] { doc.live.map { Core.leaderboard($0, $0.scores) } ?? [] }
+    private func scoreText(_ ev: DeskEvent, _ l: Line) -> String { ev.format.isStableford ? "\(l.score)" : Core.fmtPar(l.score) }
+    private func scoreColor(_ ev: DeskEvent, _ l: Line) -> Color { ev.format.isStableford ? FC.ink : l.score < 0 ? FC.red : l.score > 0 ? FC.blue : FC.ink }
+
+    // ---- the four numbers (the Mac's Overview) ----
+    private func stats(_ doc: DeskDoc) -> [StatCell] {
+        let ev = doc.ev, live = doc.live, b = board(doc)
+        let scoring = b.filter { $0.played > 0 && $0.thru != "F" }.count, finished = b.filter { $0.thru == "F" }.count
+        let leader = b.first { $0.played > 0 }
+        let screens = ev.displays.count, on = ev.displays.filter { (live?.online[$0.id] ?? 0) > 0 }.count
+        let most = b.map(\.played).max() ?? 0, behind = b.filter { most > 0 && $0.played < most - 2 }.count
+        return [
+            StatCell(label: "Teams", value: "\(ev.teams.count)", sub: "\(ev.teams.reduce(0) { $0 + $1.players.count }) players" + (ev.flights.count > 1 ? " · \(ev.flights.count) flights" : "")),
+            StatCell(label: "On the course", value: "\(scoring)", sub: behind > 0 ? "\(behind) behind on scores" : finished > 0 ? "\(finished) finished" : (ev.locked ? "results final" : "scoring now"), color: behind > 0 ? FC.flag : FC.ink),
+            StatCell(label: "Leader", value: leader.map { scoreText(ev, $0) } ?? "–", sub: leader.map { "\($0.name) · thru \($0.thru)" } ?? "No scores yet", color: leader.map { scoreColor(ev, $0) } ?? FC.ink),
+            StatCell(label: "Screens", value: screens == 0 ? "–" : "\(on) / \(screens)", sub: screens == 0 ? "None set up" : ev.displays.prefix(2).map { $0.name.isEmpty ? "TV" : $0.name }.joined(separator: ", "), color: on > 0 ? FC.ok : FC.ink)
+        ]
+    }
+
+    // ---- leaderboard (top 5) ----
+    private func leaderboard(_ doc: DeskDoc) -> some View {
+        let ev = doc.ev, top = Array(board(doc).filter { $0.played > 0 }.prefix(5))
+        return VStack(spacing: 0) {
+            HStack {
+                Text("Leaderboard").font(.system(size: 14, weight: .bold))
+                Spacer()
+                Button("All scores ›") { tabs.tab = .scores }.font(.system(size: 13, weight: .semibold)).foregroundStyle(FC.link)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 11)
+            if top.isEmpty {
+                Text(ev.teams.isEmpty ? "Add teams on the Teams tab, then Save." : "Scores show here as the carts send them.")
+                    .font(.callout).foregroundStyle(FC.muted).frame(maxWidth: .infinity).padding(.vertical, 26)
+            }
+            ForEach(top) { l in
+                Rectangle().fill(FC.hairline).frame(height: 1)
+                HStack(spacing: 10) {
+                    Text(l.pos).font(.system(size: 14, weight: .bold)).foregroundStyle(FC.muted).frame(width: 28, alignment: .leading)
+                    Text(l.name).font(.system(size: 14, weight: .semibold)).lineLimit(1)
+                    Spacer()
+                    Text(l.thru == "F" ? "F" : "Thru \(l.thru)").font(.system(size: 12)).foregroundStyle(FC.muted)
+                    Text(scoreText(ev, l)).font(FC.display(22)).foregroundStyle(scoreColor(ev, l)).frame(minWidth: 40, alignment: .trailing)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 7)
+            }
+        }
+        .background(FC.card, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(FC.line))
+    }
+
+    // ---- closest to the pin ----
+    private func contestTile(_ doc: DeskDoc) -> some View {
+        let ev = doc.ev, all = doc.live?.contests ?? ev.contests
+        let c = all.first { !$0.isLongDrive } ?? all.first
+        let lead = c.flatMap { Core.contestLeader($0).first }
+        return ZStack(alignment: .bottomLeading) {
+            Color.clear.overlay {
+                if let c { HolePicture(id: doc.id, n: c.hole, h: ev.map.holes[c.hole], fallback: doc.picture.image) } else { CourseHeroImage(image: doc.picture.image) }
+            }
+            .clipped()
+            LinearGradient(colors: [FC.scrim.opacity(0.88), FC.scrim.opacity(0)], startPoint: .bottom, endPoint: .init(x: 0.5, y: 0.3))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(c.map { "\($0.isLongDrive ? "LONG DRIVE" : "CLOSEST TO THE PIN") · HOLE \($0.hole)" } ?? "CONTESTS").font(.system(size: 11, weight: .bold)).tracking(1.2).foregroundStyle(FC.flag)
+                Text(lead?.name ?? (c == nil ? "No contests yet" : "No results yet")).font(FC.display(28)).lineLimit(1).minimumScaleFactor(0.6)
+                Text(lead.flatMap { l in c.map { Core.fmtDist($0, l.dist) } }.map { d in d + (c?.sponsor.isEmpty == false ? " · presented by \(c!.sponsor)" : "") }
+                     ?? (c == nil ? "Add one in More → Contests." : "Marshals post results from the phone app."))
+                    .font(.system(size: 13)).foregroundStyle(Color(hex: 0xdfe8e1)).lineLimit(1)
+            }
+            .foregroundStyle(.white).padding(.horizontal, 16).padding(.bottom, 14)
+        }
+        .frame(minHeight: 190)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+
     private func num(_ v: String, _ l: String, color: Color = FC.ink) -> some View {
         VStack(alignment: .leading, spacing: 0) { Text(v).font(FC.display(28)).foregroundStyle(color); Text(l).font(.caption).foregroundStyle(FC.muted).lineLimit(1) }
     }

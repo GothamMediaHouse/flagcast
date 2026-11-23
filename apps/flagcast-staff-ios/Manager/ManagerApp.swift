@@ -6,7 +6,7 @@ import SwiftUI
 @main
 struct ManagerApp: App {
     @State private var model = AppModel()
-    init() { FC.registerFonts() }
+    init() { FC.registerFonts(); GreenBars.apply() }
     var body: some Scene {
         WindowGroup {
             RootView()
@@ -27,6 +27,7 @@ enum Tab: String, Hashable { case today, teams, scores, screens, more, admin }
 
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.horizontalSizeClass) private var size
     @State private var tabs = Tabs()
     private var tab: Tab { tabs.tab }
 
@@ -36,6 +37,8 @@ struct RootView: View {
                 NavigationStack { SignInView() }
             } else if model.signedIn, model.me != nil, model.me?.club == nil, !model.isAdmin, model.events.isEmpty {
                 NavigationStack { WelcomeView() }
+            } else if size == .regular {
+                SidebarRoot()   // iPad: the Mac's green sidebar
             } else {
                 tabView
             }
@@ -52,7 +55,7 @@ struct RootView: View {
     @ViewBuilder private var tabView: some View {
         @Bindable var tabs = tabs
         let tv = TabView(selection: $tabs.tab) {
-            NavigationStack { TodayView() }.tabItem { Label("Home", systemImage: "house.fill") }.tag(Tab.today)
+            NavigationStack { TodayView() }.tabItem { Label("Overview", systemImage: "square.grid.2x2.fill") }.tag(Tab.today)
             NavigationStack { TeamsView() }.tabItem { Label("Teams", systemImage: "person.3.fill") }.tag(Tab.teams)
             NavigationStack { ScoresView() }.tabItem { Label("Scores", systemImage: "list.number") }.tag(Tab.scores)
             NavigationStack { ScreensView() }.tabItem { Label("Screens", systemImage: "tv.fill") }.tag(Tab.screens)
@@ -62,7 +65,113 @@ struct RootView: View {
                 NavigationStack { MoreView() }.tabItem { Label("More", systemImage: "ellipsis.circle.fill") }.tag(Tab.more)
             }
         }
-        if #available(iOS 18.0, *) { tv.tabViewStyle(.sidebarAdaptable) } else { tv }
+        tv
+    }
+}
+
+// MARK: - iPad
+
+/// The iPad's layout (design/Sidebar.dc.html): the Mac's green sidebar (mark, FLAGCAST / MANAGER, the tournaments with
+/// the open one's sections, the club and tournaments left at the bottom), the page beside it.
+struct SidebarRoot: View {
+    @Environment(AppModel.self) private var model
+    @Environment(Tabs.self) private var tabs
+    @State private var adding = false
+    @State private var making = false
+
+    private static let sections: [(Tab, String, String)] = [(.today, "Overview", "square.grid.2x2"), (.teams, "Teams", "person.2"), (.scores, "Scores", "list.number"), (.screens, "Screens & sponsors", "tv")]
+
+    var body: some View {
+        HStack(spacing: 0) {
+            sidebar.frame(width: 260)
+            NavigationStack { page }
+                .id(tabs.tab)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .background(FC.paper)
+        .sheet(isPresented: $adding) { NavigationStack { AddByLinkView() } }
+        .sheet(isPresented: $making) { NavigationStack { TournamentPicker(asSheet: true) } }
+    }
+
+    @ViewBuilder private var page: some View {
+        switch tabs.tab {
+        case .today: TodayView()
+        case .teams: TeamsView()
+        case .scores: ScoresView()
+        case .screens: ScreensView()
+        case .admin: AdminHome()
+        case .more: MoreView()
+        }
+    }
+
+    private var sidebar: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 10) {
+                    FlagcastMark(size: 32)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("FLAGCAST").font(FC.display(21)).tracking(1)
+                        Text("MANAGER").font(.system(size: 10, weight: .bold)).tracking(1.6).opacity(0.7)
+                    }
+                }
+                .padding(.horizontal, 6).padding(.top, 6)
+                Text("TOURNAMENTS").font(.system(size: 11, weight: .bold)).tracking(1.3).opacity(0.6).padding(.horizontal, 8).padding(.top, 6)
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(model.shownEvents) { e in
+                        let open = model.selection == e.id
+                        Button { model.selection = e.id; if tabs.tab == .admin || tabs.tab == .more { tabs.tab = .today } } label: {
+                            HStack(spacing: 8) {
+                                Text(e.name.isEmpty ? "Tournament" : e.name).font(.system(size: 14, weight: open ? .bold : .semibold)).lineLimit(1)
+                                Spacer(minLength: 4)
+                                if open && e.date == ISO8601DateFormatter.day.string(from: Date()) { LiveChip().scaleEffect(0.85) }
+                            }
+                            .padding(.horizontal, 10).frame(minHeight: 36).contentShape(Rectangle())
+                            .opacity(open ? 1 : 0.8)
+                        }
+                        .buttonStyle(.plain)
+                        if open {
+                            ForEach(Self.sections, id: \.0) { t, title, icon in row(t, title, icon).padding(.leading, 8) }
+                        }
+                    }
+                    if model.shownEvents.isEmpty { Text("No tournaments yet").font(.subheadline).opacity(0.7).padding(.horizontal, 10) }
+                }
+                Divider().overlay(Color.white.opacity(0.14)).padding(.vertical, 4)
+                if model.isAdmin { row(.admin, "Admin", "building.columns") }
+                row(.more, "More", "ellipsis.circle")
+            }
+            .padding(.horizontal, 12).padding(.vertical, 18)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                Divider().overlay(Color.white.opacity(0.14))
+                HStack(spacing: 14) {
+                    if model.me?.club?.canMake == true { Button { making = true } label: { Label("New tournament", systemImage: "plus") } }
+                    Button { adding = true } label: { Label("Add by link", systemImage: "link") }
+                }
+                .font(.system(size: 14, weight: .semibold)).buttonStyle(.plain)
+                if let c = model.me?.club { Text("\(c.name) · \(c.credits < 0 ? "Unlimited" : "\(c.credits) tournaments left")").font(.system(size: 12)).opacity(0.7).lineLimit(1) }
+            }
+            .padding(.horizontal, 20).padding(.bottom, 14)
+            .background(FC.green)
+        }
+        .foregroundStyle(.white)
+        .background(FC.green.ignoresSafeArea())
+    }
+
+    private func row(_ t: Tab, _ title: String, _ icon: String) -> some View {
+        let on = tabs.tab == t
+        return Button { tabs.tab = t } label: {
+            HStack(spacing: 10) {
+                Image(systemName: icon).font(.system(size: 15, weight: .semibold)).frame(width: 20)
+                Text(title).font(.system(size: 14, weight: .semibold))
+                Spacer()
+            }
+            .padding(.horizontal, 10).frame(minHeight: 36)
+            .foregroundStyle(on ? FC.green : .white.opacity(0.88))
+            .background(on ? Color(uiColor: GreenBars.cream) : .clear, in: RoundedRectangle(cornerRadius: 8))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 

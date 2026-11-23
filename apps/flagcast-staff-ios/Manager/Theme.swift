@@ -68,6 +68,63 @@ struct WhiteButton: ButtonStyle {
     }
 }
 
+/// Over a photo, the Mac's glass toolbar button: white at 16% with a blur and a 35% white border.
+struct GlassButton: ButtonStyle {
+    func makeBody(configuration c: Configuration) -> some View {
+        c.label.font(.system(size: 14, weight: .semibold)).foregroundStyle(.white)
+            .padding(.horizontal, 12).frame(minHeight: 36)
+            .background(.ultraThinMaterial.opacity(0.6), in: RoundedRectangle(cornerRadius: 9))
+            .background(Color.white.opacity(c.isPressed ? 0.28 : 0.16), in: RoundedRectangle(cornerRadius: 9))
+            .overlay(RoundedRectangle(cornerRadius: 9).stroke(Color.white.opacity(0.35)))
+            .environment(\.colorScheme, .dark)
+    }
+}
+
+/// The Mac's frosted strip of numbers on the photo's bottom edge (Overview): label, big number, a line under it.
+struct StatCell: Identifiable {
+    var label: String, value: String, sub: String, color: Color = FC.ink
+    var id: String { label }
+}
+struct StatsStrip: View {
+    let cells: [StatCell]
+    var columns = 2
+    var body: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 1), count: columns), spacing: 1) {
+            ForEach(cells) { c in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(c.label).font(.system(size: 12, weight: .semibold)).foregroundStyle(FC.muted)
+                    Text(c.value).font(FC.display(30)).foregroundStyle(c.color).lineLimit(1).minimumScaleFactor(0.6)
+                    Text(c.sub).font(.system(size: 11)).foregroundStyle(FC.muted).lineLimit(1)
+                }
+                .padding(.horizontal, 14).padding(.vertical, 11).frame(maxWidth: .infinity, alignment: .leading)
+                .background(FC.card.opacity(0.94))
+            }
+        }
+        .background(FC.line)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .shadow(color: FC.scrim.opacity(0.18), radius: 15, y: 8)
+    }
+}
+
+/// The tab bar in the Mac sidebar's green, the open tab in cream (design/Sidebar.dc.html).
+enum GreenBars {
+    static let cream = UIColor(red: 0xf4 / 255, green: 0xec / 255, blue: 0xd0 / 255, alpha: 1)
+    static func apply() {
+        let a = UITabBarAppearance()
+        a.configureWithOpaqueBackground()
+        a.backgroundColor = UIColor(red: 0x12 / 255, green: 0x36 / 255, blue: 0x28 / 255, alpha: 1)
+        a.shadowColor = .clear
+        for l in [a.stackedLayoutAppearance, a.inlineLayoutAppearance, a.compactInlineLayoutAppearance] {
+            l.normal.iconColor = UIColor.white.withAlphaComponent(0.7)
+            l.normal.titleTextAttributes = [.foregroundColor: UIColor.white.withAlphaComponent(0.7)]
+            l.selected.iconColor = cream
+            l.selected.titleTextAttributes = [.foregroundColor: cream]
+        }
+        UITabBar.appearance().standardAppearance = a
+        UITabBar.appearance().scrollEdgeAppearance = a
+    }
+}
+
 // MARK: - cards and labels
 
 extension View {

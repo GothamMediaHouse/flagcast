@@ -5,38 +5,69 @@ import SwiftUI
 struct AdminHome: View {
     @Environment(AppModel.self) private var model
     @Environment(AdminModel.self) private var admin
+    @State private var adding = false
+    /// Admin (the Mac's design/Admin.dc.html, on a phone): a green header with the red ADMIN tag and New club, the
+    /// sections as chips, then clubs asking to join and every club as a photo card.
     var body: some View {
-        let waiting = admin.clubs.filter { $0.status == "pending" }.count
-        CardPage(kicker: "Flagcast", title: "Admin", sub: "\(admin.clubs.count) clubs · \(admin.events.filter { !$0.hidden && !$0.archived }.count) tournaments") {
-            CardBox {
-                NavigationLink { ScrollView { EventDayList().padding(16) }.background(FC.paper).navigationTitle("Event day") } label: {
-                    ListRow(icon: "sun.max.fill", iconColor: FC.flag, title: "Event day", sub: "Every club on today: TVs, cameras, carts scoring") { Chevron() }
-                }
-                NavigationLink { ClubsView() } label: {
-                    ListRow(icon: "building.2.fill", title: "Clubs", sub: "Approve, tournaments left, people") {
-                        if waiting > 0 { Text("\(waiting) waiting").font(.caption.weight(.bold)).padding(.horizontal, 8).padding(.vertical, 4).background(FC.flag, in: Capsule()).foregroundStyle(FC.onFlag) }
-                        Chevron()
-                    }
-                }
-                NavigationLink { AdminTournaments() } label: { ListRow(icon: "flag.2.crossed.fill", iconColor: FC.ok, title: "Tournaments", sub: "Every club’s, open one here") { Chevron() } }
-                NavigationLink { AdminCameras() } label: { ListRow(icon: "video.fill", iconColor: FC.red, title: "Cameras", sub: "Par 3 camera links for every tournament") { Chevron() } }
-                NavigationLink { AdminScreens() } label: { ListRow(icon: "tv.and.mediabox.fill", iconColor: FC.blue, title: "TVs & phones", sub: "Any club’s TVs, take-overs, phones banner") { Chevron() } }
-                NavigationLink { AdminStaff() } label: { ListRow(icon: "checkmark.shield.fill", iconColor: FC.green2, title: "Staff", sub: "Who gets Admin when they sign in") { Chevron() } }
-                NavigationLink { AdminActivity() } label: { ListRow(icon: "list.bullet.rectangle.fill", iconColor: FC.muted, title: "Activity", sub: "Everything that happened", last: true) { Chevron() } }
-            }
-            CardBox {
-                NavigationLink { MoreView() } label: { ListRow(icon: "ellipsis.circle.fill", iconColor: FC.green2, title: "More", sub: "Contests, details, links, tournaments, settings", last: true) { Chevron() } }
+        ScrollView {
+            VStack(spacing: 0) {
+                header
+                ClubsView(embedded: true).padding(16).padding(.bottom, 80)
+                    .frame(maxWidth: 980).frame(maxWidth: .infinity)
             }
         }
-        .buttonStyle(.plain)
+        .ignoresSafeArea(edges: .top)
+        .background(FC.paper)
+        .toolbar(.hidden, for: .navigationBar)
+        .overlay(alignment: .bottom) { NoticeBar(text: admin.notice).padding(.bottom, 10).animation(.snappy, value: admin.notice) }
+        .sheet(isPresented: $adding) { NavigationStack { NewClub() } }
         .task { try? await admin.refresh(); await admin.refreshEvents() }
         .refreshable { try? await admin.refresh(); await admin.refreshEvents() }
+    }
+
+    private var header: some View {
+        let waiting = admin.clubs.filter { $0.status == "pending" }.count
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Text("Admin").font(FC.display(36))
+                Text("ADMIN").font(.system(size: 10, weight: .bold)).tracking(1).padding(.horizontal, 6).padding(.vertical, 3).background(FC.red, in: RoundedRectangle(cornerRadius: 4))
+                Spacer()
+                Button { adding = true } label: { Label("New club", systemImage: "plus") }.buttonStyle(WhiteButton())
+            }
+            Text("\(admin.clubs.count) clubs · \(admin.events.filter { !$0.hidden && !$0.archived }.count) tournaments" + (waiting > 0 ? " · \(waiting) waiting" : ""))
+                .font(.system(size: 13)).foregroundStyle(FC.onGreenMuted)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    chip("Event day", "sun.max") { ScrollView { EventDayList().padding(16) }.background(FC.paper).navigationTitle("Event day") }
+                    chip("Tournaments", "flag.2.crossed") { AdminTournaments() }
+                    chip("Screens", "tv.and.mediabox") { AdminScreens() }
+                    chip("Cameras", "video") { AdminCameras() }
+                    chip("Staff", "checkmark.shield") { AdminStaff() }
+                    chip("Activity", "list.bullet.rectangle") { AdminActivity() }
+                    chip("More", "ellipsis.circle") { MoreView() }
+                }
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 16).padding(.top, 64).padding(.bottom, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(FC.green)
+    }
+    private func chip<D: View>(_ title: String, _ icon: String, @ViewBuilder _ dest: () -> D) -> some View {
+        NavigationLink { dest() } label: {
+            Label(title, systemImage: icon).font(.system(size: 13, weight: .semibold)).foregroundStyle(.white)
+                .padding(.horizontal, 12).frame(minHeight: 34)
+                .background(Color.white.opacity(0.12), in: Capsule())
+        }
+        .buttonStyle(.plain)
     }
 }
 
 /// Every club as a full-photo card; clubs asking to join on top, with Approve and Decline.
 struct ClubsView: View {
     @Environment(AdminModel.self) private var admin
+    /// inside Admin's home (no scroll view, search or toolbar of its own)
+    var embedded = false
     @State private var search = ""
     @State private var opened: AdminClub?
     @State private var adding = false
@@ -46,7 +77,25 @@ struct ClubsView: View {
         return admin.clubs.filter { q.isEmpty || $0.name.lowercased().contains(q) || $0.city.lowercased().contains(q) }
     }
     var body: some View {
-        ScrollView {
+        if embedded {
+            list.sheet(item: $opened) { c in NavigationStack { ClubDetail(club: admin.clubs.first { $0.id == c.id } ?? c) } }
+        } else {
+            page
+        }
+    }
+    private var page: some View {
+        ScrollView { list.padding(16) }
+        .background(FC.paper)
+        .navigationTitle("Clubs").toolbarBackground(FC.paper, for: .navigationBar)
+        .searchable(text: $search, prompt: "Find a club")
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { adding = true } label: { Label("New club", systemImage: "plus") } } }
+        .refreshable { try? await admin.refresh() }
+        .overlay(alignment: .bottom) { NoticeBar(text: admin.notice).padding(.bottom, 10).animation(.snappy, value: admin.notice) }
+        .sheet(item: $opened) { c in NavigationStack { ClubDetail(club: admin.clubs.first { $0.id == c.id } ?? c) } }
+        .sheet(isPresented: $adding) { NavigationStack { NewClub() } }
+        .task { try? await admin.refresh() }
+    }
+    private var list: some View {
             VStack(spacing: 14) {
                 ForEach(admin.clubs.filter { $0.status == "pending" }) { c in
                     VStack(alignment: .leading, spacing: 10) {
@@ -71,17 +120,6 @@ struct ClubsView: View {
                 }
                 if shown.isEmpty { Text(admin.clubs.isEmpty ? "No clubs yet" : "No club matches").foregroundStyle(FC.muted).padding(30) }
             }
-            .padding(16)
-        }
-        .background(FC.paper)
-        .navigationTitle("Clubs").toolbarBackground(FC.paper, for: .navigationBar)
-        .searchable(text: $search, prompt: "Find a club")
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { adding = true } label: { Label("New club", systemImage: "plus") } } }
-        .refreshable { try? await admin.refresh() }
-        .overlay(alignment: .bottom) { NoticeBar(text: admin.notice).padding(.bottom, 10).animation(.snappy, value: admin.notice) }
-        .sheet(item: $opened) { c in NavigationStack { ClubDetail(club: admin.clubs.first { $0.id == c.id } ?? c) } }
-        .sheet(isPresented: $adding) { NavigationStack { NewClub() } }
-        .task { try? await admin.refresh() }
     }
 }
 

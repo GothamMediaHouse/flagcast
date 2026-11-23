@@ -21,15 +21,15 @@ private struct TeamsPage: View {
     }
 
     var body: some View {
-        PhotoPage(image: doc.picture.image, kicker: "\(doc.ev.teams.count) teams · \(doc.ev.teams.reduce(0) { $0 + $1.players.count }) players", title: "Teams", height: 220) {
-            EmptyView()
+        PhotoPage(image: doc.picture.image, title: "Teams",
+                  sub: "\(doc.ev.teams.count) teams · \(doc.ev.teams.reduce(0) { $0 + $1.players.count }) players" + (doc.ev.flights.count > 1 ? " · \(doc.ev.flights.count) flights" : ""), height: 230) {
+            Button { addTeam() } label: { Label("Add team", systemImage: "plus") }.buttonStyle(WhiteButton())
         } content: {
             // a search box in the page (the system one sat on top of the photo header's words)
             if doc.ev.teams.count > 6 { BoxField(placeholder: "Find a team or player", text: $search) }
             if doc.ev.flights.count > 1 {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) { ForEach([""] + doc.ev.flights, id: \.self) { f in chip(f.isEmpty ? "All" : "Flight \(f)", on: flight == f) { flight = f } } }
-                }
+                // the Mac's flight control
+                Picker("Flight", selection: $flight) { Text("All").tag(""); ForEach(doc.ev.flights, id: \.self) { Text($0).tag($0) } }.pickerStyle(.segmented)
             }
             if doc.ev.teams.isEmpty {
                 VStack(spacing: 10) {
@@ -39,10 +39,17 @@ private struct TeamsPage: View {
                 }
                 .frame(maxWidth: .infinity).card(padding: 24)
             }
-            ForEach(teams) { t in
-                Button { editing = t.id } label: { TeamCard(team: t, doc: doc) }.buttonStyle(.plain)
+            if !teams.isEmpty {
+                // one table card, like the Mac's: starting hole, team and players, flight
+                VStack(spacing: 0) {
+                    ForEach(Array(teams.enumerated()), id: \.element.id) { i, t in
+                        Button { editing = t.id } label: { TeamRow(team: t, last: i == teams.count - 1) }.buttonStyle(.plain)
+                    }
+                }
+                .background(FC.card, in: RoundedRectangle(cornerRadius: 12))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(FC.line))
+                Help("Tap a team for its players, GHIN, handicaps, starting hole, scorer and PIN.")
             }
-            Button { addTeam() } label: { Label("Add a Team", systemImage: "plus") }.buttonStyle(GreenButton(full: true))
         }
         .sheet(item: Binding(get: { editing.map { EditID(id: $0) } }, set: { editing = $0?.id })) { e in
             if let i = doc.ev.teams.firstIndex(where: { $0.id == e.id }) {
@@ -65,6 +72,29 @@ private struct TeamsPage: View {
 }
 
 struct EditID: Identifiable { var id: String }
+
+/// A row of the Teams table: the starting hole in a tile, the team and its players, the flight.
+struct TeamRow: View {
+    let team: DeskTeam
+    var last = false
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("\(team.start)").font(FC.display(18)).foregroundStyle(FC.green)
+                .frame(width: 32, height: 32).background(Color(uiColor: GreenBars.cream), in: RoundedRectangle(cornerRadius: 8))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(team.displayName.isEmpty ? "New team" : team.displayName).font(.system(size: 15, weight: .semibold)).foregroundStyle(FC.ink).lineLimit(1)
+                Text(team.players.isEmpty ? "No players yet" : team.players.map { $0.name.isEmpty ? "Player" : $0.name }.joined(separator: " · "))
+                    .font(.footnote).foregroundStyle(FC.muted).lineLimit(1)
+            }
+            Spacer(minLength: 6)
+            if !team.flight.isEmpty { Text("Flight \(team.flight)").font(.caption.weight(.semibold)).foregroundStyle(FC.muted) }
+            Chevron()
+        }
+        .padding(.horizontal, 14).frame(minHeight: 58)
+        .contentShape(Rectangle())
+        .overlay(alignment: .bottom) { if !last { Rectangle().fill(FC.hairline).frame(height: 1).padding(.leading, 58) } }
+    }
+}
 
 struct TeamCard: View {
     let team: DeskTeam

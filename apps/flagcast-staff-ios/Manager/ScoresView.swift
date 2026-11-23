@@ -43,8 +43,13 @@ private struct ScoresPage: View {
                 }
                 .frame(maxWidth: .infinity).card(padding: 24)
             }
-            ForEach(lines) { l in
-                Button { open = l.teamId } label: { ScoreCard(line: l, holes: holes, mode: showMode, stab: doc.ev.format.isStableford) }.buttonStyle(.plain)
+            if !lines.isEmpty {
+                // the Mac's table: a green hole header, the par row, a row per team marked like a scorecard; nine holes a block
+                let blocks = stride(from: 0, to: holes.count, by: 9).map { Array(holes[$0..<min($0 + 9, holes.count)]) }
+                ForEach(Array(blocks.enumerated()), id: \.offset) { i, b in
+                    ScoreTable(holes: b, lines: lines, mode: showMode, stab: doc.ev.format.isStableford, title: blocks.count > 1 ? (i == 0 ? "Front 9" : "Back 9") : nil, totals: i == blocks.count - 1) { open = $0 }
+                }
+                Help("Tap a team to see its players and fix a score.")
             }
             legend
         }
@@ -61,6 +66,67 @@ private struct ScoresPage: View {
             HStack(spacing: 4) { Rectangle().fill(FC.blue).frame(width: 12, height: 12); Text("Double+") }
         }
         .font(.caption).foregroundStyle(FC.muted).frame(maxWidth: .infinity)
+    }
+}
+
+/// Nine holes of the Mac's Scores table: hole numbers on green, par, then each team's marks, Thru and Total.
+private struct ScoreTable: View {
+    let holes: [Hole]
+    let lines: [Line]
+    let mode: String
+    let stab: Bool
+    var title: String? = nil
+    var totals = true
+    var open: (String) -> Void
+    private let teamW: CGFloat = 92, totW: CGFloat = 40
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let title { CardTitle(title).padding(.leading, 4) }
+            VStack(spacing: 0) {
+                row(height: 30, bg: FC.green) {
+                    Text("Hole").font(.system(size: 11, weight: .bold)).foregroundStyle(.white).frame(width: teamW, alignment: .leading).padding(.leading, 10)
+                } cells: { h in Text("\(h.n)").font(.system(size: 11, weight: .bold)).foregroundStyle(.white) } total: {
+                    Text(totals ? "Tot" : "").font(.system(size: 11, weight: .bold)).foregroundStyle(.white)
+                }
+                row(height: 24, bg: FC.hairline) {
+                    Text("Par").font(.system(size: 11, weight: .semibold)).foregroundStyle(FC.muted).frame(width: teamW, alignment: .leading).padding(.leading, 10)
+                } cells: { h in Text("\(h.par)").font(.system(size: 11, weight: .semibold)).foregroundStyle(FC.muted) } total: {
+                    Text(totals ? "\(holes.reduce(0) { $0 + $1.par })" : "").font(.system(size: 11, weight: .semibold)).foregroundStyle(FC.muted)
+                }
+                ForEach(lines) { l in
+                    Button { open(l.teamId) } label: {
+                        row(height: 42, bg: FC.card) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text(l.name).font(.system(size: 13, weight: .semibold)).foregroundStyle(FC.ink).lineLimit(1)
+                                Text(l.played == 0 ? "Not started" : l.thru == "F" ? "Finished" : "\(l.pos) · Thru \(l.thru)").font(.system(size: 10)).foregroundStyle(FC.muted).lineLimit(1)
+                            }
+                            .frame(width: teamW, alignment: .leading).padding(.leading, 10)
+                        } cells: { h in
+                            let r = l.card.first { $0.hole == h.n }
+                            ScoreMark(v: r.flatMap { $0.done ? (mode == "gross" ? $0.gross : $0.net) : nil }, par: r?.par ?? h.par, size: 22)
+                        } total: {
+                            if totals {
+                                Text(l.played == 0 ? "–" : stab ? "\(l.score)" : Core.fmtPar(l.score)).font(FC.display(19)).lineLimit(1).minimumScaleFactor(0.7)
+                                    .foregroundStyle(stab || l.played == 0 ? FC.ink : l.score < 0 ? FC.red : l.score > 0 ? FC.blue : FC.ink)
+                            }
+                        }
+                        .overlay(alignment: .top) { Rectangle().fill(FC.hairline).frame(height: 1) }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(FC.line))
+            .shadow(color: FC.scrim.opacity(0.08), radius: 12, y: 6)
+        }
+    }
+    private func row<L: View, C: View, T: View>(height: CGFloat, bg: Color, @ViewBuilder lead: () -> L, @ViewBuilder cells: @escaping (Hole) -> C, @ViewBuilder total: () -> T) -> some View {
+        HStack(spacing: 0) {
+            lead()
+            ForEach(holes, id: \.n) { h in cells(h).frame(maxWidth: .infinity) }
+            total().frame(width: totW)
+        }
+        .frame(height: height).background(bg)
     }
 }
 
