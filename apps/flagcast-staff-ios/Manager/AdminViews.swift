@@ -21,6 +21,7 @@ struct AdminHome: View {
                 NavigationLink { AdminTournaments() } label: { ListRow(icon: "flag.2.crossed.fill", iconColor: FC.ok, title: "Tournaments", sub: "Every club’s, open one here") { Chevron() } }
                 NavigationLink { AdminCameras() } label: { ListRow(icon: "video.fill", iconColor: FC.red, title: "Cameras", sub: "Par 3 camera links for every tournament") { Chevron() } }
                 NavigationLink { AdminScreens() } label: { ListRow(icon: "tv.and.mediabox.fill", iconColor: FC.blue, title: "TVs & phones", sub: "Any club’s TVs, take-overs, phones banner") { Chevron() } }
+                NavigationLink { AdminStaff() } label: { ListRow(icon: "checkmark.shield.fill", iconColor: FC.green2, title: "Staff", sub: "Who gets Admin when they sign in") { Chevron() } }
                 NavigationLink { AdminActivity() } label: { ListRow(icon: "list.bullet.rectangle.fill", iconColor: FC.muted, title: "Activity", sub: "Everything that happened", last: true) { Chevron() } }
             }
             CardBox {
@@ -513,5 +514,48 @@ private struct CamCard: View {
             let ok = await ((try? URLSession.shared.data(for: req)).map { d, r in (r as? HTTPURLResponse)?.statusCode == 200 && String(decoding: d.prefix(64), as: UTF8.self).contains("#EXTM3U") }) ?? false
             signal[h] = ok
         }
+    }
+}
+
+/// Who gets Admin when they sign in (the Mac and web Admin's Staff). ADMIN_EMAIL ones are listed but changed in Cloudflare.
+private struct AdminStaff: View {
+    @Environment(AdminModel.self) private var admin
+    @State private var email = ""
+    @State private var removing: StaffMember?
+    var body: some View {
+        CardPage(kicker: "Admin", title: "Staff", sub: "\(admin.staff.count) with Admin") {
+            Text("Anyone here gets Admin, on the iPhone, iPad, Mac and web, when they sign in with that email. Club owners never see Admin.")
+                .font(.footnote).foregroundStyle(FC.muted)
+            CardBox {
+                if admin.staff.isEmpty { Text("Only the passcode opens Admin.").foregroundStyle(FC.muted).padding(14) }
+                ForEach(Array(admin.staff.enumerated()), id: \.element.id) { i, m in
+                    ListRow(icon: m.fixed ? "lock.fill" : "person.fill", iconColor: m.fixed ? FC.muted : FC.primary, title: m.email, sub: detail(m), last: i == admin.staff.count - 1) {
+                        if !m.fixed { Button("Remove") { removing = m }.font(.subheadline.weight(.semibold)).foregroundStyle(FC.red) }
+                    }
+                }
+            }
+            CardBox {
+                HStack {
+                    TextField("name@example.com", text: $email).keyboardType(.emailAddress).textContentType(.emailAddress)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled().onSubmit(add)
+                    Button("Add", action: add).font(.body.weight(.semibold)).disabled(!email.contains("@"))
+                }
+                .padding(14)
+            }
+        }
+        .confirmationDialog("Take \(removing?.email ?? "") off staff? They lose Admin.", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
+            Button("Remove from staff", role: .destructive) { if let m = removing { Task { await admin.act("staff-remove", ["email": m.email], done: "Removed from staff.") } } }
+        }
+        .overlay(alignment: .bottom) { NoticeBar(text: admin.notice).padding(.bottom, 10).animation(.snappy, value: admin.notice) }
+        .task { try? await admin.refresh() }
+        .refreshable { try? await admin.refresh() }
+    }
+    private func add() {
+        let e = email.trimmingCharacters(in: .whitespacesAndNewlines); guard e.contains("@") else { return }
+        Task { await admin.act("staff-add", ["email": e], done: "Added. They get Admin the next time they sign in."); if admin.staff.contains(where: { $0.email == e.lowercased() }) { email = "" } }
+    }
+    private func detail(_ m: StaffMember) -> String {
+        let seen = m.seen > 0 ? Date(timeIntervalSince1970: m.seen / 1000).formatted(date: .abbreviated, time: .shortened) : "never"
+        return "\(m.fixed ? "Set in Cloudflare" : "Added \(Date(timeIntervalSince1970: m.added / 1000).formatted(date: .abbreviated, time: .omitted))") · signed in \(seen)"
     }
 }
