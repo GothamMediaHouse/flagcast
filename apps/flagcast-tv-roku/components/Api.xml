@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- one call to flagcast.app/golf/api/tv/<op> off the render thread: set op and body, then control = "RUN" -->
+<component name="Api" extends="Task">
+  <interface>
+    <field id="base" type="string" value="https://flagcast.app" />
+    <field id="op" type="string" />
+    <field id="body" type="assocarray" />
+    <field id="status" type="integer" />
+    <field id="result" type="assocarray" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/Api.brs" />
+</component>

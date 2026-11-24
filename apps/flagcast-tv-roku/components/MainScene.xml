@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Flagcast TV for Roku, 1920×1080. Three screens: the code (not connected), the club's idle screen, the board. -->
+<component name="MainScene" extends="Scene">
+  <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />
+  <children>
+    <Rectangle id="bg" width="1920" height="1080" color="0x0A120EFF" />
+
+    <!-- not connected: the code to type in the Manager (the only screen with the Flagcast logo) -->
+    <Group id="pair" visible="false">
+      <Poster uri="pkg:/images/wordmark.png" translation="[130,150]" width="190" height="70" />
+      <Label text="CONNECT THIS TV TO YOUR CLUB" translation="[130,260]" width="820" wrap="true" color="0xEEF3ECFF">
+        <Font role="font" uri="font:BoldSystemFontFile" size="76" />
+      </Label>
+      <Label text="1.  Open Flagcast Manager&#10;2.  Go to Screens &amp; sponsors, then Add a TV&#10;3.  Type the code on this TV" translation="[130,520]" width="820" wrap="true" lineSpacing="12" color="0xC9D6CCFF">
+        <Font role="font" uri="font:SystemFontFile" size="34" />
+      </Label>
+      <Label text="You only do this once. After that, this TV shows your club’s tournament on the day, all by itself." translation="[130,720]" width="760" wrap="true" color="0x8FA596FF">
+        <Font role="font" uri="font:SystemFontFile" size="26" />
+      </Label>
+      <Rectangle translation="[1040,260]" width="760" height="520" color="0x0D1A14FF" />
+      <Label text="TV CODE" translation="[1040,320]" width="760" horizAlign="center" color="0x8FA596FF">
+        <Font role="font" uri="font:SystemFontFile" size="26" />
+      </Label>
+      <Label id="code" text="······" translation="[1040,410]" width="760" horizAlign="center" color="0xE8C547FF">
+        <Font role="font" uri="font:BoldSystemFontFile" size="120" />
+      </Label>
+      <Label id="pairNote" translation="[1080,640]" width="680" horizAlign="center" wrap="true" color="0x6F8577FF">
+        <Font role="font" uri="font:SystemFontFile" size="24" />
+      </Label>
+    </Group>
+
+    <!-- between tournaments -->
+    <Group id="idle" visible="false">
+      <Poster id="idleLogo" translation="[660,180]" width="600" height="300" loadDisplayMode="scaleToFit" />
+      <Label id="welcome" translation="[100,530]" width="1720" horizAlign="center" wrap="true" maxLines="2" color="0xEEF3ECFF">
+        <Font role="font" uri="font:BoldSystemFontFile" size="72" />
+      </Label>
+      <Label id="nextLine" translation="[100,720]" width="1720" horizAlign="center" color="0xE8C547FF">
+        <Font role="font" uri="font:SystemFontFile" size="38" />
+      </Label>
+      <Label id="nextSmall" translation="[100,790]" width="1720" horizAlign="center" color="0x8FA596FF">
+        <Font role="font" uri="font:SystemFontFile" size="24" />
+      </Label>
+    </Group>
+
+    <!-- the board -->
+    <Group id="board" visible="false">
+      <Rectangle width="1920" height="116" color="0x123628FF" />
+      <Poster id="logo" translation="[60,23]" width="160" height="70" loadDisplayMode="scaleToFit" />
+      <Label id="title" translation="[250,30]" width="1300" color="0xEEF3ECFF">
+        <Font role="font" uri="font:BoldSystemFontFile" size="52" />
+      </Label>
+      <Label id="liveTag" text="LIVE" translation="[1690,38]" width="170" horizAlign="right" color="0xE8C547FF">
+        <Font role="font" uri="font:BoldSystemFontFile" size="34" />
+      </Label>
+      <Group id="stage" translation="[0,116]" />
+      <Rectangle id="flashBar" translation="[0,880]" width="1920" height="80" color="0xE8C547FF" visible="false" />
+      <Label id="flash" translation="[40,893]" width="1840" horizAlign="center" color="0x0A120EFF" visible="false">
+        <Font role="font" uri="font:BoldSystemFontFile" size="42" />
+      </Label>
+      <Rectangle id="tickerBar" translation="[0,1016]" width="1920" height="64" color="0x0D1A14FF" />
+      <ScrollingLabel id="ticker" translation="[60,1028]" maxWidth="1800" height="44" color="0xC9D6CCFF" repeatCount="-1">
+        <Font role="font" uri="font:SystemFontFile" size="30" />
+      </ScrollingLabel>
+      <Group id="take" visible="false">
+        <Rectangle width="1920" height="1080" color="0x0A120EF0" />
+        <Label id="takeHead" translation="[100,330]" width="1720" horizAlign="center" color="0xE8C547FF">
+          <Font role="font" uri="font:BoldSystemFontFile" size="150" />
+        </Label>
+        <Label id="takeText" translation="[100,560]" width="1720" horizAlign="center" wrap="true" color="0xEEF3ECFF">
+          <Font role="font" uri="font:BoldSystemFontFile" size="64" />
+        </Label>
+      </Group>
+    </Group>
+
+    <Label id="offline" text="Reconnecting…" translation="[40,1030]" visible="false" color="0xC98B7FFF">
+      <Font role="font" uri="font:SystemFontFile" size="22" />
+    </Label>
+    <Timer id="tick" repeat="true" duration="1" />
+    <Timer id="again" repeat="false" duration="3" />
+  </children>
+</component>
