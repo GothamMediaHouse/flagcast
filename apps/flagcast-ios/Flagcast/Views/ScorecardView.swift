@@ -12,6 +12,7 @@ struct ScorecardScreen: View {
     @State private var replay: Replay?
     @State private var replaySeen = 0.0
     @State private var page = Page.hole
+    @State private var coverSeen = Set<String>()
     @Environment(Router.self) private var router
     @Environment(TourNav.self) private var nav
     enum Page: Hashable { case hole, round }
@@ -128,44 +129,93 @@ struct ScorecardScreen: View {
             if page == .hole { bottomBar(t, h) }
         }
         .background(Color.fcPaper)
+        .overlay { coverPopup(s, t) }
+    }
+
+    /// The club's welcome photo, once per tournament on this phone, before the cart's first score.
+    @ViewBuilder private func coverPopup(_ s: EventState, _ t: Team) -> some View {
+        let key = "flagcast.cover.\(s.id)"
+        let scored = s.scorers(t).contains { p in (model.myScores()[t.id]?[p.id] ?? []).contains { $0 != nil } }
+        if s.photos.coverURL != nil, !scored, !coverSeen.contains(key), !UserDefaults.standard.bool(forKey: key) {
+            let close = { UserDefaults.standard.set(true, forKey: key); withAnimation { _ = coverSeen.insert(key) } }
+            ZStack {
+                Color.black.opacity(0.5).ignoresSafeArea().onTapGesture(perform: close)
+                VStack(spacing: 12) {
+                    CoverCard(state: s)
+                    Button("Let’s play", action: close).buttonStyle(.fc(.primary, full: true))
+                }
+                .padding(14)
+                .background(Color.fcCard, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .padding(24)
+            }
+            .transition(.opacity)
+        }
     }
 
     // ---- this hole ----
     @ViewBuilder private func holePage(_ s: EventState, _ t: Team, _ h: Int, _ H: Hole) -> some View {
-        // the club's cover photo welcomes the cart until its first score
-        if s.photos.coverURL != nil, !s.scorers(t).contains(where: { p in (model.myScores()[t.id]?[p.id] ?? []).contains { $0 != nil } }) {
-            CoverCard(state: s)
-        }
-        HolePhotoHeader(state: s, hole: H)
+        // one screen, no scrolling: the hole with its yards on the green, the scores, then small tiles for the
+        // hole's sponsor and contests. The club's welcome photo shows once, as a pop-up (coverPopup).
+        HoleCard(state: s, hole: H, onHole: { d in
+            let ord = model.order(t), i = ord.firstIndex(of: model.currentHole()) ?? 0
+            model.hole = ord[max(0, min(ord.count - 1, i + d))]
+        }, scorer: model, camera: s.cams[h].flatMap(URL.init(string:)).map { u in { camera = CameraLink(hole: h, url: u) } })
         VStack(spacing: 0) {
-            let ps = s.scorers(t)
+            let ps = s.scorers(t), tight = ps.count > 2
             HStack {
                 Text("Scores")
                 Spacer()
                 if !s.locked { Text("Tap the number for par") }
             }
             .font(.caption2.weight(.semibold)).tracking(0.8).textCase(.uppercase).foregroundStyle(Color.fcMuted)
-            .padding(.top, 12)
+            .padding(.top, 10)
             ForEach(Array(ps.enumerated()), id: \.element.id) { i, p in
-                playerRow(s, p, H)
+                playerRow(s, p, H, tight: tight)
                 if i < ps.count - 1 { Divider().overlay(Color.fcLine) }
             }
         }
         .padding(.horizontal, 14)
         .fcCard(padding: 0)
-        if Geo.mapped(s) {
-            GPSCard(state: s, hole: h, onHole: { d in
-                let ord = model.order(t), i = ord.firstIndex(of: model.currentHole()) ?? 0
-                model.hole = ord[max(0, min(ord.count - 1, i + d))]
-            }, scorer: model)
+        extras(s, h)
+    }
+
+    /// The hole's sponsor, the turn sponsor on 10 and the hole's contests, as small tiles two to a row.
+    @ViewBuilder private func extras(_ s: EventState, _ h: Int) -> some View {
+        let sp = s.sponsors.first { $0.spot == "hole" && $0.holes.contains(h) } ?? s.sponsors.first { $0.holes.contains(h) }
+        let turn = h == 10 ? s.sponsors.first { $0.spot == "turn" } : nil
+        let cs = s.contests.filter { $0.hole == h }
+        if sp != nil || turn != nil || !cs.isEmpty {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+                if let sp {
+                    SponsorTile(sponsor: sp, lead: "Presented by", banner: s.photos.sponsor(sp.id)) { model.hits.tap(sp.id) }
+                        .onAppear { model.hits.view(sp.id, once: "\(sp.id):\(h)") }
+                }
+                if let turn {
+                    SponsorTile(sponsor: turn, lead: "At the turn", banner: s.photos.sponsor(turn.id)) { model.hits.tap(turn.id) }
+                        .onAppear { model.hits.view(turn.id, once: "\(turn.id):turn") }
+                }
+                ForEach(cs) { c in contestTile(c) }
+            }
         }
-        // no course map: nothing here (golfers can't map it; the desk sees that in Setup)
-        sponsors(s, h)
-        ForEach(s.contests.filter { $0.hole == h }) { c in contestNote(c) }
-        if let cam = s.cams[h], let u = URL(string: cam) {
-            Button { camera = CameraLink(hole: h, url: u) } label: { Label("Watch the hole \(h) camera", systemImage: "video.fill") }
-                .buttonStyle(.fcPlain)
+    }
+
+    private func contestTile(_ c: Contest) -> some View {
+        let top = Core.contestLeader(c).first
+        return HStack(alignment: .top, spacing: 8) {
+            Image(systemName: c.isLongDrive ? "arrow.up.right" : "scope").font(.footnote.weight(.bold))
+                .frame(width: 26, height: 26).background(Color.fcFlag.opacity(0.25), in: RoundedRectangle(cornerRadius: 7))
+            VStack(alignment: .leading, spacing: 1) {
+                Text((c.isLongDrive ? "Long drive" : "Closest to pin") + (c.sponsor.isEmpty ? "" : " · \(c.sponsor)"))
+                    .font(.caption).foregroundStyle(Color.fcMuted).lineLimit(1)
+                Text(top.map { "\($0.name), \(Core.fmtDist(c, $0.dist))" } ?? "No one yet").font(.footnote.weight(.semibold)).lineLimit(2).minimumScaleFactor(0.8)
+            }
+            Spacer(minLength: 0)
         }
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .padding(10)
+        .background(Color.fcCard, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("A marshal measures at the green.")
     }
 
     // ---- your round ----
@@ -285,40 +335,7 @@ struct ScorecardScreen: View {
         }
     }
 
-    @ViewBuilder private func sponsors(_ s: EventState, _ h: Int) -> some View {
-        let sp = s.sponsors.first { $0.spot == "hole" && $0.holes.contains(h) } ?? s.sponsors.first { $0.holes.contains(h) }
-        let turn = h == 10 ? s.sponsors.first { $0.spot == "turn" } : nil
-        if let sp {
-            SponsorLine(sponsor: sp, lead: "Presented by", banner: s.photos.sponsor(sp.id)) { model.hits.tap(sp.id) }
-                .onAppear { model.hits.view(sp.id, once: "\(sp.id):\(h)") }
-        }
-        if let turn {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("At the turn").fcHeading(.subheadline)
-                SponsorLine(sponsor: turn, banner: s.photos.sponsor(turn.id)) { model.hits.tap(turn.id) }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .fcCard(padding: 12)
-            .onAppear { model.hits.view(turn.id, once: "\(turn.id):turn") }
-        }
-    }
-
-    private func contestNote(_ c: Contest) -> some View {
-        let top = Core.contestLeader(c).first
-        return HStack(alignment: .top, spacing: 12) {
-            Image(systemName: c.isLongDrive ? "arrow.up.right" : "scope").font(.headline)
-                .frame(width: 40, height: 40).background(Color.fcFlag.opacity(0.25), in: RoundedRectangle(cornerRadius: 10))
-            VStack(alignment: .leading, spacing: 3) {
-                Text((c.isLongDrive ? "Long drive" : "Closest to the pin") + (c.sponsor.isEmpty ? "" : " · \(c.sponsor)")).fcLabel()
-                Text(top.map { "\($0.name), \(Core.fmtDist(c, $0.dist))" } ?? "No one on the board yet").font(.body.weight(.semibold))
-                Text("A marshal measures at the green.").font(.footnote).foregroundStyle(Color.fcMuted)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .fcCard(padding: 12)
-    }
-
-    private func playerRow(_ s: EventState, _ p: Player, _ H: Hole) -> some View {
+    private func playerRow(_ s: EventState, _ p: Player, _ H: Hole, tight: Bool = false) -> some View {
         let v = model.value(p.id, H.n)
         let st = Core.strokesOn(Core.playing(p.hcp, s.format.allowance), H.hcp)
         let set = v != nil
@@ -346,11 +363,11 @@ struct ScorecardScreen: View {
                 }
             }
             Spacer(minLength: 2)
-            stepButton("minus", "One fewer for \(p.name)") { model.step(p.id, -1) }
+            stepButton("minus", "One fewer for \(p.name)", tight: tight) { model.step(p.id, -1) }
             Button { model.step(p.id, 0) } label: {
                 Text(shown)
-                    .font(FCType.display(v == 0 ? 26 : 38))
-                    .frame(width: 56, height: 56)
+                    .font(FCType.display(v == 0 ? 26 : tight ? 34 : 38))
+                    .frame(width: tight ? 50 : 56, height: tight ? 50 : 56)
                     .foregroundStyle(!set ? Color.fcMuted : under ? Color.fcRed : Color.fcInk)
                     .background {
                         if under { Circle().stroke(Color.fcRed, lineWidth: 3) }
@@ -362,15 +379,15 @@ struct ScorecardScreen: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(set ? "\(p.name) score \(shown)" : "Tap to enter par for \(p.name)")
-            stepButton("plus", "One more for \(p.name)") { model.step(p.id, 1) }
+            stepButton("plus", "One more for \(p.name)", tight: tight) { model.step(p.id, 1) }
         }
-        .padding(.vertical, 10)
+        .padding(.vertical, tight ? 6 : 10)
         .animation(.snappy(duration: 0.2), value: v)
     }
 
-    private func stepButton(_ icon: String, _ label: String, _ action: @escaping () -> Void) -> some View {
+    private func stepButton(_ icon: String, _ label: String, tight: Bool = false, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon).font(.title2.weight(.semibold)).frame(width: 46, height: 46)
+            Image(systemName: icon).font(.title2.weight(.semibold)).frame(width: tight ? 42 : 46, height: tight ? 42 : 46)
                 .background(Color.fcPaper2, in: Circle())
                 .foregroundStyle(Color.fcInk)
         }
@@ -472,27 +489,73 @@ struct CoverCard: View {
     }
 }
 
-struct HolePhotoHeader: View {
+/// The hole at the top of the scorecard: its picture (the club's photo, else the course map's satellite picture)
+/// with HOLE 7, par, yards and index, the yards on a drawn green (and today's pin when the desk set one), then
+/// Full screen GPS, Use my GPS and the hole's camera.
+struct HoleCard: View {
     let state: EventState
     let hole: Hole
+    var onHole: (Int) -> Void
+    var scorer: ScorecardModel? = nil
+    var camera: (() -> Void)? = nil
     @State private var photo: UIImage?
+    @State private var loc = Locator.shared
+    @State private var full = false
+    @State private var askGPS = false
+
     var body: some View {
-        ZStack(alignment: .leading) {
-            LinearGradient(colors: [Color(UIColor(hex: 0x2c5a3d)), Color(UIColor(hex: 0x123628))], startPoint: .topTrailing, endPoint: .bottomLeading)
-                .overlay { if let photo { Image(uiImage: photo).resizable().aspectRatio(contentMode: .fill).transition(.opacity) } }
-                .clipped()
-            LinearGradient(colors: [Color.fcScrim.opacity(0.85), Color.fcScrim.opacity(0.25), Color.fcScrim.opacity(0)], startPoint: .leading, endPoint: .trailing)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Hole \(hole.n)").font(FCType.display(46)).textCase(.uppercase).lineLimit(1).minimumScaleFactor(0.6)
-                Spacer(minLength: 0)
-                (stat("Par", "\(hole.par)", first: true) + (hole.yds > 0 ? Text("  ·  ") + Text("\(hole.yds)").font(FCType.display(20)).foregroundColor(.white) + Text(" Yds") : Text("")) + Text("  ·  ") + stat("Index", "\(hole.hcp)"))
-                    .font(.footnote.weight(.semibold)).tracking(0.8).textCase(.uppercase).foregroundStyle(Color(UIColor(hex: 0xd4e1d8)))
-                    .lineLimit(1).minimumScaleFactor(0.7)
+        let hm = state.map.holes[hole.n], pin = state.pinsheet[hole.n]
+        let o = hm.flatMap { Geo.middle($0) != nil ? Geo.origin($0, loc.fix?.at) : nil }
+        let y = hm.flatMap { h in o.map { Geo.yardages(h, from: $0.at) } }
+        let mapped = Geo.mapped(state)
+        VStack(spacing: 0) {
+            ZStack {
+                LinearGradient(colors: [Color(UIColor(hex: 0x2c5a3d)), Color(UIColor(hex: 0x123628))], startPoint: .topTrailing, endPoint: .bottomLeading)
+                    .overlay { if let photo { Image(uiImage: photo).resizable().aspectRatio(contentMode: .fill).transition(.opacity) } }
+                    .clipped()
+                LinearGradient(colors: [Color.fcScrim.opacity(0.88), Color.fcScrim.opacity(0.4), Color.fcScrim.opacity(0.65)], startPoint: .leading, endPoint: .trailing)
+                HStack(alignment: .center, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Hole \(hole.n)").font(FCType.display(46)).textCase(.uppercase).lineLimit(1).minimumScaleFactor(0.6)
+                        Spacer(minLength: 0)
+                        if let pin {
+                            Label("Pin \(pin.label.lowercased())", systemImage: "flag.fill")
+                                .font(.caption.weight(.bold)).foregroundStyle(Color(UIColor(hex: 0xf0cf55))).lineLimit(1).minimumScaleFactor(0.8)
+                        }
+                        (stat("Par", "\(hole.par)") + (hole.yds > 0 ? Text("  ·  ") + Text("\(hole.yds)").font(FCType.display(19)).foregroundColor(.white) + Text(" Yds") : Text("")) + Text("  ·  ") + stat("Index", "\(hole.hcp)"))
+                            .font(.caption.weight(.semibold)).tracking(0.6).textCase(.uppercase).foregroundStyle(Color(UIColor(hex: 0xd4e1d8)))
+                            .lineLimit(1).minimumScaleFactor(0.6)
+                    }
+                    .foregroundStyle(.white).shadow(color: .black.opacity(0.35), radius: 6, y: 1)
+                    Spacer(minLength: 0)
+                    if y != nil || pin != nil {
+                        GreenYards(y: y, pin: pin, fromMe: o?.me == true).frame(width: 140, height: 132)
+                    }
+                }
+                .padding(.leading, 16).padding(.trailing, 8).padding(.vertical, 10)
             }
-            .foregroundStyle(.white).shadow(color: .black.opacity(0.35), radius: 6, y: 1)
-            .padding(.horizontal, 16).padding(.vertical, 12)
+            .frame(height: 150)
+            .clipped()
+            if mapped || camera != nil {
+                HStack(spacing: 8) {
+                    if hm.flatMap({ Geo.middle($0) }) != nil {
+                        Button { full = true } label: { Label("Full screen GPS", systemImage: "arrow.up.left.and.arrow.down.right").lineLimit(1).minimumScaleFactor(0.8) }
+                            .buttonStyle(.fc(.dark, full: true))
+                    }
+                    if mapped { gpsButton }
+                    if let camera {
+                        Button(action: camera) { Image(systemName: "video.fill") }
+                            .buttonStyle(.fc(.plain, full: false))
+                            .accessibilityLabel("Watch the hole \(hole.n) camera")
+                    }
+                }
+                .padding(8)
+                if let e = loc.error, mapped {
+                    Text(e).font(.caption).foregroundStyle(Color.fcMuted).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12).padding(.bottom, 8)
+                }
+            }
         }
-        .frame(height: 112)
+        .background(Color.fcCard)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .shadow(color: Color.fcScrim.opacity(0.10), radius: 10, y: 4)
         .animation(.easeOut(duration: 0.35), value: photo != nil)
@@ -500,9 +563,153 @@ struct HolePhotoHeader: View {
         .task(id: "\(state.id)-\(hole.n)-\(state.photos.holes[String(hole.n)] ?? "")") {
             if let p = await ClubPhoto.load(state.photos.hole(hole.n)) { photo = p } else { photo = await CoursePhoto.hole(state, hole.n) }
         }
-        .accessibilityElement(children: .combine)
+        .fullScreenCover(isPresented: $full) { CourseView(state: state, hole: hole.n, onHole: onHole, scorer: scorer) }
+        // what turning GPS on means, once, when they tap it (it used to sit under the yards all the time)
+        .alert("Yards from where you are", isPresented: $askGPS) {
+            Button("Turn on GPS") { loc.start() }
+            Button("Not now", role: .cancel) {}
+        } message: {
+            Text("The yards count from your phone once you’re on the hole, and from the tee until then.\(Geo.trackingOn(state) ? " During the tournament the desk and the other groups can see where your group is, until the results are final." : "")")
+        }
     }
-    private func stat(_ label: String, _ v: String, first: Bool = false) -> Text {
-        Text("\(label) ") + Text(v).font(FCType.display(20)).foregroundColor(.white)
+
+    @ViewBuilder private var gpsButton: some View {
+        if loc.on {
+            Menu {
+                if let f = loc.fix { Text("GPS to within \(f.acc) yds") }
+                if Geo.trackingOn(state) { Text("The desk and the other groups can see where your group is.") }
+                Button("Turn off GPS", role: .destructive) { loc.stop() }
+            } label: {
+                Label(loc.fix.map { "±\($0.acc) yds" } ?? "Finding you…", systemImage: "location.fill").lineLimit(1).minimumScaleFactor(0.8)
+            }
+            .buttonStyle(.fc(.plain, full: true))
+        } else {
+            Button { askGPS = true } label: { Label("Use my GPS", systemImage: "location.fill").lineLimit(1).minimumScaleFactor(0.8) }
+                .buttonStyle(.fc(.plain, full: true))
+        }
+    }
+
+    private func stat(_ label: String, _ v: String) -> Text {
+        Text("\(label) ") + Text(v).font(FCType.display(19)).foregroundColor(.white)
+    }
+}
+
+/// A putting green drawn in a 150 × 140 box, back at the top (public/golf/gps.js GREEN_PATH).
+struct GreenShape: Shape {
+    func path(in r: CGRect) -> Path {
+        let sx = r.width / 150, sy = r.height / 140
+        func p(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: r.minX + x * sx, y: r.minY + y * sy) }
+        var path = Path()
+        path.move(to: p(40, 20))
+        path.addCurve(to: p(114, 14), control1: p(58, 6), control2: p(92, 4))
+        path.addCurve(to: p(140, 70), control1: p(136, 24), control2: p(146, 46))
+        path.addCurve(to: p(104, 104), control1: p(134, 92), control2: p(118, 100))
+        path.addCurve(to: p(74, 128), control1: p(92, 108), control2: p(86, 118))
+        path.addCurve(to: p(18, 118), control1: p(58, 140), control2: p(30, 136))
+        path.addCurve(to: p(20, 70), control1: p(6, 100), control2: p(10, 82))
+        path.addCurve(to: p(40, 20), control1: p(28, 60), control2: p(24, 40))
+        path.closeSubpath()
+        return path
+    }
+}
+
+/// The yards on a drawn green: back at the top, front at the bottom, the middle (or, with today's pin, the yards
+/// to the pin) big in the middle, with a fringe, mowing stripes, two bunkers and the flag where the pin is.
+struct GreenYards: View {
+    var y: Geo.Yardages?
+    var pin: PinSpot?
+    var fromMe: Bool
+    var body: some View {
+        let toPin = pin.flatMap { p in y.flatMap { p.yards(f: $0.f, m: $0.m, b: $0.b) } }
+        GeometryReader { g in
+            // the green sits in 150 × 140 inside a frame with room for the fringe and the bunkers
+            let box = CGRect(x: g.size.width * 0.06, y: g.size.height * 0.04, width: g.size.width * 0.84, height: g.size.height * 0.9)
+            let sx = box.width / 150, sy = box.height / 140
+            ZStack(alignment: .topLeading) {
+                Ellipse().fill(Color(UIColor(hex: 0xe7d9b0))).overlay(Ellipse().stroke(Color(UIColor(hex: 0xf6efd9)), lineWidth: 1.5))
+                    .frame(width: 22 * sx, height: 30 * sy).position(x: box.minX + 2 * sx, y: box.minY + 48 * sy)
+                Ellipse().fill(Color(UIColor(hex: 0xe7d9b0))).overlay(Ellipse().stroke(Color(UIColor(hex: 0xf6efd9)), lineWidth: 1.5))
+                    .frame(width: 36 * sx, height: 26 * sy).position(x: box.minX + 132 * sx, y: box.minY + 122 * sy)
+                GreenShape().path(in: box).stroke(Color(UIColor(hex: 0x2a6e3e)), style: StrokeStyle(lineWidth: 12 * sx, lineJoin: .round))
+                GreenShape().path(in: box).fill(RadialGradient(colors: [Color(UIColor(hex: 0x5fbf78)), Color(UIColor(hex: 0x2f8a4c))],
+                                                               center: UnitPoint(x: 0.55, y: 0.35), startRadius: 4, endRadius: box.width * 0.75))
+                HStack(spacing: 14 * sx) { ForEach(0..<8, id: \.self) { _ in Rectangle().fill(.black.opacity(0.07)).frame(width: 14 * sx) } }
+                    .frame(width: box.width * 1.6, height: box.height * 1.6)
+                    .rotationEffect(.degrees(-25))
+                    .position(x: box.midX, y: box.midY)
+                    .mask(GreenShape().path(in: box))
+                if let pin {
+                    let px = box.minX + pin.spot.x * sx
+                    let py = box.minY + pin.spot.y * sy
+                    Ellipse().fill(Color(UIColor(hex: 0x0d2a18))).frame(width: 6, height: 3).position(x: px, y: py)
+                    Rectangle().fill(.white).frame(width: 1.6, height: 26).position(x: px, y: py - 13)
+                    Path { p in p.move(to: CGPoint(x: px, y: py - 26)); p.addLine(to: CGPoint(x: px + 13, y: py - 22)); p.addLine(to: CGPoint(x: px, y: py - 18)); p.closeSubpath() }
+                        .fill(Color(UIColor(hex: 0xe0453a)))
+                }
+                if let y {
+                    VStack(spacing: 0) {
+                        Text(y.b.map { "Back \($0)" } ?? " ").font(FCType.display(14)).textCase(.uppercase)
+                        Spacer(minLength: 0)
+                        if toPin != nil { Text(fromMe ? "To pin" : "Pin · tee").font(.system(size: 9, weight: .bold)).tracking(1.2).textCase(.uppercase).foregroundStyle(Color(UIColor(hex: 0xf0cf55))) }
+                        else if !fromMe { Text("From tee").font(.system(size: 9, weight: .bold)).tracking(1.2).textCase(.uppercase).foregroundStyle(Color(UIColor(hex: 0xf0cf55))) }
+                        Text((toPin ?? y.m).map(String.init) ?? "—").font(FCType.display(40)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+                            .contentTransition(.numericText())
+                        Spacer(minLength: 0)
+                        Text(y.f.map { "Front \($0)" } ?? " ").font(FCType.display(14)).textCase(.uppercase)
+                    }
+                    .foregroundStyle(.white).shadow(color: .black.opacity(0.55), radius: 2, y: 1)
+                    .frame(width: box.width * 0.8, height: box.height * 0.84)
+                    .position(x: box.minX + 74 * sx, y: box.minY + 70 * sy)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(axLabel)
+    }
+    private var axLabel: String {
+        var parts: [String] = []
+        if let pin { parts.append("Pin \(pin.label.lowercased())") }
+        if let y {
+            if let p = pin?.yards(f: y.f, m: y.m, b: y.b) { parts.append("\(p) yards to the pin") } else if let m = y.m { parts.append("\(m) yards to the middle") }
+            if let f = y.f { parts.append("front \(f)") }
+            if let b = y.b { parts.append("back \(b)") }
+            if !fromMe { parts.append("from the tee") }
+        }
+        return parts.joined(separator: ", ")
+    }
+}
+
+/// A sponsor in a small tile on the scorecard (its banner behind, when the club added one). Tap to visit.
+struct SponsorTile: View {
+    var sponsor: Sponsor
+    var lead: String
+    var banner: URL? = nil
+    var onTap: () -> Void = {}
+    @Environment(\.openURL) private var openURL
+    @State private var bannerImage: UIImage?
+    var body: some View {
+        let link = URL(string: sponsor.url).flatMap { sponsor.url.isEmpty ? nil : $0 }
+        Button { if let link { onTap(); openURL(link) } } label: {
+            ZStack(alignment: .bottomLeading) {
+                if let bannerImage {
+                    Image(uiImage: bannerImage).resizable().aspectRatio(contentMode: .fill).frame(maxWidth: .infinity, minHeight: 64, maxHeight: 64).clipped()
+                    LinearGradient(colors: [Color.fcScrim.opacity(0.75), .clear], startPoint: .bottom, endPoint: .top)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(lead).font(.caption).foregroundStyle(bannerImage == nil ? Color.fcMuted : .white.opacity(0.85))
+                    if bannerImage == nil { SponsorBadge(sponsor: sponsor, height: 20) }
+                    else { Text(sponsor.name).font(.footnote.weight(.bold)).foregroundStyle(.white).lineLimit(1) }
+                    if !sponsor.offer.isEmpty, bannerImage == nil { Text(sponsor.offer).font(.caption.weight(.semibold)).foregroundStyle(Color.fcPrimary).lineLimit(1) }
+                }
+                .padding(10)
+            }
+            .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+            .background(Color.fcCard)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(link == nil)
+        .accessibilityLabel("\(lead) \(sponsor.name)\(sponsor.offer.isEmpty ? "" : ", \(sponsor.offer)")")
+        .task(id: banner) { bannerImage = await ClubPhoto.load(banner) }
     }
 }

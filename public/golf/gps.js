@@ -265,3 +265,42 @@ export function holeView(canvas) {
 }
 
 function roundRect(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
+
+// ---- the pin sheet: where the hole is cut on each green (Manager → Pin sheet) ----
+// S.pinsheet = { '<hole>': { d: 'F'|'M'|'B' (front, middle, back), s: 'L'|'C'|'R' (left, center, right),
+//   on: paces from the front edge (optional), off: paces in from the left or right edge (optional) } }
+// The course map has only the front, middle and back of each green, so the pin's yards come from those:
+// front + paces on when the paces are known (a pace is about a yard), else halfway to the middle for a front or back pin.
+export const PIN_DEPTH = { F: 'Front', M: 'Middle', B: 'Back' }, PIN_SIDE = { L: 'left', C: '', R: 'right' };
+export function cleanPin(p) {
+  if (!p || typeof p !== 'object' || !PIN_DEPTH[p.d]) return null;
+  const s = PIN_SIDE[p.s] !== undefined ? p.s : 'C';
+  const n = (v, hi) => { const x = Math.round(Number(v)); return Number.isFinite(x) ? Math.min(hi, Math.max(0, x)) : 0; };
+  const on = n(p.on, 60), off = s === 'C' ? 0 : n(p.off, 30);
+  return { d: p.d, s, ...(on ? { on } : {}), ...(off ? { off } : {}) };
+}
+export const pinOf = (S, n) => (S && S.pinsheet && (S.pinsheet[n] || S.pinsheet[String(n)])) || null;
+/** "Back right", "Middle", "Front left" */
+export function pinLabel(p) {
+  if (!p || !PIN_DEPTH[p.d]) return '';
+  const side = PIN_SIDE[p.s] || '';
+  return side ? `${PIN_DEPTH[p.d]} ${side}` : PIN_DEPTH[p.d];
+}
+/** "26 on · 4 R" (what's on a printed pin sheet), '' when no paces */
+export function pinPaces(p) {
+  if (!p) return '';
+  return [p.on ? `${p.on} on` : '', p.off && p.s !== 'C' ? `${p.off} ${p.s}` : ''].filter(Boolean).join(' · ');
+}
+/** yards to the pin, from the yards to the front, middle and back of the green ({ f, m, b }) */
+export function pinYards(y, p) {
+  if (!p || !y) return null;
+  const { f, m, b } = y, r = (v) => (v == null ? null : Math.round(v));
+  if (p.on > 0 && f != null) return r(f + p.on);
+  if (p.d === 'F') return r(f != null && m != null ? (f + m) / 2 : f ?? m);
+  if (p.d === 'B') return r(b != null && m != null ? (m + b) / 2 : b ?? m);
+  return r(m ?? f ?? b);
+}
+// the drawn green the Manager and golfers' screens share (viewBox 0 0 150 140: back at the top, front at the bottom)
+export const GREEN_PATH = 'M40 20 C58 6 92 4 114 14 C136 24 146 46 140 70 C134 92 118 100 104 104 C92 108 86 118 74 128 C58 140 30 136 18 118 C6 100 10 82 20 70 C28 60 24 40 40 20 Z';
+/** where a pin sits on GREEN_PATH: [x, y] */
+export const pinSpot = (p) => [{ L: 44, C: 80, R: 116 }[p && p.s] ?? 80, { B: 30, M: 68, F: 104 }[p && p.d] ?? 68];

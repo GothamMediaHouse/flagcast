@@ -19,6 +19,7 @@ const P = {
   report: '<path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/>',
   map: '<path d="M14.1 4.6 9.9 2.4a2 2 0 0 0-1.8 0L3.6 4.7A1 1 0 0 0 3 5.6v14.8a1 1 0 0 0 1.4.9l3.7-1.9a2 2 0 0 1 1.8 0l4.2 2.2a2 2 0 0 0 1.8 0l4.5-2.3a1 1 0 0 0 .6-.9V3.6a1 1 0 0 0-1.4-.9l-3.7 1.9a2 2 0 0 1-1.8 0zM9 2.2v15M15 6.8v15"/>',
   groups: '<path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/>',
+  pins: '<path d="M5 22V3"/><path d="M5 3l12 4-12 4"/><ellipse cx="12" cy="20" rx="8" ry="2"/>',
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   tv: '<rect x="2" y="7" width="20" height="13" rx="2"/><path d="m17 2-5 5-5-5"/>',
@@ -31,7 +32,7 @@ const P = {
 export const icon = (k, size = 15) => `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[k] || ''}</svg>`;
 
 // the sections of a tournament, in the sidebar (the Mac's order)
-export const SECTIONS = [['overview', 'Overview'], ['setup', 'Setup'], ['teams', 'Teams'], ['scores', 'Scores'], ['contests', 'Contests'],
+export const SECTIONS = [['overview', 'Overview'], ['setup', 'Setup'], ['teams', 'Teams'], ['scores', 'Scores'], ['contests', 'Contests'], ['pins', 'Pin sheet'],
   ['screens', 'Screens & sponsors'], ['staff', 'Staff'], ['links', 'Links & cart cards'], ['report', 'Report'], ['map', 'Course map'], ['groups', 'Where the groups are']];
 export const sectionTitle = (s) => (SECTIONS.find((x) => x[0] === s) || [s, s])[1];
 export const deskURL = (id, key, s = 'overview') => `/g/${id}/desk#${key}&${s}`;

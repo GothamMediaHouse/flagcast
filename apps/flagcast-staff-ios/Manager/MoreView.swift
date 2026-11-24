@@ -9,6 +9,7 @@ struct MoreView: View {
             if model.current != nil {
                 CardBox(title: "This tournament") {
                     NavigationLink { ContestsView() } label: { ListRow(icon: "trophy.fill", iconColor: FC.flag.opacity(0.9), title: "Contests", sub: "Closest to the pin, long drive") { Chevron() } }
+                    NavigationLink { PinsScreen() } label: { ListRow(icon: "flag.fill", iconColor: FC.ok, title: "Pin sheet", sub: "Where the pin is on each green today") { Chevron() } }
                     NavigationLink { WithTournament { DetailsView(doc: $0) } } label: { ListRow(icon: "gearshape.fill", title: "Tournament details", sub: "Name, date, holes, flights, ticker") { Chevron() } }
                     NavigationLink { WithTournament { StaffView(doc: $0) } } label: { ListRow(icon: "person.badge.key.fill", iconColor: FC.blue, title: "Golf pros and marshals", sub: "Their PINs for the phone app") { Chevron() } }
                     NavigationLink { WithTournament { LinksView(doc: $0) } } label: { ListRow(icon: "link", iconColor: FC.ok, title: "Links & cart cards", sub: "Leaderboard, board, scorecards, cards to print") { Chevron() } }
@@ -85,6 +86,18 @@ private struct SignOutDialog: ViewModifier {
 }
 
 /// Closest to the pin and long drive: each contest, its leader, and adding results (saved at once).
+/// Pin sheet: where the pin is on each green today (PinBoard, shared with the Mac). Saves as you tap.
+struct PinsScreen: View {
+    @Environment(\.horizontalSizeClass) private var size
+    var body: some View {
+        WithTournament { doc in
+            PhotoPage(image: doc.picture.image, kicker: "Golfers see it as soon as you set it", title: "Pin sheet", height: 200, maxWidth: 1100) { EmptyView() } content: {
+                PinBoard(doc: doc, columns: size == .regular ? 4 : 3, stacked: size != .regular).card()
+            }
+        }
+    }
+}
+
 struct ContestsView: View {
     var body: some View { WithTournament { doc in ContestsPage(doc: doc) } }
 }

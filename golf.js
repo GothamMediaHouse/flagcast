@@ -17,7 +17,7 @@
 // Pages: /g/<id> live page · /g/<id>/board screens · /g/<id>/desk#<key> desk · /g/<id>/map#<key> course map · /g/<id>/s/<code> cart · /g/<id>/cards QR cards
 import { DurableObject } from 'cloudflare:workers';
 import { defaultHoles, courseHcp } from './public/golf/core.js';
-import { trackingOn } from './public/golf/gps.js';
+import { trackingOn, cleanPin } from './public/golf/gps.js';
 import { clubs } from './clubs.js';
 import { camPlaylist } from './stream.js';
 import { brandFor, logoOf, cleanLogo, decodeLogo, cleanPhoto, photoLinks, PHOTO_SLOT } from './brand.js';
@@ -125,7 +125,7 @@ export const SPOTS = ['title', 'leaderboard', 'hole', 'cam', 'contest', 'turn', 
 // (cam = one hole's camera, full frame)
 export const PAGE_KINDS = ['lb', 'p3', 'cam', 'contests', 'skins', 'fund', 'sponsors', 'sponsor', 'schedule'];
 // changes made on the day (desk or a pro's PIN); marshals only post contest results
-const DAY_OPS = new Set(['fix', 'ctp', 'contest', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay', 'scene', 'map', 'groups']);
+const DAY_OPS = new Set(['fix', 'ctp', 'contest', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay', 'scene', 'map', 'groups', 'pinsheet']);
 // marshals post contest results and replays of shots at their hole
 const MARSHAL_OPS = new Set(['ctp', 'replay']);
 // a replay with no clip link replays the hole's live camera from this many seconds before it was marked
@@ -393,7 +393,7 @@ export class GolfEvent extends DurableObject {
   }
 
   // the desk: { op: 'get' } (the full setup with codes, PINs and sponsor counts) | 'save' (setup) | 'clear' { team } | 'ace' { remove: at }
-  // plus every day op (see dayOp): lock, contest, ctp, fund, flash, nudge, fix, screen, take, stats
+  // plus every day op (see dayOp): lock, contest, ctp, fund, flash, nudge, fix, screen, take, stats, pinsheet
   async desk(b) {
     const ev = this.ev;
     if (b.op === 'get') return json({ ...ev, photos: photoLinks(ev), stats: await this.getStats() });
@@ -535,6 +535,17 @@ export class GolfEvent extends DurableObject {
       ev.map = { ...cleanMap(b.map), at: now, by: clip(by, 40) };
       // the club keeps it, so its next tournament starts mapped
       if (this.env.CLUBS) this.ctx.waitUntil(this.env.CLUBS.get(this.env.CLUBS.idFromName('directory')).fetch(new Request('https://clubs/course', { method: 'POST', body: JSON.stringify({ id: ev.id, key: ev.key, map: ev.map }) })).catch(() => {}));
+    } else if (b.op === 'pinsheet') { // where the pins are today: one hole { hole, pin } (pin null takes it off), or every hole { all: { '<n>': pin } }
+      const sheet = {};
+      if (b.all && typeof b.all === 'object') {
+        for (const [k, p] of Object.entries(b.all)) { const n = Number(k), c = cleanPin(p); if (Number.isInteger(n) && n >= 1 && n <= 18 && c) sheet[n] = c; }
+      } else {
+        const n = num(b.hole, 0, 18, 0); if (n < 1) return json({ error: 'Pick a hole' }, 400);
+        Object.assign(sheet, ev.pinsheet || {});
+        const c = cleanPin(b.pin);
+        if (c) sheet[n] = c; else delete sheet[n];
+      }
+      ev.pinsheet = sheet;
     } else if (b.op === 'lock') {
       ev.locked = !!b.locked;
       if (ev.locked) await this.wipeSpots(); // results are final: group spots are wiped

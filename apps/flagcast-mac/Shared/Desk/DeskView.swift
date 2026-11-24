@@ -31,6 +31,7 @@ struct DeskView: View {
                 case .teams: TeamsView(doc: doc)
                 case .scores: ScoresView(doc: doc)
                 case .contests: ContestsView(doc: doc)
+                case .pins: PinsView(doc: doc)
                 case .screens: ScreensView(doc: doc)
                 case .staff: StaffView(doc: doc)
                 case .links: LinksView(doc: doc)
