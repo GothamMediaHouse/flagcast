@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Flagcast TV</title>
+<link rel="icon" href="/golf/brand/mark.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Flagcast TV: the page the Android TV / Fire TV app opens (and any TV's browser at flagcast.app/golf/tv/).
+   Not connected: a code to type in the Manager. Connected: the club's board on tournament day, else the club's idle screen.
+   Sized in vw for a 16:9 TV. */
+:root { color-scheme: dark; --bg: #0a120e; --panel: #0d1a14; --rule: #1d3328; --txt: #eef3ec; --dim: #8fa596; --flag: #e8c547; --green: #123628;
+  --f-display: "Barlow Condensed", "Inter", sans-serif; --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--txt); font-family: Inter, system-ui, sans-serif; cursor: none; }
+.view { position: absolute; inset: 0; display: none; }
+.view.on { display: flex; }
+iframe#board { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--bg); }
+/* pairing */
+#pair { display: none; padding: 6vw 7vw; gap: 5vw; align-items: center; }
+#pair.on { display: grid; grid-template-columns: 1fr 1fr; }
+.brand { display: flex; align-items: center; gap: 1vw; font-weight: 800; font-size: 2vw; letter-spacing: .02em; }
+.brand img { height: 2.6vw; }
+#pair h1 { font-family: var(--f-display); font-size: 4.4vw; line-height: 1.02; margin: 2.2vw 0 1.8vw; text-transform: uppercase; }
+#pair ol { margin: 0; padding-left: 2.2vw; font-size: 1.8vw; line-height: 1.65; color: #c9d6cc; }
+#pair .note { font-size: 1.35vw; color: var(--dim); margin-top: 1.8vw; max-width: 36vw; }
+.codebox { background: var(--panel); border: 1px solid var(--rule); border-radius: 2vw; padding: 4vw 3vw; display: flex; flex-direction: column; align-items: center; gap: 2vw; }
+.label { font-family: var(--f-mono); font-size: 1.2vw; letter-spacing: .18em; text-transform: uppercase; color: var(--dim); }
+#code { display: flex; gap: .9vw; }
+#code span { width: 5.6vw; height: 7.4vw; display: flex; align-items: center; justify-content: center; background: var(--green); border-radius: 1vw;
+  font-family: var(--f-mono); font-size: 4.4vw; font-weight: 600; color: var(--flag); }
+#expires { font-family: var(--f-mono); font-size: 1.1vw; color: #6f8577; }
+#pairmsg { font-size: 1.3vw; color: var(--dim); min-height: 1.6vw; text-align: center; }
+/* idle */
+#idle { flex-direction: column; }
+#idle .mid { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.8vw; text-align: center; padding: 0 6vw; }
+#idle .logo { max-height: 16vw; max-width: 40vw; object-fit: contain; }
+#idle h1 { font-family: var(--f-display); font-size: 4.6vw; text-transform: uppercase; margin: 0; }
+#idle .next { font-size: 1.9vw; color: #c9d6cc; }
+#idle .next b { color: var(--accent, var(--flag)); }
+#idle .small { font-family: var(--f-mono); font-size: 1.2vw; color: var(--dim); }
+#idle .sponsors { height: 11vw; background: var(--panel); border-top: 1px solid var(--rule); padding: 1.6vw 4.4vw; display: none; flex-direction: column; gap: 1vw; }
+#idle .sponsors.on { display: flex; }
+#idle .row { display: flex; gap: 2.4vw; align-items: center; justify-content: center; flex: 1; min-height: 0; }
+#idle .row img { max-height: 5vw; max-width: 14vw; object-fit: contain; }
+#idle .row b { font-size: 1.7vw; }
+#idle .clock { position: absolute; right: 3vw; top: 2.4vw; font-family: var(--f-mono); font-size: 1.4vw; color: var(--dim); }
+#offline { position: absolute; left: 2vw; bottom: 1.6vw; font-family: var(--f-mono); font-size: 1vw; color: #c98b7f; display: none; z-index: 5; background: rgba(0,0,0,.6); padding: .3vw .8vw; border-radius: .4vw; }
+</style>
+</head>
+<body>
+<section class="view" id="pair" aria-live="polite">
+  <div>
+    <div class="brand"><img src="/golf/brand/mark.svg" alt=""> Flagcast</div>
+    <h1>Connect this TV to your club</h1>
+    <ol>
+      <li>Open Flagcast Manager</li>
+      <li>Go to Screens &amp; sponsors, then Add a TV</li>
+      <li>Type the code on this TV</li>
+    </ol>
+    <p class="note">You only do this once. After that, this TV shows your club’s tournament on the day, all by itself.</p>
+  </div>
+  <div class="codebox">
+    <span class="label">TV code</span>
+    <div id="code" aria-label="TV code"></div>
+    <div id="pairmsg"></div>
+    <span id="expires"></span>
+  </div>
+</section>
+<section class="view" id="idle">
+  <div class="clock" id="clock"></div>
+  <div class="mid">
+    <img class="logo" id="clublogo" alt="">
+    <h1 id="welcome">Welcome</h1>
+    <div class="next" id="next"></div>
+    <div class="small" id="nextsmall"></div>
+  </div>
+  <div class="sponsors" id="sponsors"><span class="label">Thanks to our sponsors</span><div class="row" id="sprow"></div></div>
+</section>
+<iframe id="board" title="Leaderboard" hidden allow="autoplay; fullscreen"></iframe>
+<div id="offline">Reconnecting…</div>
+<script type="module">
+const $ = (id) => document.getElementById(id);
+const q = new URLSearchParams(location.search);
+const KIND = ['androidtv', 'firetv', 'web'].includes(q.get('kind')) ? q.get('kind') : 'web';
+const store = {
+  get(k) { try { return localStorage.getItem(k) || ''; } catch { return ''; } },
+  set(k, v) { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch {} },
+};
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const longDate = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : ''; };
+async function post(op, body) {
+  const r = await fetch(`/golf/api/tv/${op}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), cache: 'no-store' });
+  const j = await r.json().catch(() => ({})); return { status: r.status, ...j };
+}
+const show = (id) => { for (const v of ['pair', 'idle']) $(v).classList.toggle('on', v === id); $('board').hidden = id !== 'board'; };
+let timer = 0;
+const later = (fn, ms) => { clearTimeout(timer); timer = setTimeout(fn, ms); };
+
+// ---- not connected: show a code until someone types it in the Manager ----
+let pairing = null;
+async function pair() {
+  show('pair');
+  if (!pairing || Date.now() > pairing.exp - 15000) {
+    const r = await post('hello', { kind: KIND }).catch(() => null);
+    if (!r || !r.code) { $('pairmsg').textContent = r?.error || 'Can’t reach Flagcast. Check the TV’s internet.'; return later(pair, 15000); }
+    pairing = r; $('pairmsg').textContent = '';
+    $('code').innerHTML = [...r.code].map((c) => `<span>${esc(c)}</span>`).join('');
+  }
+  const mins = Math.max(0, Math.round((pairing.exp - Date.now()) / 60000));
+  $('expires').textContent = mins ? `New code in ${mins} min` : 'New code soon';
+  const w = await post('wait', { code: pairing.code, pair: pairing.pair }).catch(() => null);
+  if (w?.token) { store.set('fc.tv.token', w.token); pairing = null; return now(); }
+  if (w?.expired) pairing = null;
+  later(pair, 3000);
+}
+
+// ---- connected: what to show now ----
+let current = '', sponsorsFor = '';
+async function now() {
+  const token = store.get('fc.tv.token');
+  if (!token) return pair();
+  const r = await post('now', { token, today: today() }).catch(() => null);
+  $('offline').style.display = r ? 'none' : 'block';
+  if (!r) return later(now, 20000);
+  if (r.unpaired || r.status === 401) { store.set('fc.tv.token', ''); current = ''; $('board').src = 'about:blank'; return pair(); }
+  if (r.error) return later(now, 30000);
+  if (r.event) {
+    const src = `/g/${r.event.id}/board?screen=${encodeURIComponent(r.tv.id)}`;
+    if (current !== src) { current = src; $('board').src = src; }
+    show('board');
+  } else {
+    current = ''; $('board').src = 'about:blank';
+    idle(r);
+    show('idle');
+  }
+  later(now, (r.check || 60) * 1000);
+}
+
+function idle(r) {
+  const c = r.club || {};
+  document.documentElement.style.setProperty('--accent', c.accent || '#e8c547');
+  // the club's logo; Flagcast's only when the club has none
+  $('clublogo').src = c.logo || '/golf/brand/mark.svg';
+  $('welcome').textContent = c.name ? `Welcome to ${c.name}` : 'Welcome';
+  $('next').innerHTML = r.next ? `Next tournament: <b>${esc(r.next.name)}${r.next.date ? ` · ${esc(longDate(r.next.date))}` : ''}</b>` : '';
+  $('nextsmall').textContent = r.next ? 'Live scores show here on the day' : '';
+  // the next tournament's sponsors
+  const nid = r.next?.id || '';
+  if (nid !== sponsorsFor) {
+    sponsorsFor = nid; $('sponsors').classList.remove('on'); $('sprow').innerHTML = '';
+    if (nid) fetch(`/golf/api/${nid}/state`, { cache: 'no-store' }).then((x) => x.json()).then((s) => {
+      const list = (s.sponsors || []).slice(0, 6);
+      if (!list.length) return;
+      $('sprow').innerHTML = list.map((x) => x.logo ? `<img src="${esc(x.logo)}" alt="${esc(x.name)}">` : `<b>${esc(x.name)}</b>`).join('');
+      $('sponsors').classList.add('on');
+    }).catch(() => {});
+  }
+}
+const tick = () => { $('clock').textContent = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); };
+tick(); setInterval(tick, 15000);
+now();
+</script>
+</body>
+</html>

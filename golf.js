@@ -19,6 +19,7 @@ import { defaultHoles, courseHcp } from './public/golf/core.js';
 import { trackingOn } from './public/golf/gps.js';
 import { clubs } from './clubs.js';
 import { camPlaylist } from './stream.js';
+import { tv } from './tv.js';
 import { brandFor, logoOf, cleanLogo, decodeLogo, cleanPhoto, photoLinks, PHOTO_SLOT } from './brand.js';
 
 const ID = /^[a-z0-9]{8}$/;
@@ -92,6 +93,8 @@ export async function golf(request, env) {
     const j = await r.json().catch(() => ({}));
     return back(j.token ? `token=${encodeURIComponent(j.token)}` : `error=${encodeURIComponent(j.error || 'That Google sign-in didn’t work.')}`);
   }
+  // the Flagcast TV apps and the TV page (tv.js)
+  if (url.pathname.startsWith('/golf/api/tv/')) return cors(request, await tv(request, env));
   // NDI cameras on Cloudflare Stream: Flagcast's own HLS for them, with a rewind window and replay clips (stream.js).
   // Only for live inputs Flagcast made (the directory's streams table), so this can't relay anyone else's video.
   if ((m = url.pathname.match(/^\/golf\/api\/cam\/([0-9a-f]{32})\/(video|[va][0-9]{1,12})\.m3u8$/))) {
@@ -151,6 +154,14 @@ export function cleanMap(m) {
 }
 
 // the setup as the desk sends it, tidied so nothing odd gets stored
+// a Manager saves the whole setup, and one that loaded it before a club TV joined doesn't know that TV: keep the club's
+// TVs (removing one is done from the club's TV list, tv.js), and keep them marked as TVs whatever the app sends back
+function keepTVs(s, before) {
+  const tvs = (before || []).filter((d) => d.tv);
+  for (const d of s.displays) if (tvs.some((t) => t.id === d.id)) d.tv = true;
+  for (const t of tvs) if (!s.displays.some((d) => d.id === t.id) && s.displays.length < 20) s.displays.push(t);
+}
+
 function cleanSetup(s, old) {
   const holes = Array.from({ length: 18 }, (_, i) => {
     const h = (s.course?.holes || [])[i] || old.course.holes[i] || {};
@@ -218,6 +229,7 @@ function cleanSetup(s, old) {
     displays: (Array.isArray(s.displays) ? s.displays : []).slice(0, 20).map((d) => ({
       id: /^[a-z0-9]{3,12}$/.test(d.id || '') ? d.id : rand(5, 'abcdefghijkmnpqrstuvwxyz23456789'), name: clip(d.name, 40),
       where: clip(d.where, 40), group: clip(d.group, 24), // where it hangs ("Clubhouse bar") and a group to send to together ("Clubhouse")
+      ...(d.tv ? { tv: true } : {}), // one of the club's TVs (the Flagcast TV app, tv.js): it joins each tournament by itself
       playlist: (Array.isArray(d.playlist) ? d.playlist : []).slice(0, 30).filter((x) => PAGE_KINDS.includes(x.k)).map((x) => ({
         k: x.k, fl: clip(x.fl, 12), hole: num(x.hole, 0, 18, 0), sponsor: clip(x.sponsor, 12), secs: num(x.secs, 4, 300, 12) })),
     })),
@@ -335,6 +347,24 @@ export class GolfEvent extends DurableObject {
       await this.broadcast();
       return json({ ok: true, brand: brandFor(ev) });
     }
+    // the club's TVs (tv.js through the club directory). Never routed from the web.
+    // tvinfo: what a TV needs to pick today's tournament. tvjoin { tv: { id, name, where } }: the TV becomes one of this
+    // tournament's screens (so the Manager's screen controls and playlists work for it). tvleave { tv: id }: it's gone
+    if (op === 'tvinfo') return json({ name: ev.name, date: ev.date || '', locked: !!ev.locked, created: ev.created || 0, last: Math.max(0, ...Object.values(await this.scores()).flatMap((p) => Object.values(p).flatMap((arr) => arr.map((x) => (x ? x.at || 0 : 0))))) });
+    if (op === 'tvjoin' || op === 'tvleave') {
+      const t = b.tv || {}, id = op === 'tvjoin' ? t.id : b.tv;
+      if (!/^[a-z0-9]{3,12}$/.test(id || '')) return json({ error: 'Bad TV' }, 400);
+      ev.displays = ev.displays || [];
+      const have = ev.displays.find((d) => d.id === id);
+      if (op === 'tvleave') { if (!have) return json({ ok: true }); ev.displays = ev.displays.filter((d) => d.id !== id); }
+      else if (have) { if (!t.name || (have.name === clip(t.name, 40) && have.tv)) return json({ ok: true }); have.name = clip(t.name, 40); have.tv = true; if (t.where) have.where = clip(t.where, 40); }
+      else { if (ev.displays.length >= 20) return json({ error: 'This tournament already has 20 screens.' }, 409);
+        ev.displays.push({ id, name: clip(t.name, 40) || 'TV', where: clip(t.where, 40), group: '', tv: true, playlist: [] }); }
+      ev.v = (ev.v || 0) + 1;
+      await this.ctx.storage.put('event', ev);
+      await this.broadcast();
+      return json({ ok: true });
+    }
     if (op === 'cams') {
       ev.cams = cleanSetup({ cams: b.cams || {} }, ev).cams;
       await this.ctx.storage.put('event', ev);
@@ -408,6 +438,7 @@ export class GolfEvent extends DurableObject {
       let logo = ev.logo || '';
       if (b.setup?.logo !== undefined) { try { logo = cleanLogo(b.setup.logo); } catch (e) { return json({ error: e.message }, e.status || 400); } }
       const s = cleanSetup(b.setup || {}, ev);
+      keepTVs(s, ev.displays);
       s.cams = ev.cams || {};
       s.logo = logo; // camera links are Flagcast staff's (op 'cams' from Admin): a desk key can't change them
       Object.assign(ev, s, { v: (ev.v || 0) + 1 });

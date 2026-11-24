@@ -97,7 +97,9 @@ export class FlagcastClubs extends DurableObject {
       CREATE TABLE IF NOT EXISTS accounts (email TEXT PRIMARY KEY, hash TEXT, salt TEXT, iter INTEGER, apple TEXT, updated INTEGER);
       CREATE TABLE IF NOT EXISTS fails (k TEXT PRIMARY KEY, n INTEGER, since INTEGER);
       CREATE TABLE IF NOT EXISTS streams (event TEXT, hole INTEGER, uid TEXT, updated INTEGER, PRIMARY KEY (event, hole));
-      CREATE TABLE IF NOT EXISTS staff (email TEXT PRIMARY KEY, added INTEGER, by TEXT);`);
+      CREATE TABLE IF NOT EXISTS staff (email TEXT PRIMARY KEY, added INTEGER, by TEXT);
+      CREATE TABLE IF NOT EXISTS tvs (id TEXT PRIMARY KEY, club TEXT, name TEXT, place TEXT, kind TEXT, token TEXT, event TEXT, joined TEXT, added INTEGER, seen INTEGER);
+      CREATE TABLE IF NOT EXISTS tvcodes (code TEXT PRIMARY KEY, pair TEXT, kind TEXT, exp INTEGER, tv TEXT, token TEXT);`);
     // columns added after the first release
     for (const q of ['ALTER TABLE accounts ADD COLUMN google TEXT', 'ALTER TABLE clubs ADD COLUMN notes TEXT', 'ALTER TABLE events ADD COLUMN archived INTEGER DEFAULT 0', 'ALTER TABLE clubs ADD COLUMN course TEXT',
       'ALTER TABLE clubs ADD COLUMN logo TEXT', 'ALTER TABLE clubs ADD COLUMN accent TEXT', 'ALTER TABLE clubs ADD COLUMN powered INTEGER DEFAULT 0']) { try { this.sql.exec(q); } catch {} }
@@ -200,6 +202,7 @@ export class FlagcastClubs extends DurableObject {
 
   async route(op, b, local) {
     const env = this.env, now = Date.now();
+    if (op.startsWith('tv-')) return this.tvRoute(op.slice(3), b, now);
     // the course library (only reached from courses.js, never straight from the web)
     // is this live input one of Flagcast's cameras? (golf.js, before serving its playlists; never from the web)
     if (op === 'streamok') return json({ ok: !!this.one('SELECT hole FROM streams WHERE uid = ?', clip(b.uid, 40)) });
@@ -618,6 +621,103 @@ export class FlagcastClubs extends DurableObject {
   }
 
   mail(to, subject, text) { sendMail(this.env, to, subject, text).catch(() => {}); }
+
+  // ---- the club's TVs (tv.js): the Flagcast TV app on Apple TV, Google TV, Fire TV and Roku, or any TV browser ----
+  // A new TV asks for a 6-letter code (hello) and shows it; someone at the club types it in the Manager (add, with a
+  // tournament's desk key or a club sign-in); the TV, which keeps asking (wait), gets its own token. From then on the TV
+  // asks what to show (now): the tournament that's on today (it joins that tournament's screens), else the club's idle
+  // screen with the next tournament. Removing the TV in the Manager takes its token away and it shows a new code.
+  tvClub(b) {
+    if (b.token) { const u = this.who(b.token); if (!u.club) this.fail('Your email isn’t in a club yet.', 403); return u.club; }
+    const ev = this.one('SELECT * FROM events WHERE id = ?', clip(b.id, 8));
+    if (!ev || !b.key || !same(b.key, ev.key)) this.fail('This desk link is not right.', 403);
+    const c = this.one('SELECT * FROM clubs WHERE id = ?', ev.club); if (!c) this.fail('This tournament has no club.', 404);
+    return c;
+  }
+  tvRow(t) { return { id: t.id, name: t.name, where: t.place || '', kind: t.kind || '', event: t.event || '', added: t.added, seen: t.seen || 0, on: Date.now() - (t.seen || 0) < 3 * 60000 }; }
+  async tvRoute(op, b, now) {
+    const ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', KINDS = ['appletv', 'androidtv', 'firetv', 'roku', 'web'];
+    if (op === 'hello') { // a TV that isn't connected: a new code (10 minutes), 30 an hour from one network
+      const k = [[`tvh:${this.ip}`, 30]];
+      try { this.tooMany(k); } catch { this.fail('Too many new codes from this network. Wait 15 minutes.', 429); }
+      this.failed(k);
+      this.sql.exec('DELETE FROM tvcodes WHERE exp < ?', now);
+      let code; do code = rand(6, ABC); while (this.one('SELECT code FROM tvcodes WHERE code = ?', code));
+      const pair = rand(32, 'abcdefghijkmnpqrstuvwxyz23456789');
+      this.sql.exec('INSERT INTO tvcodes (code, pair, kind, exp, tv, token) VALUES (?, ?, ?, ?, ?, ?)', code, pair, KINDS.includes(b.kind) ? b.kind : 'web', now + 10 * 60000, '', '');
+      return json({ code, pair, exp: now + 10 * 60000 });
+    }
+    if (op === 'wait') { // the TV checks every few seconds; the token is handed over once
+      const c = this.one('SELECT * FROM tvcodes WHERE code = ?', clip(b.code, 6).toUpperCase());
+      if (!c || !same(b.pair, c.pair) || c.exp < now) return json({ error: 'That code ran out.', expired: true }, 410);
+      if (!c.token) return json({ waiting: true, exp: c.exp });
+      this.sql.exec('DELETE FROM tvcodes WHERE code = ?', c.code);
+      return json({ tv: c.tv, token: c.token });
+    }
+    if (op === 'add') {
+      const club = this.tvClub(b), code = clip(b.code, 8).toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const k = [[`tva:${club.id}`, 10]];
+      try { this.tooMany(k); } catch { this.fail('Too many wrong TV codes. Wait 15 minutes.', 429); }
+      const c = this.one('SELECT * FROM tvcodes WHERE code = ?', code);
+      if (!c || c.exp < now || c.token) { this.failed(k); this.fail('That code isn’t on a TV right now. Check the code on the TV, or restart the Flagcast app on it for a new one.', 404); }
+      if (this.one('SELECT COUNT(*) AS n FROM tvs WHERE club = ?', club.id).n >= 40) this.fail('Your club already has 40 TVs. Remove one first.', 409);
+      const id = rand(8, 'abcdefghijkmnpqrstuvwxyz23456789'), token = rand(40, 'abcdefghijkmnpqrstuvwxyz23456789ABCDEFGHJKLMNPQRSTUVWXYZ');
+      const name = clip(b.name, 40) || `TV ${this.one('SELECT COUNT(*) AS n FROM tvs WHERE club = ?', club.id).n + 1}`;
+      this.sql.exec('INSERT INTO tvs (id, club, name, place, kind, token, event, joined, added, seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', id, club.id, name, clip(b.where, 40), c.kind, token, '', '', now, 0);
+      this.sql.exec('UPDATE tvcodes SET tv = ?, token = ? WHERE code = ?', id, token, code);
+      this.note(b.token ? this.who(b.token).email : 'Manager', club.id, `Added a TV: ${name}`);
+      return json({ ok: true, tv: this.tvRow(this.one('SELECT * FROM tvs WHERE id = ?', id)), tvs: this.all('SELECT * FROM tvs WHERE club = ? ORDER BY added', club.id).map((t) => this.tvRow(t)) });
+    }
+    if (op === 'list' || op === 'edit' || op === 'remove') {
+      const club = this.tvClub(b), t = b.tv ? this.one('SELECT * FROM tvs WHERE id = ? AND club = ?', clip(b.tv, 12), club.id) : null;
+      if (op !== 'list' && !t) this.fail('That TV isn’t in your club.', 404);
+      if (op === 'edit') {
+        const ev = b.event === undefined ? t.event : (b.event && this.one('SELECT id FROM events WHERE id = ? AND club = ?', clip(b.event, 8), club.id) ? clip(b.event, 8) : '');
+        this.sql.exec('UPDATE tvs SET name = ?, place = ?, event = ? WHERE id = ?', clip(b.name ?? t.name, 40) || t.name, clip(b.where ?? t.place, 40), ev, t.id);
+        if (t.joined) await this.golf(t.joined, 'tvjoin', { tv: { id: t.id, name: clip(b.name ?? t.name, 40) || t.name, where: clip(b.where ?? t.place, 40) } }).catch(() => {});
+      }
+      if (op === 'remove') {
+        this.sql.exec('DELETE FROM tvs WHERE id = ?', t.id);
+        if (t.joined) await this.golf(t.joined, 'tvleave', { tv: t.id }).catch(() => {});
+        this.note('Manager', club.id, `Removed a TV: ${t.name}`);
+      }
+      return json({ tvs: this.all('SELECT * FROM tvs WHERE club = ? ORDER BY added', club.id).map((x) => this.tvRow(x)) });
+    }
+    if (op === 'now') { // a connected TV: what it shows now
+      const t = b.token && this.one('SELECT * FROM tvs WHERE token = ?', clip(b.token, 60));
+      if (!t || !same(b.token, t.token)) return json({ error: 'This TV isn’t connected to a club.', unpaired: true }, 401);
+      const club = this.one('SELECT * FROM clubs WHERE id = ?', t.club);
+      if (!club) return json({ error: 'This TV isn’t connected to a club.', unpaired: true }, 401);
+      if (now - (t.seen || 0) > 60000) this.sql.exec('UPDATE tvs SET seen = ? WHERE id = ?', now, t.id);
+      const today = /^\d{4}-\d{2}-\d{2}$/.test(b.today || '') ? b.today : new Date(now).toISOString().slice(0, 10);
+      const list = await this.tvEvents(club.id, now);
+      // a tournament the club picked for this TV; else today's (or one scored in the last three hours); else none
+      const pinned = t.event && list.find((e) => e.id === t.event);
+      const live = pinned || list.filter((e) => e.date === today || e.last > now - 3 * 3600000).sort((a, b2) => (b2.date === today) - (a.date === today) || b2.created - a.created)[0] || null;
+      const next = live ? null : list.filter((e) => e.date > today).sort((a, b2) => a.date.localeCompare(b2.date))[0] || null;
+      if (live && t.joined !== live.id) {
+        try { await this.golf(live.id, 'tvjoin', { tv: { id: t.id, name: t.name, where: t.place || '' } }); this.sql.exec('UPDATE tvs SET joined = ? WHERE id = ?', live.id, t.id); }
+        catch { /* the tournament is full of screens: the TV still plays the board, with the usual pages */ }
+      }
+      const logo = this.logoURL(club);
+      return json({ tv: { id: t.id, name: t.name, where: t.place || '' },
+        club: { name: club.name, city: club.city || '', logo, accent: club.accent || '', flagcast: !logo },
+        event: live ? { id: live.id, name: live.name, date: live.date } : null,
+        next: next ? { id: next.id, name: next.name, date: next.date } : null, check: live ? 30 : 60 });
+    }
+    this.fail('Not found', 404);
+  }
+  // the club's latest tournaments with their dates, kept for a minute (every TV at the club asks every minute)
+  async tvEvents(cid, now) {
+    this.tvCache = this.tvCache || new Map();
+    const hit = this.tvCache.get(cid); if (hit && now - hit.at < 60000) return hit.list;
+    const rows = this.all('SELECT id, name, created FROM events WHERE club = ? AND hidden = 0 AND archived = 0 ORDER BY created DESC LIMIT 8', cid);
+    const list = (await Promise.all(rows.map(async (e) => {
+      try { const i = await this.golf(e.id, 'tvinfo', {}); return { id: e.id, name: i.name || e.name, date: i.date || '', locked: !!i.locked, last: i.last || 0, created: e.created || 0 }; } catch { return null; }
+    }))).filter(Boolean);
+    if (this.tvCache.size > 200) this.tvCache.clear();
+    this.tvCache.set(cid, { at: now, list }); return list;
+  }
 
   me(u) {
     const acct = this.one('SELECT hash, apple, google FROM accounts WHERE email = ?', u.email);

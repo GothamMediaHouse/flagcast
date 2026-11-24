@@ -16,6 +16,8 @@ export default {
     // the old name's domain and www forward to flagcast.app
     if (FORWARD.includes(url.hostname)) return Response.redirect(`https://${HOME}${url.pathname}${url.search}`, 301);
     if (url.pathname === '/api/contact') return contact(request, env);
+    // a short address to type on a TV's browser: the Flagcast TV page
+    if (url.pathname === '/tv' || url.pathname === '/tv/') return Response.redirect(`${url.origin}/golf/tv/`, 302);
     if (url.pathname === '/golf/api/courses' || url.pathname.startsWith('/golf/api/courses/')) return courses(request, env, ctx);
     if (url.pathname.startsWith('/golf/api/') || url.pathname.startsWith('/g/')) { const r = await golf(request, env); if (r) return r; }
     if (/^\/(download\/[a-z]|api\/[a-z]+\/latest|updates\/)/.test(url.pathname)) { const r = await downloads(request, env, ctx); if (r) return r; }
