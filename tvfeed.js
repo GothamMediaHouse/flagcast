@@ -24,7 +24,7 @@ export function tvFeed(S, screenId, origin = 'https://flagcast.app') {
       sub: `${fl ? `Flight ${fl}` : FORMATS[S.format?.type] || ''} · ${mode}${S.locked ? ' · Final results' : ''}`,
       page: p + 1, pages, sponsor: lsp ? sponsorOf(lsp) : null, points: stab,
       rows: lb.slice(p * rows, p * rows + rows).map((l) => ({ pos: String(l.pos), name: l.name, sub: l.sub && l.sub !== l.name ? l.sub : '',
-        score: l.played ? fmtPar(l.score, stab).replace(' pts', '') : '—', under: !stab && l.played && l.score < 0, thru: String(l.thru || '').replace('Starts ', '#') })),
+        score: l.played ? fmtPar(l.score, stab).replace(' pts', '') : '—', under: !stab && !!l.played && l.score < 0, thru: String(l.thru || '').replace('Starts ', '#') })),
     }));
   };
   const camPage = (n, secs) => {
