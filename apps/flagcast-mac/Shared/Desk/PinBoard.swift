@@ -205,6 +205,7 @@ struct PinGreenShape: Shape {
     }
 }
 
+#if os(macOS)
 /// The Mac's Pin sheet page: the course photo, the title, and the board (pins save on their own, no Save button).
 struct PinsView: View {
     let doc: DeskDoc
@@ -224,3 +225,4 @@ struct PinsView: View {
         }
     }
 }
+#endif
