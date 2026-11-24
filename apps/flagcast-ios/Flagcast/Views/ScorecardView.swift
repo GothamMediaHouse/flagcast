@@ -45,7 +45,19 @@ struct ScorecardScreen: View {
         .sheet(item: $camera) { l in CameraSheet(link: l, replays: model.state?.replays.filter { $0.hole == l.hole } ?? []) }
     }
 
-    private var syncPill: some View {
+    @ViewBuilder private var syncPill: some View {
+        if model.synced {
+            Image(systemName: "checkmark").font(.system(size: 12, weight: .heavy))
+                .frame(width: 26, height: 26)
+                .background(Color(UIColor(hex: 0x5cc48a)).opacity(0.2), in: Circle())
+                .foregroundStyle(Color(UIColor(hex: 0x8fe0b0)))
+                .accessibilityLabel("All scores saved")
+        } else {
+            syncWaiting
+        }
+    }
+
+    private var syncWaiting: some View {
         HStack(spacing: 5) {
             Circle().fill(model.synced ? Color(UIColor(hex: 0x5cc48a)) : Color.fcFlag).frame(width: 7, height: 7)
             Text(model.synced ? "Saved" : model.syncText).lineLimit(1)
@@ -69,7 +81,7 @@ struct ScorecardScreen: View {
         let h = model.currentHole()
         let H = s.course.holes[h - 1]
         return VStack(spacing: 0) {
-            TourHeader(state: s, title: s.title, subtitle: "Cart \(model.code) · " + s.scorers(t).map { Fmt.firstName($0.name) }.joined(separator: " & ")) {
+            TourHeader(state: s, title: s.title, subtitle: s.scorers(t).map { Fmt.firstName($0.name) }.joined(separator: " & ")) {
                 syncPill
             } below: {
                 VStack(spacing: 10) {
@@ -84,7 +96,7 @@ struct ScorecardScreen: View {
             }
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 10) {
                         if page == .hole { holePage(s, t, h, H).id("top") } else { roundPage(s, t) }
                     }
                     .padding(16)
@@ -127,6 +139,13 @@ struct ScorecardScreen: View {
         HolePhotoHeader(state: s, hole: H)
         VStack(spacing: 0) {
             let ps = s.scorers(t)
+            HStack {
+                Text("Scores")
+                Spacer()
+                if !s.locked { Text("Tap the number for par") }
+            }
+            .font(.caption2.weight(.semibold)).tracking(0.8).textCase(.uppercase).foregroundStyle(Color.fcMuted)
+            .padding(.top, 12)
             ForEach(Array(ps.enumerated()), id: \.element.id) { i, p in
                 playerRow(s, p, H)
                 if i < ps.count - 1 { Divider().overlay(Color.fcLine) }
@@ -193,7 +212,11 @@ struct ScorecardScreen: View {
         }
 
         VStack(alignment: .leading, spacing: 8) {
-            Text("Your card").fcLabel()
+            HStack {
+                Text("Your card").fcLabel()
+                Spacer()
+                Text("Cart \(model.code)").font(.caption.monospaced()).foregroundStyle(Color.fcMuted)
+            }
             CardGrid(holes: s.course.holes.filter { Core.playHoles(s).contains($0.n) },
                      rows: s.scorers(t).map { p in (Fmt.firstName(p.name), (model.myScores()[t.id]?[p.id]) ?? []) },
                      showTotal: true)
@@ -302,57 +325,52 @@ struct ScorecardScreen: View {
         let shown = !set ? "\(H.par)" : v == 0 ? "PU" : "\(v!)"
         let m = Core.mark(v, H.par)
         let under = m == .birdie || m == .eagle
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(p.name).font(.title3.weight(.bold)).lineLimit(1).minimumScaleFactor(0.7)
+        return HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(p.name).font(.title3.weight(.bold)).lineLimit(1).minimumScaleFactor(0.7)
+                HStack(spacing: 12) {
+                    if st > 0 { Text(String(repeating: "●", count: st)).foregroundStyle(Color.fcRed) + Text(" \(st) stroke\(st > 1 ? "s" : "")") }
+                    else if st < 0 { Text("gives a stroke back") }
                     Group {
-                        if st > 0 { Text(String(repeating: "●", count: st)).foregroundStyle(Color.fcRed) + Text(" gets \(st) stroke\(st > 1 ? "s" : "") here") }
-                        else if st < 0 { Text("gives a stroke back") }
-                        else if !set { Text("Tap the number for par") }
-                        else { Text("no strokes here") }
+                        Button("Picked up") { withAnimation { model.pickedUp(p.id) } }
+                        if set { Button("Clear") { withAnimation { model.clear(p.id) } } }
                     }
-                    .font(.footnote).foregroundStyle(Color.fcMuted)
-                    if let ix = p.index {
-                        // GHIN: Handicap Index, tee and the course handicap the server worked out from them
-                        let tee = s.course.tees.first { $0.id == p.tee }?.name ?? ""
-                        Text("Index \(Core.fmtIndex(ix))\(tee.isEmpty ? "" : " · \(tee)") · CH \(Core.fmtIndex(p.hcp))")
-                            .font(.caption2.monospaced()).foregroundStyle(Color.fcMuted).lineLimit(1).minimumScaleFactor(0.75)
+                    .fontWeight(.semibold).tint(Color.fcPrimary).buttonStyle(.borderless)
+                }
+                .font(.footnote).foregroundStyle(Color.fcMuted).lineLimit(1).minimumScaleFactor(0.8)
+                if let ix = p.index {
+                    // GHIN: Handicap Index, tee and the course handicap the server worked out from them
+                    let tee = s.course.tees.first { $0.id == p.tee }?.name ?? ""
+                    Text("Index \(Core.fmtIndex(ix))\(tee.isEmpty ? "" : " · \(tee)") · CH \(Core.fmtIndex(p.hcp))")
+                        .font(.caption2.monospaced()).foregroundStyle(Color.fcMuted).lineLimit(1).minimumScaleFactor(0.75)
+                }
+            }
+            Spacer(minLength: 2)
+            stepButton("minus", "One fewer for \(p.name)") { model.step(p.id, -1) }
+            Button { model.step(p.id, 0) } label: {
+                Text(shown)
+                    .font(FCType.display(v == 0 ? 26 : 38))
+                    .frame(width: 56, height: 56)
+                    .foregroundStyle(!set ? Color.fcMuted : under ? Color.fcRed : Color.fcInk)
+                    .background {
+                        if under { Circle().stroke(Color.fcRed, lineWidth: 3) }
+                        else if m == .bogey || m == .double { RoundedRectangle(cornerRadius: 12).stroke(Color.fcInk, lineWidth: m == .double ? 3 : 2) }
+                        else if set { Circle().fill(Color.fcPaper2) }
+                        else { RoundedRectangle(cornerRadius: 14).stroke(Color.fcLine, style: StrokeStyle(lineWidth: 2, dash: [5, 4])) }
                     }
-                }
-                Spacer(minLength: 2)
-                stepButton("minus", "One fewer for \(p.name)") { model.step(p.id, -1) }
-                Button { model.step(p.id, 0) } label: {
-                    Text(shown)
-                        .font(FCType.display(v == 0 ? 30 : 42))
-                        .frame(width: 62, height: 62)
-                        .foregroundStyle(!set ? Color.fcMuted : under ? Color.fcRed : Color.fcInk)
-                        .background {
-                            if under { Circle().stroke(Color.fcRed, lineWidth: 3) }
-                            else if m == .bogey || m == .double { RoundedRectangle(cornerRadius: 12).stroke(Color.fcInk, lineWidth: m == .double ? 3 : 2) }
-                            else if set { Circle().fill(Color.fcPaper2) }
-                            else { RoundedRectangle(cornerRadius: 14).stroke(Color.fcLine, style: StrokeStyle(lineWidth: 2, dash: [5, 4])) }
-                        }
-                        .contentTransition(.numericText())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(set ? "\(p.name) score \(shown)" : "Tap to enter par for \(p.name)")
-                stepButton("plus", "One more for \(p.name)") { model.step(p.id, 1) }
+                    .contentTransition(.numericText())
             }
-            HStack(spacing: 14) {
-                Spacer()
-                if set { Button("Clear") { withAnimation { model.clear(p.id) } } }
-                Button("Picked up") { withAnimation { model.pickedUp(p.id) } }
-            }
-            .font(.footnote.weight(.semibold)).tint(Color.fcPrimary)
+            .buttonStyle(.plain)
+            .accessibilityLabel(set ? "\(p.name) score \(shown)" : "Tap to enter par for \(p.name)")
+            stepButton("plus", "One more for \(p.name)") { model.step(p.id, 1) }
         }
-        .padding(.vertical, 14)
+        .padding(.vertical, 10)
         .animation(.snappy(duration: 0.2), value: v)
     }
 
     private func stepButton(_ icon: String, _ label: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon).font(.title2.weight(.semibold)).frame(width: 52, height: 52)
+            Image(systemName: icon).font(.title2.weight(.semibold)).frame(width: 46, height: 46)
                 .background(Color.fcPaper2, in: Circle())
                 .foregroundStyle(Color.fcInk)
         }
@@ -363,9 +381,10 @@ struct ScorecardScreen: View {
     private func bottomBar(_ t: Team, _ h: Int) -> some View {
         let ord = model.order(t), i = ord.firstIndex(of: h) ?? 0, last = ord.count - 1
         return HStack(spacing: 10) {
-            Button { model.hole = ord[max(0, i - 1)] } label: { Text(i == 0 ? "Back" : "Hole \(ord[max(0, i - 1)])") }
+            Button { model.hole = ord[max(0, i - 1)] } label: { Label(i == 0 ? "Back" : "\(ord[max(0, i - 1)])", systemImage: "chevron.left").labelStyle(LeadingIcon()) }
                 .buttonStyle(.fcPlain).disabled(i == 0)
-                .frame(maxWidth: 130)
+                .frame(width: 76)
+                .accessibilityLabel(i == 0 ? "Back" : "Back to hole \(ord[max(0, i - 1)])")
             Button {
                 if i == last { page = .round; return }
                 if let s = model.state {
@@ -379,7 +398,7 @@ struct ScorecardScreen: View {
             }
             .buttonStyle(.fcDark)
         }
-        .padding(.horizontal, 16).padding(.vertical, 10)
+        .padding(.horizontal, 16).padding(.vertical, 8)
         .background(Color.fcPaper)
     }
 }
@@ -393,6 +412,10 @@ struct YouTag: View {
             .foregroundStyle(Color.fcOnFlag)
             .accessibilityLabel("Your team")
     }
+}
+
+struct LeadingIcon: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View { HStack(spacing: 3) { configuration.icon.font(.footnote.weight(.bold)); configuration.title } }
 }
 
 struct TrailingIcon: LabelStyle {
@@ -459,19 +482,17 @@ struct HolePhotoHeader: View {
                 .overlay { if let photo { Image(uiImage: photo).resizable().aspectRatio(contentMode: .fill).transition(.opacity) } }
                 .clipped()
             LinearGradient(colors: [Color.fcScrim.opacity(0.85), Color.fcScrim.opacity(0.25), Color.fcScrim.opacity(0)], startPoint: .leading, endPoint: .trailing)
-            VStack(alignment: .leading, spacing: 0) {
-                Text("Hole \(hole.n)").font(FCType.display(56)).textCase(.uppercase).lineLimit(1).minimumScaleFactor(0.6)
-                Spacer(minLength: 8)
-                HStack(spacing: 18) {
-                    stat("Par", "\(hole.par)")
-                    if hole.yds > 0 { stat("Yards", "\(hole.yds)") }
-                    stat("Index", "\(hole.hcp)")
-                }
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Hole \(hole.n)").font(FCType.display(46)).textCase(.uppercase).lineLimit(1).minimumScaleFactor(0.6)
+                Spacer(minLength: 0)
+                (stat("Par", "\(hole.par)", first: true) + (hole.yds > 0 ? Text("  ·  ") + Text("\(hole.yds)").font(FCType.display(20)).foregroundColor(.white) + Text(" Yds") : Text("")) + Text("  ·  ") + stat("Index", "\(hole.hcp)"))
+                    .font(.footnote.weight(.semibold)).tracking(0.8).textCase(.uppercase).foregroundStyle(Color(UIColor(hex: 0xd4e1d8)))
+                    .lineLimit(1).minimumScaleFactor(0.7)
             }
             .foregroundStyle(.white).shadow(color: .black.opacity(0.35), radius: 6, y: 1)
-            .padding(16)
+            .padding(.horizontal, 16).padding(.vertical, 12)
         }
-        .frame(height: 178)
+        .frame(height: 112)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .shadow(color: Color.fcScrim.opacity(0.10), radius: 10, y: 4)
         .animation(.easeOut(duration: 0.35), value: photo != nil)
@@ -481,10 +502,7 @@ struct HolePhotoHeader: View {
         }
         .accessibilityElement(children: .combine)
     }
-    private func stat(_ label: String, _ v: String) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(label).font(.caption2.weight(.semibold)).tracking(1).textCase(.uppercase).foregroundStyle(Color(UIColor(hex: 0xa9bdb0)))
-            Text(v).font(FCType.display(30))
-        }
+    private func stat(_ label: String, _ v: String, first: Bool = false) -> Text {
+        Text("\(label) ") + Text(v).font(FCType.display(20)).foregroundColor(.white)
     }
 }

@@ -14,14 +14,14 @@ struct GPSCard: View {
 
     var body: some View {
         let h = state.map.holes[hole]
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             if let h, Geo.middle(h) != nil {
                 let me = loc.fix?.at
                 let o = Geo.origin(h, me)
                 let y = o.map { Geo.yardages(h, from: $0.at) }
                 HStack(spacing: 6) {
                     yard("Front", y?.f, big: false)
-                    yard(o?.me == true ? "To the middle" : "Middle, from tee", y?.m, big: true)
+                    yard(o?.me == true ? "To the middle" : "Middle", y?.m, big: true)
                     yard("Back", y?.b, big: false)
                 }
                 if let hz = y?.hz, !hz.isEmpty {
@@ -70,11 +70,11 @@ struct GPSCard: View {
         VStack(spacing: 3) {
             Text(label).font(.caption2.weight(.semibold)).tracking(0.8).textCase(.uppercase).lineLimit(1).minimumScaleFactor(0.7)
                 .foregroundStyle(big ? Color.fcFlag : Color.fcMuted)
-            Text(v.map(String.init) ?? "—").font(FCType.display(big ? 50 : 32)).monospacedDigit()
+            Text(v.map(String.init) ?? "—").font(FCType.display(big ? 42 : 28)).monospacedDigit()
                 .foregroundStyle(big ? Color.white : Color.fcInk)
                 .contentTransition(.numericText())
         }
-        .frame(maxWidth: .infinity).padding(.vertical, big ? 8 : 4)
+        .frame(maxWidth: .infinity).padding(.vertical, big ? 6 : 2)
         .background(big ? Color(UIColor(hex: 0x123628)) : .clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .accessibilityElement(children: .combine)
     }
@@ -500,7 +500,7 @@ struct CourseView: View {
             Text(v.map(String.init) ?? "—").font(FCType.display(big ? 52 : 34)).monospacedDigit().foregroundStyle(.white)
                 .contentTransition(.numericText())
         }
-        .frame(maxWidth: .infinity).padding(.vertical, big ? 8 : 4)
+        .frame(maxWidth: .infinity).padding(.vertical, big ? 6 : 2)
         .background(big ? Color(UIColor(hex: 0x123628)) : .clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .accessibilityElement(children: .combine)
     }
