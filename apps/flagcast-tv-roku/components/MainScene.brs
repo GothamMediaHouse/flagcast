@@ -12,9 +12,9 @@ sub init()
     m.video = invalid
     m.top.findNode("tick").observeField("fire", "onTick")
     m.top.findNode("tick").control = "start"
-    m.top.findNode("again").observeField("fire", "step")
+    m.top.findNode("again").observeField("fire", "nextStep")
     m.top.setFocus(true)
-    step()
+    nextStep()
 end sub
 
 ' ---- talking to flagcast.app ----
@@ -51,7 +51,7 @@ function token() as String
 end function
 
 ' what to do next: connected → now; else a code (hello) or keep waiting for it (wait)
-sub step()
+sub nextStep()
     if token() <> ""
         call("now", { token: token(), today: today(), feed: 1 })
     else if m.pairing = invalid
@@ -83,7 +83,7 @@ sub onResult()
             m.reg.Write("token", j.token)
             m.reg.Flush()
             m.pairing = invalid
-            step()
+            nextStep()
         else
             if s = 410 then m.pairing = invalid
             later(3)
@@ -94,7 +94,7 @@ sub onResult()
             m.reg.Flush()
             m.pairing = invalid
             stopVideo()
-            step()
+            nextStep()
         else if s = 200 and j.tv <> invalid
             if j.event <> invalid and j.feed <> invalid
                 showBoard(j.feed)
@@ -184,7 +184,10 @@ sub showBoard(f as Object)
     ' new pages: keep the page on screen if it's still there (scores refresh in place), else start again
     key = ""
     for each p in f.pages
-        key = key + p.k + "|" + str(p.page) + ","
+        key = key + p.k + "|"
+        if p.page <> invalid then key = key + p.page.ToStr()
+        if p.hole <> invalid then key = key + "h" + p.hole.ToStr()
+        key = key + ","
     end for
     m.pages = f.pages
     if m.pages.Count() = 0 then m.pages = [{ k: "empty", secs: 30, text: "Scores will show here once the first group is out." }]
@@ -255,11 +258,11 @@ sub drawPage(fresh as Boolean)
         bg = stage.createChild("Rectangle") : bg.translation = [30, 30] : bg.width = 520 : bg.height = 60 : bg.color = "0xC6362BFF"
         addLabel(stage, tag, 50, 38, 500, 32, "0xFFFFFFFF", true)
     else if p.k = "sponsor"
-        addLabel(stage, "THANK YOU TO", 0, 160, 1920, 28, "0x8FA596FF", false).horizAlign = "center"
+        addLabel(stage, "THANK YOU TO", 0, 160, 1920, 28, "0x8FA596FF", false, "center")
         addSponsor(stage, p, 560, 260, 800, 360)
-        if p.line <> invalid and p.line <> "" then addLabel(stage, p.line, 100, 680, 1720, 38, "0xC9D6CCFF", false).horizAlign = "center"
+        if p.line <> invalid and p.line <> "" then addLabel(stage, p.line, 100, 680, 1720, 38, "0xC9D6CCFF", false, "center")
     else if p.k = "sponsors"
-        addLabel(stage, "THANKS TO OUR SPONSORS", 0, 80, 1920, 60, "0xEEF3ECFF", true).horizAlign = "center"
+        addLabel(stage, "THANKS TO OUR SPONSORS", 0, 80, 1920, 60, "0xEEF3ECFF", true, "center")
         n = p.list.Count()
         cols = 4
         if n < 4 then cols = n
@@ -270,13 +273,13 @@ sub drawPage(fresh as Boolean)
             addSponsor(stage, p.list[i], 100 + col * w + 20, 240 + row * 200, w - 40, 160)
         end for
     else if p.k = "phone"
-        addLabel(stage, UCase(p.text), 0, 260, 1920, 84, "0xEEF3ECFF", true).horizAlign = "center"
-        addLabel(stage, "Open this on your phone. No app needed: the leaderboard, par 3 cameras and replays.", 200, 420, 1520, 36, "0xC9D6CCFF", false).horizAlign = "center"
-        addLabel(stage, Mid(p.url, 9), 0, 560, 1920, 64, m.accent, true).horizAlign = "center"
+        addLabel(stage, UCase(p.text), 0, 260, 1920, 84, "0xEEF3ECFF", true, "center")
+        addLabel(stage, "Open this on your phone. No app needed: the leaderboard, par 3 cameras and replays.", 200, 420, 1520, 36, "0xC9D6CCFF", false, "center")
+        addLabel(stage, Mid(p.url, 9), 0, 560, 1920, 64, m.accent, true, "center")
     else
         t = "Scores will show here once the first group is out."
         if p.text <> invalid then t = p.text
-        addLabel(stage, t, 0, 420, 1920, 40, "0x8FA596FF", false).horizAlign = "center"
+        addLabel(stage, t, 0, 420, 1920, 40, "0x8FA596FF", false, "center")
     end if
 end sub
 
@@ -287,14 +290,14 @@ sub drawLeaderboard(stage as Object, p as Object)
         addLabel(stage, "Presented by", 1290, 86, 220, 24, "0x8FA596FF", false)
         addSponsor(stage, p.sponsor, 1520, 50, 340, 80)
     else if p.pages > 1
-        addLabel(stage, "Page " + p.page.ToStr() + " of " + p.pages.ToStr(), 1500, 90, 360, 26, "0x8FA596FF", false).horizAlign = "right"
+        addLabel(stage, "Page " + p.page.ToStr() + " of " + p.pages.ToStr(), 1500, 90, 360, 26, "0x8FA596FF", false, "right")
     end if
     head = "TO PAR"
     if p.points = true then head = "POINTS"
     addLabel(stage, "POS", 80, 160, 120, 22, "0x8FA596FF", false)
     addLabel(stage, "TEAM", 200, 160, 900, 22, "0x8FA596FF", false)
-    addLabel(stage, head, 1460, 160, 200, 22, "0x8FA596FF", false).horizAlign = "right"
-    addLabel(stage, "THRU", 1680, 160, 160, 22, "0x8FA596FF", false).horizAlign = "right"
+    addLabel(stage, head, 1460, 160, 200, 22, "0x8FA596FF", false, "right")
+    addLabel(stage, "THRU", 1680, 160, 160, 22, "0x8FA596FF", false, "right")
     rule = stage.createChild("Rectangle") : rule.translation = [60, 196] : rule.width = 1800 : rule.height = 3 : rule.color = "0x1D3328FF"
     rows = p.rows
     h = 66
@@ -311,13 +314,14 @@ sub drawLeaderboard(stage as Object, p as Object)
         addLabel(stage, r.name, 200, ty, 1220, 40, "0xEEF3ECFF", true)
         col = "0xEEF3ECFF"
         if r.under = true then col = "0xFF6B5EFF"
-        addLabel(stage, r.score, 1460, ty - 2, 200, 44, col, true).horizAlign = "right"
-        addLabel(stage, r.thru, 1680, ty + 2, 160, 34, "0xC9D6CCFF", true).horizAlign = "right"
+        addLabel(stage, r.score, 1460, ty - 2, 200, 44, col, true, "right")
+        addLabel(stage, r.thru, 1680, ty + 2, 160, 34, "0xC9D6CCFF", true, "right")
     end for
 end sub
 
-function addLabel(parent as Object, text as String, x as Integer, y as Integer, w as Integer, size as Integer, color as String, bold as Boolean) as Object
+function addLabel(parent as Object, text as String, x as Integer, y as Integer, w as Integer, size as Integer, color as String, bold as Boolean, align = "left" as String) as Object
     l = parent.createChild("Label")
+    l.horizAlign = align
     l.text = text
     l.translation = [x, y]
     l.width = w
@@ -338,15 +342,14 @@ sub addSponsor(parent as Object, s as Object, x as Integer, y as Integer, w as I
         po.loadDisplayMode = "scaleToFit"
         po.uri = s.logo
     else
-        l = addLabel(parent, s.name, x, y + Int(h / 2) - 26, w, 48, "0xEEF3ECFF", true)
-        l.horizAlign = "center"
+        addLabel(parent, s.name, x, y + Int(h / 2) - 26, w, 48, "0xEEF3ECFF", true, "center")
     end if
 end sub
 
 ' OK on the remote: check now (handy if a TV looks stuck)
 function onKeyEvent(key as String, press as Boolean) as Boolean
     if press and key = "OK"
-        step()
+        nextStep()
         return true
     end if
     return false
