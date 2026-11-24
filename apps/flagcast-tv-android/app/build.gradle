@@ -1,0 +1,16 @@
+// Flagcast TV for Google TV, Android TV and Fire TV: a full-screen WebView of flagcast.app/golf/tv/ (the TV page in
+// public/golf/tv/). No libraries. Each release: change versionName; versionCode must go up for Google Play and Amazon.
+plugins { id 'com.android.application' }
+android {
+    namespace 'app.flagcast.tv'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'app.flagcast.tv'
+        minSdk 24
+        targetSdk 36
+        versionCode 1
+        versionName '1.0.0'
+    }
+    buildTypes { release { minifyEnabled false } }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
