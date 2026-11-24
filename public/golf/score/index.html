@@ -261,16 +261,13 @@ const sideOK = () => S && S.sideGames !== false && S.format.type !== 'scramble';
 const whereOK = () => S && (trackingOn(S) || mapped(S));
 let gmap = null;
 function renderWhere() {
-  $('strip').hidden = true; $('bar').hidden = true; $('tabs').hidden = true;
   if (gmap) return gmap.refresh();
-  $('main').innerHTML = `<div class="sg"><h2>Where everyone is</h2><div id="gmHost"></div>
-    <button class="btn primary" style="width:100%;margin-top:16px;padding:14px" data-view="card">Back to the scorecard</button></div>`;
-  gmap = groupsMap($('gmHost'), { state: () => S, code, team: () => teamId, hole: () => hole });
+  gmap = groupsMap({ state: () => S, code, team: () => teamId, hole: () => hole, onClose: () => { view = 'card'; render(); } });
 }
 function render() {
   if (!S) return;
   if (view === 'where' && whereOK()) return renderWhere();
-  if (gmap) { gmap.destroy(); gmap = null; }
+  if (gmap) { gmap.destroy(); gmap = null; view = 'card'; }
   if (view === 'side' && sideOK()) return renderSide();
   $('strip').hidden = false;
   $('evname').textContent = S.screens?.title || S.name || 'Scorecard';
@@ -320,7 +317,7 @@ function render() {
       <div style="text-align:right"><div class="label">Position</div><div class="big">${lb && lb.pos ? lb.pos : '—'}</div></div></div>
     <a class="btn" style="width:100%;margin-top:10px" href="/g/${eventId()}">Full leaderboard</a>
     ${sideOK() ? `<button class="btn" style="width:100%;margin-top:10px" data-view="side">Side games${sideOn() ? ' · playing' : ''}</button>` : ''}
-    ${whereOK() ? `<button class="btn" style="width:100%;margin-top:10px" data-view="where">Where everyone is</button>` : ''}
+    ${whereOK() ? `<button class="btn" style="width:100%;margin-top:10px" data-view="where">See everyone on the course</button>` : ''}
     <div class="card"><table><thead><tr><th>Hole</th>${holes.filter(inRound).map((h) => `<th>${h.n}</th>`).join('')}<th>Tot</th></tr>
       <tr><th>Par</th>${holes.filter(inRound).map((h) => `<th>${h.par}</th>`).join('')}<th>${holes.filter(inRound).reduce((a, h) => a + h.par, 0)}</th></tr></thead>
       <tbody>${ps.map((p) => { const arr = mine[p.id] || []; const tot = arr.reduce((a, v) => a + (v > 0 ? v : 0), 0);
