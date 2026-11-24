@@ -445,6 +445,7 @@ export class GolfEvent extends DurableObject {
     if (b.op === 'hello') return json({ name: who.name, role: who.role });
     if (!(who.role === 'pro' ? DAY_OPS : MARSHAL_OPS).has(b.op)) return json({ error: 'Your PIN can’t make that change. Ask the golf pro.' }, 403);
     if (who.role !== 'pro') { delete b.screens; delete b.remove; } // marshals save replays; the pro puts them on the screens or removes them
+    delete b.pin; // that was their PIN, not a pin position (a pro's pin sheet change sends it as spot)
     return this.dayOp(b, who.name);
   }
 
@@ -535,14 +536,14 @@ export class GolfEvent extends DurableObject {
       ev.map = { ...cleanMap(b.map), at: now, by: clip(by, 40) };
       // the club keeps it, so its next tournament starts mapped
       if (this.env.CLUBS) this.ctx.waitUntil(this.env.CLUBS.get(this.env.CLUBS.idFromName('directory')).fetch(new Request('https://clubs/course', { method: 'POST', body: JSON.stringify({ id: ev.id, key: ev.key, map: ev.map }) })).catch(() => {}));
-    } else if (b.op === 'pinsheet') { // where the pins are today: one hole { hole, pin } (pin null takes it off), or every hole { all: { '<n>': pin } }
+    } else if (b.op === 'pinsheet') { // where the pins are today: one hole { hole, pin } (or spot; null takes it off), or every hole { all: { '<n>': pin } }
       const sheet = {};
       if (b.all && typeof b.all === 'object') {
         for (const [k, p] of Object.entries(b.all)) { const n = Number(k), c = cleanPin(p); if (Number.isInteger(n) && n >= 1 && n <= 18 && c) sheet[n] = c; }
       } else {
         const n = num(b.hole, 0, 18, 0); if (n < 1) return json({ error: 'Pick a hole' }, 400);
         Object.assign(sheet, ev.pinsheet || {});
-        const c = cleanPin(b.pin);
+        const c = cleanPin(b.spot !== undefined ? b.spot : b.pin);
         if (c) sheet[n] = c; else delete sheet[n];
       }
       ev.pinsheet = sheet;

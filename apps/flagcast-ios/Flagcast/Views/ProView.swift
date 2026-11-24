@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// A golf pro or marshal, signed in with the PIN from the Manager (matches public/golf/app/pro/).
-/// Pros get Live, Scores, Screens and Contests; marshals only post contest results.
+/// Pros get Live, Scores, Screens, Pins (pin sheet + contests) and Replays; marshals post contest results and replays.
 @MainActor @Observable
 final class ProModel {
     let id: String
@@ -80,7 +80,7 @@ struct ProScreen: View {
                         ProLiveTab(model: model, s: s).tabItem { Label("Live", systemImage: "waveform.path.ecg") }
                         ProScoresTab(model: model, s: s).tabItem { Label("Scores", systemImage: "list.clipboard") }
                         ProScreensTab(model: model, s: s).tabItem { Label("Screens", systemImage: "tv") }
-                        ProContestsTab(model: model, s: s).tabItem { Label("Contests", systemImage: "flag") }
+                        ProPinsTab(model: model, s: s).tabItem { Label("Pins", systemImage: "flag") }
                         ProReplaysTab(model: model, s: s).tabItem { Label("Replays", systemImage: "arrow.counterclockwise.circle") }
                     }
                 } else {
@@ -373,6 +373,77 @@ struct ProScreensTab: View {
     private func switchTo(_ d: Display, _ page: PageRef?) {
         let p: Any = page.map { ["k": $0.k, "hole": $0.hole] as [String: Any] } ?? NSNull()
         Task { await model.op(["op": "screen", "display": d.id, "page": p], ok: page == nil ? "Back to its playlist" : "Screen switched") }
+    }
+}
+
+// ---- PINS: today's pin sheet (golfers see it as soon as it's set) and the contests, one tab so it fits ----
+struct ProPinsTab: View {
+    var model: ProModel
+    var s: EventState
+    @State private var part = 0
+    var body: some View {
+        VStack(spacing: 0) {
+            Picker("Show", selection: $part) { Text("Pin sheet").tag(0); Text("Contests").tag(1) }
+                .pickerStyle(.segmented).padding(.horizontal, 16).padding(.vertical, 8)
+            if part == 0 { ProPinSheet(model: model, s: s) } else { ProContestsTab(model: model, s: s) }
+        }
+    }
+}
+
+/// Every hole: Front / Middle / Back and Left / Center / Right, paces optional. Saves as you tap (day op pinsheet).
+struct ProPinSheet: View {
+    var model: ProModel
+    var s: EventState
+    @State private var pending: [Int: PinSpot?] = [:]
+    @State private var saves: [Int: Task<Void, Never>] = [:]
+
+    private func pin(_ n: Int) -> PinSpot? { if let p = pending[n] { return p }; return s.pinsheet[n] }
+
+    var body: some View {
+        List {
+            Section { EmptyView() } footer: { Text("Tap front, middle or back for each green. Golfers see the pin and the yards to it right away.") }
+            ForEach(s.course.holes, id: \.n) { h in
+                let p = pin(h.n)
+                Section {
+                    Picker("Depth", selection: Binding(get: { p?.d ?? "" }, set: { d in var q = p ?? PinSpot(); q.d = d; set(h.n, q) })) {
+                        Text("Front").tag("F"); Text("Middle").tag("M"); Text("Back").tag("B")
+                    }.pickerStyle(.segmented)
+                    Picker("Side", selection: Binding(get: { p == nil ? "" : p!.s }, set: { x in var q = p ?? PinSpot(); q.s = x; if x == "C" { q.off = 0 }; set(h.n, q) })) {
+                        Text("Left").tag("L"); Text("Center").tag("C"); Text("Right").tag("R")
+                    }.pickerStyle(.segmented)
+                    if let p {
+                        Stepper(value: Binding(get: { p.on }, set: { v in var q = p; q.on = v; set(h.n, q, wait: true) }), in: 0...60) {
+                            LabeledContent("Paces on", value: p.on > 0 ? "\(p.on)" : "—")
+                        }
+                        if p.s != "C" {
+                            Stepper(value: Binding(get: { p.off }, set: { v in var q = p; q.off = v; set(h.n, q, wait: true) }), in: 0...30) {
+                                LabeledContent("From the \(p.s == "L" ? "left" : "right")", value: p.off > 0 ? "\(p.off)" : "—")
+                            }
+                        }
+                        Button("Take this pin off", role: .destructive) { set(h.n, nil) }
+                    }
+                } header: {
+                    HStack {
+                        Text("Hole \(h.n) · Par \(h.par)")
+                        Spacer()
+                        Text(p.map { [$0.label, $0.paces].filter { !$0.isEmpty }.joined(separator: " · ") } ?? "Not set")
+                            .foregroundStyle(p == nil ? Color.fcMuted : Color.fcGreen)
+                    }
+                }
+            }
+        }
+        .refreshable { await model.feed.refresh() }
+        .onChange(of: s.pinsheet) { _, now in pending = pending.filter { n, p in now[n] != p } }
+    }
+
+    private func set(_ n: Int, _ p: PinSpot?, wait: Bool = false) {
+        pending[n] = .some(p)
+        saves[n]?.cancel()
+        saves[n] = Task {
+            if wait { try? await Task.sleep(for: .milliseconds(600)); if Task.isCancelled { return } }
+            let r = await model.op(["op": "pinsheet", "hole": n, "spot": p.map { $0.json as Any } ?? NSNull()], ok: p.map { "Hole \(n): \($0.label)" } ?? "Hole \(n) cleared")
+            if r == nil { pending[n] = nil }
+        }
     }
 }
 
