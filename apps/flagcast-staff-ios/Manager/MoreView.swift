@@ -19,10 +19,68 @@ struct MoreView: View {
             }
             CardBox(title: "You") {
                 NavigationLink { TournamentPicker() } label: { ListRow(icon: "rectangle.stack.fill", title: "Tournaments", sub: "Switch, make a new one, add by link") { Chevron() } }
-                NavigationLink { SettingsView() } label: { ListRow(icon: "person.crop.circle.fill", iconColor: FC.muted, title: "Settings", sub: model.me?.email ?? "Not signed in", last: true) { Chevron() } }
+                NavigationLink { SettingsView() } label: { ListRow(icon: "person.crop.circle.fill", iconColor: FC.muted, title: "Settings", sub: model.me?.email ?? "Not signed in", last: !model.canSignOut) { Chevron() } }
+                if model.canSignOut { SignOutRow() }
             }
         }
         .buttonStyle(.plain)
+    }
+}
+
+extension AppModel {
+    /// Signed in, or Admin unlocked with the passcode: there's something to sign out of.
+    var canSignOut: Bool { signedIn || !(admin.pass ?? "").isEmpty }
+    /// Sign Out on the phone: the account and the admin passcode both go, so the sign-in screen shows.
+    func signOutHere() async {
+        if signedIn { await signOut() }
+        admin.forget()
+    }
+}
+
+/// Sign Out, asking first (More, Settings).
+struct SignOutRow: View {
+    @Environment(AppModel.self) private var model
+    @State private var asking = false
+    var body: some View {
+        Button { asking = true } label: { ListRow(icon: "rectangle.portrait.and.arrow.right", iconColor: FC.red, title: "Sign Out", sub: model.me?.email, last: true) }
+            .buttonStyle(.plain)
+            .signOutDialog($asking)
+    }
+}
+
+/// The person button at the top of Admin and Overview: who's signed in, Settings and Sign Out.
+struct AccountMenu: View {
+    @Environment(AppModel.self) private var model
+    var onGreen = false
+    @State private var asking = false
+    @State private var settings = false
+    var body: some View {
+        Menu {
+            if let e = model.me?.email { Text(e) } else if model.isAdmin { Text("Flagcast admin (passcode)") }
+            Button { settings = true } label: { Label("Settings", systemImage: "gearshape") }
+            if model.canSignOut { Button(role: .destructive) { asking = true } label: { Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right") } }
+        } label: {
+            Image(systemName: "person.crop.circle").font(.system(size: 24, weight: .regular))
+                .foregroundStyle(onGreen ? .white : FC.link)
+                .frame(width: 40, height: 40).contentShape(Rectangle())
+        }
+        .accessibilityLabel("Account")
+        .signOutDialog($asking)
+        .sheet(isPresented: $settings) { NavigationStack { SettingsView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { settings = false } } } } }
+    }
+}
+
+extension View {
+    /// "Sign out of Flagcast Manager?" with Sign Out and Cancel.
+    func signOutDialog(_ shown: Binding<Bool>) -> some View { modifier(SignOutDialog(shown: shown)) }
+}
+private struct SignOutDialog: ViewModifier {
+    @Environment(AppModel.self) private var model
+    @Binding var shown: Bool
+    func body(content: Content) -> some View {
+        content.confirmationDialog("Sign out of Flagcast Manager?", isPresented: $shown, titleVisibility: .visible) {
+            Button("Sign Out", role: .destructive) { Task { await model.signOutHere() } }
+        } message: { Text("Your tournaments stay. Sign in again to see them.") }
     }
 }
 
@@ -236,7 +294,10 @@ struct SettingsView: View {
                 if model.signedIn {
                     NavigationLink { PasswordView() } label: { ListRow(icon: "key.fill", title: model.me?.password == true ? "Change password" : "Set a password", sub: "Then sign in with your email and password") { Chevron() } }
                         .buttonStyle(.plain)
-                    Button { Task { await model.signOut() } } label: { ListRow(icon: "rectangle.portrait.and.arrow.right", iconColor: FC.red, title: "Sign Out", last: true) }.buttonStyle(.plain)
+                    SignOutRow()
+                } else if model.canSignOut {
+                    NavigationLink { SignInView() } label: { ListRow(icon: "person.badge.plus", title: "Sign in") { Chevron() } }.buttonStyle(.plain)
+                    SignOutRow()
                 } else {
                     NavigationLink { SignInView() } label: { ListRow(icon: "person.badge.plus", title: "Sign in", last: true) { Chevron() } }.buttonStyle(.plain)
                 }

@@ -9,7 +9,7 @@ struct TodayView: View {
             if let d = model.current { DocHost(doc: d) { HomePage(doc: d) } }
             else { HomePage(doc: nil) }
         }
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { TournamentMenu() } }
+        .toolbar { ToolbarItem(placement: .topBarLeading) { AccountMenu() }; ToolbarItem(placement: .topBarTrailing) { TournamentMenu() } }
     }
 }
 

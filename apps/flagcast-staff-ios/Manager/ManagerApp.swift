@@ -86,6 +86,7 @@ struct SidebarRoot: View {
     @Environment(Tabs.self) private var tabs
     @State private var adding = false
     @State private var making = false
+    @State private var signingOut = false
 
     /// the Mac's sections, in the Mac's order
     private static let sections: [(Tab, String, String)] = [(.today, "Overview", "square.grid.2x2"), (.setup, "Setup", "gearshape"), (.teams, "Teams", "person.2"),
@@ -167,7 +168,17 @@ struct SidebarRoot: View {
                     Button { adding = true } label: { Label("Add by link", systemImage: "link") }
                 }
                 .font(.system(size: 14, weight: .semibold)).buttonStyle(.plain)
-                if let c = model.me?.club { Text("\(c.name) · \(c.credits < 0 ? "Unlimited" : "\(c.credits) tournaments left")").font(.system(size: 12)).opacity(0.7).lineLimit(1) }
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        if let c = model.me?.club { Text("\(c.name) · \(c.credits < 0 ? "Unlimited" : "\(c.credits) tournaments left")").font(.system(size: 12)).opacity(0.7).lineLimit(1) }
+                        if let e = model.me?.email { Text(e).font(.system(size: 11)).opacity(0.6).lineLimit(1) }
+                    }
+                    Spacer(minLength: 4)
+                    if model.canSignOut {
+                        Button { signingOut = true } label: { Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right").font(.system(size: 13, weight: .semibold)) }
+                            .buttonStyle(.plain).signOutDialog($signingOut)
+                    }
+                }
             }
             .padding(.horizontal, 20).padding(.bottom, 14)
             .background(FC.green)

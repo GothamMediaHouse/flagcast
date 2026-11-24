@@ -33,6 +33,7 @@ struct AdminHome: View {
                 Text("ADMIN").font(.system(size: 10, weight: .bold)).tracking(1).padding(.horizontal, 6).padding(.vertical, 3).background(FC.red, in: RoundedRectangle(cornerRadius: 4))
                 Spacer()
                 Button { adding = true } label: { Label("New club", systemImage: "plus") }.buttonStyle(WhiteButton())
+                AccountMenu(onGreen: true)
             }
             Text("\(admin.clubs.count) clubs · \(admin.events.filter { !$0.hidden && !$0.archived }.count) tournaments" + (waiting > 0 ? " · \(waiting) waiting" : ""))
                 .font(.system(size: 13)).foregroundStyle(FC.onGreenMuted)
@@ -169,6 +170,8 @@ private struct ClubDetail: View {
     @Environment(\.dismiss) private var dismiss
     let club: AdminClub
     @State private var image: UIImage?
+    @State private var deleting = false
+    @State private var newEvent = ""
     var body: some View {
         CardPage(image: image, kicker: club.statusText, title: club.name, sub: club.city.isEmpty ? nil : club.city) {
             HStack(spacing: 8) {
@@ -210,6 +213,17 @@ private struct ClubDetail: View {
                     ListRow(icon: m.role == "owner" ? "crown.fill" : "person.fill", iconColor: m.role == "owner" ? FC.flag.opacity(0.9) : FC.muted, title: m.email, sub: m.role == "owner" ? "Owner" : "Staff", last: i == club.members.count - 1)
                 }
             }
+            CardBox(title: "New tournament", footer: "Made by Flagcast, so it doesn’t use up one of the club’s tournaments.") {
+                HStack(spacing: 8) {
+                    BoxField(placeholder: "Name, e.g. Member-Guest 2027", text: $newEvent)
+                    Button("Make") {
+                        let n = newEvent
+                        Task { await admin.act("event", ["club": club.id, "name": n], done: "Made \(n). It’s at the top of Tournaments below."); newEvent = "" }
+                    }
+                    .buttonStyle(GreenButton()).disabled(newEvent.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                .padding(14)
+            }
             CardBox(title: "Tournaments") {
                 if club.events.isEmpty { Text("None yet.").foregroundStyle(FC.muted).padding(14) }
                 ForEach(Array(club.events.enumerated()), id: \.element.id) { i, e in
@@ -219,9 +233,17 @@ private struct ClubDetail: View {
                     .buttonStyle(.plain)
                 }
             }
+            if club.events.isEmpty {
+                Button(role: .destructive) { deleting = true } label: { Label("Delete Club", systemImage: "trash").foregroundStyle(FC.red) }.buttonStyle(PlainCardButton(full: true))
+            } else {
+                Help("A club with tournaments can’t be deleted. Switch it off instead, or delete its tournaments in Admin → Tournaments.")
+            }
         }
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         .overlay(alignment: .bottom) { NoticeBar(text: admin.notice).padding(.bottom, 10).animation(.snappy, value: admin.notice) }
+        .confirmationDialog("Delete \(club.name)?", isPresented: $deleting, titleVisibility: .visible) {
+            Button("Delete Club", role: .destructive) { Task { await admin.act("delete", ["club": club.id], done: "Club deleted."); if !admin.clubs.contains(where: { $0.id == club.id }) { dismiss() } } }
+        } message: { Text("For a mistaken or spam sign-up. Its people lose access to it. This can’t be undone.") }
         .task(id: club.id) { image = await CourseImages.place([club.name, club.city].filter { !$0.isEmpty }.joined(separator: " "), key: club.id) }
     }
 }
@@ -260,6 +282,7 @@ private struct AdminTournaments: View {
     @Environment(AppModel.self) private var model
     @State private var search = ""
     @State private var showHidden = false
+    @State private var deleting: AdminEvent?
     private var shown: [AdminEvent] {
         let q = search.lowercased()
         return admin.events.filter { (showHidden || (!$0.hidden && !$0.archived)) && (q.isEmpty || $0.name.lowercased().contains(q) || $0.clubName.lowercased().contains(q) || $0.id.contains(q)) }
@@ -282,6 +305,10 @@ private struct AdminTournaments: View {
                                 Button(e.locked ? "Unlock Results" : "Lock Results") { Task { await admin.act("lock", ["id": e.id, "locked": !e.locked]) } }
                                 Button(e.archived ? "Unarchive" : "Archive") { Task { await admin.act("archive", ["id": e.id, "on": !e.archived]) } }
                                 Button(e.hidden ? "Show on the Club’s List" : "Hide from the Club’s List") { Task { await admin.act(e.hidden ? "unhide" : "hide", ["id": e.id]) } }
+                                if !(e.hidden && e.archived) {
+                                    Divider()
+                                    Button("Delete Tournament…", role: .destructive) { deleting = e }
+                                }
                             } label: { Image(systemName: "ellipsis.circle").font(.title3).foregroundStyle(FC.link) }
                         }
                     }
@@ -292,6 +319,14 @@ private struct AdminTournaments: View {
         .overlay(alignment: .bottom) { NoticeBar(text: admin.notice).padding(.bottom, 10).animation(.snappy, value: admin.notice) }
         .task { await admin.refreshEvents() }
         .refreshable { await admin.refreshEvents() }
+        .confirmationDialog("Delete \(deleting?.name ?? "this tournament")?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible, presenting: deleting) { e in
+            Button("Delete Tournament", role: .destructive) {
+                Task {
+                    if !e.archived { await admin.act("archive", ["id": e.id, "on": true]) }
+                    await admin.act("hide", ["id": e.id], done: "Deleted. Turn on Show hidden and archived to bring it back.")
+                }
+            }
+        } message: { _ in Text("It comes off the club’s list and its results are locked. Its scores stay, so you can bring it back from Show hidden and archived.") }
     }
 }
 

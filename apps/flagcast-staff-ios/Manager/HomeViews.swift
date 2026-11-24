@@ -110,6 +110,8 @@ struct TournamentPicker: View {
     @State private var name = ""
     @State private var making = false
     @State private var message: String?
+    @State private var deleting: EventRef?
+    private static var device: String { UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone" }
 
     var body: some View {
         CardPage(kicker: model.me?.club?.stateLine ?? (model.signedIn ? nil : "Not signed in"), title: "Tournaments", sub: model.me?.club?.name) {
@@ -123,10 +125,18 @@ struct TournamentPicker: View {
                                 title: e.name.isEmpty ? "Tournament" : e.name,
                                 sub: [e.date.flatMap(dayLine), e.club].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "), last: i == model.shownEvents.count - 1) {
                             if model.selection == e.id { Image(systemName: "checkmark").font(.headline).foregroundStyle(FC.primary) }
+                            Color.clear.frame(width: 34, height: 1)
                         }
                     }
                     .buttonStyle(.plain)
-                    .contextMenu { Button("Remove from this list", role: .destructive) { Task { await model.remove(e.id) } } }
+                    .overlay(alignment: .trailing) {
+                        Menu {
+                            Button(role: .destructive) { deleting = e } label: { Label(e.fromClub == true ? "Delete Tournament…" : "Remove from This \(Self.device)…", systemImage: "trash") }
+                        } label: { Image(systemName: "ellipsis.circle").font(.title3).foregroundStyle(FC.link).frame(width: 44, height: 44).contentShape(Rectangle()) }
+                        .accessibilityLabel("More for \(e.name)")
+                        .padding(.trailing, 4)
+                    }
+                    .contextMenu { Button(role: .destructive) { deleting = e } label: { Label(e.fromClub == true ? "Delete Tournament…" : "Remove from This \(Self.device)…", systemImage: "trash") } }
                 }
             }
             if model.signedIn {
@@ -136,6 +146,9 @@ struct TournamentPicker: View {
                         Button { make() } label: { if making { ProgressView().tint(.white) } else { Text("Make a Tournament") } }
                             .buttonStyle(GreenButton(full: true)).disabled(making || !(model.me?.club?.canMake ?? false))
                         if let message { Text(message).font(.footnote).foregroundStyle(FC.red) }
+                        else if model.isAdmin && !(model.me?.club?.canMake ?? false) { Text("To make one for a club, go to Admin, open the club, and use New tournament there.").font(.footnote).foregroundStyle(FC.muted) }
+                        else if let c = model.me?.club, !c.canMake { Text(c.stateLine).font(.footnote).foregroundStyle(FC.red) }
+                        else if model.me?.club == nil { Text("Set up your club first.").font(.footnote).foregroundStyle(FC.red) }
                     }
                     .padding(14)
                 }
@@ -146,9 +159,13 @@ struct TournamentPicker: View {
                     NavigationLink { SignInView() } label: { ListRow(icon: "person.badge.plus", title: "Sign in", sub: "See your club’s tournaments", last: true) { Chevron() } }.buttonStyle(.plain)
                 }
             }
-            Help("Press and hold a tournament to take it off this list.")
+            Help("Tap ⋯ beside a tournament to delete it.")
         }
         .toolbar { if asSheet { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } } }
+        .confirmationDialog(deleting?.fromClub == true ? "Delete \(deleting?.name ?? "this tournament")?" : "Remove \(deleting?.name ?? "this tournament") from this \(Self.device)?",
+                            isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible, presenting: deleting) { e in
+            Button(e.fromClub == true ? "Delete Tournament" : "Remove", role: .destructive) { Task { await model.remove(e.id) } }
+        } message: { e in Text(e.fromClub == true ? "It comes off your club’s list on every phone, iPad and Mac. Its scores and pages stay, so Flagcast can bring it back if you need it." : "You can add it again with its desk link.") }
         .refreshable { await model.refresh() }
     }
     private func make() {
