@@ -27,6 +27,8 @@ final class ScorecardModel {
     var hole: Int? { didSet { save("hole", hole) } }
     private(set) var pending: [PendingScore] { didSet { save("pending", pending) } }
     var side: SideConfig { didSet { save("side", side) } }
+    /// Which golfer holds this phone (a player id), "-" when they skipped the question, nil before it's asked.
+    var me: String? { didSet { save("me", me) } }
 
     private(set) var sending = false
     var toast: String?
@@ -54,6 +56,7 @@ final class ScorecardModel {
         hole = Store.get("\(base):hole", Int?.none)
         pending = Store.get("\(base):pending", [PendingScore]())
         side = Store.get("\(base):side", SideConfig())
+        me = Store.get("\(base):me", String?.none)
     }
 
     var state: EventState? { feed.state }
@@ -249,7 +252,10 @@ final class ScorecardModel {
     private var nudgeKey: String { "golf:\(id):nudge" }
     private func checkNudges(_ s: EventState) {
         let seen = UserDefaults.standard.object(forKey: nudgeKey) as? Double ?? (Date().timeIntervalSince1970 * 1000 - 15 * 60000)
-        let mine = s.nudges.filter { teams.contains($0.team) && $0.at > seen }
+        // to everyone, to this cart, or to one golfer (only their phone, once they've said which one they are)
+        let mine = s.nudges.filter { n in
+            (n.team == "*" || teams.contains(n.team)) && (n.player == nil || me == nil || me == "-" || n.player == me) && n.at > seen
+        }
         guard let n = mine.last else { return }
         UserDefaults.standard.set(n.at, forKey: nudgeKey)
         nudge = n

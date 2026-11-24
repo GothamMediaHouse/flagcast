@@ -36,7 +36,7 @@ struct ScorecardScreen: View {
         .sensoryFeedback(.success, trigger: model.aces)
         .sensoryFeedback(.warning, trigger: model.nudge)
         .overlay { if model.celebrating { AceCelebration { model.celebrating = false } } }
-        .alert(model.nudge.map { _ in "A note for your cart" } ?? "", isPresented: Binding(get: { model.nudge != nil }, set: { if !$0 { model.nudge = nil } })) {
+        .alert(model.nudge.map { n in n.team == "*" ? "A note for everyone" : n.player != nil && n.player == model.me ? "A note for you" : "A note for your cart" } ?? "", isPresented: Binding(get: { model.nudge != nil }, set: { if !$0 { model.nudge = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(model.nudge?.text ?? "") }
         .fullScreenCover(item: $replay) { r in
@@ -130,6 +130,18 @@ struct ScorecardScreen: View {
         }
         .background(Color.fcPaper)
         .overlay { coverPopup(s, t) }
+        // once, for a cart of two or more: which golfer holds this phone, so the pro shop can send a note to just them
+        .confirmationDialog("Which one are you?", isPresented: Binding(get: { model.me == nil && t.players.count > 1 && !coverShowing(s, t) && model.nudge == nil },
+                                                                       set: { if !$0 && model.me == nil { model.me = "-" } }), titleVisibility: .visible) {
+            ForEach(t.players, id: \.id) { p in Button(p.name) { model.me = p.id } }
+            Button("Skip", role: .cancel) { model.me = "-" }
+        } message: { Text("So the pro shop can send a note to you, not the whole cart.") }
+    }
+
+    private func coverShowing(_ s: EventState, _ t: Team) -> Bool {
+        let key = "flagcast.cover.\(s.id)"
+        let scored = s.scorers(t).contains { p in (model.myScores()[t.id]?[p.id] ?? []).contains { $0 != nil } }
+        return s.photos.coverURL != nil && !scored && !coverSeen.contains(key) && !UserDefaults.standard.bool(forKey: key)
     }
 
     /// The club's welcome photo, once per tournament on this phone, before the cart's first score.

@@ -129,6 +129,7 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
 </div>
 <div class="toast" id="toast" hidden></div>
 <div class="nudge" id="nudge" role="alertdialog" aria-labelledby="nudgeH" hidden><div><span class="label">From the pro shop</span><h2 id="nudgeH">A note for your cart</h2><p id="nudgeText"></p><button class="btn primary" onclick="this.closest('.nudge').hidden=true">OK</button></div></div>
+<div class="nudge" id="whoami" role="dialog" aria-labelledby="whoH" hidden><div><span class="label">Just once</span><h2 id="whoH">Which one are you?</h2><p>So the pro shop can send a note to you, not the whole cart.</p><div id="whoList" style="display:grid;gap:8px;margin-top:10px"></div><button class="btn" data-me="-" style="margin-top:8px">Skip</button></div></div>
 <script type="module">
 import { phoneBanner } from '/golf/phonecast.js';
 import { applyBrand } from '/golf/brandmark.js';
@@ -238,13 +239,25 @@ const NKEY = `golf:${eventId()}:nudge`;
 function nudges() {
   if (!S || !S.nudges) return;
   const seen = Number(localStorage.getItem(NKEY) || Date.now() - 15 * 60000);
-  const mine = S.nudges.filter((n) => teams.includes(n.team) && n.at > seen);
+  const me = store.get('me', null);
+  // to everyone ('*'), to this cart, or to one golfer (only their phone, once they've said which one they are)
+  const mine = S.nudges.filter((n) => (n.team === '*' || teams.includes(n.team)) && (!n.player || !me || me === '-' || n.player === me) && n.at > seen);
   if (!mine.length) return;
   const n = mine[mine.length - 1];
   try { localStorage.setItem(NKEY, String(n.at)); } catch {}
+  $('nudgeH').textContent = n.team === '*' ? 'A note for everyone' : n.player && n.player === me ? 'A note for you' : 'A note for your cart';
   $('nudgeText').textContent = n.text; $('nudge').hidden = false;
   if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
 }
+
+// which golfer holds this phone (asked once, for a cart of two or more), so a note can go to just them
+function askMe() {
+  const t = team(); if (!t || t.players.length < 2 || store.get('me', null) !== null || !$('nudge').hidden) return;
+  if (!$('whoami').hidden) return;
+  $('whoList').innerHTML = t.players.map((p) => `<button class="btn primary" data-me="${esc(p.id)}">${esc(p.name)}</button>`).join('');
+  $('whoami').hidden = false;
+}
+$('whoami').addEventListener('click', (e) => { const b = e.target.closest('[data-me]'); if (!b) return; store.set('me', b.dataset.me); $('whoami').hidden = true; });
 
 // hole GPS: yardages and the course view, when the course is mapped
 const gps = gpsCard({ onHole: (d) => { const t = team(); if (!t) return; const ord = order(t), i = ord.indexOf(hole); hole = ord[Math.max(0, Math.min(ord.length - 1, i + d))]; render(); } });
@@ -479,7 +492,7 @@ async function start() {
     if (e.status === 404) { $('main').innerHTML = `<div class="center"><h2>Code not found</h2><p>${esc(e.message)}</p></div>`; return; }
     // no signal: carry on with what this phone already knows
   }
-  live((s) => { S = s; applyBrand(s); store.set('state', s); remember(s.name, code); render(); nudges(); phoneBanner(S, (r) => { location.href = `/g/${eventId()}${r.k === 'cam' || r.k === 'p3' ? `#hole-${r.hole}` : `#v=${r.k === 'contests' ? 'ct' : r.k === 'skins' ? 'sk' : 'lb'}`}`; }); }, (on) => { if (!on && online) offSince = Date.now(); online = on; syncLabel(); if (on) send(); });
+  live((s) => { S = s; applyBrand(s); store.set('state', s); remember(s.name, code); render(); nudges(); askMe(); phoneBanner(S, (r) => { location.href = `/g/${eventId()}${r.k === 'cam' || r.k === 'p3' ? `#hole-${r.hole}` : `#v=${r.k === 'contests' ? 'ct' : r.k === 'skins' ? 'sk' : 'lb'}`}`; }); }, (on) => { if (!on && online) offSince = Date.now(); online = on; syncLabel(); if (on) send(); });
   if (!S) { const saved = store.get('state', null); if (saved && teams.length) { S = saved; render(); } }
   send();
 }

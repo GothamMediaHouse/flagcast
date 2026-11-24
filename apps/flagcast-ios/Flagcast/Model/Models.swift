@@ -200,7 +200,8 @@ struct Photos: Codable, Hashable {
     func sponsor(_ id: String) -> URL? { url(sponsors[id]) }
 }
 struct News: Codable, Hashable { var text: String; var at: Double; var by: String? }
-struct Nudge: Codable, Hashable { var team: String; var text: String; var at: Double }
+/// From the pro shop: to one cart (team), one golfer on it (player), or everyone (team "*").
+struct Nudge: Codable, Hashable { var team: String; var player: String? = nil; var text: String; var at: Double }
 struct Ace: Codable, Hashable { var hole: Int; var name: String; var team: String; var at: Double }
 struct Take: Codable, Hashable { var kind: String; var text: String?; var sponsor: String?; var at: Double; var secs: Double? }
 /// "Routed to phones": Admin, the desk or a pro points every player's phone at something (public/golf/phonecast.js).

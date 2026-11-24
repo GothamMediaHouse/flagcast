@@ -19,6 +19,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { defaultHoles, courseHcp } from './public/golf/core.js';
 import { trackingOn, cleanPin } from './public/golf/gps.js';
 import { clubs } from './clubs.js';
+import { resultsRows, ghinRows } from './report.js';
 import { camPlaylist } from './stream.js';
 import { brandFor, logoOf, cleanLogo, decodeLogo, cleanPhoto, photoLinks, PHOTO_SLOT } from './brand.js';
 
@@ -125,7 +126,7 @@ export const SPOTS = ['title', 'leaderboard', 'hole', 'cam', 'contest', 'turn', 
 // (cam = one hole's camera, full frame)
 export const PAGE_KINDS = ['lb', 'p3', 'cam', 'contests', 'skins', 'fund', 'sponsors', 'sponsor', 'schedule'];
 // changes made on the day (desk or a pro's PIN); marshals only post contest results
-const DAY_OPS = new Set(['fix', 'ctp', 'contest', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay', 'scene', 'map', 'groups', 'pinsheet']);
+const DAY_OPS = new Set(['fix', 'ctp', 'contest', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay', 'scene', 'map', 'groups', 'pinsheet', 'report', 'team', 'move']);
 // marshals post contest results and replays of shots at their hole
 const MARSHAL_OPS = new Set(['ctp', 'replay']);
 // a replay with no clip link replays the hole's live camera from this many seconds before it was marked
@@ -456,6 +457,46 @@ export class GolfEvent extends DurableObject {
     // a timed send (Send now for 5 or 15 minutes) is over: the screen is back on its playlist
     for (const [id, f] of Object.entries(ev.live.force || {})) if (f && f.until && f.until <= now) delete ev.live.force[id];
     if (b.op === 'stats') return json({ stats: await this.getStats(), log: ev.log || [] });
+    if (b.op === 'report') { // the results and GHIN posting files (rows; the app makes the CSV)
+      const S = await this.publicState();
+      return json({ name: ev.name || 'Tournament', results: resultsRows(S), ghin: ghinRows(ev, S) });
+    }
+    if (b.op === 'team') { // fix a team on the day: its name and players ({ team, name?, players }), or a late group ({ team: 'new', ... })
+      const isNew = b.team === 'new', old = isNew ? null : ev.teams.find((t) => t.id === b.team);
+      if (!isNew && !old) return json({ error: 'No such team' }, 404);
+      if (isNew && ev.teams.length >= 200) return json({ error: 'That’s the most teams a tournament can have.' }, 400);
+      const was = new Map((old ? old.players : []).map((p) => [p.id, p]));
+      const players = (Array.isArray(b.players) ? b.players : (old ? old.players : [])).slice(0, 4)
+        .map((p) => ({ ...(was.get(p && p.id) || {}), ...p, ghin: (was.get(p && p.id) || {}).ghin || p.ghin })) // keep what the pro's phone doesn't send (GHIN numbers)
+        .filter((p) => String(p.name || '').trim());
+      if (!players.length) return json({ error: 'A team needs at least one player.' }, 400);
+      const t = { ...(old || { start: num(b.start, 1, 18, 1), flight: clip(b.flight, 12) }), name: b.name !== undefined ? b.name : (old ? old.name : ''), players };
+      const next = isNew ? [...ev.teams, t] : ev.teams.map((x) => (x.id === old.id ? t : x));
+      const ids = new Set(ev.teams.map((x) => x.id));
+      ev.teams = cleanSetup({ ...ev, teams: next }, ev).teams;
+      const made = isNew ? ev.teams.find((x) => !ids.has(x.id)) : ev.teams.find((x) => x.id === old.id);
+      await this.ctx.storage.put('event', ev);
+      await this.broadcast();
+      return json({ ok: true, team: made.id, code: made.code }); // the new cart's code, for the pro to hand out
+    }
+    if (b.op === 'move') { // move a player to another cart ({ player, to }); their scores go with them
+      const from = ev.teams.find((t) => t.players.some((p) => p.id === b.player)), to = ev.teams.find((t) => t.id === b.to);
+      if (!from || !to) return json({ error: 'No such player or team' }, 404);
+      if (from.id === to.id) return json({ ok: true });
+      if (to.players.length >= 4) return json({ error: 'That team already has four players.' }, 400);
+      const p = from.players.find((x) => x.id === b.player);
+      from.players = from.players.filter((x) => x.id !== p.id); to.players = [...to.players, p];
+      const sc = await this.scores();
+      if (sc[from.id] && sc[from.id][p.id]) {
+        sc[to.id] = sc[to.id] || {};
+        if (!sc[to.id][p.id]) sc[to.id][p.id] = sc[from.id][p.id];
+        delete sc[from.id][p.id];
+        await this.ctx.storage.put(`s:${from.id}`, sc[from.id]); await this.ctx.storage.put(`s:${to.id}`, sc[to.id]);
+      }
+      await this.ctx.storage.put('event', ev);
+      await this.broadcast();
+      return json({ ok: true });
+    }
     if (b.op === 'groups') {
       if (!trackingOn(ev)) {
         if (Object.keys(await this.spots()).length) await this.wipeSpots(); // the day is over: wipe them
@@ -487,8 +528,10 @@ export class GolfEvent extends DurableObject {
       ev.flash = b.text ? { text: clip(b.text, 140), at: now } : null;
       if (b.text) ev.news = [...(ev.news || []), { text: clip(b.text, 140), at: now, by: clip(by, 40) }].slice(-30);
     } else if (b.op === 'nudge') {
-      const team = ev.teams.find((t) => t.id === b.team); if (!team) return json({ error: 'No such team' }, 404);
-      ev.nudges = [...(ev.nudges || []), { team: team.id, text: clip(b.text || 'Please keep up the pace of play. Thank you!', 140), at: now }].slice(-50);
+      // to one cart ({ team }), one golfer on it ({ team, player }: their phone if they picked their name, else the cart), or everyone ({ team: '*' })
+      const all = b.team === '*', team = all ? null : ev.teams.find((t) => t.id === b.team); if (!all && !team) return json({ error: 'No such team' }, 404);
+      const player = team && b.player ? team.players.find((p) => p.id === b.player) : null; if (b.player && !player) return json({ error: 'No such player' }, 404);
+      ev.nudges = [...(ev.nudges || []), { team: all ? '*' : team.id, ...(player ? { player: player.id } : {}), text: clip(b.text || 'Please keep up the pace of play. Thank you!', 140), at: now }].slice(-50);
     } else if (b.op === 'screen') { // route a page to one screen, several (a list) or all ('*'), or send them back to their playlists (page: null)
       const all = (ev.displays || []).map((d) => d.id), want = Array.isArray(b.display) ? b.display : [b.display];
       // 'phones': every player's phone gets a banner pointing at this page (live leaderboard page and scorecards)

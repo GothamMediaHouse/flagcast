@@ -716,33 +716,18 @@ function csv(name, rows) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + text], { type: 'text/csv' })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 const fileName = (what) => `${(EV.name || 'tournament').replace(/[^\w -]+/g, '').trim() || 'tournament'} - ${what}.csv`;
-$('csvResults').onclick = () => {
-  if (!LIVE) return toast('Still loading.');
-  const flights = LIVE.flights.length ? LIVE.flights : [null], rows = [['Flight', 'Pos', 'Team', 'Players', 'Thru', 'Score', ...LIVE.course.holes.map((h) => `H${h.n}`)]];
-  for (const fl of flights) for (const l of leaderboard(LIVE, LIVE.scores, { flight: fl })) rows.push([fl || '', l.pos, l.name, l.sub, l.thru, l.played ? l.score : '', ...l.card.map((r) => (r.done ? (LIVE.format.show === 'gross' ? r.gross : r.net) ?? '' : ''))]);
-  csv(fileName('results'), rows);
+$('csvResults').onclick = async () => { // made on the server (report.js), the same file the golf pro's phone gets
+  try { const r = await desk('report'); csv(fileName('results'), r.results); } catch (e) { toast(e.message); }
 };
 $('csvSponsors').onclick = () => { csv(fileName('sponsors'), [['Sponsor', 'Where', 'Holes', 'Screen minutes', 'Phone views', 'Taps'], ...EV.sponsors.map((x) => { const st = REPORT.stats[x.id] || {}; return [x.name, SPOT_NAMES[x.spot] || '', (x.holes || []).join(' '), Math.round((st.secs || 0) / 60), st.view || 0, st.tap || 0]; })]); };
 // every player's round, ready to post to GHIN (hole by hole, and the adjusted gross score)
-$('csvGhin').onclick = () => {
-  if (!LIVE) return toast('Still loading.');
-  if (LIVE.format.type === 'scramble') return toast('Scramble scores can’t be posted for handicaps.');
-  const H = LIVE.course.holes, par = coursePar(LIVE), T = EV.course.tees || [];
-  const rows = [['Player', 'GHIN number', 'Handicap Index', 'Course handicap', 'Date', 'Course', 'Tees', 'Course rating', 'Slope', 'Par', ...H.map((h) => `H${h.n}`), 'Holes played', 'Gross', 'Adjusted gross', 'Picked up on', 'Team']];
-  for (const t of EV.teams) for (const p of t.players) {
-    const arr = (LIVE.scores[t.id] || {})[p.id] || [], tee = T.find((x) => x.id === p.tee) || (p.index != null ? T[0] : null);
-    let gross = 0, adj = 0, n = 0; const pu = [];
-    const holes = H.map((h, i) => {
-      const v = arr[i]; if (v == null) return '';
-      const cap = netDoubleBogey(h.par, p.hcp, h.hcp); n++;
-      if (v === 0) { pu.push(h.n); adj += cap; return cap; } // picked up: most likely score is net double bogey at most
-      gross += v; adj += Math.min(v, cap); return v;
-    });
-    if (!n) continue;
-    rows.push([p.name, p.ghin || '', fmtIndex(p.index), p.hcp, EV.date || '', EV.course.name || EV.club || '', tee ? tee.name : '', tee ? tee.rating : '', tee ? tee.slope : '', tee && tee.par ? tee.par : par, ...holes, n, pu.length ? '' : gross, adj, pu.join(' '), t.name]);
-  }
-  if (rows.length === 1) return toast('No scores yet.');
-  csv(fileName('ghin-posting'), rows);
+$('csvGhin').onclick = async () => {
+  try {
+    const r = await desk('report');
+    if (!r.ghin) return toast('Scramble scores can’t be posted for handicaps.');
+    if (r.ghin.length === 1) return toast('No scores yet.');
+    csv(fileName('ghin-posting'), r.ghin);
+  } catch (e) { toast(e.message); }
 };
 $('reportRefresh').onclick = drawReport;
 
