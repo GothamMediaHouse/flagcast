@@ -23,7 +23,7 @@ SHARED = [
     '../flagcast-ios/Flagcast/Net/Server.swift', '../flagcast-ios/Flagcast/Net/EventFeed.swift',
     '../flagcast-mac/Shared/Net.swift', '../flagcast-mac/Shared/Desk.swift', '../flagcast-mac/Shared/Route.swift',
     '../flagcast-mac/Shared/UI.swift', '../flagcast-mac/Shared/Geo.swift', '../flagcast-mac/Shared/CourseImages.swift',
-    '../flagcast-mac/Shared/Desk/DeskDoc.swift', '../flagcast-mac/Shared/Desk/DeskNav.swift', '../flagcast-mac/Shared/Desk/ScreenLogic.swift',
+    '../flagcast-mac/Shared/Desk/DeskDoc.swift', '../flagcast-mac/Shared/Desk/DeskNav.swift', '../flagcast-mac/Shared/Desk/ScreenLogic.swift', '../flagcast-mac/Shared/Desk/ClubTVs.swift',
     '../flagcast-mac/Shared/Admin/AdminModel.swift', '../flagcast-mac/Manager/AppModel.swift', '../flagcast-mac/Shared/AppleSignIn.swift',
     '../flagcast-mac/Shared/Branding.swift', '../flagcast-mac/Shared/DayOf.swift', '../flagcast-mac/Shared/Admin/EventDay.swift',
 ]

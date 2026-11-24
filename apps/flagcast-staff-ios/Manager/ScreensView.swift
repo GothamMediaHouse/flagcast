@@ -74,6 +74,7 @@ private struct ScreensPage: View {
     }
 
     @ViewBuilder private var tvs: some View {
+        ClubTVsCard(doc: doc)
         if doc.ev.displays.isEmpty {
             VStack(spacing: 12) {
                 Image(systemName: "tv").font(.system(size: 40)).foregroundStyle(FC.muted)

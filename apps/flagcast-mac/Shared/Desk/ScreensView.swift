@@ -194,6 +194,7 @@ struct ScreenWall: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
+                ClubTVsCard(doc: doc)
                 if doc.ev.displays.isEmpty { empty }
                 else {
                     if doc.ev.displays.count > 1 {

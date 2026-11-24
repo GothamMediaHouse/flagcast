@@ -20,6 +20,7 @@
 		F697E0FB7DC0DE3DC075C06E = {isa = PBXBuildFile; fileRef = 4CD1D7E21F4F7B9649C7C4E3; };
 		5F1C6D380C45DCC113EAB87C = {isa = PBXBuildFile; fileRef = E163E89EF65BCF47DF9334BF; };
 		D4B4AD17526243C648AA952A = {isa = PBXBuildFile; fileRef = 4457B8067AAE1AAEF2F89E9B; };
+		6D92823E7DE2533BA08ACD03 = {isa = PBXBuildFile; fileRef = 322F5FB2ACB630676DC0E758; };
 		B8E1480F886B1DBDD3CB05E4 = {isa = PBXBuildFile; fileRef = 21C26F226881C80BCAC6FBEC; };
 		25D11A59641C9ED381AAC5F2 = {isa = PBXBuildFile; fileRef = 0E8BD471F8B2F04B31D90F63; };
 		B905603D4E4014D1F52C0C03 = {isa = PBXBuildFile; fileRef = 5821F4E446BC121536A5619F; };
@@ -45,6 +46,7 @@
 		4CD1D7E21F4F7B9649C7C4E3 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DeskDoc.swift; path = "../flagcast-mac/Shared/Desk/DeskDoc.swift"; sourceTree = SOURCE_ROOT; };
 		E163E89EF65BCF47DF9334BF = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DeskNav.swift; path = "../flagcast-mac/Shared/Desk/DeskNav.swift"; sourceTree = SOURCE_ROOT; };
 		4457B8067AAE1AAEF2F89E9B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ScreenLogic.swift; path = "../flagcast-mac/Shared/Desk/ScreenLogic.swift"; sourceTree = SOURCE_ROOT; };
+		322F5FB2ACB630676DC0E758 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClubTVs.swift; path = "../flagcast-mac/Shared/Desk/ClubTVs.swift"; sourceTree = SOURCE_ROOT; };
 		21C26F226881C80BCAC6FBEC = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AdminModel.swift; path = "../flagcast-mac/Shared/Admin/AdminModel.swift"; sourceTree = SOURCE_ROOT; };
 		0E8BD471F8B2F04B31D90F63 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppModel.swift; path = "../flagcast-mac/Manager/AppModel.swift"; sourceTree = SOURCE_ROOT; };
 		5821F4E446BC121536A5619F = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppleSignIn.swift; path = "../flagcast-mac/Shared/AppleSignIn.swift"; sourceTree = SOURCE_ROOT; };
@@ -80,6 +82,7 @@
 				F697E0FB7DC0DE3DC075C06E,
 				5F1C6D380C45DCC113EAB87C,
 				D4B4AD17526243C648AA952A,
+				6D92823E7DE2533BA08ACD03,
 				B8E1480F886B1DBDD3CB05E4,
 				25D11A59641C9ED381AAC5F2,
 				B905603D4E4014D1F52C0C03,
@@ -131,6 +134,7 @@
 				4CD1D7E21F4F7B9649C7C4E3,
 				E163E89EF65BCF47DF9334BF,
 				4457B8067AAE1AAEF2F89E9B,
+				322F5FB2ACB630676DC0E758,
 				21C26F226881C80BCAC6FBEC,
 				0E8BD471F8B2F04B31D90F63,
 				5821F4E446BC121536A5619F,

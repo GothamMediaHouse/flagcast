@@ -213,6 +213,11 @@ table.t .n { width: 64px; }
   <div class="card2"><span class="label">Tournament code</span><div class="big-code" id="evcode"></div></div>
   <div id="staff"></div>
   <div class="row"><button class="btn" id="addPro">Add golf pro</button><button class="btn" id="addMarshal">Add marshal</button></div>
+  <h3>Club TVs</h3>
+  <p class="help">TVs with the Flagcast TV app (Apple TV, Google TV, Fire TV, Roku), or any TV’s browser at flagcast.app/tv. Open it on the TV and type the code it shows. A club TV shows the tournament of the day by itself, so you only add it once.</p>
+  <div id="tvs"><p class="help">Loading…</p></div>
+  <div class="row" id="tvadd"><input id="tvcode" placeholder="TV code" maxlength="6" autocomplete="off" style="text-transform:uppercase;letter-spacing:.2em;font-family:var(--f-mono);width:9rem" aria-label="TV code">
+    <input id="tvname" placeholder="Name, like Clubhouse bar" maxlength="40" aria-label="TV name"><button class="btn primary" id="addTV">Add a TV</button></div>
   <h3>Screens at the club</h3>
   <p class="help">Add each TV or LED wall and pick what it plays, in order. Open its link full screen on that TV. A screen with an empty list shows everything.</p>
   <div id="displays"></div>
@@ -640,9 +645,39 @@ function drawStaff() {
       ${it.k === 'lb' ? `<input data-pl="${k}" data-pk="fl" value="${esc(it.fl || '')}" placeholder="Flight (empty for all)">` : it.k === 'p3' ? `<select data-pl="${k}" data-pk="hole">${p3.map((h) => `<option value="${h.n}" ${it.hole === h.n ? 'selected' : ''}>Hole ${h.n}</option>`).join('')}</select>` : it.k === 'sponsor' ? `<select data-pl="${k}" data-pk="sponsor">${EV.sponsors.map((x) => `<option value="${x.id}" ${it.sponsor === x.id ? 'selected' : ''}>${esc(x.name || 'Sponsor')}</option>`).join('')}</select>` : '<span></span>'}
       <label class="f" style="grid-template-columns:auto 1fr;align-items:center">Secs<input data-pl="${k}" data-pk="secs" type="number" min="4" max="300" value="${it.secs || 12}"></label>
       <button class="btn" data-plmove="${k}" data-dir="-1" title="Move up" ${k ? '' : 'disabled'}>↑</button><button class="btn" data-plmove="${k}" data-dir="1" title="Move down" ${k < d.playlist.length - 1 ? '' : 'disabled'}>↓</button><button class="btn danger" data-pldel="${k}">✕</button></div>`).join('') || '<p class="help">Empty: this screen shows everything.</p>'}</div>
-    <div class="row"><button class="btn" data-pladd="1">Add page</button><button class="btn danger" data-deld="${i}">Remove screen</button></div></div>`).join('') || '<p class="help">No screens yet.</p>';
+    <div class="row"><button class="btn" data-pladd="1">Add page</button>${d.tv ? '<span class="help" style="margin:0">Club TV: remove it under Club TVs</span>' : `<button class="btn danger" data-deld="${i}">Remove screen</button>`}</div></div>`).join('') || '<p class="help">No screens yet.</p>';
   $('schedule').innerHTML = EV.schedule.map((x, i) => `<div class="sched"><input data-sc="${i}" data-sk2="time" value="${esc(x.time)}" placeholder="9:00 AM"><input data-sc="${i}" data-sk2="what" value="${esc(x.what)}" placeholder="Shotgun start"><button class="btn danger" data-delsc="${i}">Remove</button></div>`).join('') || '<p class="help">Nothing yet.</p>';
 }
+// the club's TVs (tv.js): kept by the club, not saved with this tournament
+const KINDS = { appletv: 'Apple TV', androidtv: 'Google TV', firetv: 'Fire TV', roku: 'Roku', web: 'TV browser' };
+let TVS = null;
+async function tvCall(op, b = {}) {
+  const r = await fetch(`/golf/api/tv/${op}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: eventId(), key, ...b }) });
+  const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'That didn’t work. Try again.'); return j;
+}
+function drawTVs() {
+  if (!TVS) return;
+  $('tvs').innerHTML = TVS.length ? TVS.map((t) => `<div class="card2" data-tv="${esc(t.id)}"><div class="row" style="margin:0;justify-content:space-between">
+    <div><b>${esc(t.name)}</b> <span class="help" style="margin:0">${esc(KINDS[t.kind] || 'TV')}${t.where ? ` · ${esc(t.where)}` : ''}</span></div>
+    <div class="row" style="margin:0"><span class="pill ${t.on ? 'live' : 'off'}">${t.on ? 'On' : 'Off'}</span><button class="btn" data-tvren="${esc(t.id)}">Rename</button><button class="btn danger" data-tvdel="${esc(t.id)}">Remove</button></div></div></div>`).join('')
+    : '<p class="help">No club TVs yet.</p>';
+}
+async function loadTVs() { try { TVS = (await tvCall('list')).tvs; drawTVs(); } catch (e) { $('tvs').innerHTML = `<p class="help">${esc(e.message)}</p>`; } }
+loadTVs(); setInterval(loadTVs, 60000);
+$('tvadd').addEventListener('click', async (e) => {
+  if (!e.target.closest('#addTV')) return;
+  const code = $('tvcode').value.trim(); if (!code) return toast('Type the code on the TV.');
+  try { const j = await tvCall('add', { code, name: $('tvname').value.trim() }); TVS = j.tvs; drawTVs(); $('tvcode').value = ''; $('tvname').value = ''; toast(`${j.tv.name} is connected.`); }
+  catch (err) { toast(err.message); }
+});
+$('tvs').addEventListener('click', async (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  try {
+    if (b.dataset.tvren) { const t = TVS.find((x) => x.id === b.dataset.tvren); const name = prompt('Name for this TV', t?.name || ''); if (!name) return; TVS = (await tvCall('edit', { tv: t.id, name })).tvs; }
+    if (b.dataset.tvdel) { const t = TVS.find((x) => x.id === b.dataset.tvdel); if (!confirm(`Remove ${t?.name || 'this TV'}? It goes back to showing a code.`)) return; TVS = (await tvCall('remove', { tv: t.id })).tvs; }
+    drawTVs();
+  } catch (err) { toast(err.message); }
+});
 $('s-staff').addEventListener('input', (e) => {
   const t = e.target;
   if (t.dataset.pin !== undefined) { const x = EV.pins[t.dataset.pin]; x[t.dataset.pk] = t.dataset.pk === 'pin' ? t.value.replace(/\D/g, '') : t.value; }
