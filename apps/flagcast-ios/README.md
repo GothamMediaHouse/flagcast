@@ -2,7 +2,7 @@
 
 The native iPhone app: cart scorecard, live leaderboard, par 3 cameras and replays, side games, and the golf pro / marshal tools. iOS 17+, iPhone only, no third-party packages. Bundle id `app.flagcast.golf`, team C8KXPB4QNA.
 
-It talks to the same API as the web pages (`golf.js`): `GET /golf/api/<id>/state`, the WebSocket at `/golf/api/<id>/ws`, and `POST …/cart`, `…/score`, `…/pro`, `…/hit`.
+It talks to the same API as the web pages (`golf.js`): `GET /golf/api/<id>/state`, the WebSocket at `/golf/api/<id>/ws`, and `POST …/cart`, `…/score`, `…/pro`, `…/hit`, `…/where` (the group's spot, and the other groups for the Course tab's Everyone map).
 
 ## Layout
 

@@ -133,7 +133,8 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
 import { phoneBanner } from '/golf/phonecast.js';
 import { applyBrand } from '/golf/brandmark.js';
 import { gpsCard } from '/golf/gpscard.js';
-import { onGps, yds, trackingOn } from '/golf/gps.js';
+import { groupsMap, hidden as groupHidden } from '/golf/groupsmap.js';
+import { onGps, yds, trackingOn, mapped } from '/golf/gps.js';
 import { leaderboard, playHoles, teamCard, strokesOn, playing, fmtPar, mark, contestLeader, fmtDist, sideGames } from '/golf/core.js';
 import { eventId, post, live, esc } from '/golf/client.js';
 import { appBar, remember } from '/golf/appbar.js';
@@ -247,17 +248,29 @@ function nudges() {
 
 // hole GPS: yardages and the course view, when the course is mapped
 const gps = gpsCard({ onHole: (d) => { const t = team(); if (!t) return; const ord = order(t), i = ord.indexOf(hole); hole = ord[Math.max(0, Math.min(ord.length - 1, i + d))]; render(); } });
-// with GPS on, the desk sees where this group is (every 30 s, or sooner after a walk)
+// with GPS on, the desk and the other groups (unless this group hides) see where this group is (every 30 s, or sooner after a walk)
 let sent = null;
 onGps((f) => {
   if (!f.at || !teamId || !trackingOn(S)) return; // only while the tournament is on
   if (sent && Date.now() - sent.t < 30000 && yds(sent.at, f.at) < 25) return;
   sent = { t: Date.now(), at: f.at };
-  post('where', { code, team: teamId, at: f.at, acc: f.acc, hole }).catch(() => {});
+  post('where', { code, team: teamId, at: f.at, acc: f.acc, hole, hide: groupHidden(code) }).catch(() => {});
 });
 const sideOK = () => S && S.sideGames !== false && S.format.type !== 'scramble';
+// where everyone is: the other groups on a map (groupsmap.js), on the day of the tournament or when the course is mapped
+const whereOK = () => S && (trackingOn(S) || mapped(S));
+let gmap = null;
+function renderWhere() {
+  $('strip').hidden = true; $('bar').hidden = true; $('tabs').hidden = true;
+  if (gmap) return gmap.refresh();
+  $('main').innerHTML = `<div class="sg"><h2>Where everyone is</h2><div id="gmHost"></div>
+    <button class="btn primary" style="width:100%;margin-top:16px;padding:14px" data-view="card">Back to the scorecard</button></div>`;
+  gmap = groupsMap($('gmHost'), { state: () => S, code, team: () => teamId, hole: () => hole });
+}
 function render() {
   if (!S) return;
+  if (view === 'where' && whereOK()) return renderWhere();
+  if (gmap) { gmap.destroy(); gmap = null; }
   if (view === 'side' && sideOK()) return renderSide();
   $('strip').hidden = false;
   $('evname').textContent = S.screens?.title || S.name || 'Scorecard';
@@ -307,6 +320,7 @@ function render() {
       <div style="text-align:right"><div class="label">Position</div><div class="big">${lb && lb.pos ? lb.pos : '—'}</div></div></div>
     <a class="btn" style="width:100%;margin-top:10px" href="/g/${eventId()}">Full leaderboard</a>
     ${sideOK() ? `<button class="btn" style="width:100%;margin-top:10px" data-view="side">Side games${sideOn() ? ' · playing' : ''}</button>` : ''}
+    ${whereOK() ? `<button class="btn" style="width:100%;margin-top:10px" data-view="where">Where everyone is</button>` : ''}
     <div class="card"><table><thead><tr><th>Hole</th>${holes.filter(inRound).map((h) => `<th>${h.n}</th>`).join('')}<th>Tot</th></tr>
       <tr><th>Par</th>${holes.filter(inRound).map((h) => `<th>${h.par}</th>`).join('')}<th>${holes.filter(inRound).reduce((a, h) => a + h.par, 0)}</th></tr></thead>
       <tbody>${ps.map((p) => { const arr = mine[p.id] || []; const tot = arr.reduce((a, v) => a + (v > 0 ? v : 0), 0);

@@ -35,12 +35,12 @@ struct GPSCard: View {
                 }
                 Group {
                     if let e = loc.error { Text(e) }
-                    else if !loc.on { Text("Yards from the tee. Turn on GPS for yards from where you are\(Geo.trackingOn(state) ? " (during the tournament the desk sees where your group is)" : "").") }
+                    else if !loc.on { Text("Yards from the tee. Turn on GPS for yards from where you are\(Geo.trackingOn(state) ? " (during the tournament the desk and the other groups see where your group is)" : "").") }
                     else if loc.fix == nil { Text("Finding your spot…") }
                     else if o?.me != true { Text("You’re not on hole \(hole) yet, so these are from the tee.") }
                     else {
                         HStack(spacing: 4) {
-                            Text("GPS to within \(loc.fix!.acc) yds.\(Geo.trackingOn(state) ? " The desk can see where your group is until the results are final." : "")")
+                            Text("GPS to within \(loc.fix!.acc) yds.\(Geo.trackingOn(state) ? " The desk and the other groups can see where your group is until the results are final." : "")")
                             Button("Turn off") { loc.stop() }.underline().buttonStyle(.plain)
                         }
                     }

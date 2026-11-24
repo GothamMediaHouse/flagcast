@@ -70,14 +70,15 @@ final class ScorecardModel {
         askForNotifications()
     }
 
-    // ---- group spot for the desk (only while the tournament is on): every 30 s, or sooner after a walk ----
+    // ---- group spot for the desk and the other golfers' Everyone map (only while the tournament is on): every 30 s,
+    // or sooner after a walk. A group that hides (GroupPrivacy) is still seen by the desk, not by other golfers ----
     @ObservationIgnored private var sentSpot: (at: GeoPoint, t: Date)?
     func reportSpot(_ at: GeoPoint, _ acc: Int) {
         guard let s = state, let t = teamId, Geo.trackingOn(s) else { return }
         if let last = sentSpot, Date().timeIntervalSince(last.t) < 30, (Geo.yds(last.at, at) ?? 0) < 25 { return }
         sentSpot = (at, Date())
         let h = currentHole()
-        Task { _ = try? await API.post(id, "where", ["code": code, "team": t, "at": [at.lat, at.lng], "acc": acc, "hole": h]) }
+        Task { _ = try? await API.post(id, "where", ["code": code, "team": t, "at": [at.lat, at.lng], "acc": acc, "hole": h, "hide": GroupPrivacy.hidden(code)]) }
     }
 
     func stop() {

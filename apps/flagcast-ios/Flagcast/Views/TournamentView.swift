@@ -44,7 +44,7 @@ struct TournamentScreen: View {
                 SideGamesHub(model: model)
                     .tabItem { Label("Games", systemImage: "trophy.fill") }.tag(TourTab.games)
             }
-            if let model, let s, Geo.mapped(s) {
+            if let model, let s, Geo.mapped(s) || Geo.trackingOn(s) {
                 CourseTab(model: model, state: s)
                     .tabItem { Label("Course", systemImage: "map.fill") }.tag(TourTab.course)
             }
@@ -142,16 +142,33 @@ struct TourTitle: View {
     }
 }
 
-/// The Course tab: the hole you're on, following the scorecard, with the scores at the bottom.
+/// The Course tab: the hole you're on, following the scorecard, with the scores at the bottom; or Everyone, where
+/// every group is on the course right now (GroupsMapView). Everyone only, when the course isn't mapped yet.
+enum CourseMode: Hashable { case hole, everyone }
+
 struct CourseTab: View {
     @Bindable var model: ScorecardModel
     let state: EventState
+    @State private var mode: CourseMode = .hole
+
     var body: some View {
-        let h = model.currentHole()
-        CourseView(state: state, hole: h, onHole: { d in
-            guard let t = model.team else { return }
-            let ord = model.order(t), i = ord.firstIndex(of: model.currentHole()) ?? 0
-            model.hole = ord[(i + d + ord.count) % ord.count]
-        }, embedded: true, scorer: model)
+        let mapped = Geo.mapped(state)
+        VStack(spacing: 0) {
+            if mapped {
+                HeaderSwitch(options: [(CourseMode.hole, "Your hole"), (.everyone, "Everyone")], selection: $mode)
+                    .padding(.horizontal, 14).padding(.top, 6).padding(.bottom, 8)
+                    .background(Color(UIColor(hex: 0x0b1a12)).ignoresSafeArea(edges: .top))
+            }
+            if mapped && mode == .hole {
+                let h = model.currentHole()
+                CourseView(state: state, hole: h, onHole: { d in
+                    guard let t = model.team else { return }
+                    let ord = model.order(t), i = ord.firstIndex(of: model.currentHole()) ?? 0
+                    model.hole = ord[(i + d + ord.count) % ord.count]
+                }, embedded: true, scorer: model)
+            } else {
+                GroupsMapView(model: model, state: state)
+            }
+        }
     }
 }

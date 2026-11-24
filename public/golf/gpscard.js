@@ -49,7 +49,7 @@ export function gpsCard({ onHole } = {}) {
         <div class="fb">${y && y.f != null ? `Front <b>${y.f}</b><br>` : ''}${y && y.b != null ? `Back <b>${y.b}</b>` : ''}</div>
         <div class="go"><button class="cv" data-cv>Course view</button>${on ? '' : '<button class="on" data-on>Use my GPS</button>'}</div></div>
       ${y && y.hz.length ? `<div class="hzs">${y.hz.slice(0, 6).map((z) => `<span>${esc(z.name)} <b>${z.reach}</b>${z.carry ? `–<b>${z.carry}</b>` : ''}</span>`).join('')}</div>` : ''}
-      <div class="msg">${err ? esc(err) : !on ? `Yards from the tee. Turn on GPS for yards from where you are${trackingOn(S) ? ' (during the tournament the desk sees where your group is)' : ''}.` : !me ? 'Finding your spot…' : far ? `You’re not on hole ${hole} yet, so these are from the tee.` : `GPS to within ${me.acc} yds.${trackingOn(S) ? ' The tournament desk can see where your group is until the results are final.' : ''} <button data-off style="background:none;border:0;color:inherit;text-decoration:underline;padding:0;font-size:inherit">Turn off</button>`}</div>`;
+      <div class="msg">${err ? esc(err) : !on ? `Yards from the tee. Turn on GPS for yards from where you are${trackingOn(S) ? ' (during the tournament the desk and the other groups see where your group is)' : ''}.` : !me ? 'Finding your spot…' : far ? `You’re not on hole ${hole} yet, so these are from the tee.` : `GPS to within ${me.acc} yds.${trackingOn(S) ? ' The desk and the other groups can see where your group is until the results are final.' : ''} <button data-off style="background:none;border:0;color:inherit;text-decoration:underline;padding:0;font-size:inherit">Turn off</button>`}</div>`;
     if (ov) paintView();
   }
 

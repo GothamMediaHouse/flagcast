@@ -9,7 +9,8 @@
 //   POST /golf/api/<id>/score              { code, team, list: [{ p, h, v, at }] }   p = player id or 'T'
 //   POST /golf/api/<id>/desk               { key, op, … }   the tournament desk (see desk() below)
 //   POST /golf/api/<id>/pro                { pin, op, … }   a golf pro or marshal with a PIN from the Manager (see pro() below)
-//   POST /golf/api/<id>/where              { code, team, at: [lat, lng], acc, hole }   a group's spot, from a scorecard with GPS on
+//   POST /golf/api/<id>/where              { code, team, at?: [lat, lng], acc, hole, hide? }   a group's spot, from a scorecard with GPS on
+//                                          → { groups }   where the other groups are, for the golfers' course map
 //   GET  /golf/api/<id>/photo/<slot>       a photo the club added: cover, h<n> (a hole), s-<sponsor id> (a banner)
 //   POST /golf/api/<id>/hit                { list: [{ s: sponsorId, k: 'view'|'tap'|'secs', n }] }   sponsor counts for the report
 //
@@ -130,6 +131,14 @@ const MARSHAL_OPS = new Set(['ctp', 'replay']);
 // a replay with no clip link replays the hole's live camera from this many seconds before it was marked
 export const REPLAY_BACK = 25;
 const num = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
+// what golfers see of the other groups on the course (POST …/where): name, hole and spot, no codes. Hidden
+// groups and spots older than 15 minutes are left out; your own group is marked me (even when hidden).
+export const GOLFER_SPOT_MINS = 15;
+export function golferGroups(ev, wh, mine, now = Date.now()) {
+  const name = (t) => t.name || t.players.map((p) => String(p.name || '').split(' ').slice(-1)[0]).join(' / ');
+  return ev.teams.filter((t) => { const w = wh[t.id]; return w && w.at && (t.id === mine || (!w.hide && now - w.t <= GOLFER_SPOT_MINS * 60000)); })
+    .map((t) => ({ team: t.id, name: name(t), hole: wh[t.id].hole || 0, at: wh[t.id].at, acc: wh[t.id].acc || 0, t: wh[t.id].t, ...(t.id === mine ? { me: true } : {}) }));
+}
 
 // the course map for hole GPS: per hole the tee, the front, middle and back of the green, and hazards
 // (p = where you reach it, c = what carries it). Points are [lat, lng]. Shared by every tournament at the club.
@@ -537,7 +546,8 @@ export class GolfEvent extends DurableObject {
     return json({ ok: true });
   }
 
-  // where each group is on the course: scorecards with GPS on send their spot. Only the desk, pros and Admin see it.
+  // where each group is on the course: scorecards with GPS on send their spot. The desk, pros and Admin see every
+  // group; golfers see the others' recent spots (golferGroups) unless a group hides.
   async spots() {
     // one load even when several phones report at once. Each group is its own key, written every time:
     // the object can be put to sleep between reports, so nothing is kept only in memory
@@ -549,16 +559,21 @@ export class GolfEvent extends DurableObject {
     if (keys.length) await this.ctx.storage.delete(keys);
     this.wh = {}; this.whLoad = null;
   }
+  // a scorecard sends its group's spot (at) and/or asks where the other groups are. Golfers see the other groups'
+  // names, holes and spots (never their codes), only while the tournament is on, and only spots from the last
+  // 15 minutes. A group can hide from the other golfers (hide: true); the desk and pros still see it for pace of play.
   async where(b) {
     const ev = this.ev, team = ev.teams.find((t) => t.id === b.team);
     if (!team || team.code !== String(b.code || '').toUpperCase()) return json({ error: 'Not your scorecard' }, 403);
-    const at = Array.isArray(b.at) && b.at.length === 2 ? b.at.map(Number) : null;
-    if (!at || !at.every(Number.isFinite) || Math.abs(at[0]) > 90 || Math.abs(at[1]) > 180) return json({ error: 'Bad spot' }, 400);
-    if (!trackingOn(ev)) return json({ error: 'Group tracking is only on during the tournament.', off: true }, 409);
-    const wh = await this.spots(), now = Date.now();
-    wh[team.id] = { at: at.map((x) => Math.round(x * 1e6) / 1e6), acc: num(b.acc, 0, 9999, 0), hole: num(b.hole, 0, 18, 0), t: now };
-    await this.ctx.storage.put(`w:${team.id}`, wh[team.id]);
-    return json({ ok: true });
+    const at = b.at == null ? null : Array.isArray(b.at) && b.at.length === 2 ? b.at.map(Number) : [NaN];
+    if (at && (!at.every(Number.isFinite) || Math.abs(at[0]) > 90 || Math.abs(at[1]) > 180)) return json({ error: 'Bad spot' }, 400);
+    if (!trackingOn(ev)) return json({ error: 'Group tracking is only on during the tournament.', off: true, date: ev.date, locked: !!ev.locked, groups: [] }, 409);
+    const wh = await this.spots(), now = Date.now(), was = wh[team.id];
+    const hide = b.hide === undefined ? !!was?.hide : !!b.hide;
+    if (at) wh[team.id] = { at: at.map((x) => Math.round(x * 1e6) / 1e6), acc: num(b.acc, 0, 9999, 0), hole: num(b.hole, 0, 18, 0), t: now, ...(hide ? { hide: true } : {}) };
+    else if (was && hide !== !!was.hide) { wh[team.id] = { ...was }; if (hide) wh[team.id].hide = true; else delete wh[team.id].hide; }
+    if (wh[team.id] !== was) await this.ctx.storage.put(`w:${team.id}`, wh[team.id]);
+    return json({ ok: true, now, on: true, hide, groups: golferGroups(ev, wh, team.id, now) });
   }
 
   // sponsor counts for the report: app views and taps, and seconds on the big screens
