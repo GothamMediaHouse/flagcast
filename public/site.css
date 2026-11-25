@@ -465,3 +465,26 @@ footer .wrap{grid-template-columns:1.4fr 1fr 1fr 1fr 1fr}
   .mock .mr.col{flex-direction:column;align-items:flex-start}
 }
 .cartc .crest{width:40px;height:40px;border-radius:10px;background:#123628;color:#e8c547;display:grid;place-items:center;font:700 1.1rem var(--f-display);flex:none}
+
+/* Motion (site.js adds .anim only when motion is allowed) */
+.anim .rv{opacity:0;transform:translateY(22px);transition:opacity .7s cubic-bezier(.2,.7,.2,1) var(--d,0ms),transform .7s cubic-bezier(.2,.7,.2,1) var(--d,0ms)}
+.anim .rv.in{opacity:1;transform:none}
+.anim .rvis.rv{transform:translateY(28px) scale(.985)}
+.anim .rvis.rv.in{transform:none}
+.anim .thermo.rv .bar i{width:0;transition:width 1.8s cubic-bezier(.2,.7,.2,1) .4s}
+.anim .thermo.rv.in .bar i{width:72%}
+.anim .hero .ph,.anim .hero .phones,.anim .phero .phones .ph2,.anim .phero .mgr-vis .ph2,.anim .app-grid .phones .ph2:last-child{animation:float 7s ease-in-out infinite}
+.anim .phero .phones .ph2:last-child{animation-delay:-3.5s}
+@keyframes float{50%{translate:0 -10px}}
+.anim .phero .pvis,.anim .phero .pgrid>div:first-child,.anim .fhero .wrap>*{animation:rise .9s cubic-bezier(.2,.7,.2,1) both}
+.anim .phero .pvis{animation-delay:.15s}
+@keyframes rise{from{opacity:0;transform:translateY(24px)}}
+.pill.pop,.fv-ld .ok.pop{animation:pop .4s ease}
+@keyframes pop{40%{transform:scale(1.15)}}
+.la.bump .sc,.gtable.bump em{animation:tick .5s ease}
+@keyframes tick{0%{opacity:.2;transform:translateY(6px)}100%{opacity:1;transform:none}}
+.anim .gl-live i,.anim .lv i{animation:blink 1.4s infinite}
+.scrn{position:relative;display:block;overflow:hidden;border-radius:23px}
+.ph .scrn{border-radius:20px}
+.scrn iframe{position:absolute;left:0;top:0;width:393px;height:852px;border:0;transform-origin:0 0;opacity:0;transition:opacity .4s;pointer-events:none;background:#0e1713}
+.scrn iframe.ok{opacity:1}
