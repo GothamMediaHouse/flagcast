@@ -357,6 +357,12 @@ export class GolfEvent extends DurableObject {
       await this.broadcast();
       return json({ ok: true, brand: brandFor(ev) });
     }
+    // the club was deleted in Flagcast Admin (clubs.js admin op 'delete'): wipe everything. Never routed from the web.
+    if (op === 'wipe') {
+      for (const w of this.ctx.getWebSockets()) { try { w.close(1000, 'Deleted'); } catch {} }
+      await this.ctx.storage.deleteAll(); this.ev = null; this.sc = null;
+      return json({ ok: true });
+    }
     if (op === 'cams') {
       ev.cams = cleanSetup({ cams: b.cams || {} }, ev).cams;
       await this.ctx.storage.put('event', ev);

@@ -47,6 +47,8 @@ function same(a, b) {
   let d = x.length ^ y.length; for (let i = 0; i < Math.max(x.length, y.length); i++) d |= (x[i] || 0) ^ (y[i] || 0);
   return d === 0;
 }
+// the club name typed to confirm a delete: case, spaces and curly quotes don't matter
+const sameName = (a, b) => { const f = (x) => String(x || '').toLowerCase().replace(/[’‘`]/g, "'").replace(/\s+/g, ' ').trim(); return !!f(a) && f(a) === f(b); };
 export const isAdmin = (env, pass) => !!env.GOLF_CREATE_PASS && same(pass, env.GOLF_CREATE_PASS);
 // Flagcast staff: the emails in ADMIN_EMAIL (comma-separated, set in the Cloudflare dashboard) get Admin when signed in,
 // and so do the ones added in Admin → Staff (the staff table; FlagcastClubs.staffEmail checks both)
@@ -404,9 +406,17 @@ export class FlagcastClubs extends DurableObject {
       if (b.op === 'off') { need(); this.sql.exec('UPDATE clubs SET status = ? WHERE id = ?', 'off', cid); }
       if (b.op === 'delete') {
         need();
-        // only a club with no tournaments (a mistaken or spam request)
-        if (this.one('SELECT id FROM events WHERE club = ?', cid)) this.fail('This club has tournaments. Switch it off instead.');
+        // a mistaken or spam request (no tournaments), or a test club: with tournaments, only after typing the club's name.
+        // Its tournaments go too: scores, teams and photos are wiped, and their links stop working.
+        const evs = this.all('SELECT id, name FROM events WHERE club = ?', cid);
+        if (evs.length) {
+          if (!sameName(b.confirm, c.name)) this.fail(`This club has ${evs.length === 1 ? 'a tournament' : `${evs.length} tournaments`}. Type the club’s name to delete it and its tournaments.`);
+          const cam = this.one(`SELECT s.hole, e.name FROM streams s JOIN events e ON e.id = s.event WHERE e.club = ?`, cid);
+          if (cam) this.fail(`${cam.name} still streams hole ${cam.hole}. Stop that camera in Cameras first.`, 409);
+          for (const e of evs) { await this.golf(e.id, 'wipe', {}).catch(() => {}); this.sql.exec('DELETE FROM events WHERE id = ?', e.id); }
+        }
         this.sql.exec('DELETE FROM clubs WHERE id = ?', cid); this.sql.exec('DELETE FROM members WHERE club = ?', cid);
+        this.note('Flagcast', '', `Admin: deleted club ${c.name}${evs.length ? ` and ${evs.length === 1 ? 'its tournament' : `its ${evs.length} tournaments`} (${evs.map((e) => e.name).join(', ')})` : ''}`);
       }
       if (b.op === 'create') {
         const name = clip(b.name, 80), email = clip(b.email, 254).toLowerCase();

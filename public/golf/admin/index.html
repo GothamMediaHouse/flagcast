@@ -394,7 +394,7 @@ function clubDetail(c) {
   return `<div class="box" data-club="${c.id}">
     <div class="row" style="justify-content:space-between"><h2 style="margin:0">${esc(c.name)}</h2><div class="row">${pillFor(c.status)}
       ${c.status === 'pending' ? '<button class="btn sm primary" data-a="approve">Approve</button>' : c.status === 'active' ? '<button class="btn sm danger" data-a="off">Switch off</button>' : '<button class="btn sm" data-a="on">Switch on</button>'}
-      ${c.events.length ? '' : '<button class="btn sm danger" data-a="delete">Delete</button>'}</div></div>
+      <button class="btn sm danger" data-a="delete" title="${c.events.length ? 'For a test club: its tournaments are deleted too' : 'For a mistaken or spam request'}">Delete</button></div></div>
     <p class="help" style="margin:4px 0 0">Since ${date(c.created)}${c.by ? ` · asked by ${esc(c.by)}` : ''} · ${c.events.length} tournaments · ${money(paid)} paid</p>
 
     <div class="sub">Details</div>
@@ -619,9 +619,17 @@ $('view').addEventListener('click', async (e) => {
     if (el.dataset.open) { sel = el.dataset.open; tab = 'clubs'; draw(); return; }
     if (el.hasAttribute('data-newclub')) { tab = 'overview'; draw(); document.querySelector('#newClub input')?.focus(); return; }
     if (el.dataset.a) {
-      if (el.dataset.a === 'delete' && !confirm('Delete this club? This can’t be undone.')) return;
+      let confirmName = '';
+      if (el.dataset.a === 'delete') {
+        const n = c?.events.length || 0;
+        if (!n && !confirm('Delete this club? Its people lose access to it. This can’t be undone.')) return;
+        if (n) {
+          confirmName = prompt(`Delete ${c.name}? This also deletes its ${n === 1 ? 'tournament' : `${n} tournaments`} with every score, team and photo, and their links stop working. This can’t be undone.\n\nType the club’s name to confirm:`) || '';
+          if (!confirmName.trim()) return;
+        }
+      }
       if (el.dataset.a === 'off' && !confirm('Switch this club off? They won’t be able to make tournaments.')) return;
-      await admin({ op: el.dataset.a, club }); toast(el.dataset.a === 'approve' ? 'Approved. They’ve been emailed.' : 'Done.'); if (el.dataset.a === 'delete') sel = null; return;
+      await admin({ op: el.dataset.a, club, ...(confirmName ? { confirm: confirmName } : {}) }); toast(el.dataset.a === 'approve' ? 'Approved. They’ve been emailed.' : 'Done.'); if (el.dataset.a === 'delete') sel = null; return;
     }
     if (el.dataset.cr) return void await admin({ op: 'credits', club, add: Number(el.dataset.cr) });
     if (el.dataset.set) return void await admin({ op: 'credits', club, set: Number(el.dataset.set) });

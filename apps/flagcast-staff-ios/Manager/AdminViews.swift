@@ -71,6 +71,7 @@ struct ClubsView: View {
     var embedded = false
     @State private var search = ""
     @State private var opened: AdminClub?
+    @State private var deleting: AdminClub?
     @State private var adding = false
     @AppStorage(ClubLook.key) private var look = ClubLook.photo
     private var shown: [AdminClub] {
@@ -79,7 +80,7 @@ struct ClubsView: View {
     }
     var body: some View {
         if embedded {
-            list.sheet(item: $opened) { c in NavigationStack { ClubDetail(club: admin.clubs.first { $0.id == c.id } ?? c) } }
+            list.sheet(item: $opened) { c in NavigationStack { ClubDetail(club: admin.clubs.first { $0.id == c.id } ?? c) } }.deleteClubAlert($deleting)
         } else {
             page
         }
@@ -94,6 +95,7 @@ struct ClubsView: View {
         .overlay(alignment: .bottom) { NoticeBar(text: admin.notice).padding(.bottom, 10).animation(.snappy, value: admin.notice) }
         .sheet(item: $opened) { c in NavigationStack { ClubDetail(club: admin.clubs.first { $0.id == c.id } ?? c) } }
         .sheet(isPresented: $adding) { NavigationStack { NewClub() } }
+        .deleteClubAlert($deleting)
         .task { try? await admin.refresh() }
     }
     private var list: some View {
@@ -117,7 +119,7 @@ struct ClubsView: View {
                 }
                 Picker("Club cards", selection: $look) { ForEach(ClubLook.allCases) { Text($0.title).tag($0) } }.pickerStyle(.segmented)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 300, maximum: 460), spacing: 14)], spacing: 14) {
-                    ForEach(shown) { c in ClubCard(club: c) { opened = c } }
+                    ForEach(shown) { c in ClubCard(club: c, open: { opened = c }, delete: { deleting = c }) }
                 }
                 if shown.isEmpty { Text(admin.clubs.isEmpty ? "No clubs yet" : "No club matches").foregroundStyle(FC.muted).padding(30) }
             }
@@ -129,6 +131,7 @@ private struct ClubCard: View {
     @Environment(AdminModel.self) private var admin
     let club: AdminClub
     var open: () -> Void
+    var delete: () -> Void
     @State private var image: UIImage?
     @AppStorage(ClubLook.key) private var look = ClubLook.photo
     var body: some View {
@@ -151,6 +154,10 @@ private struct ClubCard: View {
                     Button("+5") { Task { await admin.act("credits", ["club": club.id, "add": 5]) } }.buttonStyle(WhiteButton()).disabled(club.credits < 0)
                     Spacer()
                     Button("Open", action: open).buttonStyle(WhiteButton())
+                    Menu { Button("Open Club", systemImage: "arrow.up.right", action: open); Button("Delete Club…", systemImage: "trash", role: .destructive, action: delete) } label: {
+                        Image(systemName: "ellipsis").font(.system(size: 17, weight: .bold)).frame(width: 44, height: 44).background(.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 10))
+                    }
+                    .accessibilityLabel("More for \(club.name)")
                 }
             }
             .foregroundStyle(.white).padding(16)
@@ -158,6 +165,7 @@ private struct ClubCard: View {
         .overlay(alignment: .topTrailing) { if look == .photo, let u = logoURL(club.logo) { ClubLogoTile(url: u, name: club.name, size: 60).padding(12) } }
         .frame(height: 250).frame(maxWidth: .infinity).clipShape(RoundedRectangle(cornerRadius: 16))
         .contentShape(Rectangle()).onTapGesture(perform: open)
+        .contextMenu { Button("Open Club", systemImage: "arrow.up.right", action: open); Button("Delete Club…", systemImage: "trash", role: .destructive, action: delete) }
         .task(id: club.id) { image = await CourseImages.place([club.name, club.city].filter { !$0.isEmpty }.joined(separator: " "), key: club.id) }
     }
     private func stat(_ v: String, _ l: String) -> some View { Text(v).font(.system(size: 15, weight: .bold)) + Text(" \(l)").font(.caption) }
@@ -170,7 +178,7 @@ private struct ClubDetail: View {
     @Environment(\.dismiss) private var dismiss
     let club: AdminClub
     @State private var image: UIImage?
-    @State private var deleting = false
+    @State private var deleting: AdminClub?
     @State private var newEvent = ""
     var body: some View {
         CardPage(image: image, kicker: club.statusText, title: club.name, sub: club.city.isEmpty ? nil : club.city) {
@@ -233,17 +241,12 @@ private struct ClubDetail: View {
                     .buttonStyle(.plain)
                 }
             }
-            if club.events.isEmpty {
-                Button(role: .destructive) { deleting = true } label: { Label("Delete Club", systemImage: "trash").foregroundStyle(FC.red) }.buttonStyle(PlainCardButton(full: true))
-            } else {
-                Help("A club with tournaments can’t be deleted. Switch it off instead, or delete its tournaments in Admin → Tournaments.")
-            }
+            Button(role: .destructive) { deleting = club } label: { Label("Delete Club", systemImage: "trash").foregroundStyle(FC.red) }.buttonStyle(PlainCardButton(full: true))
+            if !club.events.isEmpty { Help("For a test club. Its \(club.events.count == 1 ? "tournament goes" : "\(club.events.count) tournaments go") too, and you type the club’s name to confirm. For a real club, Switch Off instead.") }
         }
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         .overlay(alignment: .bottom) { NoticeBar(text: admin.notice).padding(.bottom, 10).animation(.snappy, value: admin.notice) }
-        .confirmationDialog("Delete \(club.name)?", isPresented: $deleting, titleVisibility: .visible) {
-            Button("Delete Club", role: .destructive) { Task { await admin.act("delete", ["club": club.id], done: "Club deleted."); if !admin.clubs.contains(where: { $0.id == club.id }) { dismiss() } } }
-        } message: { Text("For a mistaken or spam sign-up. Its people lose access to it. This can’t be undone.") }
+        .deleteClubAlert($deleting) { dismiss() }
         .task(id: club.id) { image = await CourseImages.place([club.name, club.city].filter { !$0.isEmpty }.joined(separator: " "), key: club.id) }
     }
 }

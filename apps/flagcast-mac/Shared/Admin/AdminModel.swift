@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Security
 import Observation
 
@@ -176,9 +177,25 @@ final class AdminModel {
         do {
             try await call(op, extra)
             try await refresh()
-            if ["lock", "archive", "move", "hide", "unhide", "event", "claim", "demo"].contains(op) { await refreshEvents() }
+            if ["lock", "archive", "move", "hide", "unhide", "event", "claim", "demo", "delete"].contains(op) { await refreshEvents() }
             if let done { flash(done) }
         } catch { flash(error.localizedDescription) }
+    }
+    /// Delete a club. One with tournaments (a test club) goes with them, and only with its name typed (the server checks too). True when it's gone.
+    func deleteClub(_ club: AdminClub, typed: String = "") async -> Bool {
+        await act("delete", ["club": club.id, "confirm": typed], done: club.events.isEmpty ? "Club deleted." : "Club and its tournaments deleted.")
+        return !clubs.contains { $0.id == club.id }
+    }
+    /// The typed name matches the club's (case, spaces and curly quotes don't matter).
+    static func nameMatches(_ typed: String, _ name: String) -> Bool {
+        let f = { (x: String) in x.lowercased().replacingOccurrences(of: "’", with: "'").replacingOccurrences(of: "‘", with: "'").split(whereSeparator: \.isWhitespace).joined(separator: " ") }
+        return !f(typed).isEmpty && f(typed) == f(name)
+    }
+    /// What deleting a club does, for the confirm.
+    static func deleteMessage(_ club: AdminClub) -> String {
+        let n = club.events.count
+        return n == 0 ? "For a mistaken or spam sign-up. Its people lose access to it. This can’t be undone."
+            : "This also deletes its \(n == 1 ? "tournament" : "\(n) tournaments") with every score, team and photo, and their links stop working. Its people lose access. This can’t be undone. Type \(club.name) to confirm."
     }
     /// A club's branding (logo, accent, powered): nil when saved, else what went wrong (for the branding editor).
     func brand(_ club: String, _ changes: [String: Any]) async -> String? {
@@ -246,4 +263,23 @@ enum Keychain {
             if let v = newValue, !v.isEmpty { var a = q; a[kSecValueData as String] = Data(v.utf8); SecItemAdd(a as CFDictionary, nil) }
         }
     }
+}
+
+/// Delete a club from Admin: a plain confirm when it has no tournaments, else type its name (a test club and its tournaments).
+struct DeleteClubAlert: ViewModifier {
+    @Environment(AdminModel.self) private var model
+    @Binding var club: AdminClub?
+    var deleted: () -> Void = {}
+    @State private var typed = ""
+    func body(content: Content) -> some View {
+        content.alert("Delete \(club?.name ?? "club")?", isPresented: Binding(get: { club != nil }, set: { if !$0 { club = nil; typed = "" } }), presenting: club) { c in
+            if !c.events.isEmpty { TextField(c.name, text: $typed).autocorrectionDisabled() }
+            Button("Delete Club", role: .destructive) { let t = typed; Task { if await model.deleteClub(c, typed: t) { deleted() } } }
+                .disabled(!c.events.isEmpty && !AdminModel.nameMatches(typed, c.name))
+            Button("Cancel", role: .cancel) {}
+        } message: { c in Text(AdminModel.deleteMessage(c)) }
+    }
+}
+extension View {
+    func deleteClubAlert(_ club: Binding<AdminClub?>, deleted: @escaping () -> Void = {}) -> some View { modifier(DeleteClubAlert(club: club, deleted: deleted)) }
 }

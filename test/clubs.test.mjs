@@ -46,4 +46,14 @@ const ids = r.j.events.map((e) => e.id); assert.ok(ids.includes(aEv) && ids.incl
 r = await club('admin', { pass: PASS, op: 'events' }); assert.equal(r.status, 200); assert.ok(r.j.events.some((e) => e.id === bEv));
 ok('Flagcast staff (ADMIN_EMAIL sign-in or the passcode) still see every club’s tournaments');
 
+// deleting a test club with tournaments: only after typing its name, and its tournaments go too
+r = await club('admin', { pass: PASS, op: 'delete', club: aId }); assert.equal(r.status, 400); assert.match(r.j.error, /Type the club/);
+r = await club('admin', { pass: PASS, op: 'delete', club: aId, confirm: 'Club B' }); assert.equal(r.status, 400);
+r = await club('admin', { token: a, op: 'delete', club: aId, confirm: `Club A ${t}` }); assert.equal(r.status, 403);
+r = await club('admin', { pass: PASS, op: 'delete', club: aId, confirm: `  club a ${t} ` }); assert.equal(r.status, 200);
+assert.ok(!r.j.clubs.some((c) => c.id === aId));
+r = await club('admin', { pass: PASS, op: 'events' }); assert.ok(!r.j.events.some((e) => e.id === aEv)); assert.ok(r.j.events.some((e) => e.id === bEv));
+r = await fetch(`${BASE}/golf/api/${aEv}/state`); assert.equal(r.status, 404);
+ok('Admin deletes a club with tournaments only after its name is typed; its tournaments are wiped, other clubs keep theirs');
+
 console.log(`\n${n} passed`);
