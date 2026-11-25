@@ -98,6 +98,8 @@ struct DeskEvent: Codable, Hashable {
     var logo = ""   // this tournament's own logo (a PNG data: URI) instead of its club's; '' = the club's
     // the rest: read only here, changed with their own ops
     var id = "", key = ""
+    /// the setup version this copy was loaded at: Save sends it, so the server keeps what changed since (golf.js mergeTeams)
+    var v = 0
     var locked = false
     var aces: [Ace] = []
     var map = CourseMap()
@@ -111,7 +113,7 @@ struct DeskEvent: Codable, Hashable {
 
     enum CodingKeys: String, CodingKey {
         case name, club, date, course, format, sideGames, flights, teams, screens, cams, sponsors, schedule, pins, displays, fund, contests, logo
-        case id, key, locked, aces, map, live, scenes, replays, news, stats, log, photos
+        case id, key, locked, aces, map, live, scenes, replays, news, stats, log, photos, v
     }
     init() {}
     init(from d: Decoder) throws {
@@ -128,7 +130,7 @@ struct DeskEvent: Codable, Hashable {
         sponsors = c.list(.sponsors); schedule = c.list(.schedule); pins = c.list(.pins); displays = c.list(.displays)
         fund = (try? c.decodeIfPresent(Fund.self, forKey: .fund)) ?? Fund()
         contests = c.list(.contests); logo = c.str(.logo)
-        id = c.str(.id); key = c.str(.key); locked = c.bool(.locked, false); aces = c.list(.aces)
+        id = c.str(.id); key = c.str(.key); locked = c.bool(.locked, false); aces = c.list(.aces); v = Int(c.dbl(.v, 0))
         map = (try? c.decodeIfPresent(CourseMap.self, forKey: .map)) ?? CourseMap()
         live = (try? c.decodeIfPresent(LiveScreens.self, forKey: .live)) ?? LiveScreens()
         scenes = c.list(.scenes); replays = c.list(.replays); news = c.list(.news)
@@ -145,7 +147,7 @@ struct DeskEvent: Codable, Hashable {
         try c.encode(Dictionary(uniqueKeysWithValues: cams.map { (String($0.key), $0.value) }), forKey: .cams)
         try c.encode(sponsors, forKey: .sponsors); try c.encode(schedule, forKey: .schedule); try c.encode(pins, forKey: .pins)
         try c.encode(displays, forKey: .displays); try c.encode(fund, forKey: .fund); try c.encode(contests, forKey: .contests)
-        try c.encode(logo, forKey: .logo)
+        try c.encode(logo, forKey: .logo); try c.encode(v, forKey: .v)
     }
     /// The setup as JSON, for comparing (unsaved changes) and for Save.
     var setupData: Data { (try? Self.encoder.encode(self)) ?? Data() }

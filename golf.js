@@ -252,6 +252,35 @@ function cleanSetup(s, old) {
   };
 }
 
+// Every Manager saves the whole setup, team list included, so a desk opened a while ago could undo what happened since
+// (a late group a pro added, a player moved, another device's Save) and drop those teams' scores. Each team carries
+// sv, the setup version it last changed in; the desk sends the version it loaded (setup.v). Teams changed after that
+// keep the server's copy, and teams added after it stay even though the old copy doesn't list them. An app too old
+// to send v can't take off a team that has scores. Teams the desk did change get the new version.
+const teamSame = (a, b) => JSON.stringify({ ...a, sv: 0 }) === JSON.stringify({ ...b, sv: 0 });
+export function mergeTeams(old, sent, base, v, scores = {}) {
+  const known = Number.isFinite(Number(base)) && base !== null && base !== '' ? Number(base) : null;
+  const was = new Map(old.map((t) => [t.id, t])), seen = new Set();
+  const out = sent.map((t) => {
+    seen.add(t.id);
+    const o = was.get(t.id);
+    if (o && known !== null && (o.sv || 0) > known) return o; // changed on the server since this desk loaded
+    if (!o) return { ...t, sv: v };
+    return teamSame(o, t) ? { ...t, sv: o.sv || 0 } : { ...t, sv: v };
+  });
+  for (const o of old) {
+    if (seen.has(o.id)) continue;
+    const newer = known !== null && (o.sv || 0) > known, scored = known === null && Object.values(scores[o.id] || {}).some((a) => (a || []).some((x) => x));
+    if ((newer || scored) && out.length < 200) out.push(o);
+  }
+  return out;
+}
+// cleanSetup drops sv: put each team's back, and the new version on the one that changed
+function stamp(teams, old, changed, v) {
+  const sv = new Map(old.map((t) => [t.id, t.sv || 0]));
+  return teams.map((t) => ({ ...t, sv: t.id === changed ? v : sv.get(t.id) || 0 }));
+}
+
 export class GolfEvent extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
@@ -273,9 +302,9 @@ export class GolfEvent extends DurableObject {
   // what anyone can see: the setup without the cart codes or the desk key
   async publicState() {
     const ev = await this.load(), sc = await this.scores();
-    const { key, pins, log, logo, clubBrand, demo, photos, ...rest } = ev; // logos and photos go by address, not in the state
+    const { key, pins, log, logo, clubBrand, demo, photos, removed, ...rest } = ev; // logos and photos go by address, not in the state
 
-    const teams = ev.teams.map(({ code, ...t }) => ({ ...t, players: t.players.map(({ ghin, ...p }) => p) })); // GHIN numbers stay with the desk
+    const teams = ev.teams.map(({ code, sv, ...t }) => ({ ...t, players: t.players.map(({ ghin, ...p }) => p) })); // GHIN numbers stay with the desk
     const online = Object.fromEntries((ev.displays || []).map((d) => [d.id, this.ctx.getWebSockets(`d:${d.id}`).length]));
     const scores = {}, lastAt = {};
     for (const t of ev.teams) {
@@ -438,13 +467,30 @@ export class GolfEvent extends DurableObject {
       const s = cleanSetup(b.setup || {}, ev);
       s.cams = ev.cams || {};
       s.logo = logo; // camera links are Flagcast staff's (op 'cams' from Admin): a desk key can't change them
-      Object.assign(ev, s, { v: (ev.v || 0) + 1 });
-      // scores of teams that were removed go too
-      const keep = new Set(ev.teams.map((t) => t.id)), sc = await this.scores();
+      const v = (ev.v || 0) + 1, sc = await this.scores();
+      s.teams = mergeTeams(ev.teams, s.teams, b.setup?.v, v, sc);
+      const was = ev.teams;
+      Object.assign(ev, s, { v });
+      // teams that were removed: set aside with their scores for 30 days (desk op 'restore' brings one back)
+      const keep = new Set(ev.teams.map((t) => t.id));
+      ev.removed = (ev.removed || []).filter((r) => Date.now() - r.at < 30 * 86400000 && !keep.has(r.team.id));
+      for (const t of was) if (!keep.has(t.id)) {
+        ev.removed = [...ev.removed.filter((r) => r.team.id !== t.id), { team: t, at: Date.now() }].slice(-60);
+        if (sc[t.id]) { await this.ctx.storage.put(`x:${t.id}`, sc[t.id]); delete sc[t.id]; await this.ctx.storage.delete(`s:${t.id}`); }
+      }
       for (const id of Object.keys(sc)) if (!keep.has(id)) { delete sc[id]; await this.ctx.storage.delete(`s:${id}`); }
+      for (const k of (await this.ctx.storage.list({ prefix: 'x:' })).keys()) if (!ev.removed.some((r) => `x:${r.team.id}` === k)) await this.ctx.storage.delete(k);
       // banners of sponsors that were removed go too
       const sps = new Set(ev.sponsors.map((x) => `s-${x.id}`));
       for (const k of Object.keys(ev.photos || {})) if (k.startsWith('s-') && !sps.has(k)) { delete ev.photos[k]; await this.ctx.storage.delete(`p:${k}`); }
+    } else if (b.op === 'restore') { // a team taken off by a Save (kept 30 days), back with its scores
+      const r = (ev.removed || []).find((x) => x.team.id === b.team); if (!r) return json({ error: 'That team isn’t in the removed list any more.' }, 404);
+      if (ev.teams.length >= 200) return json({ error: 'That’s the most teams a tournament can have.' }, 400);
+      ev.v = (ev.v || 0) + 1;
+      ev.teams = [...ev.teams, { ...r.team, sv: ev.v }];
+      ev.removed = ev.removed.filter((x) => x !== r);
+      const x = await this.ctx.storage.get(`x:${r.team.id}`);
+      if (x) { const sc = await this.scores(); sc[r.team.id] = x; await this.ctx.storage.put(`s:${r.team.id}`, x); await this.ctx.storage.delete(`x:${r.team.id}`); }
     } else if (b.op === 'ace') ev.aces = (ev.aces || []).filter((a) => a.at !== b.remove);
     else if (b.op === 'clear') {
       const sc = await this.scores(); delete sc[b.team]; await this.ctx.storage.delete(`s:${b.team}`);
@@ -491,7 +537,9 @@ export class GolfEvent extends DurableObject {
       const t = { ...(old || { start: num(b.start, 1, 18, 1), flight: clip(b.flight, 12) }), name: b.name !== undefined ? b.name : (old ? old.name : ''), players };
       const next = isNew ? [...ev.teams, t] : ev.teams.map((x) => (x.id === old.id ? t : x));
       const ids = new Set(ev.teams.map((x) => x.id));
-      ev.teams = cleanSetup({ ...ev, teams: next }, ev).teams;
+      ev.v = (ev.v || 0) + 1;
+      ev.teams = stamp(cleanSetup({ ...ev, teams: next }, ev).teams, ev.teams, isNew ? null : old.id, ev.v);
+      if (isNew) { const nt = ev.teams.find((x) => !ids.has(x.id)); if (nt) nt.sv = ev.v; }
       const made = isNew ? ev.teams.find((x) => !ids.has(x.id)) : ev.teams.find((x) => x.id === old.id);
       await this.ctx.storage.put('event', ev);
       await this.broadcast();
@@ -504,6 +552,7 @@ export class GolfEvent extends DurableObject {
       if (to.players.length >= 4) return json({ error: 'That team already has four players.' }, 400);
       const p = from.players.find((x) => x.id === b.player);
       from.players = from.players.filter((x) => x.id !== p.id); to.players = [...to.players, p];
+      ev.v = (ev.v || 0) + 1; from.sv = ev.v; to.sv = ev.v; // a Save made from an older copy keeps this move
       const sc = await this.scores();
       if (sc[from.id] && sc[from.id][p.id]) {
         sc[to.id] = sc[to.id] || {};

@@ -6,3 +6,10 @@ dist/
 /screens/
 .DS_Store
 apps/flagcast-phone/ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+# Xcode builds, archives and upload logs (never commit: they hold signing details)
+apps/flagcast-ios/build/
+apps/flagcast-staff-ios/build/
+apps/flagcast-mac/build/
+apps/flagcast-tv-apple/build/
+*.xcarchive/
+apps/flagcast-manager/dist-win-*.log

@@ -175,6 +175,7 @@ table.t .n { width: 64px; }
   <p class="help">Each team gets its own scorecard code and QR card. Start hole is for a shotgun start. For a scramble, set the team handicap. Type a player’s Handicap Index (use + for plus handicaps, like +1.2) and pick their tees to have the course handicap worked out; or leave Index empty and type the course handicap yourself.</p>
   <div class="scroll" style="margin-top:12px"><table class="t" id="teams"></table></div>
   <div class="row"><button class="btn" id="addTeam">Add team</button><button class="btn" id="pasteBtn">Paste from a spreadsheet</button></div>
+  <div id="removedTeams" class="help" hidden style="margin-top:10px"></div>
   <div id="pasteBox" hidden style="margin-top:12px">
     <p class="help">One team per line, columns split by tabs or commas: Team name, Flight, Start hole, Player 1, Handicap 1, Player 2, Handicap 2, and so on (up to 4 players). Copy the rows straight out of Excel or Google Sheets.</p>
     <textarea id="paste" placeholder="Reilly / Okafor, A, 1, Pat Reilly, 8, Sam Okafor, 14"></textarea>
@@ -518,7 +519,17 @@ document.addEventListener('input', (e) => {
   else if (e.target.closest('#teams') && ['index', 'tee'].includes(e.target.dataset.pk)) updateHcps();
 });
 document.addEventListener('change', (e) => { if (e.target.closest('#tees')) { const keep = [...document.querySelectorAll('#teams .pl [data-pk="tee"]')].map((x) => x.value); drawTeams(); document.querySelectorAll('#teams .pl [data-pk="tee"]').forEach((x, i) => { if (keep[i] && [...x.options].some((o) => o.value === keep[i])) x.value = keep[i]; }); updateHcps(); } });
+// teams taken off by a Save are kept 30 days with their scores: put one back
+function drawRemoved() {
+  const r = EV.removed || [], el = $('removedTeams'); el.hidden = !r.length; if (!r.length) return;
+  el.innerHTML = `Taken off recently: ${r.map((x) => `<button class="btn" data-restore="${esc(x.team.id)}">Put back ${esc(x.team.name || x.team.players.map((p) => p.name).join(' / ') || 'team')}</button>`).join(' ')}`;
+  el.querySelectorAll('[data-restore]').forEach((b) => b.onclick = async () => {
+    if (dirty) return toast('Save or undo your changes first.');
+    try { await desk('restore', { team: b.dataset.restore }); EV = await desk('get'); fill(); toast('Team put back, with its scores.'); } catch (e) { toast(e.message); }
+  });
+}
 function drawTeams() {
+  drawRemoved();
   const scr = $('f-type').value === 'scramble';
   $('teams').innerHTML = `<thead><tr><th>Team name</th><th>Flight</th><th>Start</th>${scr ? '<th>Team hcp</th>' : ''}<th>Players and handicaps</th><th>Code</th><th></th></tr></thead><tbody>${EV.teams.map((t, i) => `
     <tr data-t="${i}"><td><input data-k="name" value="${esc(t.name)}" placeholder="Uses the last names"></td>
