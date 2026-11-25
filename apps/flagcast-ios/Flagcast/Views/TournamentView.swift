@@ -50,14 +50,6 @@ struct TournamentScreen: View {
             }
         }
         .tint(Color.fcPrimary)
-        // a Demo tournament (Admin marked it, "Try a demo" opens it): say so, so nobody takes it for a real round
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if s?.brand.marked == true {
-                Text("Demo · a sample tournament").font(.caption.weight(.bold)).tracking(1.2).textCase(.uppercase)
-                    .foregroundStyle(Color.fcOnFlag).frame(maxWidth: .infinity).padding(.vertical, 5).background(Color.fcFlag)
-                    .accessibilityAddTraits(.isHeader)
-            }
-        }
         .environment(nav)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
@@ -99,7 +91,15 @@ struct TourHeader<Trailing: View, Below: View>: View {
                     if let u = state?.brand.logoURL {
                         ClubLogo(url: u).frame(width: 170, height: 30).accessibilityLabel(state?.title ?? title)
                     } else {
-                        Text(state?.title ?? title).font(.headline).lineLimit(1)
+                        HStack(spacing: 6) {
+                            // a Demo tournament (Admin marked it, "Try a demo" opens it): a small pill, so nobody takes it for a real round
+                            if state?.brand.marked == true {
+                                Text("DEMO").font(.system(size: 10, weight: .heavy)).tracking(0.8).foregroundStyle(Color.fcOnFlag)
+                                    .padding(.horizontal, 6).padding(.vertical, 2).background(Color.fcFlag, in: RoundedRectangle(cornerRadius: 5))
+                                    .accessibilityLabel("Demo tournament")
+                            }
+                            Text(state?.title ?? title).font(.headline).lineLimit(1)
+                        }
                     }
                     if !subtitle.isEmpty { Text(subtitle).font(.caption).foregroundStyle(Color.fcOnGreenMuted).lineLimit(1).minimumScaleFactor(0.8) }
                 }

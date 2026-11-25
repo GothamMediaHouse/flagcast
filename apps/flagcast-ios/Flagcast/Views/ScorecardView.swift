@@ -196,8 +196,10 @@ struct ScorecardScreen: View {
         let sp = s.sponsors.first { $0.spot == "hole" && $0.holes.contains(h) } ?? s.sponsors.first { $0.holes.contains(h) }
         let turn = h == 10 ? s.sponsors.first { $0.spot == "turn" } : nil
         let cs = s.contests.filter { $0.hole == h }
-        if sp != nil || turn != nil || !cs.isEmpty {
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
+        let tiles = (sp == nil ? 0 : 1) + (turn == nil ? 0 : 1) + cs.count
+        if tiles > 0 {
+            // one tile gets the whole width, so a sponsor's name fits on one line
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: tiles == 1 ? 1 : 2), spacing: 8) {
                 if let sp {
                     SponsorTile(sponsor: sp, lead: "Presented by", banner: s.photos.sponsor(sp.id)) { model.hits.tap(sp.id) }
                         .onAppear { model.hits.view(sp.id, once: "\(sp.id):\(h)") }
@@ -449,6 +451,11 @@ struct ScorecardScreen: View {
         }
         .padding(.horizontal, 16).padding(.vertical, 8)
         .background(Color.fcPaper)
+        // a soft fade above the bar, so a card cut off at the bottom reads as "more below"
+        .overlay(alignment: .top) {
+            LinearGradient(colors: [Color.fcPaper.opacity(0), Color.fcPaper], startPoint: .top, endPoint: .bottom)
+                .frame(height: 18).offset(y: -18).allowsHitTesting(false)
+        }
     }
 }
 
@@ -571,8 +578,8 @@ struct HoleCard: View {
             if mapped || camera != nil {
                 HStack(spacing: 8) {
                     if hm.flatMap({ Geo.middle($0) }) != nil {
-                        Button { full = true } label: { Label("Full screen GPS", systemImage: "arrow.up.left.and.arrow.down.right").lineLimit(1).minimumScaleFactor(0.8) }
-                            .buttonStyle(.fc(.dark, full: true))
+                        Button { full = true } label: { Label(camera == nil ? "Full screen GPS" : "Full screen", systemImage: "arrow.up.left.and.arrow.down.right").lineLimit(1).minimumScaleFactor(0.8) }
+                            .buttonStyle(.fc(.dark, full: true)).layoutPriority(1)
                     }
                     if mapped { gpsButton }
                     if let camera {
