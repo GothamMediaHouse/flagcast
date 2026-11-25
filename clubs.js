@@ -412,13 +412,19 @@ export class FlagcastClubs extends DurableObject {
         // local dev: anyone can make one
       } else this.fail('Sign in with your club’s account to make a tournament.', 401);
       const id = rand(8, 'abcdefghijkmnpqrstuvwxyz23456789');
-      const r = await env.GOLF.get(env.GOLF.idFromName(id)).fetch(new Request(`https://golf/init?id=${id}`, { method: 'POST', body: JSON.stringify({ name, club: club?.name || '', map: this.courseOf(club) }) }));
-      const j = await r.json();
-      if (!r.ok) return json(j, r.status);
+      // take the credit before making it (two quick taps on the last credit can't both get one), and give it back if making fails
+      const paid = !b.pass && club && club.credits > 0;
+      if (paid) {
+        // (no await since the check above, so nothing else ran in between)
+        this.sql.exec('UPDATE clubs SET credits = credits - 1 WHERE id = ? AND credits > 0', club.id);
+      }
+      let r, j;
+      try { r = await env.GOLF.get(env.GOLF.idFromName(id)).fetch(new Request(`https://golf/init?id=${id}`, { method: 'POST', body: JSON.stringify({ name, club: club?.name || '', map: this.courseOf(club) }) })); j = await r.json(); }
+      catch { r = { ok: false, status: 502 }; j = { error: 'That didn’t work. Try again.' }; }
+      if (!r.ok) { if (paid) this.sql.exec('UPDATE clubs SET credits = credits + 1 WHERE id = ?', club.id); return json(j, r.status); }
       if (club) {
         this.sql.exec('INSERT INTO events (id, club, key, name, created) VALUES (?, ?, ?, ?, ?)', id, club.id, j.key, name || 'New tournament', now);
         this.note(b.pass ? 'Flagcast' : this.who(b.token).email, club.id, `Made tournament ${name || 'New tournament'} (${id.toUpperCase()})`);
-        if (!b.pass && club.credits > 0) this.sql.exec('UPDATE clubs SET credits = credits - 1 WHERE id = ?', club.id);
         if (club.logo || club.accent) await this.golf(id, 'brand', { club: this.brandOf(club) }).catch(() => {});
       }
       return json(j);

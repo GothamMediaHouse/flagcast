@@ -371,7 +371,7 @@ export class GolfEvent extends DurableObject {
       return json({ ok: true, cams: ev.cams });
     }
     if (op === 'pro') return this.pro(b, request.headers.get('CF-Connecting-IP') || '');
-    if (op === 'hit') return this.hit(b);
+    if (op === 'hit') return this.hit(b, request.headers.get('CF-Connecting-IP') || '');
     if (op === 'where') return this.where(b);
     return json({ error: 'Not found' }, 404);
   }
@@ -698,8 +698,12 @@ export class GolfEvent extends DurableObject {
     if (!this.st) this.st = (await this.ctx.storage.get('stats')) || {};
     return this.st;
   }
-  async hit(b) {
-    const ev = this.ev, st = await this.getStats(), ids = new Set(ev.sponsors.map((x) => x.id));
+  async hit(b, ip = '') {
+    const ev = this.ev, st = await this.getStats(), ids = new Set(ev.sponsors.map((x) => x.id)), now = Date.now();
+    // one phone or screen sends a batch every little while: more than 40 batches in 10 minutes from one network are left out,
+    // so nobody can pump up a sponsor's numbers in the report
+    this.hits = this.hits && this.hits.size < 5000 ? this.hits : new Map();
+    const h = this.hits.get(ip); if (h && now - h.t < 600000) { if (++h.n > 40 * Math.max(1, ev.displays?.length || 1)) return json({ ok: true }); } else this.hits.set(ip, { t: now, n: 1 });
     let n = 0;
     for (const e of (Array.isArray(b.list) ? b.list : []).slice(0, 50)) {
       if (!ids.has(e.s) || !['view', 'tap', 'secs'].includes(e.k)) continue;

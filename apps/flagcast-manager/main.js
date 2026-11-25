@@ -12,6 +12,8 @@ function load() { try { return JSON.parse(fs.readFileSync(store(), 'utf8')); } c
 function save(d) { fs.mkdirSync(path.dirname(store()), { recursive: true }); fs.writeFileSync(store(), JSON.stringify(d, null, 2)); }
 let data = load();
 const base = () => (data.base || DEFAULT_BASE).replace(/\/+$/, '');
+// a page of the Flagcast server this app uses (not a look-alike such as flagcast.app.example.com)
+const ours = (u) => { try { return new URL(u).origin === new URL(base()).origin; } catch { return false; } };
 
 let win = null;
 const screenWins = new Map();
@@ -29,20 +31,21 @@ function createWindow() {
   win.loadFile(path.join(__dirname, 'home.html'));
   // the desk's own links: Flagcast pages open in an app window (the cart cards print from there); anything else in the browser
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith(base())) return { action: 'allow', overrideBrowserWindowOptions: { width: 1100, height: 800, autoHideMenuBar: true, webPreferences: { contextIsolation: true } } };
-    shell.openExternal(url); return { action: 'deny' };
+    if (ours(url)) return { action: 'allow', overrideBrowserWindowOptions: { width: 1100, height: 800, autoHideMenuBar: true, webPreferences: { contextIsolation: true } } };
+    if (/^(https?:|mailto:|tel:)/i.test(url)) shell.openExternal(url); // never file:, smb: and the like
+    return { action: 'deny' };
   });
   // on a desk page, add a way back to the list of tournaments
   win.webContents.on('did-finish-load', () => {
     const u = win.webContents.getURL();
     // Mac: make room for the traffic lights on the web pages too, and let their green bar move the window
-    if (process.platform === 'darwin' && u.startsWith(base())) {
+    if (process.platform === 'darwin' && ours(u)) {
       win.webContents.insertCSS(`.topbar { padding-top: 40px !important; -webkit-app-region: drag; }
         .topbar a, .topbar button, .topbar input, .topbar select, .topbar label { -webkit-app-region: no-drag; }
         body:not(:has(.topbar)) { padding-top: 32px; }
         body:not(:has(.topbar))::before { content: ''; position: fixed; inset: 0 0 auto 0; height: 32px; -webkit-app-region: drag; z-index: 999; }`).catch(() => {});
     }
-    if (u.startsWith(base()) && /\/desk/.test(u)) {
+    if (ours(u) && /\/desk/.test(u)) {
       win.webContents.executeJavaScript(`(() => { if (document.getElementById('glm-back')) return;
         const b = document.createElement('button'); b.id = 'glm-back'; b.textContent = '‹ All tournaments';
         b.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:99;padding:8px 14px;border-radius:8px;border:1px solid #d3dacf;background:#fff;color:#14201a;font:600 13px system-ui;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.15)';
