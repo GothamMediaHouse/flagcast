@@ -35,12 +35,15 @@ function mapped(ev) {
 }
 
 // [{ team, name, start, hole, at, acc, t, sample: true }]. Uses the demo's own teams (so the names match the
-// leaderboard), skipping `skip` (teams with a real phone on the map), and fills up to 8 groups with sample names.
+// leaderboard), skipping `skip` (teams with a real phone on the map), and fills up to 8 groups with sample names
+// (fewer on a course with fewer mapped holes). Every demo team walks, however many: a 40-team shotgun has two or
+// three groups on each hole, spread out along it.
+export const MAX_DEMO_GROUPS = 120;
 export function demoGroups(ev, now = Date.now(), skip = new Set()) {
   const holes = mapped(ev); if (holes.length < 2) return [];
   const name = (t) => t.name || t.players.map((p) => String(p.name || '').split(' ').slice(-1)[0]).join(' / ');
   const own = (ev.teams || []).filter((t) => !skip.has(t.id)).map((t) => ({ team: t.id, name: name(t), start: t.start || 0 }));
-  const count = Math.min(holes.length, Math.max(own.length, 8), 18);
+  const count = Math.min(Math.max(own.length, Math.min(holes.length, 8)), MAX_DEMO_GROUPS);
   const list = own.slice(0, count);
   for (let i = 0; list.length < count; i++) list.push({ team: `sample${i + 1}`, name: SAMPLE[i % SAMPLE.length], start: 0 });
   const legMins = LEGS.reduce((a, l) => a + l[2], 0), clock = now / 60000;
@@ -50,7 +53,7 @@ export function demoGroups(ev, now = Date.now(), skip = new Set()) {
     const k = ((Math.floor(pos) % holes.length) + holes.length) % holes.length, h = holes[k];
     let m = (pos - Math.floor(pos)) * legMins, f = 1; const into = m;
     for (const [a, b, mins] of LEGS) { if (m <= mins) { f = a + (b - a) * (m / mins); break; } m -= mins; }
-    const side = f > 0 && f < 0.92 ? ((i * 7) % 5 - 2) * 6 : ((i * 3) % 3 - 1) * 3; // fairway spread; close on the green
+    const side = f > 0 && f < 0.92 ? ((i * 7) % 5 - 2) * 6 : ((i % 5) - 2) * 4; // fairway spread; close on the tee and green, never on top of each other
     const at = along(h.path, f, side);
     return { ...g, hole: h.n, at: [round6(at[0]), round6(at[1])], acc: 5, t: now - ((i * 17) % 40) * 1000, since: Math.round(now - into * (HOLE_MINS / legMins) * 60000), sample: true };
   });

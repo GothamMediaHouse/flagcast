@@ -35,6 +35,17 @@ test('courses with no map get none; teams with a real phone are skipped', () => 
   assert.ok(g.every((x) => !('code' in x)));
 });
 
+test('every demo team walks, even more teams than holes (a 40-team shotgun)', () => {
+  const forty = Array.from({ length: 40 }, (_, i) => ({ id: `t${i + 1}`, name: `Team ${i + 1}`, start: (i % 18) + 1, players: [{ id: `q${i}`, name: `P ${i}` }] }));
+  const g = demoGroups({ ...ev, teams: forty }, Date.UTC(2026, 10, 25, 15));
+  assert.equal(g.length, 40);
+  assert.deepEqual(g.map((x) => x.team), forty.map((t) => t.id), 'the demo teams, no sample names');
+  assert.equal(new Set(g.map((x) => x.hole)).size, 18, 'every hole has groups');
+  assert.ok(Math.max(...Object.values(g.reduce((a, x) => ({ ...a, [x.hole]: (a[x.hole] || 0) + 1 }), {}))) <= 4, 'no pile-up on one hole');
+  const spots = new Set(g.map((x) => x.at.join()));
+  assert.equal(spots.size, 40, 'no two groups on the same spot');
+});
+
 test('a demo has the map on any day, until the results are final', () => {
   assert.equal(trackingOn({ date: '2020-01-01' }), false);
   assert.equal(trackingOn({ date: '2020-01-01', demo: true }), true);
