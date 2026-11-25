@@ -1,5 +1,5 @@
 // The feed the native Flagcast TV apps draw (tv.js serves it): the board's pages as data. No Cloudflare imports, so tests run it in Node.
-import { leaderboard, fmtPar, FORMATS } from './public/golf/core.js';
+import { leaderboard, fmtPar, FORMATS, formatName, matches, cup, fmtPts, individuals, hasIndividuals } from './public/golf/core.js';
 
 const abs = (origin, u) => (!u ? '' : /^https:\/\//.test(u) ? u : u.startsWith('/') ? origin + u : '');
 const isHLS = (u) => /^https:\/\/.+\.m3u8(\?|$)/.test(u || '');
@@ -21,8 +21,36 @@ export function tvFeed(S, screenId, origin = 'https://flagcast.app') {
     const pages = Math.min(4, Math.max(1, Math.ceil(lb.length / rows))), lsp = spot('leaderboard')[0];
     return Array.from({ length: pages }, (_, p) => ({
       k: 'lb', secs: secs || secsDefault, title: 'Leaderboard',
-      sub: `${fl ? `Flight ${fl}` : FORMATS[S.format?.type] || ''} · ${mode}${S.locked ? ' · Final results' : ''}`,
+      sub: `${fl ? `Flight ${fl}` : formatName(S)} · ${mode}${S.locked ? ' · Final results' : ''}`,
       page: p + 1, pages, sponsor: lsp ? sponsorOf(lsp) : null, points: stab,
+      rows: lb.slice(p * rows, p * rows + rows).map((l) => ({ pos: String(l.pos), name: l.name, sub: l.sub && l.sub !== l.name ? l.sub : '',
+        score: l.played ? fmtPar(l.score, stab).replace(' pts', '') : '—', under: !stab && !!l.played && l.score < 0, thru: String(l.thru || '').replace('Starts ', '#') })),
+    }));
+  };
+  // match play and Individuals go to the TV apps as leaderboard pages too, so every TV app can draw them as they are:
+  // a match is a row (its number, "Fox / Lee v Park / Ortiz", "2 UP", thru) and the cup score goes in the subtitle
+  const tname = (id) => { const t = (S.teams || []).find((x) => x.id === id); return t ? t.name || (t.players || []).map((p) => String(p.name || '').split(' ').pop()).join(' / ') : ''; };
+  const matchPages = (secs) => {
+    const list = matches(S, S.scores || {}); if (!list.length) return [];
+    const c = cup(S, S.scores || {}, list), per = rows, pages = Math.min(4, Math.ceil(list.length / per)), lsp = spot('leaderboard')[0];
+    return Array.from({ length: pages }, (_, p) => ({
+      k: 'lb', secs: secs || secsDefault, title: 'Matches',
+      sub: `${formatName(S)}${c.on ? ` · ${c.a} ${fmtPts(c.A)}, ${c.b} ${fmtPts(c.B)}` : ''}${S.locked ? ' · Final results' : ''}`,
+      page: p + 1, pages, sponsor: lsp ? sponsorOf(lsp) : null, points: false,
+      rows: list.slice(p * per, p * per + per).map((r, i) => {
+        const w = r.winner || r.leader, a = tname(r.a), b = tname(r.b);
+        return { pos: String(p * per + i + 1), name: `${a} v ${b}`, sub: w ? `${w === 'A' ? a : b} ${r.done ? 'won' : 'leads'}` : r.done ? 'Halved' : '',
+          score: r.done ? (r.halved ? '½' : r.text) : r.started ? r.text : '—', under: false, thru: r.done ? 'F' : r.started ? String(r.thru) : String(r.thru).replace('Starts ', '#') };
+      }),
+    }));
+  };
+  const indivPages = (fl, secs) => {
+    if (!S.format?.indiv || !hasIndividuals(S)) return [];
+    const lb = individuals(S, S.scores || {}, { flight: fl || null }); if (!lb.length) return [];
+    const pages = Math.min(4, Math.max(1, Math.ceil(lb.length / rows)));
+    return Array.from({ length: pages }, (_, p) => ({
+      k: 'lb', secs: secs || secsDefault, title: 'Individuals', sub: `${fl ? `Flight ${fl}` : 'Every player'} · ${mode}${S.locked ? ' · Final results' : ''}`,
+      page: p + 1, pages, sponsor: null, points: stab,
       rows: lb.slice(p * rows, p * rows + rows).map((l) => ({ pos: String(l.pos), name: l.name, sub: l.sub && l.sub !== l.name ? l.sub : '',
         score: l.played ? fmtPar(l.score, stab).replace(' pts', '') : '—', under: !stab && !!l.played && l.score < 0, thru: String(l.thru || '').replace('Starts ', '#') })),
     }));
@@ -34,6 +62,8 @@ export function tvFeed(S, screenId, origin = 'https://flagcast.app') {
   };
   const page = (it) => {
     const secs = it.secs;
+    if (it.k === 'matches' || (it.k === 'lb' && S.format?.type === 'match')) return matchPages(secs);
+    if (it.k === 'indiv') return indivPages(it.fl, secs);
     if (it.k === 'lb') return lbPages(it.fl, secs);
     if (it.k === 'cam' || it.k === 'p3') return camPage(it.hole || (S.course?.holes || []).find((h) => h.par === 3 && isHLS(cams[h.n]))?.n, secs);
     if (it.k === 'sponsor') { const x = (S.sponsors || []).find((y) => y.id === it.sponsor); return x ? [{ k: 'sponsor', secs: secs || secsDefault, ...sponsorOf(x) }] : []; }
@@ -49,7 +79,9 @@ export function tvFeed(S, screenId, origin = 'https://flagcast.app') {
     const d = (S.displays || []).find((x) => x.id === screenId);
     if (d?.playlist?.length) pages = d.playlist.flatMap(page);
     if (!pages.length) { // the board's usual pages
-      for (const fl of (S.flights || []).length > 1 ? S.flights : [null]) pages.push(...lbPages(fl));
+      if (S.format?.type === 'match') pages.push(...matchPages());
+      else for (const fl of (S.flights || []).length > 1 ? S.flights : [null]) pages.push(...lbPages(fl));
+      for (const fl of (S.flights || []).length > 1 ? S.flights : [null]) pages.push(...indivPages(fl));
       for (const h of (S.course?.holes || []).filter((x) => x.par === 3)) pages.push(...camPage(h.n));
       if ((S.sponsors || []).length) pages.push(page({ k: 'sponsors' })[0]);
       for (const x of spot('slide')) pages.push({ k: 'sponsor', secs: secsDefault, ...sponsorOf(x) });

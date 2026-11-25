@@ -149,15 +149,19 @@ table.t .n { width: 64px; }
   </div>
   <h3>Format</h3>
   <div class="grid">
-    <label class="f">Format<select id="f-type"><option value="bestball">Best ball (teams)</option><option value="scramble">Scramble (one team score)</option><option value="stroke">Stroke play (each player)</option><option value="stableford">Stableford points</option></select></label>
-    <label class="f">Best balls that count on each hole<select id="f-count"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
+    <label class="f">Format<select id="f-type"><option value="bestball">Best ball (teams)</option><option value="shamble">Shamble (best drive, then own ball)</option><option value="scramble">Scramble (one team score)</option><option value="stroke">Stroke play (each player)</option><option value="stableford">Stableford points</option><option value="match">Match play (head to head)</option></select></label>
+    <label class="f" data-fm="count">Best balls that count on each hole<select id="f-count"><option value="1">1</option><option value="2">2</option><option value="3">3</option></select></label>
+    <label class="f" data-fm="match">Match type<select id="f-match"><option value="singles">Singles (1 v 1)</option><option value="fourball">Four-ball (2 v 2, best ball)</option><option value="scramble">Scramble (2 v 2, one ball)</option></select></label>
+    <label class="f" data-fm="match">Team cup<select id="f-cup"><option value="">Off</option><option value="1">On: two sides, 1 point a win, ½ a halve</option></select></label>
+    <label class="f" data-fm="cup">Side names<span class="row" style="margin:0;gap:6px;flex-wrap:nowrap"><input id="f-cupA" placeholder="Reds" aria-label="First side"><input id="f-cupB" placeholder="Blues" aria-label="Second side"></span></label>
+    <label class="f" data-fm="indiv">Individuals leaderboard<select id="f-indiv"><option value="">Off</option><option value="1">On: every player’s gross and net too</option></select></label>
     <label class="f">Handicap allowance (%)<input id="f-allow" type="number" min="0" max="100" step="5"></label>
     <label class="f">Holes<select id="f-nine"><option value="">18 holes</option><option value="front">Front 9 (holes 1–9)</option><option value="back">Back 9 (holes 10–18)</option></select></label>
     <label class="f">Leaderboard shows<select id="f-show"><option value="net">Net scores</option><option value="gross">Gross scores</option></select></label>
     <label class="f">Flights (comma between)<input id="f-flights" placeholder="A, B, C"></label>
     <label class="f">Side games on the scorecard<select id="f-side"><option value="1">On: skins, Nassau, Wolf and more, for points</option><option value="">Off</option></select></label>
   </div>
-  <p class="help" style="margin-top:10px">Handicaps on the Teams tab are each player’s course handicap. The allowance is applied to it, and strokes fall on the holes by stroke index. A picked-up ball counts as net double bogey. Ties are broken on the back 9, 6, 3 and last hole. Side games let each cart play skins, Nassau, birdies, Stableford, Vegas, Wolf, closest to the pin and long drive among themselves. They're scored in points only, with no money involved.</p>
+  <p class="help" style="margin-top:10px">Handicaps on the Teams tab are each player’s course handicap. The allowance is applied to it, and strokes fall on the holes by stroke index. A picked-up ball counts as net double bogey. Ties are broken on the back 9, 6, 3 and last hole. A shamble counts like best ball: everyone plays from the best drive, then their own ball (80% allowance is usual). In match play strokes come off the lowest player in each match (90% is usual for four-ball); pair the teams on the Teams tab. The Individuals leaderboard (for a club championship) ranks every player on their own, net and gross, by flight, next to the team board. Side games let each cart play skins, Nassau, birdies, Stableford, Vegas, Wolf, closest to the pin and long drive among themselves. They're scored in points only, with no money involved.</p>
   <h3>Course</h3>
   <form class="row" id="cfind" style="margin-top:6px"><input id="cq" placeholder="Find the course by name or town" style="flex:1 1 240px" aria-label="Find the course"><button class="btn dark">Find the course</button><span class="help">Fills in par, yardage, stroke index and every set of tees with its rating and slope.</span></form>
   <div id="cres"></div>
@@ -180,6 +184,12 @@ table.t .n { width: 64px; }
   <div class="scroll" style="margin-top:12px"><table class="t" id="teams"></table></div>
   <div class="row"><button class="btn" id="addTeam">Add team</button><button class="btn" id="pasteBtn">Paste from a spreadsheet</button></div>
   <div id="removedTeams" class="help" hidden style="margin-top:10px"></div>
+  <div id="matchBox" hidden style="margin-top:18px">
+    <h3>Matches</h3>
+    <p class="help">Who plays who. Put both sides of a match on the same cart code (or give them the same start hole) so they play together. Strokes come off the lowest player in each match.</p>
+    <div class="row"><button class="btn dark" id="pairOrder" type="button">Pair in order</button><button class="btn" id="pairDraw" type="button">Draw at random</button><button class="btn" id="addMatch" type="button">Add match</button></div>
+    <div class="scroll"><table class="t" id="matchT"></table></div>
+  </div>
   <div id="pasteBox" hidden style="margin-top:12px">
     <p class="help">One team per line, columns split by tabs or commas: Team name, Flight, Start hole, Player 1, Handicap 1, Player 2, Handicap 2, and so on (up to 4 players). Copy the rows straight out of Excel or Google Sheets.</p>
     <textarea id="paste" placeholder="Reilly / Okafor, A, 1, Pat Reilly, 8, Sam Okafor, 14"></textarea>
@@ -287,7 +297,7 @@ table.t .n { width: 64px; }
 <script type="module">
 import { defaultHoles, leaderboard, courseHcp, coursePar, parseIndex, fmtIndex, netDoubleBogey } from '/golf/core.js';
 import { eventId, post, live, esc } from '/golf/client.js';
-import { fmtPar, contestLeader, contestFlag, fmtDist, playHoles } from '/golf/core.js';
+import { fmtPar, contestLeader, contestFlag, fmtDist, playHoles, teamBall, matches, matchFor, cup, fmtPts } from '/golf/core.js';
 import { GREEN_PATH, pinSpot, pinLabel, pinPaces, pinYards, yds, middle } from '/golf/gps.js';
 import { SECTIONS, sectionTitle, mountSidebar, menuButton, paintPhoto, courseView, holeView, dayLine, today, rememberLink, shrinkPhoto } from '/golf/shell.js';
 
@@ -366,9 +376,20 @@ function drawOverview() {
   const stat = (l, v, s, cls = '') => `<div class="stat"><div class="l">${l}</div><div class="v ${cls}">${esc(v)}</div><div class="s">${esc(s)}</div></div>`;
   $('ovStats').innerHTML = stat('Teams', String(ev.teams.length), `${ev.teams.reduce((a, t) => a + (t.players || []).length, 0)} players`)
     + stat('On the course', String(scoring), finished ? `${finished} finished` : ev.locked ? 'results final' : 'scoring now')
-    + stat('Leader', leader ? scoreText(leader) : '–', leader ? leader.name : 'No scores yet', leader ? scoreClass(leader) : '')
+    + (LIVE && LIVE.format.type === 'match'
+      ? (() => { const ms = matches(LIVE, LIVE.scores), d = ms.filter((r) => r.done).length; return stat('Matches', ms.length ? `${d}/${ms.length}` : '–', ms.length ? 'finished' : 'None paired yet'); })()
+      : stat('Leader', leader ? scoreText(leader) : '–', leader ? leader.name : 'No scores yet', leader ? scoreClass(leader) : ''))
     + stat('Screens', screens ? `${on}/${screens}` : '–', screens ? 'on now' : 'None set up', on ? 'okc' : '');
   const top = board.filter((l) => l.played > 0).slice(0, 5);
+  // match play: the matches as they stand (and the cup) instead of a stroke leaderboard
+  if (LIVE && LIVE.format.type === 'match') {
+    const T = Object.fromEntries(LIVE.teams.map((t) => [t.id, t])), list = matches(LIVE, LIVE.scores), c = cup(LIVE, LIVE.scores, list);
+    const nm = (id) => esc(T[id] ? teamLabel(T[id]) : '?');
+    const live = [...list.filter((r) => r.started && !r.done), ...list.filter((r) => r.done), ...list.filter((r) => !r.started)].slice(0, 6);
+    $('ovLb').innerHTML = `<div class="h"><span>Matches${c.on ? ` · ${esc(c.a)} ${fmtPts(c.A)}, ${esc(c.b)} ${fmtPts(c.B)}` : ''}</span><a class="lnk" href="#scores">All scores ›</a></div>`
+      + (live.length ? live.map((r) => { const w = r.winner || r.leader; return `<div class="r"><span class="n">${w === 'A' ? '<b>' : ''}${nm(r.a)}${w === 'A' ? '</b>' : ''} v ${w === 'B' ? '<b>' : ''}${nm(r.b)}${w === 'B' ? '</b>' : ''}</span><span class="t">${r.done ? 'Final' : r.started ? `Thru ${esc(r.thru)}` : esc(r.thru)}</span><span class="s">${esc(r.done || r.started ? r.text : '–')}</span></div>`; }).join('')
+        : `<div class="none"><span style="font-size:26px">⚑</span>${ev.teams.length ? 'Pair the teams on the Teams page, then Save.' : 'Add teams on the Teams page, then Save.'}</div>`);
+  } else
   $('ovLb').innerHTML = `<div class="h"><span>Leaderboard</span><a class="lnk" href="#scores">All scores ›</a></div>`
     + (top.length ? top.map((l) => `<div class="r"><span class="p">${esc(l.pos)}</span><span class="n">${esc(l.name)}</span><span class="t">${l.thru === 'F' ? 'F' : `Thru ${esc(l.thru)}`}</span><span class="s ${scoreClass(l)}">${esc(scoreText(l))}</span></div>`).join('')
       : `<div class="none"><span style="font-size:26px">⚑</span>${ev.teams.length ? 'Scores show here as the carts send them.' : 'Add teams on the Teams page, then Save.'}</div>`);
@@ -397,16 +418,20 @@ const val = (id) => $(id).value.trim();
 function fill() {
   drawHero();
   $('f-name').value = EV.name; $('f-club').value = EV.club; $('f-date').value = EV.date; $('f-course').value = EV.course.name;
+  EV.matches ||= [];
+  $('f-match').value = EV.format.match || 'fourball'; $('f-cup').value = EV.format.cup?.on ? '1' : ''; $('f-cupA').value = EV.format.cup?.a || 'Reds'; $('f-cupB').value = EV.format.cup?.b || 'Blues';
+  $('f-indiv').value = EV.format.indiv ? '1' : '';
   $('f-type').value = EV.format.type; $('f-count').value = EV.format.count; $('f-allow').value = EV.format.allowance; $('f-show').value = EV.format.show; $('f-nine').value = EV.format.nine || '';
   $('f-flights').value = EV.flights.join(', '); $('f-side').value = EV.sideGames === false ? '' : '1';
   $('f-title').value = EV.screens.title || ''; $('f-secs').value = EV.screens.seconds; $('f-rows').value = EV.screens.rows; $('f-skins').value = EV.screens.skins ? '1' : '';
   $('f-ticker').value = EV.screens.ticker || '';
   $('f-fund').value = EV.fund.on ? '1' : ''; $('f-fundLabel').value = EV.fund.label; $('f-goal').value = EV.fund.goal || ''; $('f-give').value = EV.fund.give; $('raised').value = EV.fund.raised || '';
-  setMapLinks(); drawCourse(); drawPhotos(); drawTees(); drawTeams(); drawContests(); drawCams(); drawSponsors(); drawStaff(); drawLock();
+  showFormat(); setMapLinks(); drawCourse(); drawPhotos(); drawTees(); drawTeams(); drawContests(); drawCams(); drawSponsors(); drawStaff(); drawLock();
 }
 function read() {
   EV.name = val('f-name'); EV.club = val('f-club'); EV.date = val('f-date'); EV.course.name = val('f-course');
-  EV.format = { type: $('f-type').value, count: Number($('f-count').value), allowance: Number($('f-allow').value), show: $('f-show').value, nine: $('f-nine').value };
+  EV.format = { type: $('f-type').value, count: Number($('f-count').value), allowance: Number($('f-allow').value), show: $('f-show').value, nine: $('f-nine').value,
+    match: $('f-match').value, cup: { on: !!$('f-cup').value, a: val('f-cupA') || 'Reds', b: val('f-cupB') || 'Blues' }, indiv: !!$('f-indiv').value };
   EV.flights = val('f-flights').split(',').map((s) => s.trim()).filter(Boolean);
   EV.sideGames = !!$('f-side').value;
   EV.screens = { title: val('f-title'), seconds: Number($('f-secs').value) || 12, rows: Number($('f-rows').value) || 10, skins: !!$('f-skins').value, ticker: val('f-ticker') };
@@ -538,18 +563,59 @@ function drawRemoved() {
     try { await desk('restore', { team: b.dataset.restore }); EV = await desk('get'); fill(); toast('Team put back, with its scores.'); } catch (e) { toast(e.message); }
   });
 }
+// the Setup boxes that only matter for some formats
+function showFormat() {
+  const t = $('f-type').value, m = t === 'match';
+  const on = { count: ['bestball', 'shamble', 'stableford'].includes(t), match: m, cup: m && !!$('f-cup').value, indiv: !['stroke', 'scramble'].includes(t) && !(m && $('f-match').value === 'scramble') };
+  document.querySelectorAll('[data-fm]').forEach((el) => { el.hidden = !on[el.dataset.fm]; });
+}
+const cupOn = () => $('f-type').value === 'match' && !!$('f-cup').value;
 function drawTeams() {
   drawRemoved();
-  const scr = $('f-type').value === 'scramble';
-  $('teams').innerHTML = `<thead><tr><th>Team name</th><th>Flight</th><th>Start</th>${scr ? '<th>Team hcp</th>' : ''}<th>Players and handicaps</th><th>Code</th><th></th></tr></thead><tbody>${EV.teams.map((t, i) => `
+  const scr = $('f-type').value === 'scramble' || ($('f-type').value === 'match' && $('f-match').value === 'scramble');
+  const cupCol = cupOn(), sideName = (k) => (k === 'B' ? val('f-cupB') || 'Blues' : val('f-cupA') || 'Reds');
+  $('teams').innerHTML = `<thead><tr><th>Team name</th><th>Flight</th><th>Start</th>${cupCol ? '<th>Side</th>' : ''}${scr ? '<th>Team hcp</th>' : ''}<th>Players and handicaps</th><th>Code</th><th></th></tr></thead><tbody>${EV.teams.map((t, i) => `
     <tr data-t="${i}"><td><input data-k="name" value="${esc(t.name)}" placeholder="Uses the last names"></td>
     <td><input data-k="flight" class="n" value="${esc(t.flight)}"></td>
     <td><input data-k="start" class="n" type="number" min="1" max="18" value="${t.start || 1}"></td>
+    ${cupCol ? `<td><select data-k="side" style="min-width:96px"><option value=""></option><option value="A"${t.side === 'A' ? ' selected' : ''}>${esc(sideName('A'))}</option><option value="B"${t.side === 'B' ? ' selected' : ''}>${esc(sideName('B'))}</option></select></td>` : ''}
     ${scr ? `<td><input data-k="hcp" class="n" type="number" step="0.1" value="${t.hcp || 0}"></td>` : ''}
     <td><div class="plhead"><span>Player</span><span>GHIN number</span><span>Index</span><span>Tees</span><span>Course hcp</span></div>${[0, 1, 2, 3].map((k) => plRow(t.players[k] || {}, k)).join('')}</td>
     <td class="code">${t.code ? esc(t.code) : '<span class="help">After save</span>'}</td>
     <td><button class="btn danger" data-del="${i}" title="Remove team">Remove</button></td></tr>`).join('')}</tbody>`;
+  drawMatches();
 }
+// ---- match play pairings (EV.matches: [{ id, a, b }]) ----
+const teamLabel = (t) => t.name || (t.players || []).map((p) => String(p.name || '').trim().split(/\s+/).pop()).filter(Boolean).join(' / ') || 'Team';
+function drawMatches() {
+  const box = $('matchBox'); box.hidden = $('f-type').value !== 'match'; if (box.hidden) return;
+  EV.matches ||= [];
+  const cupCol = cupOn(), dot = (t) => (cupCol && t?.side ? `<span class="sdot" style="display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:${t.side === 'A' ? '#c94a43' : '#3b72d1'}"></span>` : '');
+  const opts = (sel) => `<option value="">Pick a team</option>${EV.teams.map((t) => `<option value="${esc(t.id)}"${t.id === sel ? ' selected' : ''}>${esc(teamLabel(t))}</option>`).join('')}`;
+  const T = Object.fromEntries(EV.teams.map((t) => [t.id, t])), used = new Set(EV.matches.flatMap((m) => [m.a, m.b]));
+  const left = EV.teams.filter((t) => !used.has(t.id));
+  $('matchT').innerHTML = `<thead><tr><th>#</th><th>Side 1</th><th></th><th>Side 2</th><th>Tees off</th><th></th></tr></thead><tbody>${EV.matches.map((m, i) => `
+    <tr data-m="${i}"><td class="help">${i + 1}</td><td><span style="display:flex;align-items:center">${dot(T[m.a])}<select data-mk="a" style="flex:1">${opts(m.a)}</select></span></td><td class="help">v</td><td><span style="display:flex;align-items:center">${dot(T[m.b])}<select data-mk="b" style="flex:1">${opts(m.b)}</select></span></td>
+    <td class="help">${T[m.a] ? `Hole ${T[m.a].start || 1}` : ''}</td><td><button class="btn danger" data-delm="${i}" type="button">Remove</button></td></tr>`).join('')}</tbody>`
+    + (left.length ? `<caption style="caption-side:bottom;text-align:left" class="help">${left.length} team${left.length === 1 ? ' isn’t' : 's aren’t'} in a match yet: ${left.slice(0, 8).map((t) => esc(teamLabel(t))).join(', ')}${left.length > 8 ? '…' : ''}</caption>` : '');
+}
+function pairUp(random) {
+  readTables();
+  let list = [...EV.teams];
+  if (random) for (let i = list.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [list[i], list[j]] = [list[j], list[i]]; }
+  const out = [];
+  if (cupOn() && list.some((t) => t.side)) { // a team cup: each match is one side against the other
+    const A = list.filter((t) => t.side !== 'B'), B = list.filter((t) => t.side === 'B');
+    for (let i = 0; i < Math.min(A.length, B.length); i++) out.push({ id: rid(), a: A[i].id, b: B[i].id });
+  } else for (let i = 0; i + 1 < list.length; i += 2) out.push({ id: rid(), a: list[i].id, b: list[i + 1].id });
+  EV.matches = out; drawMatches(); setDirty();
+  toast(`${out.length} match${out.length === 1 ? '' : 'es'} paired. Save to keep them.`);
+}
+$('pairOrder').onclick = () => pairUp(false);
+$('pairDraw').onclick = () => pairUp(true);
+$('addMatch').onclick = () => { readTables(); EV.matches.push({ id: rid(), a: '', b: '' }); drawMatches(); setDirty(); };
+$('matchT').addEventListener('click', (e) => { const b = e.target.closest('[data-delm]'); if (!b) return; readTables(); EV.matches.splice(Number(b.dataset.delm), 1); drawMatches(); setDirty(); });
+['f-match', 'f-cup', 'f-cupA', 'f-cupB'].forEach((id) => $(id).addEventListener('change', () => { readTables(); showFormat(); drawTeams(); }));
 function readTables() {
   for (const inp of document.querySelectorAll('#course input')) { const h = EV.course.holes[inp.dataset.i]; h[inp.dataset.c] = Number(inp.value) || 0; }
   for (const tr of document.querySelectorAll('#tees tbody tr[data-tee]')) {
@@ -570,6 +636,10 @@ function readTables() {
     }
     t.players = players;
   }
+  for (const tr of document.querySelectorAll('#matchT tbody tr')) {
+    const m = EV.matches[tr.dataset.m]; if (!m) continue;
+    m.a = tr.querySelector('[data-mk="a"]').value; m.b = tr.querySelector('[data-mk="b"]').value;
+  }
   for (const box of document.querySelectorAll('.contest')) {
     const c = EV.contests[box.dataset.c]; if (!c) continue;
     c.hole = Number(box.querySelector('[data-ck="hole"]').value) || 1; c.label = box.querySelector('[data-ck="label"]').value.trim(); c.sponsor = box.querySelector('[data-ck="sponsor"]').value.trim();
@@ -583,7 +653,7 @@ function readTables() {
     s.spot = row.querySelector('[data-sk="spot"]').value; s.url = row.querySelector('[data-sk="url"]').value.trim(); s.offer = row.querySelector('[data-sk="offer"]').value.trim();
   }
 }
-$('f-type').addEventListener('change', () => { readTables(); drawTeams(); });
+$('f-type').addEventListener('change', () => { readTables(); showFormat(); drawTeams(); });
 $('addTeam').onclick = () => { readTables(); EV.teams.push({ id: rid(), name: '', flight: EV.flights[0] || '', start: 1, hcp: 0, players: [] }); drawTeams(); setDirty(); };
 $('pasteBtn').onclick = () => { $('pasteBox').hidden = !$('pasteBox').hidden; };
 $('pasteAdd').onclick = () => {
@@ -859,15 +929,18 @@ $('lock').onclick = async () => {
 // ---- scores grid ----
 function drawScores() {
   if (!LIVE) return;
-  const H = LIVE.course.holes, scr = LIVE.format.type === 'scramble';
+  const H = LIVE.course.holes, scr = teamBall(LIVE), mp = LIVE.format.type === 'match';
+  // match play: each team's match as it stands ("2 UP thru 12") where the place would be
+  const mres = mp ? Object.fromEntries(matches(LIVE, LIVE.scores).flatMap((r) => [[r.a, r], [r.b, r]])) : {};
+  const mtext = (id) => { const r = mres[id]; if (!r || !r.started) return ''; return matchFor(r, id).text + (r.done ? '' : ` thru ${r.thru}`); };
   const rows = [];
   for (const t of LIVE.teams) for (const p of scr ? [{ id: 'T', name: t.name || 'Team' }] : t.players) rows.push({ t, p });
   const lb = leaderboard(LIVE, LIVE.scores);
   const active = document.activeElement && document.activeElement.dataset.cell;
-  $('scores').innerHTML = `<thead><tr><th>${scr ? 'Team' : 'Player'}</th>${H.map((h) => `<th>${h.n}<br><span class="mono" style="font-size:.7rem">P${h.par}</span></th>`).join('')}<th>Pos</th></tr></thead><tbody>${rows.map(({ t, p }) => {
+  $('scores').innerHTML = `<thead><tr><th>${scr ? 'Team' : 'Player'}</th>${H.map((h) => `<th>${h.n}<br><span class="mono" style="font-size:.7rem">P${h.par}</span></th>`).join('')}<th>${mp ? 'Match' : 'Pos'}</th></tr></thead><tbody>${rows.map(({ t, p }) => {
     const arr = ((LIVE.scores[t.id] || {})[p.id]) || [];
     const l = lb.find((x) => x.teamId === t.id);
-    return `<tr><td>${esc(p.name)}${scr ? '' : `<br><span class="help">${esc(t.name || '')}</span>`}</td>${H.map((h, i) => `<td><input data-cell="${t.id}|${p.id}|${i + 1}" inputmode="numeric" value="${arr[i] == null ? '' : arr[i]}" aria-label="${esc(p.name)} hole ${h.n}"></td>`).join('')}<td class="mono">${l ? esc(l.pos) : ''}</td></tr>`;
+    return `<tr><td>${esc(p.name)}${scr ? '' : `<br><span class="help">${esc(t.name || '')}</span>`}</td>${H.map((h, i) => `<td><input data-cell="${t.id}|${p.id}|${i + 1}" inputmode="numeric" value="${arr[i] == null ? '' : arr[i]}" aria-label="${esc(p.name)} hole ${h.n}"></td>`).join('')}<td class="mono">${mp ? esc(mtext(t.id)) : l ? esc(l.pos) : ''}</td></tr>`;
   }).join('')}</tbody>`;
   if (active) document.querySelector(`[data-cell="${active}"]`)?.focus();
 }

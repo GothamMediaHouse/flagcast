@@ -41,6 +41,25 @@ header .pill { font-size: .9vw; padding: .2vw .7vw; }
 .lb .moved td.name::after { content: "▲"; color: #59c98a; font-size: .9vw; margin-left: .6vw; vertical-align: .3vw; }
 .under { color: var(--red); }
 .page { position: absolute; right: 2.4vw; top: 2.3vw; font-family: var(--f-mono); font-size: 1vw; color: var(--dim); }
+/* match play: two columns of matches, the leader's colour in the middle; a white ring when it's over */
+.cupline { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 1.6vw; margin: .6vw 0 .2vw; }
+.cupline .sd { display: flex; align-items: baseline; gap: 1vw; font-family: var(--f-display); font-weight: 800; font-size: 2.2vw; text-transform: uppercase; }
+.cupline .sd.l { justify-content: flex-end; }
+.cupline .sd em { font-style: normal; font-size: 3.6vw; line-height: 1; color: var(--txt); }
+.cupbar { height: .8vw; width: 26vw; border-radius: .4vw; position: relative; background: var(--cb); }
+.cupbar::after { content: ""; position: absolute; left: 50%; top: -.35vw; bottom: -.35vw; width: .15vw; background: #fff; }
+.cupnote { text-align: center; font-family: var(--f-mono); font-size: .95vw; color: var(--dim); }
+.mgrid { display: grid; grid-template-columns: 1fr 1fr; gap: .6vw 1vw; margin-top: 1vw; }
+.mt { display: grid; grid-template-columns: 1fr 9vw 1fr; align-items: center; background: var(--row); border-radius: .4vw; overflow: hidden; height: 3.9vw; font-size: 1.5vw; }
+.mt .a, .mt .z { padding: 0 1vw; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mt .z { text-align: right; }
+.mt .lo { color: var(--dim); font-weight: 500; }
+.mt .s { height: 100%; display: grid; place-content: center; text-align: center; font-family: var(--f-display); font-weight: 800; font-size: 1.9vw; line-height: 1; background: #24352c; }
+.mt .s small { display: block; font-family: var(--f-mono); font-weight: 500; font-size: .75vw; opacity: .85; margin-top: .2vw; }
+.mt.done .s { box-shadow: inset 0 0 0 .22vw #fff; }
+.mt .s.ld { background: var(--flag); color: #12160f; }
+.mt .s.A { background: #c94a43; color: #fff; } .mt .s.B { background: #3b72d1; color: #fff; }
+.lb .gr { color: var(--dim); }
 /* par 3 */
 .p3 { display: grid; grid-template-columns: 1.7fr 1fr; gap: 2vw; height: 100%; }
 .cam { position: relative; background: #000; border-radius: .5vw; overflow: hidden; }
@@ -142,7 +161,7 @@ header .tsp b { color: var(--txt); font-weight: 600; }
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
 <script src="/golf/qrcode.js"></script>
 <script type="module">
-import { leaderboard, holeStats, fmtPar, contestLeader, fmtDist, skins, FORMATS } from '/golf/core.js';
+import { leaderboard, holeStats, fmtPar, contestLeader, fmtDist, skins, FORMATS, formatName, matches, cup, fmtPts, individuals, hasIndividuals } from '/golf/core.js';
 import { live, esc, post } from '/golf/client.js';
 import { attach, detach, playReplay } from '/golf/replay.js';
 import { applyBrand } from '/golf/brandmark.js';
@@ -166,6 +185,9 @@ const display = () => (S.displays || []).find((d) => d.id === screenId);
 // one playlist entry → the slides it makes (a leaderboard can be several pages)
 function pageSlides(it) {
   const stab = S.format.type === 'stableford', rows = S.screens?.rows || 10, secs = it.secs;
+  // match play: the leaderboard page is the matches board
+  if (it.k === 'matches' || (it.k === 'lb' && isMatch())) return matchSlides(secs);
+  if (it.k === 'indiv') return indivSlides(it.fl || null, secs);
   if (it.k === 'lb') {
     const lb = leaderboard(S, S.scores, { flight: it.fl || null, mode: q.get('mode') || undefined });
     if (!lb.length) return [];
@@ -202,12 +224,15 @@ function build() {
   const out = [], want = (k) => !only.length || only.includes(k);
   const stab = S.format.type === 'stableford', flights = q.get('flight') ? [q.get('flight')] : (S.flights.length > 1 ? S.flights : [null]);
   const rows = S.screens?.rows || 10;
-  if (want('leaderboard') && !lockHole) for (const fl of flights) {
+  if (want('leaderboard') && !lockHole && isMatch()) out.push(...matchSlides());
+  else if (want('leaderboard') && !lockHole) for (const fl of flights) {
     const lb = leaderboard(S, S.scores, { flight: fl, mode: q.get('mode') || undefined });
     if (!lb.length) continue;
     const pages = Math.max(1, Math.ceil(lb.length / rows));
     for (let p = 0; p < Math.min(pages, 4); p++) out.push({ k: 'lb', fl, lb: lb.slice(p * rows, p * rows + rows), p, pages, stab });
   }
+  // the Individuals board (club championships): every player, gross and net, by flight
+  if ((want('leaderboard') || want('individuals')) && !lockHole && S.format.indiv && hasIndividuals(S)) for (const fl of flights) out.push(...indivSlides(fl));
   const par3 = S.course.holes.filter((h) => h.par === 3 && (!lockHole || h.n === lockHole));
   if (want('par3') || lockHole) for (const h of par3) out.push({ k: 'p3', h });
   if (want('contests') && !lockHole && S.contests.some((c) => c.kind === 'ld' || !par3.find((h) => h.n === c.hole))) out.push({ k: 'contests' });
@@ -219,8 +244,9 @@ function build() {
 }
 // "Live scores on your phone": a big QR code once a cycle, after the leaderboard (off with ?qr=0, or on a one-hole TV)
 function withPhone(out) {
-  if (q.get('qr') === '0' || lockHole || !eventId || !out.some((x) => x.k === 'lb')) return out;
-  const at = out.map((x) => x.k).lastIndexOf('lb') + 1;
+  const board = (k) => ['lb', 'matches', 'indiv'].includes(k);
+  if (q.get('qr') === '0' || lockHole || !eventId || !out.some((x) => board(x.k))) return out;
+  const at = out.map((x) => board(x.k)).lastIndexOf(true) + 1;
   return [...out.slice(0, at), { k: 'phone', secs: 12 }, ...out.slice(at)];
 }
 const phoneURL = () => `${location.protocol === 'https:' ? location.origin : 'https://flagcast.app'}/g/${eventId}`;
@@ -232,12 +258,55 @@ function phoneSlide() {
 }
 
 function lbSlide(s) {
-  const fname = s.fl ? `Flight ${esc(s.fl)}` : esc(FORMATS[S.format.type] || '');
+  const fname = s.fl ? `Flight ${esc(s.fl)}` : esc(formatName(S));
   return `<div class="sub">${fname} · ${S.format.type === 'stableford' ? 'Points' : (q.get('mode') || S.format.show) === 'gross' ? 'Gross' : 'Net'}${S.locked ? ' · Final results' : ''}</div><h2>Leaderboard</h2>
   ${spot('leaderboard')[0] ? `<div class="lbsp">Presented by ${spName(spot('leaderboard')[0])}</div>` : s.pages > 1 ? `<div class="page">Page ${s.p + 1} of ${Math.min(s.pages, 4)}</div>` : ''}
   <table class="lb"><thead><tr><th>Pos</th><th>${S.format.type === 'stroke' ? 'Player' : 'Team'}</th>${S.flights.length > 1 && !s.fl ? '<th class="fl">Flt</th>' : ''}<th class="num">${s.stab ? 'Points' : 'To par'}</th><th class="num">Thru</th></tr></thead>
   <tbody>${s.lb.map((l) => `<tr class="${moved.has(l.key) ? 'moved' : ''}"><td class="pos">${esc(l.pos)}</td><td class="name">${esc(l.name)}${l.sub && l.sub !== l.name ? `<small>${esc(l.sub)}</small>` : ''}</td>${S.flights.length > 1 && !s.fl ? `<td class="fl">${esc(l.flight)}</td>` : ''}
   <td class="num tp ${!s.stab && l.score < 0 && l.played ? 'under' : ''}">${l.played ? fmtPar(l.score, s.stab).replace(' pts', '') : '—'}</td><td class="num">${esc(l.thru.replace('Starts ', '#'))}</td></tr>`).join('')}</tbody></table>`;
+}
+
+const isMatch = () => S.format.type === 'match';
+// the matches board: 16 matches a page (two columns of 8)
+function matchSlides(secs) {
+  const list = matches(S, S.scores); if (!list.length) return [];
+  const per = 16, pages = Math.min(4, Math.ceil(list.length / per)), c = cup(S, S.scores, list);
+  return Array.from({ length: pages }, (_, p) => ({ k: 'matches', list: list.slice(p * per, p * per + per), first: p * per, p, pages, c, secs }));
+}
+function matchesSlide(s) {
+  const T = Object.fromEntries(S.teams.map((t) => [t.id, t])), nm = (id) => esc(T[id] ? T[id].name || T[id].players.map((p) => p.name.split(' ').pop()).join(' / ') : '');
+  const c = s.c, sideOf = (id) => T[id]?.side || '';
+  // the leader's colour: their cup side's, or the club's accent without a cup
+  const col = (r) => { if (!r.leader && !r.winner) return ''; const id = (r.winner || r.leader) === 'A' ? r.a : r.b; return c.on ? (sideOf(id) || ((r.winner || r.leader) === 'A' ? 'A' : 'B')) : 'ld'; };
+  const res = (r) => r.done ? (r.halved ? '½<small>halved</small>' : `${esc(r.text)}<small>final</small>`) : r.started ? `${esc(r.text)}<small>thru ${esc(r.thru)}</small>` : `—<small>${esc(r.thru === '—' ? 'not started' : r.thru.toLowerCase())}</small>`;
+  const share = (c.nowA + (c.total - c.nowA - c.nowB) / 2) / Math.max(1, c.total); // matches not started count half each
+  const cupHtml = c.on ? `<div class="cupline"><div class="sd l"><span style="color:#f2a19d">${esc(c.a)}</span><em>${fmtPts(c.A)}</em></div>
+    <div class="cupbar" style="--cb:linear-gradient(90deg,#c94a43 0 ${Math.round(share * 100)}%,#3b72d1 ${Math.round(share * 100)}%)"></div>
+    <div class="sd"><em>${fmtPts(c.B)}</em><span style="color:#9dbcf2">${esc(c.b)}</span></div></div>
+    <div class="cupnote">${c.left ? `If it finished now: ${esc(c.a)} ${fmtPts(c.nowA)}, ${esc(c.b)} ${fmtPts(c.nowB)} · ` : 'Final · '}${fmtPts(c.toWin)} to win</div>` : '';
+  return `<div class="sub">${esc(formatName(S))}${S.locked ? ' · Final results' : ''}</div><h2>Matches</h2>
+  ${spot('leaderboard')[0] ? `<div class="lbsp">Presented by ${spName(spot('leaderboard')[0])}</div>` : s.pages > 1 ? `<div class="page">Page ${s.p + 1} of ${s.pages}</div>` : ''}
+  ${cupHtml}<div class="mgrid">${s.list.map((r) => { const w = r.winner || r.leader;
+    return `<div class="mt ${r.done ? 'done' : ''}"><div class="a ${w === 'B' ? 'lo' : ''}">${nm(r.a)}</div><div class="s ${col(r)}">${res(r)}</div><div class="z ${w === 'A' ? 'lo' : ''}">${nm(r.b)}</div></div>`; }).join('')}</div>`;
+}
+// Individuals: every player, ranked by the event's net or gross, with both shown
+function indivSlides(fl, secs) {
+  if (!hasIndividuals(S)) return [];
+  const mode = q.get('mode') || S.format.show || 'net', stab = S.format.type === 'stableford';
+  const lb = individuals(S, S.scores, { flight: fl, mode }); if (!lb.length) return [];
+  const other = stab ? null : individuals(S, S.scores, { flight: fl, mode: mode === 'gross' ? 'net' : 'gross' });
+  const rows = S.screens?.rows || 10, pages = Math.min(4, Math.ceil(lb.length / rows));
+  return Array.from({ length: pages }, (_, p) => ({ k: 'indiv', fl, mode, stab, other, lb: lb.slice(p * rows, p * rows + rows), p, pages, secs }));
+}
+function indivSlide(s) {
+  const fname = s.fl ? `Flight ${esc(s.fl)}` : 'Every player';
+  const o = (l) => { const x = s.other && s.other.find((y) => y.key === l.key); return x && x.played ? fmtPar(x.score) : '—'; };
+  const first = s.mode === 'gross' ? 'Gross' : 'Net', second = s.mode === 'gross' ? 'Net' : 'Gross';
+  return `<div class="sub">${fname} · ${s.stab ? 'Points' : `Ranked by ${first.toLowerCase()}`}${S.locked ? ' · Final results' : ''}</div><h2>Individuals</h2>
+  ${s.pages > 1 ? `<div class="page">Page ${s.p + 1} of ${s.pages}</div>` : ''}
+  <table class="lb"><thead><tr><th>Pos</th><th>Player</th>${S.flights.length > 1 && !s.fl ? '<th class="fl">Flt</th>' : ''}<th class="num">${s.stab ? 'Points' : first}</th>${s.stab ? '' : `<th class="num">${second}</th>`}<th class="num">Thru</th></tr></thead>
+  <tbody>${s.lb.map((l) => `<tr><td class="pos">${esc(l.pos)}</td><td class="name">${esc(l.name)}${l.sub && l.sub !== l.name ? `<small>${esc(l.sub)}</small>` : ''}</td>${S.flights.length > 1 && !s.fl ? `<td class="fl">${esc(l.flight)}</td>` : ''}
+  <td class="num tp ${!s.stab && l.score < 0 && l.played ? 'under' : ''}">${l.played ? fmtPar(l.score, s.stab).replace(' pts', '') : '—'}</td>${s.stab ? '' : `<td class="num gr">${o(l)}</td>`}<td class="num">${esc(l.thru.replace('Starts ', '#'))}</td></tr>`).join('')}</tbody></table>`;
 }
 
 function holeArt(h) {
@@ -317,6 +386,8 @@ function scheduleSlide() {
 
 function draw(s) {
   if (s.k === 'lb') return lbSlide(s);
+  if (s.k === 'matches') return matchesSlide(s);
+  if (s.k === 'indiv') return indivSlide(s);
   if (s.k === 'p3') return p3Slide(s);
   if (s.k === 'cam') return `<div class="camfull"><div class="cam">${camHtml(S.cams[s.h.n], s.h.n)}</div></div>`;
   if (s.k === 'contests') return contestsSlide();
@@ -461,7 +532,7 @@ setInterval(() => {
   if (cur) {
     if (cur.k === 'sponsor' && cur.sp) ids.add(cur.sp.id);
     if (cur.k === 'sponsors') (S.sponsors || []).forEach((x) => ids.add(x.id));
-    if (cur.k === 'lb') spot('leaderboard').forEach((x) => ids.add(x.id));
+    if (cur.k === 'lb' || cur.k === 'matches') spot('leaderboard').forEach((x) => ids.add(x.id));
     if (cur.k === 'p3') { spot('hole', cur.h.n).forEach((x) => ids.add(x.id)); spot('cam', cur.h.n).forEach((x) => ids.add(x.id)); }
   }
   spot('title').forEach((x) => ids.add(x.id));

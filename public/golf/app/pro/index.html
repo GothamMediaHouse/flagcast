@@ -68,7 +68,7 @@ input, select, textarea { padding: 11px; border: 1.5px solid var(--line); border
 <div class="sheet" id="sheet" hidden><div id="sheetBody"></div></div>
 
 <script type="module">
-import { leaderboard, fmtPar, contestLeader, contestFlag, fmtDist, fmtIndex } from '/golf/core.js';
+import { leaderboard, fmtPar, contestLeader, contestFlag, fmtDist, fmtIndex, teamBall } from '/golf/core.js';
 import { eventId, post, live, esc } from '/golf/client.js';
 import { cleanPin, pinOf, pinLabel, pinPaces } from '/golf/gps.js';
 const $ = (id) => document.getElementById(id);
@@ -142,7 +142,7 @@ function scoresTab() {
   if (!t) return '<p class="help">No teams yet.</p>';
   fixTeam = t.id;
   const sc = S.scores[t.id] || {};
-  const rows = S.format.type === 'scramble' ? [{ id: 'T', name: 'Team' }] : t.players;
+  const rows = teamBall(S) ? [{ id: 'T', name: 'Team' }] : t.players;
   return `<h2>Fix a score</h2>
   <select id="fixTeam" style="width:100%">${S.teams.map((x) => `<option value="${x.id}" ${x.id === t.id ? 'selected' : ''}>${esc(x.name || x.players.map((p) => p.name).join(' / '))}</option>`).join('')}</select>
   <p class="help">Tap a hole to change it. PU means picked up.</p>

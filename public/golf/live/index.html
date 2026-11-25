@@ -78,18 +78,31 @@ main { max-width: 720px; margin: 0 auto; padding: 14px max(16px, env(safe-area-i
 /* the club's cover photo behind the title */
 .topbar.photo { background: linear-gradient(rgba(0, 0, 0, .25), rgba(0, 0, 0, .7)), var(--cover) center / cover no-repeat, var(--green); padding-top: 46px; }
 .topbar.photo .label { color: rgba(255, 255, 255, .85); }
+.cupbox { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+.cupbox b { font-family: var(--f-display); font-size: 2rem; line-height: 1; margin: 0 8px; }
+.cupbox > div:last-child { text-align: right; }
+.cupbox .ca { color: #d9534f; font-weight: 700; text-transform: uppercase; } .cupbox .cb { color: #3d7be0; font-weight: 700; text-transform: uppercase; }
+.cupbox .mid { font-family: var(--f-mono); font-size: .7rem; color: var(--muted); text-align: center; line-height: 1.4; }
+.mlist { display: grid; gap: 6px; }
+.mrow { display: grid; grid-template-columns: 22px 1fr 84px 1fr; align-items: center; background: var(--card); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; min-height: 50px; }
+.mrow .n { font-family: var(--f-mono); font-size: .75rem; color: var(--muted); text-align: center; }
+.mrow .t { padding: 6px 8px; font-weight: 600; font-size: .92rem; } .mrow .t.z { text-align: right; } .mrow .t.lo { color: var(--muted); font-weight: 500; }
+.mrow .res { align-self: stretch; display: grid; place-content: center; text-align: center; font-family: var(--f-display); font-weight: 700; font-size: 1.15rem; line-height: 1.05; background: color-mix(in srgb, var(--muted) 18%, transparent); }
+.mrow .res small { font-family: var(--f-mono); font-size: .6rem; font-weight: 500; opacity: .85; }
+.mrow .res.mA { background: #c94a43; color: #fff; } .mrow .res.mB { background: #3b72d1; color: #fff; } .mrow .res.mL { background: var(--flag); color: var(--on-flag); }
+.mrow.done .res { box-shadow: inset 0 0 0 3px var(--txt, #fff); }
 .powered { font-size: 11px; letter-spacing: .08em; color: var(--muted); text-align: center; padding: 18px 0 6px; }
 </style>
 </head>
 <body>
 <header class="topbar"><div class="hdr"><div><img data-brand src="/golf/brand/wide-on-dark.svg" alt="Flagcast" style="height:24px;width:auto;max-width:60vw;object-fit:contain;object-position:left;display:block;margin-bottom:6px"><h1 id="title">Leaderboard</h1><span class="label" id="sub"></span></div><span class="pill live pulse" id="pill">LIVE</span></div></header>
 <div class="flash" id="flash" hidden></div>
-<nav class="tabs" id="tabs"><button data-v="lb" aria-pressed="true">Leaderboard</button><button data-v="p3" aria-pressed="false">Par 3s</button><button data-v="ct" aria-pressed="false">Contests</button><button data-v="sk" aria-pressed="false" hidden>Skins</button></nav>
+<nav class="tabs" id="tabs"><button data-v="lb" aria-pressed="true">Leaderboard</button><button data-v="in" aria-pressed="false" hidden>Individuals</button><button data-v="p3" aria-pressed="false">Par 3s</button><button data-v="ct" aria-pressed="false">Contests</button><button data-v="sk" aria-pressed="false" hidden>Skins</button></nav>
 <main id="main"><div class="empty">Loading the leaderboard…</div></main>
 <p class="powered" data-powered hidden>POWERED BY FLAGCAST</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
 <script type="module">
-import { leaderboard, fmtPar, holeStats, contestLeader, fmtDist, skins, mark, FORMATS } from '/golf/core.js';
+import { leaderboard, fmtPar, holeStats, contestLeader, fmtDist, skins, mark, FORMATS, formatName, teamBall, matches, cup, fmtPts, individuals, hasIndividuals } from '/golf/core.js';
 import { live, esc } from '/golf/client.js';
 import { appBar, remember } from '/golf/appbar.js';
 import { attach, detach, playReplay, rewind, goLive, replayTime } from '/golf/replay.js';
@@ -98,11 +111,11 @@ import { applyBrand } from '/golf/brandmark.js';
 appBar('live');
 
 const HV = (location.hash.match(/^#v=(\w+)/) || [])[1];
-let S = null, view = location.hash.startsWith('#hole-') ? 'p3' : ['lb', 'p3', 'ct', 'sk'].includes(HV) ? HV : 'lb', flight = '', openRow = null;
+let S = null, view = location.hash.startsWith('#hole-') ? 'p3' : ['lb', 'in', 'p3', 'ct', 'sk'].includes(HV) ? HV : 'lb', flight = '', openRow = null, imode = '';
 // a page routed to every phone: jump there when the player taps the banner
 function goRoute(r) {
-  const v = r.k === 'cam' || r.k === 'p3' ? 'p3' : r.k === 'contests' ? 'ct' : r.k === 'skins' ? 'sk' : 'lb';
-  if (r.k === 'lb') flight = r.fl || '';
+  const v = r.k === 'cam' || r.k === 'p3' ? 'p3' : r.k === 'contests' ? 'ct' : r.k === 'skins' ? 'sk' : r.k === 'indiv' ? 'in' : 'lb';
+  if (r.k === 'lb' || r.k === 'indiv') flight = r.fl || '';
   view = v; render(); scrollTo(0, 0);
   if (v === 'p3') setTimeout(() => document.getElementById(`hole-${r.hole}`)?.scrollIntoView({ behavior: 'smooth' }), 50);
 }
@@ -114,7 +127,34 @@ function camHtml(url, n) {
   return `<iframe src="${esc(url)}" allow="autoplay; fullscreen" allowfullscreen title="Hole ${n} camera"></iframe><span class="tag">LIVE</span>`;
 }
 
+// match play: every match as it stands, the team cup on top
+function matchView() {
+  const T = Object.fromEntries(S.teams.map((t) => [t.id, t])), nm = (id) => esc(T[id] ? T[id].name || T[id].players.map((p) => p.name.trim().split(/\s+/).pop()).join(' / ') : '');
+  const list = matches(S, S.scores), c = cup(S, S.scores, list);
+  if (!list.length) return `<div class="empty">The matches show here once the desk pairs the teams.</div>`;
+  const col = (r) => { const w = r.winner || r.leader; if (!w) return ''; const id = w === 'A' ? r.a : r.b; return c.on ? (T[id]?.side === 'B' ? 'mB' : T[id]?.side === 'A' ? 'mA' : `m${w}`) : 'mL'; };
+  const cupHtml = c.on ? `<div class="cupbox"><div><span class="ca">${esc(c.a)}</span><b>${fmtPts(c.A)}</b></div><div class="mid">${c.left ? `If it finished now<br>${fmtPts(c.nowA)} – ${fmtPts(c.nowB)}` : 'Final'}<br>${fmtPts(c.toWin)} to win</div><div><b>${fmtPts(c.B)}</b><span class="cb">${esc(c.b)}</span></div></div>` : '';
+  return cupHtml + `<div class="mlist">${list.map((r, i) => { const w = r.winner || r.leader;
+    return `<div class="mrow ${r.done ? 'done' : ''}"><span class="n">${i + 1}</span><span class="t ${w === 'B' ? 'lo' : ''}">${nm(r.a)}</span><span class="res ${col(r)}">${r.done ? (r.halved ? 'Halved' : esc(r.text)) : r.started ? esc(r.text) : '—'}<small>${r.done ? 'final' : r.started ? `thru ${esc(r.thru)}` : esc(r.thru === '—' ? 'not started' : r.thru.toLowerCase())}</small></span><span class="t z ${w === 'A' ? 'lo' : ''}">${nm(r.b)}</span></div>`; }).join('')}</div>
+    <p class="label" style="margin-top:10px">${esc(formatName(S))} · ${S.format.show === 'gross' ? 'gross' : 'net'}${S.locked ? ' · final results' : ''}</p>`;
+}
+// Individuals (club championships): every player on their own, net or gross, by flight
+function indivView() {
+  const stab = S.format.type === 'stableford', mode = imode || S.format.show || 'net';
+  const lb = individuals(S, S.scores, { flight: flight || undefined, mode });
+  const other = stab ? [] : individuals(S, S.scores, { flight: flight || undefined, mode: mode === 'gross' ? 'net' : 'gross' });
+  const fl = S.flights.length > 1 ? `<div class="flights">${['', ...S.flights].map((f) => `<button data-fl="${esc(f)}" aria-pressed="${f === flight}">${f ? `Flight ${esc(f)}` : 'All'}</button>`).join('')}</div>` : '';
+  const md = stab ? '' : `<div class="flights">${['net', 'gross'].map((m) => `<button data-im="${m}" aria-pressed="${m === mode}">${m === 'net' ? 'Net' : 'Gross'}</button>`).join('')}</div>`;
+  if (!lb.length) return md + fl + `<div class="empty">No players yet.</div>`;
+  const o = (l) => { const x = other.find((y) => y.key === l.key); return x && x.played ? fmtPar(x.score) : '—'; };
+  return md + fl + `<table class="lb"><thead><tr><th>Pos</th><th>Player</th><th class="num">${stab ? 'Pts' : mode === 'gross' ? 'Gross' : 'Net'}</th>${stab ? '' : `<th class="num">${mode === 'gross' ? 'Net' : 'Gross'}</th>`}<th class="num">Thru</th></tr></thead><tbody>${lb.map((l) => `
+    <tr><td class="pos">${esc(l.pos)}</td><td class="nm"><b>${esc(l.name)}</b>${l.sub && l.sub !== l.name ? `<span>${esc(l.sub)}${S.flights.length > 1 && !flight && l.flight ? ` · Flight ${esc(l.flight)}` : ''}</span>` : ''}</td>
+    <td class="num tp ${!stab && l.played && l.score < 0 ? 'under' : ''}">${l.played ? fmtPar(l.score, stab).replace(' pts', '') : '—'}</td>${stab ? '' : `<td class="num" style="color:var(--muted)">${o(l)}</td>`}<td class="num">${esc(l.thru)}</td></tr>`).join('')}</tbody></table>
+    <p class="label" style="margin-top:10px">Every player on their own · ${stab ? 'points' : `ranked by ${mode}`}${S.locked ? ' · final results' : ''}</p>`;
+}
+
 function lbView() {
+  if (S.format.type === 'match') return matchView();
   const stab = S.format.type === 'stableford';
   const lb = leaderboard(S, S.scores, { flight: flight || undefined });
   const fund = S.fund?.on ? `<div class="fund"><div class="row"><span>${esc(S.fund.label || 'Raised today')}</span>${S.fund.give ? `<a href="${esc(S.fund.give)}" target="_blank" rel="noopener">Give now</a>` : ''}</div>
@@ -125,11 +165,11 @@ function lbView() {
     <tr class="r ${openRow === l.key ? 'open' : ''}" data-k="${esc(l.key)}"><td class="pos">${esc(l.pos)}</td><td class="nm"><b>${esc(l.name)}</b>${l.sub && l.sub !== l.name ? `<span>${esc(l.sub)}</span>` : ''}</td>
     <td class="num tp ${!stab && l.played && l.score < 0 ? 'under' : ''}">${l.played ? fmtPar(l.score, stab).replace(' pts', '') : '—'}</td><td class="num">${esc(l.thru)}</td></tr>
     ${openRow === l.key ? `<tr class="cardrow"><td colspan="4"><div class="wrap">${cardTable(l)}</div></td></tr>` : ''}`).join('')}</tbody></table>
-    <p class="label" style="margin-top:10px">${esc(FORMATS[S.format.type])} · ${stab ? 'points' : S.format.show === 'gross' ? 'gross' : 'net'}${S.locked ? ' · final results' : ''} · tap a team for its card</p>`;
+    <p class="label" style="margin-top:10px">${esc(formatName(S))} · ${stab ? 'points' : S.format.show === 'gross' ? 'gross' : 'net'}${S.locked ? ' · final results' : ''} · tap a team for its card</p>`;
 }
 
 function cardTable(l) {
-  const H = S.course.holes, t = l.team, scr = S.format.type === 'scramble';
+  const H = S.course.holes, t = l.team, scr = teamBall(S);
   const who = scr ? [{ id: 'T', name: t.name || 'Team' }] : t.players;
   const sc = S.scores[l.teamId] || {};
   return `<table><tr><th>Hole</th>${H.map((h) => `<th>${h.n}</th>`).join('')}</tr><tr><th>Par</th>${H.map((h) => `<th>${h.par}</th>`).join('')}</tr>
@@ -189,7 +229,10 @@ function render(keepVideo) {
   $('sub').textContent = [S.club, S.course.name && S.course.name !== S.club ? S.course.name : '', S.date].filter(Boolean).join(' · ');
   document.title = `${S.screens?.title || S.name} · Leaderboard`;
   $('flash').hidden = !(S.flash && Date.now() - S.flash.at < 30 * 60e3); if (S.flash) $('flash').textContent = S.flash.text;
-  document.querySelector('[data-v="sk"]').hidden = !S.screens?.skins || S.format.type === 'scramble';
+  document.querySelector('[data-v="sk"]').hidden = !S.screens?.skins || teamBall(S);
+  const inOn = !!S.format.indiv && hasIndividuals(S);
+  document.querySelector('[data-v="in"]').hidden = !inOn; if (!inOn && view === 'in') view = 'lb';
+  document.querySelector('[data-v="lb"]').textContent = S.format.type === 'match' ? 'Matches' : 'Leaderboard';
   for (const b of document.querySelectorAll('#tabs button')) b.setAttribute('aria-pressed', b.dataset.v === view);
   if (view === 'p3' && keepVideo && document.querySelector('.p3')) { // update the numbers, keep the video playing
     const tmp = document.createElement('div'); tmp.innerHTML = p3View();
@@ -198,7 +241,7 @@ function render(keepVideo) {
   }
   const main = $('main');
   main.querySelectorAll('video').forEach(detach);
-  main.innerHTML = view === 'p3' ? p3View() : view === 'ct' ? ctView() : view === 'sk' ? skView() : lbView();
+  main.innerHTML = view === 'p3' ? p3View() : view === 'ct' ? ctView() : view === 'sk' ? skView() : view === 'in' ? indivView() : lbView();
   startVideos(main);
   if (view === 'p3' && location.hash.startsWith('#hole-') && !render.jumped) { render.jumped = true; document.querySelector(location.hash)?.scrollIntoView(); }
 }
@@ -206,6 +249,7 @@ function render(keepVideo) {
 document.addEventListener('click', (e) => {
   const tb = e.target.closest('#tabs button'); if (tb) { view = tb.dataset.v; render(); scrollTo(0, 0); return; }
   const fb = e.target.closest('[data-fl]'); if (fb) { flight = fb.dataset.fl; render(); return; }
+  const im = e.target.closest('[data-im]'); if (im) { imode = im.dataset.im; render(); return; }
   const rp = e.target.closest('[data-rep]'); if (rp) { openReplay(rp.dataset.rep); return; }
   const rw = e.target.closest('[data-rw]'); if (rw) { const v = rw.closest('.cam').querySelector('video'); if (v && !rewind(v, 30)) rw.textContent = 'Live only'; rw.nextElementSibling?.classList.remove('on'); return; }
   const gl = e.target.closest('[data-golive]'); if (gl) { const cam = gl.closest('.cam'); if (cam.querySelector('[data-tag]')) { const v = cam.querySelector('video'); if (v) goLive(v); gl.classList.add('on'); } else backToLive(Number(gl.dataset.golive)); return; }

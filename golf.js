@@ -20,10 +20,10 @@
 //
 // Pages: /g/<id> live page · /g/<id>/board screens · /g/<id>/desk#<key> desk · /g/<id>/map#<key> course map · /g/<id>/s/<code> cart · /g/<id>/cards QR cards
 import { DurableObject } from 'cloudflare:workers';
-import { defaultHoles, courseHcp, leaderboard, contestNeedsOk } from './public/golf/core.js';
+import { defaultHoles, courseHcp, leaderboard, contestNeedsOk, teamBall } from './public/golf/core.js';
 import { trackingOn, cleanPin, yds, holeMap } from './public/golf/gps.js';
 import { demoGroups } from './demogroups.js';
-import { same, pinProblem, mergeTeams, stamp, PIN_WAIT, PIN_TRIES_IP, PIN_TRIES_ALL } from './setup.js';
+import { same, pinProblem, mergeTeams, stamp, keepMatch, PIN_WAIT, PIN_TRIES_IP, PIN_TRIES_ALL } from './setup.js';
 import { clubs } from './clubs.js';
 import { resultsRows, ghinRows } from './report.js';
 import { camPlaylist } from './stream.js';
@@ -152,7 +152,7 @@ const isTryTeam = (ev, team) => !!ev.demo && tryTeam(ev)?.id === team.id;
 export const SPOTS = ['title', 'leaderboard', 'hole', 'cam', 'contest', 'turn', 'ace', 'slide'];
 // what a screen's playlist can hold
 // (cam = one hole's camera, full frame)
-export const PAGE_KINDS = ['lb', 'p3', 'cam', 'contests', 'skins', 'fund', 'sponsors', 'sponsor', 'schedule'];
+export const PAGE_KINDS = ['lb', 'matches', 'indiv', 'p3', 'cam', 'contests', 'skins', 'fund', 'sponsors', 'sponsor', 'schedule'];
 // changes made on the day (desk or a pro's PIN); marshals only post contest results
 const DAY_OPS = new Set(['fix', 'ctp', 'contest', 'check', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay', 'scene', 'map', 'groups', 'pinsheet', 'report', 'team', 'move', 'notes', 'golive']);
 // marshals post contest results and replays of shots at their hole
@@ -227,6 +227,7 @@ function cleanSetup(s, old) {
     return {
       id, code: codes.get(id) || newCode(), name: clip(t.name, 60), flight: clip(t.flight, 12), start: num(t.start, 1, 18, 1),
       hcp: num(t.hcp, -10, 54, 0), cart: clip(t.cart, 12),
+      side: ['A', 'B'].includes(t.side) ? t.side : '', // match play team cup: which side the team plays for
       players: (Array.isArray(t.players) ? t.players : []).slice(0, 4).map((p) => ({
         id: /^[a-z0-9]{2,12}$/.test(p.id || '') ? p.id : rand(5, 'abcdefghijkmnpqrstuvwxyz23456789'),
         name: clip(p.name, 50), hcp: num(p.hcp, -10, 54, 0), guest: !!p.guest,
@@ -248,9 +249,21 @@ function cleanSetup(s, old) {
       // where the course is (from Find the course), so the course map opens on it
       at: (() => { const a = s.course?.at || old.course?.at; const lat = Number(a?.lat), lng = Number(a?.lng);
         return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && (lat || lng) ? { lat, lng } : null; })() },
-    format: { type: ['bestball', 'stroke', 'scramble', 'stableford'].includes(f.type) ? f.type : 'bestball',
+    format: { type: ['bestball', 'shamble', 'stroke', 'scramble', 'stableford', 'match'].includes(f.type) ? f.type : 'bestball',
       count: num(f.count, 1, 4, 1), allowance: num(f.allowance, 0, 100, 100), show: f.show === 'gross' ? 'gross' : 'net',
-      nine: ['front', 'back'].includes(f.nine) ? f.nine : '' }, // '' = all 18 holes
+      nine: ['front', 'back'].includes(f.nine) ? f.nine : '', // '' = all 18 holes
+      // match play: singles, four-ball (best ball a side) or scramble (one ball a side); cup = two sides playing for points
+      match: ['singles', 'fourball', 'scramble'].includes(f.match) ? f.match : 'fourball',
+      cup: { on: !!f.cup?.on, a: clip(f.cup?.a, 20) || 'Reds', b: clip(f.cup?.b, 20) || 'Blues' },
+      // a leaderboard of every player on their own (club championships): shown next to the team board
+      indiv: !!f.indiv },
+    // match play pairings: team a v team b (each team once)
+    matches: (() => {
+      const ids = new Set(teams.map((t) => t.id)), used = new Set();
+      return (Array.isArray(s.matches) ? s.matches : []).slice(0, 100).map((m) => ({
+        id: /^[a-z0-9]{3,12}$/.test(m?.id || '') ? m.id : rand(5, 'abcdefghijkmnpqrstuvwxyz23456789'), a: String(m?.a || ''), b: String(m?.b || '') }))
+        .filter((m) => m.a !== m.b && ids.has(m.a) && ids.has(m.b) && !used.has(m.a) && !used.has(m.b) && used.add(m.a) && used.add(m.b));
+    })(),
     sideGames: s.sideGames !== false, // each cart's own side games on the scorecard, for points only (no money)
     flights: (Array.isArray(s.flights) ? s.flights : []).slice(0, 12).map((x) => clip(x, 12)).filter(Boolean),
     teams,
@@ -547,7 +560,7 @@ export class GolfEvent extends DurableObject {
     const trial = isTryTeam(ev, team);
     const last = Math.max(0, ...Object.values(sc[team.id] || {}).flatMap((arr) => arr.map((x) => (x ? x.at || 0 : 0))));
     const mine = trial && last && Date.now() - last > TRY_RESET ? {} : (sc[team.id] || {});
-    const ids = new Set(ev.format.type === 'scramble' ? ['T'] : team.players.map((p) => p.id));
+    const ids = new Set(teamBall(ev) ? ['T'] : team.players.map((p) => p.id));
     const now = Date.now(); let changed = false; const aces = [];
     for (const e of (Array.isArray(b.list) ? b.list : []).slice(0, 200)) {
       if (!ids.has(e.p)) continue;
@@ -604,6 +617,8 @@ export class GolfEvent extends DurableObject {
         const was = (ev.contests || []).find((x) => x.id === c?.id);
         return was ? { self: was.self, check: was.check, prize: was.prize, ...c, entries: was.entries } : { ...c, entries: [] };
       }) };
+      // a Manager from before match play doesn't send the pairings, the match settings or each team's cup side: keep them
+      if (b.setup) b.setup = keepMatch(b.setup, ev);
       const s = cleanSetup(b.setup || {}, ev);
       keepTVs(s, ev.displays);
       const pp = pinProblem(s.pins, ev.pins || []); if (pp) return json({ error: pp }, 400);

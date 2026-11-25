@@ -2,8 +2,11 @@
 // The server only stores what was entered; each page works out the leaderboard from it with these functions,
 // so they all show the same numbers.
 //
-// event.format = { type: 'bestball' | 'stroke' | 'scramble' | 'stableford', count: 1 | 2 (best balls per hole),
-//                  allowance: 0–100 (% of each playing handicap), show: 'net' | 'gross' }
+// event.format = { type: 'bestball' | 'shamble' | 'stroke' | 'scramble' | 'stableford' | 'match', count: 1 | 2 (best balls per hole),
+//                  allowance: 0–100 (% of each playing handicap), show: 'net' | 'gross',
+//                  match: 'singles' | 'fourball' | 'scramble' (match play only), cup: { on, a, b } (match play team cup: the two sides' names) }
+// A shamble is scored like best ball (everyone plays from the best drive, then their own ball). Match play pairs teams in
+// event.matches = [{ id, a: teamId, b: teamId }]; with a team cup each team has team.side = 'A' | 'B'.
 // event.course.holes = [{ n: 1–18, par, yds, hcp: 1–18 (stroke index) }]
 // event.teams = [{ id, name, flight, start (hole), hcp (scramble team handicap), players: [{ id, name, hcp }] }]
 // scores[teamId] = { [playerId or 'T' for a scramble team]: [18 values: null = not yet, 0 = picked up, else strokes] }
@@ -13,7 +16,17 @@ export const FORMATS = {
   stroke: 'Stroke play',
   scramble: 'Scramble',
   stableford: 'Stableford',
+  shamble: 'Shamble',
+  match: 'Match play',
 };
+export const MATCH_TYPES = { singles: 'Singles', fourball: 'Four-ball', scramble: 'Scramble' };
+
+// one score for the whole team (a scramble, or a scramble match): it's entered under 'T' with the team's handicap
+export const teamBall = (ev) => { const f = ev?.format || {}; return f.type === 'scramble' || (f.type === 'match' && f.match === 'scramble'); };
+// the format's name, as the screens show it ("Four-ball match play")
+export const formatName = (ev) => { const f = ev?.format || {}; return f.type === 'match' ? `${MATCH_TYPES[f.match || 'fourball'] || 'Four-ball'} match play` : FORMATS[f.type] || FORMATS.bestball; };
+// can the event show each player on their own (the Individuals leaderboard)? Not when the team plays one ball
+export const hasIndividuals = (ev) => !teamBall(ev) && (ev?.format?.type || 'bestball') !== 'stroke';
 
 export function defaultHoles() {
   const par = [4, 5, 4, 3, 4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 4, 3, 4, 5];
@@ -56,8 +69,9 @@ const isScore = (v) => typeof v === 'number' && v >= 0;
 // one team's card, hole by hole: what counts on each hole for this format
 export function teamCard(ev, team, sc) {
   const f = ev.format || {}, holes = ev.course.holes, allow = f.allowance ?? 100;
-  const type = f.type || 'bestball';
-  const count = type === 'stroke' ? 1 : Math.max(1, Math.min(4, f.count || 1));
+  // a shamble counts like best ball; a match's own card is its best ball (or one team ball in a scramble match)
+  const type = teamBall(ev) ? 'scramble' : f.type === 'shamble' || f.type === 'match' || !f.type ? 'bestball' : f.type;
+  const count = type === 'stroke' || f.type === 'match' ? 1 : Math.max(1, Math.min(4, f.count || 1));
   const s = sc || {};
   const rows = [], inPlay = new Set(playHoles(ev));
   for (let i = 0; i < 18; i++) {
@@ -102,8 +116,8 @@ export function teamCard(ev, team, sc) {
 }
 
 // every line on the leaderboard (a stroke play event lists players, the rest list teams)
-export function entries(ev) {
-  if ((ev.format || {}).type === 'stroke') {
+export function entries(ev, individual) {
+  if ((ev.format || {}).type === 'stroke' || individual) {
     const out = [];
     for (const t of ev.teams || []) for (const p of t.players || []) {
       out.push({ key: `${t.id}:${p.id}`, teamId: t.id, name: p.name, sub: t.name, flight: t.flight || '', start: t.start || 1,
@@ -121,9 +135,9 @@ const last = (n) => String(n || '').trim().split(/\s+/).pop();
 export function leaderboard(ev, scores, opts = {}) {
   const f = ev.format || {}, stab = f.type === 'stableford';
   const mode = opts.mode || f.show || 'net';
-  const lines = entries(ev).map((e) => {
+  const lines = entries(ev, opts.individual).map((e) => {
     const sc = (scores || {})[e.teamId] || {};
-    const card = teamCard(ev, e.team, f.type === 'stroke' ? { [e.team.players[0].id]: sc[e.team.players[0].id] } : sc);
+    const card = teamCard(ev, e.team, f.type === 'stroke' || opts.individual ? { [e.team.players[0].id]: sc[e.team.players[0].id] } : sc);
     let toPar = 0, total = 0, played = 0, nr = false;
     for (const r of card) {
       if (!r.done) continue;
@@ -163,6 +177,101 @@ export function leaderboard(ev, scores, opts = {}) {
   return filtered;
 }
 
+// every player on their own line, whatever the team format (a club championship's gross and net medal), with flights.
+// Stableford events rank each player's own points; the rest rank each player's own score to par.
+export function individuals(ev, scores, opts = {}) {
+  if (!hasIndividuals(ev)) return [];
+  const f = ev.format || {};
+  return leaderboard({ ...ev, format: { ...f, type: f.type === 'stableford' ? 'stableford' : 'stroke', count: 1 } }, scores, { ...opts, individual: true });
+}
+
+// ---- match play: two teams head to head, hole by hole ----
+// Singles: one player a side. Four-ball: each side's best ball. Scramble: one ball a side (entered as 'T', team handicap).
+// Strokes come off the lowest player in the match (allowance first). A picked-up ball loses the hole to any score.
+// The match ends when one side is more holes up than there are holes left (closed out "3&2"); holes after that don't count.
+export function matchPlay(ev, scores, m) {
+  const f = ev.format || {}, holes = ev.course.holes, allow = f.allowance ?? 100, gross = f.show === 'gross';
+  const T = Object.fromEntries((ev.teams || []).map((t) => [t.id, t]));
+  const A = T[m.a], B = T[m.b];
+  const out = { id: m.id, a: m.a, b: m.b, holes: [], played: 0, diff: 0, toPlay: 0, done: false, started: false, winner: null, halved: false, text: '', thru: '', strokes: {} };
+  if (!A || !B) { out.text = 'Not paired'; return out; }
+  const one = teamBall(ev);
+  const side = (t) => one ? [{ team: t.id, id: 'T', hcp: playing(t.hcp, allow) }]
+    : (f.match === 'singles' ? (t.players || []).slice(0, 1) : (t.players || [])).map((p) => ({ team: t.id, id: p.id, hcp: playing(p.hcp, allow) }));
+  const sa = side(A), sb = side(B), all = [...sa, ...sb];
+  if (!sa.length || !sb.length) { out.text = 'Not paired'; return out; }
+  const low = Math.min(...all.map((p) => p.hcp));
+  for (const p of all) { p.rel = p.hcp - low; out.strokes[`${p.team}:${p.id}`] = p.rel; }
+  const raw = (p, i) => ((((scores || {})[p.team] || {})[p.id]) || [])[i];
+  const entered = (p, i) => { const v = raw(p, i); return v !== null && v !== undefined; };
+  const val = (p, i) => { const v = raw(p, i); if (!isScore(v) || v === 0) return Infinity; return gross ? v : v - strokesOn(p.rel, holes[i].hcp); };
+  const ph = playHoles(ev).map((h) => h - 1), start = A.start || 1, k0 = Math.max(0, ph.indexOf(start - 1));
+  const order = [...ph.slice(k0), ...ph.slice(0, k0)];
+  let diff = 0, played = 0;
+  for (let k = 0; k < order.length; k++) {
+    const i = order[k];
+    const row = { hole: i + 1, r: null, after: out.done, sa: Object.fromEntries(sa.map((p) => [p.id, strokesOn(p.rel, holes[i].hcp)])), sb: Object.fromEntries(sb.map((p) => [p.id, strokesOn(p.rel, holes[i].hcp)])) };
+    out.holes.push(row);
+    if (out.done || !all.every((p) => entered(p, i))) continue;
+    const x = Math.min(...sa.map((p) => val(p, i))), y = Math.min(...sb.map((p) => val(p, i)));
+    row.r = x < y ? 'A' : y < x ? 'B' : 'H';
+    diff += row.r === 'A' ? 1 : row.r === 'B' ? -1 : 0;
+    played++;
+    const left = order.length - (k + 1);
+    if (Math.abs(diff) > left || left === 0) { out.done = true; out.toPlay = left; }
+  }
+  out.played = played; out.diff = diff; out.started = played > 0;
+  if (!out.done) out.toPlay = order.length - played;
+  const up = Math.abs(diff);
+  if (out.done) {
+    if (!diff) { out.halved = true; out.text = 'Halved'; }
+    else { out.winner = diff > 0 ? 'A' : 'B'; out.text = out.toPlay ? `${up}&${out.toPlay}` : `${up} UP`; }
+    out.thru = 'F';
+  } else {
+    out.text = !played ? '' : diff ? `${up} UP` : 'AS';
+    out.thru = played ? String(played) : (start !== 1 ? `Starts ${start}` : '—');
+    out.dormie = played > 0 && up > 0 && up === out.toPlay;
+  }
+  out.leader = diff > 0 ? 'A' : diff < 0 ? 'B' : null;
+  return out;
+}
+
+// every match in the event, in the order the desk set them
+export function matches(ev, scores) {
+  return (ev.matches || []).map((m) => matchPlay(ev, scores, m));
+}
+
+// the match as one side sees it: "2 UP", "1 DOWN", "AS", "WON 3&2", "LOST 1 UP", "HALVED"
+export function matchFor(r, teamId) {
+  const me = r.a === teamId ? 'A' : r.b === teamId ? 'B' : null;
+  if (!me || !r.started) return { text: r.thru && r.thru !== '—' ? r.thru : 'Not started', state: 'open' };
+  if (r.done) return r.halved ? { text: 'HALVED', state: 'halved' } : { text: `${r.winner === me ? 'WON' : 'LOST'} ${r.text}`, state: r.winner === me ? 'won' : 'lost' };
+  if (!r.leader) return { text: 'AS', state: 'level' };
+  const up = Math.abs(r.diff);
+  return r.leader === me ? { text: `${up} UP`, state: 'up' } : { text: `${up} DOWN`, state: 'down' };
+}
+
+// the team cup: 1 point a win, ½ a halve. "now" also counts the matches on the course as they stand
+// (leader gets 1, all square ½ each); matches not started yet aren't counted
+export function cup(ev, scores, list) {
+  const f = ev.format || {}, c = f.cup || {};
+  const rs = list || matches(ev, scores);
+  const side = (id) => ((ev.teams || []).find((t) => t.id === id) || {}).side;
+  const pts = { A: 0, B: 0 }, now = { A: 0, B: 0 };
+  let left = 0;
+  for (const r of rs) {
+    // which cup side each half of the match plays for (normally a is A and b is B)
+    const sa = side(r.a) === 'B' ? 'B' : side(r.b) === 'A' ? 'B' : 'A', sb = sa === 'A' ? 'B' : 'A';
+    const give = (o, w) => { if (w === 'A') o[sa] += 1; else if (w === 'B') o[sb] += 1; else { o[sa] += 0.5; o[sb] += 0.5; } };
+    if (r.done) { give(pts, r.winner); give(now, r.winner); }
+    else { left++; if (r.started) give(now, r.leader); }
+  }
+  const total = rs.length;
+  return { on: !!c.on, a: c.a || 'Reds', b: c.b || 'Blues', A: pts.A, B: pts.B, nowA: now.A, nowB: now.B, left, total, toWin: total / 2 + 0.5 };
+}
+// 6.5 → "6½"
+export const fmtPts = (n) => `${Math.floor(n) || (n % 1 ? '' : '0')}${n % 1 ? '½' : ''}`;
+
 export function fmtPar(n, stab) {
   if (stab) return `${n} pts`;
   if (n === 0) return 'E';
@@ -175,7 +284,7 @@ export function holeStats(ev, scores, holeNo) {
   const out = { holeNo, par, eagle: 0, birdie: 0, par0: 0, bogey: 0, worse: 0, aces: [], n: 0, total: 0 };
   for (const t of ev.teams || []) {
     const sc = (scores || {})[t.id] || {};
-    const who = ev.format?.type === 'scramble' ? [{ id: 'T', name: t.name }] : (t.players || []);
+    const who = teamBall(ev) ? [{ id: 'T', name: t.name }] : (t.players || []);
     for (const p of who) {
       const v = (sc[p.id] || [])[i];
       if (!isScore(v) || v === 0) continue;
@@ -191,7 +300,7 @@ export function holeStats(ev, scores, holeNo) {
 
 // gross skins: a hole is won when one player has the lowest score alone; ties carry over when carry is on
 export function skins(ev, scores, carry = true) {
-  if (ev.format?.type === 'scramble') return [];
+  if (teamBall(ev)) return [];
   const res = []; let pot = 1;
   for (let i = 0; i < 18; i++) {
     let best = Infinity, who = [], all = true;
@@ -460,7 +569,7 @@ export function groupInfo(ev, scores, teamId) {
       const l = per ? lines.find((x) => x.key === `${teamId}:${p.id}`) : null;
       // otherwise their own gross score to par over the holes they've finished
       let d = 0, n = 0; ((scores || {})[teamId]?.[p.id] || []).forEach((v, i) => { if (typeof v === 'number' && v > 0) { d += v - (ev.course?.holes?.[i]?.par || 4); n++; } });
-      return { id: p.id, name: p.name, hcp: p.hcp, today: l && l.played ? fmtPar(l.score, stab) : n && ev.format?.type !== 'scramble' ? `${fmtPar(d)} gross` : '' };
+      return { id: p.id, name: p.name, hcp: p.hcp, today: l && l.played ? fmtPar(l.score, stab) : n && !teamBall(ev) ? `${fmtPar(d)} gross` : '' };
     }),
   };
 }

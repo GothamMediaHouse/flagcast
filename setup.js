@@ -47,3 +47,18 @@ export function stamp(teams, old, changed, v) {
   return teams.map((t) => ({ ...t, sv: t.id === changed ? v : sv.get(t.id) || 0 }));
 }
 
+
+// what a Manager from before match play leaves out of its Save (setup.matches, format.match/cup/indiv, team.side) stays as it was
+export function keepMatch(setup, ev) {
+  const out = { ...setup };
+  if (!Array.isArray(out.matches)) out.matches = ev.matches || [];
+  if (out.format && typeof out.format === 'object') {
+    const f = ev.format || {};
+    out.format = { ...(f.match ? { match: f.match } : {}), ...(f.cup ? { cup: f.cup } : {}), ...(f.indiv ? { indiv: f.indiv } : {}), ...out.format };
+  }
+  if (Array.isArray(out.teams)) {
+    const side = new Map((ev.teams || []).map((t) => [t.id, t.side || '']));
+    out.teams = out.teams.map((t) => (t && typeof t === 'object' && !('side' in t) && side.get(t.id) ? { ...t, side: side.get(t.id) } : t));
+  }
+  return out;
+}

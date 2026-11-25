@@ -9,7 +9,7 @@
 // Apple push needs, in Cloudflare: APNS_KEY (secret: the .p8 key's text), APNS_KEY_ID (the key's 10-letter id)
 // and optionally APNS_TEAM_ID (default C8KXPB4QNA). Without APNS_KEY nothing is sent and the app still shows the
 // card, updated whenever the app is open.
-import { leaderboard, fmtPar, playHoles, groupInfo } from './public/golf/core.js';
+import { leaderboard, fmtPar, playHoles, groupInfo, teamBall, matches, matchFor } from './public/golf/core.js';
 
 export const LIVE_TOPIC = 'app.flagcast.golf.push-type.liveactivity';
 export const LIVE_MAX = 400; // tokens kept per tournament
@@ -37,7 +37,7 @@ export function liveCard(ev, scores, teamId, player = '', now = Date.now(), boar
   const ph = playHoles(ev), start = ph.includes(team.start) ? team.start : ph[0], k = ph.indexOf(start);
   const order = [...ph.slice(k), ...ph.slice(0, k)];
   const sc = scores?.[teamId] || {};
-  const ids = ev.format?.type === 'scramble' ? ['T'] : team.players.map((p) => p.id);
+  const ids = teamBall(ev) ? ['T'] : team.players.map((p) => p.id);
   const done = (h) => ids.length > 0 && ids.every((p) => { const v = sc[p]?.[h - 1]; return v !== null && v !== undefined; });
   const played = order.filter(done).length;
   const hole = order.find((h) => !done(h)) || order[order.length - 1];
@@ -45,6 +45,16 @@ export function liveCard(ev, scores, teamId, player = '', now = Date.now(), boar
   const lead = lb.find((l) => l.played);
   const msg = cardMessage(ev, teamId, player, now);
   const raw = best && best.played ? best.score : null;
+  // match play: the card shows the team's match ("2 UP", "WON 3&2") and who they're playing, not a to-par score
+  const m = ev.format?.type === 'match' ? matches(ev, scores).find((r) => r.a === teamId || r.b === teamId) : null;
+  if (m) {
+    const f = matchFor(m, teamId), opp = (ev.teams || []).find((t) => t.id === (m.a === teamId ? m.b : m.a));
+    const c = { team: gi.name || teamName(team), score: m.started ? f.text : '—', tone: ['up', 'won'].includes(f.state) ? -1 : ['down', 'lost'].includes(f.state) ? 1 : 0,
+      thru: m.thru || '—', pos: '—', of: 0, hole, par: hh.par || 4, yds: hh.yds || 0, played, holes: order.length,
+      leader: opp ? `v ${opp.name || teamName(opp)}` : '',
+      msg: msg ? msg.text : '', from: msg ? msg.from : '', msgAt: msg ? msg.at : 0, final: !!ev.locked, at: now };
+    return c;
+  }
   return {
     team: gi.name || teamName(team),
     score: raw === null ? '—' : fmtPar(raw, stab),

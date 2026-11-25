@@ -72,6 +72,16 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
 .card th:first-child, .card td:first-child { text-align: left; padding-right: 10px; white-space: nowrap; font-family: var(--f-body); font-weight: 600; }
 .card thead th { color: var(--muted); font-weight: 500; }
 .card .sc { min-width: 1.7em; height: 1.7em; }
+.match { margin-top: 12px; padding: 12px; border-radius: 10px; background: var(--paper-2); border: 1.5px solid var(--flag); }
+.match .top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.match small { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.match .big { font-family: var(--f-display); font-size: 2rem; font-weight: 800; line-height: 1; }
+.match .big.up, .match .big.won { color: #2f9e62; } .match .big.down, .match .big.lost { color: #c9483f; }
+.match .hs { display: grid; grid-template-columns: repeat(9, 1fr); gap: 3px; margin-top: 8px; }
+.match .hs span { height: 22px; border-radius: 5px; display: grid; place-items: center; font: 500 .65rem var(--f-mono); background: rgba(127, 127, 127, .15); position: relative; }
+.match .hs .w { background: #2f9e62; color: #fff; } .match .hs .l { background: #c9483f; color: #fff; } .match .hs .h { background: rgba(127, 127, 127, .4); }
+.match .hs .cur { outline: 2px solid var(--flag); } .match .hs .off { opacity: .35; }
+.match .hs i { position: absolute; top: 2px; right: 3px; width: 4px; height: 4px; border-radius: 50%; background: var(--flag); }
 .summary { display: flex; justify-content: space-between; align-items: baseline; margin-top: 18px; gap: 12px; }
 .summary .big { font-family: var(--f-display); font-size: 2rem; font-weight: 800; }
 .cam { margin-top: 12px; display: block; text-align: center; }
@@ -151,7 +161,7 @@ import { gpsCard } from '/golf/gpscard.js';
 import { startGps, position, holeMap } from '/golf/gps.js';
 import { groupsMap, hidden as groupHidden } from '/golf/groupsmap.js';
 import { onGps, yds, trackingOn, mapped } from '/golf/gps.js';
-import { leaderboard, playHoles, teamCard, strokesOn, playing, fmtPar, mark, contestLeader, fmtDist, sideGames } from '/golf/core.js';
+import { leaderboard, playHoles, teamCard, strokesOn, playing, fmtPar, mark, contestLeader, fmtDist, sideGames, teamBall, matches, matchFor, cup, fmtPts } from '/golf/core.js';
 import { eventId, post, live, esc } from '/golf/client.js';
 import { appBar, remember } from '/golf/appbar.js';
 appBar('score');
@@ -180,7 +190,7 @@ function myScores() {
   return sc;
 }
 const team = () => S && S.teams.find((t) => t.id === teamId);
-const who = (t) => (S.format.type === 'scramble' ? [{ id: 'T', name: t.name || 'Team', hcp: t.hcp }] : t.players);
+const who = (t) => (teamBall(S) ? [{ id: 'T', name: t.name || 'Team', hcp: t.hcp }] : t.players);
 // the holes this cart plays, in order from its starting hole (only the front or back 9 on a 9-hole round)
 const inRound = (h) => playHoles(S).includes(h.n);
 const order = (t) => { const ph = playHoles(S), k = Math.max(0, ph.indexOf(t.start || ph[0])); return [...ph.slice(k), ...ph.slice(0, k)]; };
@@ -347,7 +357,7 @@ onGps((f) => {
   sent = { t: Date.now(), at: f.at };
   post('where', { code, team: teamId, at: f.at, acc: f.acc, hole, hide: groupHidden(code) }).catch(() => {});
 });
-const sideOK = () => S && S.sideGames !== false && S.format.type !== 'scramble';
+const sideOK = () => S && S.sideGames !== false && !teamBall(S);
 // where everyone is: the other groups on a map (groupsmap.js), on the day of the tournament or when the course is mapped
 const whereOK = () => S && (trackingOn(S) || mapped(S));
 let gmap = null;
@@ -387,6 +397,9 @@ function render() {
   if (sponsor) hit(sponsor.id, 'view', `${sponsor.id}:${hole}`); if (turn) hit(turn.id, 'view', `${turn.id}:turn`);
   const contests = (S.contests || []).filter((c) => c.hole === hole);
   const lb = leaderboard(S, sc).find((l) => l.teamId === t.id);
+  // match play: this team's match, and strokes off the lowest player in it (not each player's full handicap)
+  const mres = S.format.type === 'match' ? matches(S, sc).find((r) => r.a === t.id || r.b === t.id) : null;
+  const strokesHere = (p) => mres ? strokesOn(mres.strokes[`${t.id}:${p.id}`] || 0, H.hcp) : strokesOn(playing(p.hcp, allow), H.hcp);
   const cover = S.photos?.cover && !ps.some((p) => (mine[p.id] || []).some((v) => v != null)), hp = S.photos?.holes?.[hole];
   $('main').innerHTML = `
     ${cover ? `<div class="cover" style="background-image:url('${esc(S.photos.cover)}')"><div><small>Welcome to</small><b>${esc(S.screens?.title || S.name)}</b></div></div>` : ''}
@@ -399,7 +412,7 @@ function render() {
     ${S.cams && S.cams[hole] ? `<a class="btn cam" href="/g/${eventId()}#hole-${hole}">Watch the hole ${hole} camera</a>` : ''}
     <div class="players">${ps.map((p) => {
       const v = (mine[p.id] || [])[hole - 1];
-      const st = strokesOn(playing(p.hcp, allow), H.hcp);
+      const st = strokesHere(p);
       const set = v != null;
       const shown = !set ? H.par : v === 0 ? 'PU' : v;
       return `<div class="pl"><div class="who"><b>${esc(p.name)}</b><span>${st > 0 ? `<span class="dots" title="Strokes on this hole">${'●'.repeat(st)}</span> gets ${st} stroke${st > 1 ? 's' : ''}` : st < 0 ? 'gives a stroke back' : 'no strokes here'}</span></div>
@@ -408,9 +421,10 @@ function render() {
         <button class="pm" data-p="${p.id}" data-d="1" aria-label="One more for ${esc(p.name)}">+</button></div>
         <div class="pu"><span>${set ? '' : 'Tap the number for par'}</span><span>${set ? `<button data-clear="${p.id}">Clear</button> · ` : ''}<button data-pu="${p.id}">Picked up</button></span></div></div>`;
     }).join('')}</div>
-    <div class="summary"><div><div class="label">${S.format.show === 'gross' ? 'Gross' : 'Net'} to par</div><div class="big ${lb && lb.score < 0 && S.format.type !== 'stableford' ? 'under' : ''}">${lb && lb.played ? fmtPar(lb.score, S.format.type === 'stableford') : '—'}</div></div>
-      <div style="text-align:right"><div class="label">Position</div><div class="big">${lb && lb.pos ? lb.pos : '—'}</div></div></div>
-    <a class="btn" style="width:100%;margin-top:10px" href="/g/${eventId()}">Full leaderboard</a>
+    ${mres ? matchCard(mres, t) : S.format.type === 'match' ? `<div class="note"><b>Match play</b><br>Your match shows here once the desk pairs the teams.</div>` : ''}
+    ${mres ? '' : `<div class="summary"><div><div class="label">${S.format.show === 'gross' ? 'Gross' : 'Net'} to par</div><div class="big ${lb && lb.score < 0 && S.format.type !== 'stableford' ? 'under' : ''}">${lb && lb.played ? fmtPar(lb.score, S.format.type === 'stableford') : '—'}</div></div>
+      <div style="text-align:right"><div class="label">Position</div><div class="big">${lb && lb.pos ? lb.pos : '—'}</div></div></div>`}
+    <a class="btn" style="width:100%;margin-top:10px" href="/g/${eventId()}">${mres ? 'Every match' : 'Full leaderboard'}</a>
     ${sideOK() ? `<button class="btn" style="width:100%;margin-top:10px" data-view="side">Side games${sideOn() ? ' · playing' : ''}</button>` : ''}
     ${whereOK() ? `<button class="btn" style="width:100%;margin-top:10px" data-view="where">See everyone on the course</button>` : ''}
     <div class="card"><table><thead><tr><th>Hole</th>${holes.filter(inRound).map((h) => `<th>${h.n}</th>`).join('')}<th>Tot</th></tr>
@@ -424,6 +438,22 @@ function render() {
   $('next').textContent = i === ord.length - 1 ? 'Done' : `Hole ${ord[i + 1]}`;
   store.set('hole', hole);
   document.querySelector('.strip [aria-current="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+}
+
+// the match card: "2 UP thru 7" (or WON 3&2), who they play, and a square a hole: won, lost, halved, a dot for a stroke
+function matchCard(r, t) {
+  const me = r.a === t.id ? 'A' : 'B', opp = S.teams.find((x) => x.id === (me === 'A' ? r.b : r.a)), f = matchFor(r, t.id);
+  const oppName = opp ? opp.name || opp.players.map((p) => p.name.split(' ').pop()).join(' / ') : '';
+  const mine = Object.entries(r.strokes).filter(([k]) => k.startsWith(`${t.id}:`)).map(([, v]) => v);
+  const c = S.format.cup?.on ? cup(S, S.scores) : null;
+  const sq = r.holes.map((h) => { const res = h.r === me ? 'w' : h.r === 'H' ? 'h' : h.r ? 'l' : '';
+    const st = Object.values(me === 'A' ? h.sa : h.sb).some((v) => v > 0);
+    return `<span class="${res} ${h.hole === hole ? 'cur' : ''} ${h.after ? 'off' : ''}">${h.hole}${st ? '<i></i>' : ''}</span>`; }).join('');
+  return `<div class="match"><div class="top"><div><small>You v ${esc(oppName)}</small><div class="big ${f.state}">${esc(f.text)}</div></div>
+    <div style="text-align:right"><small>${r.done ? (r.toPlay ? `after ${r.played}` : 'final') : r.started ? `thru ${esc(r.thru)}` : ''}</small><div>${r.done ? (r.toPlay ? 'Match over' : '') : r.started ? `${r.toPlay} to play${r.dormie ? ' · dormie' : ''}` : 'Not started'}</div></div></div>
+    <div class="hs">${sq}</div>
+    <div class="label" style="margin-top:6px">${mine.some((v) => v > 0) ? 'Gold dot: you get a stroke there. ' : ''}${r.done && r.toPlay ? 'Holes after the match is over don’t count for it.' : 'Strokes are off the lowest handicap in your match.'}</div>
+    ${c ? `<div class="label" style="margin-top:6px">Cup: ${esc(c.a)} ${fmtPts(c.A)} · ${esc(c.b)} ${fmtPts(c.B)}${c.left ? ` · ${c.left} still playing` : ''}</div>` : ''}</div>`;
 }
 
 const pts = (v) => { const a = Math.round(Math.abs(v) * 10) / 10; return `${a} pts`; };

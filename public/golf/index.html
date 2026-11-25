@@ -148,7 +148,7 @@ input { background: var(--paper); border: 1px solid var(--line); border-radius: 
 <script type="module">
 import { api, token, esc, creditsText, signinError } from '/golf/club.js';
 import { fileToLogo } from '/golf/brandmark.js';
-import { leaderboard, fmtPar } from '/golf/core.js';
+import { leaderboard, fmtPar, formatName } from '/golf/core.js';
 import { mountSidebar, menuButton, getMe, myEvents, withMeta, featured, stepsLeft, isEventDay, slowCarts, teamName, paintPhoto, courseView,
   dayLine, monthDay, today, deskURL, rememberLink, icon } from '/golf/shell.js';
 const $ = (id) => document.getElementById(id);
@@ -211,7 +211,7 @@ async function drawDashboard() {
   const board = leaderboard(S, S.scores), played = board.reduce((a, l) => a + l.played, 0), l1 = board.find((l) => l.played > 0);
   const most = Math.max(0, ...board.map((l) => l.played)), behind = board.filter((l) => most > 0 && l.played < most - 2).length, stab = S.format?.type === 'stableford';
   const isToday = S.date === today();
-  const fmt = { bestball: 'Best ball', scramble: 'Scramble', stableford: 'Stableford', stroke: 'Stroke play' }[S.format?.type] || '';
+  const fmt = S.format?.type ? formatName(S) : '';
   const num = (v, l, cls = '') => `<div><b class="${cls}">${esc(v)}</b><span>${esc(l)}</span></div>`;
   $('leadWrap').innerHTML = `<div class="raised lead">
     <div class="pic"><div class="tilebox" id="leadPic"></div>${isToday && !S.locked ? '<span class="chip-live">LIVE</span>' : ''}</div>
