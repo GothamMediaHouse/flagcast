@@ -10,7 +10,8 @@ struct GroupsView: View {
     @State private var picked: String?
     @AppStorage("map.3d") private var threeD = false
 
-    struct Group: Identifiable, Hashable { var id: String; var name: String; var start: Int; var hole: Int; var at: GeoPoint; var acc: Double; var t: Double }
+    struct Group: Identifiable, Hashable { var id: String; var name: String; var start: Int; var hole: Int; var at: GeoPoint; var acc: Double; var t: Double; var since: Double = 0; var sample = false
+        var card: GroupCardSpot { GroupCardSpot(id: id, name: name, start: start, hole: hole, t: t, since: since, sample: sample) } }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -35,6 +36,11 @@ struct GroupsView: View {
                 if !on { Text("Group tracking is on only during the tournament: on its date, until the results are locked.").font(.callout).padding(10).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8)).padding() }
             }
             Divider()
+            VStack(spacing: 0) {
+            if let g = groups.first(where: { $0.id == picked }) {
+                ScrollView { GroupCard(doc: doc, group: g.card) { picked = nil }.padding(10) }.frame(maxHeight: 470).fixedSize(horizontal: false, vertical: true)
+                Divider()
+            }
             List(selection: $picked) {
                 SwiftUI.Section("\(groups.count) group\(groups.count == 1 ? "" : "s") on the course") {
                     if groups.isEmpty { Text("No groups yet. They appear when a scorecard has GPS on.").foregroundStyle(.secondary) }
@@ -46,7 +52,9 @@ struct GroupsView: View {
                     }
                 }
             }
-            .frame(width: 300)
+            GolferNotesToggle(doc: doc).padding(12)
+            }
+            .frame(width: 360)
         }
         }
         .task {
@@ -64,7 +72,8 @@ struct GroupsView: View {
         groups = (r["groups"] as? [[String: Any]] ?? []).compactMap { g in
             guard let at = g["at"] as? [Double], at.count == 2 else { return nil }
             return Group(id: g["team"] as? String ?? UUID().uuidString, name: g["name"] as? String ?? "Group", start: g["start"] as? Int ?? 1, hole: g["hole"] as? Int ?? 0,
-                         at: GeoPoint(lat: at[0], lng: at[1]), acc: g["acc"] as? Double ?? 0, t: (g["t"] as? Double ?? now) - now + Date().timeIntervalSince1970 * 1000)
+                         at: GeoPoint(lat: at[0], lng: at[1]), acc: g["acc"] as? Double ?? 0, t: (g["t"] as? Double ?? now) - now + Date().timeIntervalSince1970 * 1000,
+                         since: (g["since"] as? Double).map { $0 - now + Date().timeIntervalSince1970 * 1000 } ?? 0, sample: g["sample"] as? Bool ?? false)
         }
         if camera == .automatic, let first = groups.first { camera = .camera(MapCamera(centerCoordinate: first.at.coordinate, distance: 2500, heading: 0, pitch: 0)) }
         else if camera == .automatic, let any = doc.ev.map.holes.values.compactMap({ $0.m }).first { camera = .camera(MapCamera(centerCoordinate: any.coordinate, distance: 2500, heading: 0, pitch: 0)) }

@@ -28,6 +28,27 @@ body.maponly #hero { display: none !important; }
 @media (max-width: 900px) { body.maponly #hero { display: flex !important; min-height: 0 !important; } body.maponly #hero .ttl, body.maponly #hero .acts { display: none; } main > section.embed iframe { height: calc(100dvh - 52px); } }
 @media (max-width: 640px) { main { padding: 0 12px 60px; } main > section:not(.ov):not(.embed) { padding: 4px 14px 18px; } main > section.embed { margin: 0 -12px -60px; } }
 section[hidden] { display: none; }
+/* pin sheet */
+.pinwrap { display: grid; grid-template-columns: 1fr 300px; gap: 16px; align-items: start; margin-top: 12px; }
+.pingrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+.ptile { all: unset; cursor: pointer; background: var(--card); border: 2px solid var(--line); border-radius: 10px; padding: 6px 8px 8px; display: grid; justify-items: center; text-align: center; }
+.ptile[aria-pressed="true"] { border-color: var(--green, #123628); }
+.ptile .top { width: 100%; display: flex; justify-content: space-between; align-items: baseline; }
+.ptile .top b { font: 700 20px/1 var(--f-display); } .ptile .top span { font-size: 11px; color: var(--muted); }
+.ptile .l { font-size: 13px; font-weight: 600; } .ptile .p { font-size: 12px; color: var(--muted); min-height: 1.2em; }
+.ptile.none .l { color: var(--muted); font-weight: 500; }
+.pined { position: sticky; top: 16px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 8px; }
+.pined .hd { display: flex; justify-content: space-between; align-items: center; }
+.pined .hd b { font: 700 26px/1 var(--f-display); display: block; } .pined .hd small { color: var(--muted); font-size: 12px; }
+.pined svg.big { width: 100%; max-width: 250px; justify-self: center; cursor: crosshair; }
+.seg { display: flex; background: var(--paper2, #e6eae1); border-radius: 8px; padding: 2px; }
+.seg button { all: unset; flex: 1; text-align: center; font-size: 13px; font-weight: 600; padding: 6px 0; border-radius: 6px; cursor: pointer; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: #123628; color: #fff; }
+.pined .two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pined .sees { font-size: 12px; color: var(--muted); border: 1px dashed var(--line); border-radius: 8px; padding: 8px; }
+@media (max-width: 900px) { .pinwrap { grid-template-columns: 1fr; } .pined { position: static; } }
+@media print { body.pinprint .side, body.pinprint #hero, body.pinprint .pined, body.pinprint .pinbar { display: none !important; } body.pinprint main > section { box-shadow: none; margin: 0; } }
+
 h2 { font-size: 1.8rem; margin: 6px 0 14px; }
 h3 { font-size: 1.2rem; margin: 22px 0 10px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
@@ -154,6 +175,7 @@ table.t .n { width: 64px; }
   <p class="help">Each team gets its own scorecard code and QR card. Start hole is for a shotgun start. For a scramble, set the team handicap. Type a player’s Handicap Index (use + for plus handicaps, like +1.2) and pick their tees to have the course handicap worked out; or leave Index empty and type the course handicap yourself.</p>
   <div class="scroll" style="margin-top:12px"><table class="t" id="teams"></table></div>
   <div class="row"><button class="btn" id="addTeam">Add team</button><button class="btn" id="pasteBtn">Paste from a spreadsheet</button></div>
+  <div id="removedTeams" class="help" hidden style="margin-top:10px"></div>
   <div id="pasteBox" hidden style="margin-top:12px">
     <p class="help">One team per line, columns split by tabs or commas: Team name, Flight, Start hole, Player 1, Handicap 1, Player 2, Handicap 2, and so on (up to 4 players). Copy the rows straight out of Excel or Google Sheets.</p>
     <textarea id="paste" placeholder="Reilly / Okafor, A, 1, Pat Reilly, 8, Sam Okafor, 14"></textarea>
@@ -172,6 +194,13 @@ table.t .n { width: 64px; }
   <p class="help">Closest to the pin is measured in feet (4.5 = 4 ft 6 in). Long drive in yards. Results go on the screens as soon as you add them.</p>
   <div id="contests" style="margin-top:12px"></div>
   <div class="row"><button class="btn" id="addCtp">Add closest to the pin</button><button class="btn" id="addLd">Add long drive</button><span class="help">Set the contest’s hole and name, then Save before entering results.</span></div>
+</section>
+
+<section id="s-pins" hidden>
+  <h2>Pin sheet</h2>
+  <p class="help">Where the pin is on each green today. Golfers see a flag on the green and the yards to the pin, and it changes on their phones as soon as you set it. Tap a hole, then tap the green where the pin is.</p>
+  <div class="row pinbar"><button class="btn" id="pinPrint">Print pin sheet</button><button class="btn danger" id="pinClear">Clear all pins</button><span class="help" id="pinCount"></span></div>
+  <div class="pinwrap"><div class="pingrid" id="pinGrid"></div><div class="pined" id="pinEd"></div></div>
 </section>
 
 <section id="s-screens" hidden>
@@ -254,6 +283,7 @@ table.t .n { width: 64px; }
 import { defaultHoles, leaderboard, courseHcp, coursePar, parseIndex, fmtIndex, netDoubleBogey } from '/golf/core.js';
 import { eventId, post, live, esc } from '/golf/client.js';
 import { fmtPar, contestLeader, fmtDist, playHoles } from '/golf/core.js';
+import { GREEN_PATH, pinSpot, pinLabel, pinPaces, pinYards, yds, middle } from '/golf/gps.js';
 import { SECTIONS, sectionTitle, mountSidebar, menuButton, paintPhoto, courseView, holeView, dayLine, today, rememberLink, shrinkPhoto } from '/golf/shell.js';
 
 const key = location.hash.slice(1).split('&')[0].replace(/^key=/, '');
@@ -283,6 +313,7 @@ function showTab(t) {
   if (tab === 'scores') drawScores();
   if (tab === 'links') drawLinks();
   if (tab === 'report') drawReport();
+  if (tab === 'pins') drawPins();
   if (tab === 'map' && !$('mapFrame').src) $('mapFrame').src = `/g/${eventId()}/map?embed#${key}`;
   if (tab === 'groups' && !$('groupsFrame').src) $('groupsFrame').src = `/g/${eventId()}/map?embed#${key}&groups`;
   scrollTo(0, 0);
@@ -493,7 +524,17 @@ document.addEventListener('input', (e) => {
   else if (e.target.closest('#teams') && ['index', 'tee'].includes(e.target.dataset.pk)) updateHcps();
 });
 document.addEventListener('change', (e) => { if (e.target.closest('#tees')) { const keep = [...document.querySelectorAll('#teams .pl [data-pk="tee"]')].map((x) => x.value); drawTeams(); document.querySelectorAll('#teams .pl [data-pk="tee"]').forEach((x, i) => { if (keep[i] && [...x.options].some((o) => o.value === keep[i])) x.value = keep[i]; }); updateHcps(); } });
+// teams taken off by a Save are kept 30 days with their scores: put one back
+function drawRemoved() {
+  const r = EV.removed || [], el = $('removedTeams'); el.hidden = !r.length; if (!r.length) return;
+  el.innerHTML = `Taken off recently: ${r.map((x) => `<button class="btn" data-restore="${esc(x.team.id)}">Put back ${esc(x.team.name || x.team.players.map((p) => p.name).join(' / ') || 'team')}</button>`).join(' ')}`;
+  el.querySelectorAll('[data-restore]').forEach((b) => b.onclick = async () => {
+    if (dirty) return toast('Save or undo your changes first.');
+    try { await desk('restore', { team: b.dataset.restore }); EV = await desk('get'); fill(); toast('Team put back, with its scores.'); } catch (e) { toast(e.message); }
+  });
+}
 function drawTeams() {
+  drawRemoved();
   const scr = $('f-type').value === 'scramble';
   $('teams').innerHTML = `<thead><tr><th>Team name</th><th>Flight</th><th>Start</th>${scr ? '<th>Team hcp</th>' : ''}<th>Players and handicaps</th><th>Code</th><th></th></tr></thead><tbody>${EV.teams.map((t, i) => `
     <tr data-t="${i}"><td><input data-k="name" value="${esc(t.name)}" placeholder="Uses the last names"></td>
@@ -631,7 +672,7 @@ $('raisedGo').onclick = async () => { try { await desk('fund', { raised: Number(
 
 // ---- staff, screens and schedule (changed straight in EV) ----
 const PAGE_NAMES = { lb: 'Leaderboard', p3: 'Par 3 camera', contests: 'Contests', skins: 'Skins', fund: 'Fundraising', sponsors: 'All sponsors', sponsor: 'One sponsor', schedule: 'Schedule' };
-const pinGen = () => String(1000 + Math.floor(Math.random() * 9000));
+const pinGen = () => { let p; do p = String(100000 + crypto.getRandomValues(new Uint32Array(1))[0] % 900000); while ((EV.pins || []).some((x) => x.pin === p)); return p; };
 function drawStaff() {
   EV.pins = EV.pins || []; EV.displays = EV.displays || []; EV.schedule = EV.schedule || [];
   $('evcode').textContent = eventId().toUpperCase();
@@ -721,33 +762,18 @@ function csv(name, rows) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['﻿' + text], { type: 'text/csv' })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 const fileName = (what) => `${(EV.name || 'tournament').replace(/[^\w -]+/g, '').trim() || 'tournament'} - ${what}.csv`;
-$('csvResults').onclick = () => {
-  if (!LIVE) return toast('Still loading.');
-  const flights = LIVE.flights.length ? LIVE.flights : [null], rows = [['Flight', 'Pos', 'Team', 'Players', 'Thru', 'Score', ...LIVE.course.holes.map((h) => `H${h.n}`)]];
-  for (const fl of flights) for (const l of leaderboard(LIVE, LIVE.scores, { flight: fl })) rows.push([fl || '', l.pos, l.name, l.sub, l.thru, l.played ? l.score : '', ...l.card.map((r) => (r.done ? (LIVE.format.show === 'gross' ? r.gross : r.net) ?? '' : ''))]);
-  csv(fileName('results'), rows);
+$('csvResults').onclick = async () => { // made on the server (report.js), the same file the golf pro's phone gets
+  try { const r = await desk('report'); csv(fileName('results'), r.results); } catch (e) { toast(e.message); }
 };
 $('csvSponsors').onclick = () => { csv(fileName('sponsors'), [['Sponsor', 'Where', 'Holes', 'Screen minutes', 'Phone views', 'Taps'], ...EV.sponsors.map((x) => { const st = REPORT.stats[x.id] || {}; return [x.name, SPOT_NAMES[x.spot] || '', (x.holes || []).join(' '), Math.round((st.secs || 0) / 60), st.view || 0, st.tap || 0]; })]); };
 // every player's round, ready to post to GHIN (hole by hole, and the adjusted gross score)
-$('csvGhin').onclick = () => {
-  if (!LIVE) return toast('Still loading.');
-  if (LIVE.format.type === 'scramble') return toast('Scramble scores can’t be posted for handicaps.');
-  const H = LIVE.course.holes, par = coursePar(LIVE), T = EV.course.tees || [];
-  const rows = [['Player', 'GHIN number', 'Handicap Index', 'Course handicap', 'Date', 'Course', 'Tees', 'Course rating', 'Slope', 'Par', ...H.map((h) => `H${h.n}`), 'Holes played', 'Gross', 'Adjusted gross', 'Picked up on', 'Team']];
-  for (const t of EV.teams) for (const p of t.players) {
-    const arr = (LIVE.scores[t.id] || {})[p.id] || [], tee = T.find((x) => x.id === p.tee) || (p.index != null ? T[0] : null);
-    let gross = 0, adj = 0, n = 0; const pu = [];
-    const holes = H.map((h, i) => {
-      const v = arr[i]; if (v == null) return '';
-      const cap = netDoubleBogey(h.par, p.hcp, h.hcp); n++;
-      if (v === 0) { pu.push(h.n); adj += cap; return cap; } // picked up: most likely score is net double bogey at most
-      gross += v; adj += Math.min(v, cap); return v;
-    });
-    if (!n) continue;
-    rows.push([p.name, p.ghin || '', fmtIndex(p.index), p.hcp, EV.date || '', EV.course.name || EV.club || '', tee ? tee.name : '', tee ? tee.rating : '', tee ? tee.slope : '', tee && tee.par ? tee.par : par, ...holes, n, pu.length ? '' : gross, adj, pu.join(' '), t.name]);
-  }
-  if (rows.length === 1) return toast('No scores yet.');
-  csv(fileName('ghin-posting'), rows);
+$('csvGhin').onclick = async () => {
+  try {
+    const r = await desk('report');
+    if (!r.ghin) return toast('Scramble scores can’t be posted for handicaps.');
+    if (r.ghin.length === 1) return toast('No scores yet.');
+    csv(fileName('ghin-posting'), r.ghin);
+  } catch (e) { toast(e.message); }
 };
 $('reportRefresh').onclick = drawReport;
 
@@ -790,6 +816,73 @@ $('scores').addEventListener('change', async (e) => {
   try { await post('score', { desk: key, team, list: [{ p, h: Number(h), v, at: Date.now() }] }); } catch (err) { toast(err.message); }
 });
 
+// ---- pin sheet: where the pin is on each green today (saved straight away, like contest results) ----
+let pinHole = 1, pinBusy = false;
+const PINS = () => (LIVE && LIVE.pinsheet) || EV.pinsheet || {};
+const greenSVG = (p, w, big) => {
+  const [x, y] = pinSpot(p);
+  const guides = big ? [[6, 49, 146, 49], [6, 88, 146, 88], [62, 4, 62, 136], [98, 4, 98, 136]].map(([a, b, c, d]) => `<line x1="${a}" y1="${b}" x2="${c}" y2="${d}" stroke="#fff" stroke-opacity=".45" stroke-dasharray="4 4"/>`).join('') : '';
+  const mark = !p ? '' : big
+    ? `<ellipse cx="${x}" cy="${y}" rx="5" ry="2.5" fill="#0d2a18"/><line x1="${x}" y1="${y}" x2="${x}" y2="${y - 32}" stroke="#fff" stroke-width="2.5"/><path d="M${x} ${y - 32} l18 6 l-18 6z" fill="#e0453a"/>`
+    : `<circle cx="${x}" cy="${y}" r="12" fill="#e0453a" stroke="#fff" stroke-width="4"/>`;
+  return `<svg ${big ? 'class="big" id="pinGreen"' : ''} viewBox="-10 ${big ? -24 : -12} 170 ${big ? 176 : 164}" width="${w}" aria-hidden="true"><path d="${GREEN_PATH}" fill="#4fae6e" stroke="#2a6e3e" stroke-width="10"/>${guides}${mark}${big ? '<text x="75" y="-12" text-anchor="middle" font-size="9" font-weight="600" fill="currentColor" opacity=".6">BACK</text><text x="75" y="148" text-anchor="middle" font-size="9" font-weight="600" fill="currentColor" opacity=".6">FRONT (from the fairway)</text>' : ''}</svg>`;
+};
+function drawPins() {
+  if (!EV) return;
+  const S0 = S(), holes = S0.course.holes.filter((h) => playHoles(S0).includes(h.n)), P = PINS();
+  if (!holes.some((h) => h.n === pinHole)) pinHole = holes[0]?.n || 1;
+  $('pinCount').textContent = `${holes.filter((h) => P[h.n]).length} of ${holes.length} holes set`;
+  $('pinGrid').innerHTML = holes.map((h) => { const p = P[h.n]; return `<button class="ptile${p ? '' : ' none'}" data-ph="${h.n}" aria-pressed="${h.n === pinHole}"><div class="top"><b>${h.n}</b><span>Par ${h.par}</span></div>${greenSVG(p, 58)}<div class="l">${p ? esc(pinLabel(p)) : 'Not set'}</div><div class="p">${esc(pinPaces(p))}</div></button>`; }).join('');
+  const h = holes.find((x) => x.n === pinHole) || holes[0]; if (!h) { $('pinEd').innerHTML = ''; return; }
+  const p = P[h.n], i = holes.indexOf(h), prev = holes[i - 1], next = holes[i + 1];
+  const mh = S0.map?.holes?.[h.n], t = mh?.tee;
+  const yd = t && middle(mh) ? { f: yds(t, mh.f), m: yds(t, middle(mh)), b: yds(t, mh.b) } : h.yds ? { f: null, m: h.yds, b: null } : null;
+  const toPin = p && yd ? pinYards(yd, p) : null;
+  const seg = (k, opts) => `<div class="seg">${opts.map(([v, t]) => `<button data-pk="${k}" data-pv="${v}" aria-pressed="${!!p && p[k] === v}">${t}</button>`).join('')}</div>`;
+  $('pinEd').innerHTML = `<div class="hd"><div><b>Hole ${h.n}</b><small>Par ${h.par}${h.yds ? ` · ${h.yds} yds` : ''}</small></div><div class="row" style="margin:0;gap:4px"><button class="btn" data-pgo="${prev ? prev.n : ''}" ${prev ? '' : 'disabled'} aria-label="Hole before">‹ ${prev ? prev.n : ''}</button><button class="btn" data-pgo="${next ? next.n : ''}" ${next ? '' : 'disabled'} aria-label="Next hole">${next ? next.n : ''} ›</button></div></div>
+    ${greenSVG(p, 250, true)}
+    <p class="help" style="text-align:center;margin:0">Tap the green where the pin is, or pick below</p>
+    ${seg('d', [['F', 'Front'], ['M', 'Middle'], ['B', 'Back']])}${seg('s', [['L', 'Left'], ['C', 'Center'], ['R', 'Right']])}
+    <div class="two"><label class="f">Paces on<input id="pinOn" type="number" min="0" max="60" inputmode="numeric" value="${p?.on || ''}" placeholder="—"></label>
+    <label class="f">From the ${p?.s === "L" ? "left" : "right"}<input id="pinOff" type="number" min="0" max="30" inputmode="numeric" value="${p?.off || ''}" placeholder="—" ${!p || p.s === 'C' ? 'disabled' : ''}></label></div>
+    <div class="sees">${p ? `Golfers see: <b>⚑ Pin ${esc(pinLabel(p).toLowerCase())}</b>${pinPaces(p) ? ` (${esc(pinPaces(p))})` : ''}${toPin ? ` · about ${toPin} yds to the pin from the tee` : ''}` : 'No pin set: golfers see the green without a flag.'}</div>
+    ${p ? '<button class="btn danger" id="pinOff1">Take this pin off</button>' : ''}`;
+}
+async function setPin(n, pin) {
+  pinBusy = true;
+  const before = { ...PINS() };
+  const after = { ...before }; if (pin) after[n] = pin; else delete after[n];
+  EV.pinsheet = after; if (LIVE) LIVE.pinsheet = after; drawPins();
+  try { await desk('pinsheet', { hole: n, pin }); } catch (e) { EV.pinsheet = before; if (LIVE) LIVE.pinsheet = before; toast(e.message); drawPins(); }
+  pinBusy = false;
+}
+$('pinGrid').addEventListener('click', (e) => { const b = e.target.closest('[data-ph]'); if (!b) return; pinHole = Number(b.dataset.ph); drawPins(); if (innerWidth <= 900) $('pinEd').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+$('pinEd').addEventListener('click', (e) => {
+  const cur = PINS()[pinHole];
+  const g = e.target.closest('#pinGreen');
+  if (g) {
+    const r = g.getBoundingClientRect(), vb = g.viewBox.baseVal;
+    const x = vb.x + (e.clientX - r.left) / r.width * vb.width, y = vb.y + (e.clientY - r.top) / r.height * vb.height;
+    return setPin(pinHole, { ...(cur || {}), d: y < 49 ? 'B' : y < 88 ? 'M' : 'F', s: x < 62 ? 'L' : x < 98 ? 'C' : 'R' });
+  }
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.pgo) { pinHole = Number(b.dataset.pgo); return drawPins(); }
+  if (b.dataset.pk) return setPin(pinHole, { ...(cur || { d: 'M', s: 'C' }), [b.dataset.pk]: b.dataset.pv });
+  if (b.id === 'pinOff1') return setPin(pinHole, null);
+});
+$('pinEd').addEventListener('change', (e) => {
+  const cur = PINS()[pinHole]; if (!e.target.matches('#pinOn, #pinOff')) return;
+  const v = Math.max(0, Math.round(Number(e.target.value) || 0));
+  setPin(pinHole, { ...(cur || { d: 'M', s: 'C' }), [e.target.id === 'pinOn' ? 'on' : 'off']: v });
+});
+$('pinClear').onclick = async () => {
+  const b = $('pinClear');
+  if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Clear every pin? Click again'; setTimeout(() => { delete b.dataset.sure; b.textContent = 'Clear all pins'; }, 4000); return; }
+  delete b.dataset.sure; b.textContent = 'Clear all pins';
+  try { await desk('pinsheet', { all: {} }); EV.pinsheet = {}; if (LIVE) LIVE.pinsheet = {}; drawPins(); toast('Pins cleared.'); } catch (err) { toast(err.message); }
+};
+$('pinPrint').onclick = () => { document.body.classList.add('pinprint'); print(); document.body.classList.remove('pinprint'); };
+
 // the course map links live on the Setup tab, so they're set as soon as the desk opens (not only on Links and cards)
 function setMapLinks() {
   $('cardsLink').href = `/g/${eventId()}/cards#${key}`; // the Teams tab's cart cards button too
@@ -820,7 +913,7 @@ async function start() {
     .then((side) => { SIDE = side; if (!(side.me?.events || []).some((e) => e.id === eventId())) rememberLink({ id: eventId(), key, name: EV.name }, side.me?.email); });
   live((s) => {
     LIVE = s; drawReplays(); if (!dirty) { EV.locked = s.locked; drawLock(); setDirty(false); }
-    drawHero(); if (tab === 'overview') drawOverview(); if (tab === 'scores') drawScores(); if (tab === 'links') drawLinks();
+    drawHero(); if (tab === 'overview') drawOverview(); if (tab === 'scores') drawScores(); if (tab === 'pins' && !pinBusy) drawPins(); if (tab === 'links') drawLinks();
     if (SIDE) SIDE.setCurrent({ name: s.name, date: s.date, locked: s.locked });
   });
 }

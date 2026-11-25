@@ -1,7 +1,7 @@
 // The hole GPS on the scorecard: a yardage card (front / middle / back, hazards) and a full-screen course view.
 // mount(slot) puts the one card into the page after each render; update(S, hole) changes what it shows.
 import { esc } from '/golf/client.js';
-import { trackingOn, holeMap, middle, mapped, origin, yardages, startGps, stopGps, gpsWanted, position, onGps, holeView, HZ_LABEL } from '/golf/gps.js';
+import { trackingOn, holeMap, middle, mapped, origin, yardages, startGps, stopGps, gpsWanted, position, onGps, holeView, HZ_LABEL, pinOf, pinLabel, pinPaces, pinYards } from '/golf/gps.js';
 
 const css = `
 .gps { margin-top: 12px; background: var(--green); color: var(--on-green); border-radius: 12px; padding: 12px 14px; }
@@ -17,6 +17,7 @@ const css = `
 .gps .hzs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .gps .hzs span { font-size: .78rem; background: rgba(255,255,255,.1); border-radius: 999px; padding: 3px 9px; }
 .gps .hzs b { font-family: var(--f-mono); }
+.gps .pin { font-size: .8rem; font-weight: 700; color: var(--flag); margin-bottom: 6px; }
 .gps .msg { font-size: .82rem; color: var(--on-green-muted); margin-top: 8px; }
 .cview { position: fixed; inset: 0; z-index: 60; background: #0b1a12; color: #fff; display: flex; flex-direction: column; }
 .cview canvas { flex: 1; width: 100%; min-height: 0; display: block; touch-action: manipulation; }
@@ -39,17 +40,18 @@ export function gpsCard({ onHole } = {}) {
   if (gpsWanted()) startGps();
 
   function paint() {
-    const h = holeMap(S, hole);
-    el.hidden = !mapped(S);
-    if (!h || !middle(h)) { el.innerHTML = `<div class="msg" style="margin:0">Hole ${hole} isn’t on the course map yet.</div>`; if (ov) paintView(); return; }
+    const h = holeMap(S, hole), pin = pinOf(S, hole);
+    const pinLine = pin ? `<div class="pin">⚑ Pin ${esc(pinLabel(pin).toLowerCase())}${pinPaces(pin) ? ` · ${esc(pinPaces(pin))}` : ''}</div>` : '';
+    el.hidden = !mapped(S) && !pin;
+    if (!h || !middle(h)) { el.innerHTML = `${pinLine}<div class="msg" style="margin:0">${mapped(S) ? `Hole ${hole} isn’t on the course map yet.` : ''}</div>`; if (ov) paintView(); return; }
     const me = position(), o = origin(h, me && me.at), y = yardages(h, o && o.at), on = gpsWanted();
-    const far = me && !o?.me;
-    el.innerHTML = `<div class="top">
-        <div class="mid">${y && y.m != null ? y.m : '—'}<small>${o?.me ? 'to the middle' : 'middle, from the tee'}</small></div>
-        <div class="fb">${y && y.f != null ? `Front <b>${y.f}</b><br>` : ''}${y && y.b != null ? `Back <b>${y.b}</b>` : ''}</div>
+    const far = me && !o?.me, toPin = pinYards(y, pin);
+    el.innerHTML = `${pinLine}<div class="top">
+        <div class="mid">${toPin != null ? toPin : y && y.m != null ? y.m : '—'}<small>${toPin != null ? (o?.me ? 'to the pin' : 'to the pin, from the tee') : o?.me ? 'to the middle' : 'middle, from the tee'}</small></div>
+        <div class="fb">${y && y.f != null ? `Front <b>${y.f}</b><br>` : ''}${toPin != null && y && y.m != null ? `Middle <b>${y.m}</b><br>` : ''}${y && y.b != null ? `Back <b>${y.b}</b>` : ''}</div>
         <div class="go"><button class="cv" data-cv>Course view</button>${on ? '' : '<button class="on" data-on>Use my GPS</button>'}</div></div>
       ${y && y.hz.length ? `<div class="hzs">${y.hz.slice(0, 6).map((z) => `<span>${esc(z.name)} <b>${z.reach}</b>${z.carry ? `–<b>${z.carry}</b>` : ''}</span>`).join('')}</div>` : ''}
-      <div class="msg">${err ? esc(err) : !on ? `Yards from the tee. Turn on GPS for yards from where you are${trackingOn(S) ? ' (during the tournament the desk sees where your group is)' : ''}.` : !me ? 'Finding your spot…' : far ? `You’re not on hole ${hole} yet, so these are from the tee.` : `GPS to within ${me.acc} yds.${trackingOn(S) ? ' The tournament desk can see where your group is until the results are final.' : ''} <button data-off style="background:none;border:0;color:inherit;text-decoration:underline;padding:0;font-size:inherit">Turn off</button>`}</div>`;
+      <div class="msg">${err ? esc(err) : !on ? `Yards from the tee. Turn on GPS for yards from where you are${trackingOn(S) ? ' (during the tournament the desk and the other groups see where your group is)' : ''}.` : !me ? 'Finding your spot…' : far ? `You’re not on hole ${hole} yet, so these are from the tee.` : `GPS to within ${me.acc} yds.${trackingOn(S) ? ' The desk and the other groups can see where your group is until the results are final.' : ''} <button data-off style="background:none;border:0;color:inherit;text-decoration:underline;padding:0;font-size:inherit">Turn off</button>`}</div>`;
     if (ov) paintView();
   }
 
@@ -58,7 +60,8 @@ export function gpsCard({ onHole } = {}) {
     const o = h ? origin(h, me && me.at) : null, y = h ? yardages(h, o && o.at) : null, H = S.course.holes[hole - 1];
     ov.querySelector('h3').textContent = `Hole ${hole}`;
     ov.querySelector('.cv-bar small').textContent = `Par ${H.par}${H.yds ? ` · ${H.yds} yds` : ''}`;
-    ov.querySelector('.yd').innerHTML = y && y.m != null ? `<div class="m">${y.m}</div>${o?.me ? 'to the middle' : 'from the tee'}${y.f != null || y.b != null ? `<br>${[y.f != null ? `Front <b>${y.f}</b>` : '', y.b != null ? `Back <b>${y.b}</b>` : ''].filter(Boolean).join(' · ')}` : ''}` : 'Not mapped yet';
+    const pin = pinOf(S, hole), toPin = pinYards(y, pin);
+    ov.querySelector('.yd').innerHTML = y && y.m != null ? `<div class="m">${toPin ?? y.m}</div>${toPin != null ? `to the pin (${esc(pinLabel(pin).toLowerCase())})` : o?.me ? 'to the middle' : 'from the tee'}${y.f != null || y.b != null ? `<br>${[y.f != null ? `Front <b>${y.f}</b>` : '', y.b != null ? `Back <b>${y.b}</b>` : ''].filter(Boolean).join(' · ')}` : ''}` : 'Not mapped yet';
     ov.querySelector('.cv-foot span').textContent = measure ? `${measure.to} yds there, then ${measure.left} to the middle. Tap it again to clear.` : 'Tap anywhere to measure: how far there, and what’s left to the green.';
     if (h && middle(h)) view.draw(h, me && me.at, S.map && S.map.src === 'osm'); else view.draw(null);
   }

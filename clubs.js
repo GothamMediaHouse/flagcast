@@ -40,6 +40,7 @@ const sixDigits = () => String(crypto.getRandomValues(new Uint32Array(1))[0] % 1
 const SESSION_DAYS = 90;
 const num = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
 const DAY = 86400000;
+const PURGE_DAYS = 30; // a deleted club waits this long in Admin's Recently deleted before it is wiped
 
 // safe string compare for passcodes
 function same(a, b) {
@@ -47,6 +48,8 @@ function same(a, b) {
   let d = x.length ^ y.length; for (let i = 0; i < Math.max(x.length, y.length); i++) d |= (x[i] || 0) ^ (y[i] || 0);
   return d === 0;
 }
+// the club name typed to confirm a delete: case, spaces and curly quotes don't matter
+const sameName = (a, b) => { const f = (x) => String(x || '').toLowerCase().replace(/[’‘`]/g, "'").replace(/\s+/g, ' ').trim(); return !!f(a) && f(a) === f(b); };
 export const isAdmin = (env, pass) => !!env.GOLF_CREATE_PASS && same(pass, env.GOLF_CREATE_PASS);
 // Flagcast staff: the emails in ADMIN_EMAIL (comma-separated, set in the Cloudflare dashboard) get Admin when signed in,
 // and so do the ones added in Admin → Staff (the staff table; FlagcastClubs.staffEmail checks both)
@@ -59,6 +62,15 @@ async function sendMail(env, to, subject, text) {
     body: JSON.stringify({ from: env.MAIL_FROM || 'Flagcast <signin@flagcast.app>', to: [to], subject, text }),
   });
   if (!r.ok) throw new Error(`mail ${r.status}`);
+}
+
+// for courses.js and contact.js: may this network do k again? (max times in mins minutes; true if the directory can't answer)
+export async function allowed(env, k, max, mins) {
+  if (!env.CLUBS) return true;
+  try {
+    const r = await env.CLUBS.get(env.CLUBS.idFromName('directory')).fetch(new Request('https://clubs/limit', { method: 'POST', body: JSON.stringify({ k, max, mins }) }));
+    return !!(await r.json()).ok;
+  } catch { return true; }
 }
 
 // the worker hands every /golf/api/club/* call (and /golf/api/new) to the one directory object
@@ -102,7 +114,8 @@ export class FlagcastClubs extends DurableObject {
       CREATE TABLE IF NOT EXISTS tvcodes (code TEXT PRIMARY KEY, pair TEXT, kind TEXT, exp INTEGER, tv TEXT, token TEXT);`);
     // columns added after the first release
     for (const q of ['ALTER TABLE accounts ADD COLUMN google TEXT', 'ALTER TABLE clubs ADD COLUMN notes TEXT', 'ALTER TABLE events ADD COLUMN archived INTEGER DEFAULT 0', 'ALTER TABLE clubs ADD COLUMN course TEXT',
-      'ALTER TABLE clubs ADD COLUMN logo TEXT', 'ALTER TABLE clubs ADD COLUMN accent TEXT', 'ALTER TABLE clubs ADD COLUMN powered INTEGER DEFAULT 0']) { try { this.sql.exec(q); } catch {} }
+      'ALTER TABLE clubs ADD COLUMN logo TEXT', 'ALTER TABLE clubs ADD COLUMN accent TEXT', 'ALTER TABLE clubs ADD COLUMN powered INTEGER DEFAULT 0',
+      'ALTER TABLE clubs ADD COLUMN deleted INTEGER', 'ALTER TABLE clubs ADD COLUMN was TEXT', 'ALTER TABLE events ADD COLUMN demo INTEGER DEFAULT 0']) { try { this.sql.exec(q); } catch {} }
     // the Flagcast course library (courselib.js): courses any club can pick in Find the course
     this.sql.exec('CREATE TABLE IF NOT EXISTS library (id TEXT PRIMARY KEY, name TEXT, city TEXT, state TEXT, data TEXT, club TEXT, updated INTEGER)');
     for (const c of SEED) if (!this.one('SELECT id FROM library WHERE id = ?', c.id)) this.libPut(c, '', 0);
@@ -124,7 +137,13 @@ export class FlagcastClubs extends DurableObject {
   staffEmail(email) { return adminEmail(this.env, email) || (!!email && !!this.one('SELECT email FROM staff WHERE email = ?', String(email).toLowerCase())); }
   // Admin: the passcode, or a sign-in whose email is staff
   isStaff(b) {
-    if (isAdmin(this.env, b.pass)) return true;
+    // the passcode: 5 wrong from one network and 20 in all in 15 minutes, then a wait (saved in the fails table)
+    if (b.pass !== undefined && b.pass !== '' && this.env.GOLF_CREATE_PASS) {
+      const keys = [[`pass:${this.ip}`, 5], ['pass:*', 20]], now = Date.now();
+      for (const [k, max] of keys) { const f = this.one('SELECT * FROM fails WHERE k = ?', k); if (f && now - f.since < 15 * 60000 && f.n >= max) this.fail('Too many wrong passcodes. Wait 15 minutes, or sign in with your staff email.', 429); }
+      if (isAdmin(this.env, b.pass)) return true;
+      this.failed(keys);
+    }
     if (!b.token) return false;
     try { return this.staffEmail(this.who(b.token).email); } catch { return false; }
   }
@@ -187,6 +206,13 @@ export class FlagcastClubs extends DurableObject {
       if (f && now - f.since < 15 * 60000 && f.n >= max) this.fail('Too many tries. Wait 15 minutes, or sign in with an emailed code.', 429);
     }
   }
+  // a general limit: true while k has been used fewer than max times in this window (and counts this use)
+  limit(k, max, win) {
+    const now = Date.now(), f = this.one('SELECT * FROM fails WHERE k = ?', k);
+    if (!f || now - f.since >= win) { this.sql.exec('INSERT OR REPLACE INTO fails (k, n, since) VALUES (?, 1, ?)', k, now); return true; }
+    if (f.n >= max) return false;
+    this.sql.exec('UPDATE fails SET n = n + 1 WHERE k = ?', k); return true;
+  }
   failed(keys) {
     const now = Date.now();
     for (const [k] of keys) {
@@ -205,6 +231,20 @@ export class FlagcastClubs extends DurableObject {
     if (op.startsWith('tv-')) return this.tvRoute(op.slice(3), b, now);
     // the course library (only reached from courses.js, never straight from the web)
     // is this live input one of Flagcast's cameras? (golf.js, before serving its playlists; never from the web)
+    // limits for the other parts of the worker (courses.js, contact.js): { k, max, mins } → { ok }. Never from the web
+    if (op === 'limit') return json({ ok: this.limit(`lim:${clip(b.k, 120)}`, num(b.max, 1, 10000, 10), num(b.mins, 1, 1440, 60) * 60000) });
+    // "Try a demo" in the player and TV apps (golf.js GET /golf/api/demo): the newest tournament Admin marked Demo that
+    // isn't archived → { id } (Apple's reviewers have no tournament code). Demo marks made before the events.demo column
+    // existed are found once by asking each tournament.
+    if (op === 'demo-find') {
+      if (!(await this.ctx.storage.get('demoScanned'))) {
+        const rows = this.all('SELECT id FROM events WHERE COALESCE(archived, 0) = 0 ORDER BY created DESC LIMIT 300');
+        await Promise.all(rows.map(async (e) => { try { const s = await this.golf(e.id, 'state'); if (s.brand?.marked) this.sql.exec('UPDATE events SET demo = 1 WHERE id = ?', e.id); } catch {} }));
+        await this.ctx.storage.put('demoScanned', Date.now());
+      }
+      const row = this.one("SELECT e.id FROM events e LEFT JOIN clubs c ON c.id = e.club WHERE e.demo = 1 AND COALESCE(e.archived, 0) = 0 AND COALESCE(c.status, '') NOT IN ('deleted', 'purged') ORDER BY e.created DESC LIMIT 1");
+      return json({ id: row?.id || '' });
+    }
     if (op === 'streamok') return json({ ok: !!this.one('SELECT hole FROM streams WHERE uid = ?', clip(b.uid, 40)) });
     if (op === 'lib-search') {
       const words = clip(b.q, 80).toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 1).slice(0, 5);
@@ -247,6 +287,8 @@ export class FlagcastClubs extends DurableObject {
     if (op === 'start') {
       const email = clip(b.email, 254).toLowerCase();
       if (!EMAIL.test(email)) this.fail('Type a full email address.');
+      // codes from one network: 10 an hour (so a script can't make Flagcast email lots of people)
+      if (this.ip && !this.limit(`start:${this.ip}`, 10, 3600000)) this.fail('Too many sign-in codes from this network. Try again in an hour, or use a password.', 429);
       const c = this.one('SELECT * FROM codes WHERE email = ?', email);
       if (c && now - c.sent < 30000) this.fail('A code was just sent. Wait half a minute before asking for another.', 429);
       const hour = Math.floor(now / 3600000), hourCount = c && c.hour === hour ? c.hourCount + 1 : 1;
@@ -339,6 +381,7 @@ export class FlagcastClubs extends DurableObject {
       const u = this.who(b.token);
       if (u.club) this.fail('You’re already part of a club.');
       const name = clip(b.name, 80); if (!name) this.fail('Type your club’s name.');
+      if (!this.limit(`request:${u.email}`, 3, DAY)) this.fail('You’ve asked a few times today. Flagcast will be in touch.', 429);
       const id = rand(10, 'abcdefghijkmnpqrstuvwxyz23456789');
       this.sql.exec('INSERT INTO clubs (id, name, contact, phone, city, status, created, by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', id, name, clip(b.contact, 80), clip(b.phone, 40), clip(b.city, 80), 'pending', now, u.email);
       this.sql.exec('INSERT OR REPLACE INTO members (email, club, role, added) VALUES (?, ?, ?, ?)', u.email, id, 'owner', now);
@@ -384,13 +427,19 @@ export class FlagcastClubs extends DurableObject {
         // local dev: anyone can make one
       } else this.fail('Sign in with your club’s account to make a tournament.', 401);
       const id = rand(8, 'abcdefghijkmnpqrstuvwxyz23456789');
-      const r = await env.GOLF.get(env.GOLF.idFromName(id)).fetch(new Request(`https://golf/init?id=${id}`, { method: 'POST', body: JSON.stringify({ name, club: club?.name || '', map: this.courseOf(club) }) }));
-      const j = await r.json();
-      if (!r.ok) return json(j, r.status);
+      // take the credit before making it (two quick taps on the last credit can't both get one), and give it back if making fails
+      const paid = !b.pass && club && club.credits > 0;
+      if (paid) {
+        // (no await since the check above, so nothing else ran in between)
+        this.sql.exec('UPDATE clubs SET credits = credits - 1 WHERE id = ? AND credits > 0', club.id);
+      }
+      let r, j;
+      try { r = await env.GOLF.get(env.GOLF.idFromName(id)).fetch(new Request(`https://golf/init?id=${id}`, { method: 'POST', body: JSON.stringify({ name, club: club?.name || '', map: this.courseOf(club) }) })); j = await r.json(); }
+      catch { r = { ok: false, status: 502 }; j = { error: 'That didn’t work. Try again.' }; }
+      if (!r.ok) { if (paid) this.sql.exec('UPDATE clubs SET credits = credits + 1 WHERE id = ?', club.id); return json(j, r.status); }
       if (club) {
         this.sql.exec('INSERT INTO events (id, club, key, name, created) VALUES (?, ?, ?, ?, ?)', id, club.id, j.key, name || 'New tournament', now);
         this.note(b.pass ? 'Flagcast' : this.who(b.token).email, club.id, `Made tournament ${name || 'New tournament'} (${id.toUpperCase()})`);
-        if (!b.pass && club.credits > 0) this.sql.exec('UPDATE clubs SET credits = credits - 1 WHERE id = ?', club.id);
         if (club.logo || club.accent) await this.golf(id, 'brand', { club: this.brandOf(club) }).catch(() => {});
       }
       return json(j);
@@ -399,6 +448,7 @@ export class FlagcastClubs extends DurableObject {
       if (!this.isStaff(b) && !(local && !env.GOLF_CREATE_PASS)) this.fail('That passcode is not right.', 403);
       const cid = clip(b.club, 10), c = cid ? this.one('SELECT * FROM clubs WHERE id = ?', cid) : null;
       const need = () => { if (!c) this.fail('That club isn’t there any more.', 404); };
+      if (c && ['deleted', 'purged'].includes(c.status) && !['restore', 'purge'].includes(b.op)) this.fail(c.status === 'deleted' ? 'That club is in Recently deleted. Restore it first.' : 'That club was deleted.', 410);
       let made = null;
       if (b.op === 'approve' || b.op === 'on') {
         need(); this.sql.exec('UPDATE clubs SET status = ? WHERE id = ?', 'active', cid);
@@ -407,9 +457,37 @@ export class FlagcastClubs extends DurableObject {
       if (b.op === 'off') { need(); this.sql.exec('UPDATE clubs SET status = ? WHERE id = ?', 'off', cid); }
       if (b.op === 'delete') {
         need();
-        // only a club with no tournaments (a mistaken or spam request)
-        if (this.one('SELECT id FROM events WHERE club = ?', cid)) this.fail('This club has tournaments. Switch it off instead.');
-        this.sql.exec('DELETE FROM clubs WHERE id = ?', cid); this.sql.exec('DELETE FROM members WHERE club = ?', cid);
+        // a mistaken or spam request (no tournaments), or a test club: with tournaments, only after typing the club's name.
+        // Nothing is wiped yet: the club goes to Recently deleted for 30 days (Restore puts it back), its people lose access
+        // and its tournaments are locked and taken off lists. After 30 days (or Delete now) they are wiped for good.
+        const evs = this.all('SELECT id, name FROM events WHERE club = ?', cid);
+        if (c.status === 'deleted') this.fail('That club is already in Recently deleted.');
+        if (evs.length && !sameName(b.confirm, c.name)) this.fail(`This club has ${evs.length === 1 ? 'a tournament' : `${evs.length} tournaments`}. Type the club’s name to delete it and its tournaments.`);
+        const cam = this.one(`SELECT s.hole, e.name FROM streams s JOIN events e ON e.id = s.event WHERE e.club = ?`, cid);
+        if (cam) this.fail(`${cam.name} still streams hole ${cam.hole}. Stop that camera in Cameras first.`, 409);
+        const members = this.all('SELECT * FROM members WHERE club = ?', cid);
+        for (const e of evs) await this.golf(e.id, 'desk', { key: this.one('SELECT key FROM events WHERE id = ?', e.id).key, op: 'lock', locked: true }).catch(() => {});
+        this.sql.exec('UPDATE events SET hidden = 1 WHERE club = ? AND hidden = 0', cid); // (marked so Restore shows them again)
+        this.sql.exec('UPDATE clubs SET status = ?, deleted = ?, was = ? WHERE id = ?', 'deleted', now, JSON.stringify({ status: c.status, members, hid: evs.map((e) => e.id) }), cid);
+        this.sql.exec('DELETE FROM members WHERE club = ?', cid);
+        this.note('Flagcast', cid, `Admin: deleted club ${c.name}${evs.length ? ` and ${evs.length === 1 ? 'its tournament' : `its ${evs.length} tournaments`} (${evs.map((e) => e.name).join(', ')})` : ''} · Restore in Recently deleted for 30 days`);
+        await this.ctx.storage.setAlarm(now + PURGE_DAYS * DAY).catch(() => {});
+      }
+      // Recently deleted: put a club back with its people and tournaments, or wipe it now (type its name)
+      if (b.op === 'restore') {
+        need(); if (c.status !== 'deleted') this.fail('That club isn’t deleted.');
+        let was = {}; try { was = JSON.parse(c.was || '{}'); } catch {}
+        const back = [];
+        for (const m of was.members || []) if (!this.one('SELECT email FROM members WHERE email = ?', m.email)) { this.sql.exec('INSERT INTO members (email, club, role, added) VALUES (?, ?, ?, ?)', m.email, cid, m.role, m.added); back.push(m.email); }
+        for (const id of was.hid || []) this.sql.exec('UPDATE events SET hidden = 0 WHERE id = ? AND club = ?', id, cid);
+        this.sql.exec('UPDATE clubs SET status = ?, deleted = NULL, was = NULL WHERE id = ?', was.status && was.status !== 'deleted' ? was.status : 'off', cid);
+        this.note('Flagcast', cid, `Admin: restored club ${c.name} (${back.length} people back; tournaments stay locked until the desk unlocks them)`);
+      }
+      if (b.op === 'purge') {
+        need(); if (c.status !== 'deleted') this.fail('Delete the club first; it then waits 30 days in Recently deleted.');
+        if (!sameName(b.confirm, c.name)) this.fail('Type the club’s name to wipe it for good.');
+        const left = await this.purge(c);
+        if (left) this.fail(`${left} of its tournaments didn’t answer, so they weren’t wiped. Try again in a minute.`, 502);
       }
       if (b.op === 'create') {
         const name = clip(b.name, 80), email = clip(b.email, 254).toLowerCase();
@@ -497,6 +575,7 @@ export class FlagcastClubs extends DurableObject {
       if (b.op === 'lock') await this.golf(evRow.id, 'desk', { key: evRow.key, op: 'lock', locked: !!b.locked });
       // Demo: the tournament shows the Flagcast logo whatever its club has (for showing Flagcast to a club)
       if (b.op === 'demo') await this.golf(evRow.id, 'brand', { demo: !!b.on });
+      if (b.op === 'demo') this.sql.exec('UPDATE events SET demo = ? WHERE id = ?', b.on ? 1 : 0, evRow.id);
       if (b.op === 'archive') {
         this.sql.exec('UPDATE events SET archived = ? WHERE id = ?', b.on ? 1 : 0, evRow.id);
         if (b.on) await this.golf(evRow.id, 'desk', { key: evRow.key, op: 'lock', locked: true }).catch(() => {});
@@ -610,12 +689,17 @@ export class FlagcastClubs extends DurableObject {
         return json({ events: out });
       }
       const seen = Object.fromEntries(this.all('SELECT email, MAX(seen) AS seen FROM sessions GROUP BY email').map((s) => [s.email, s.seen]));
-      const clubs = this.all('SELECT * FROM clubs ORDER BY (status = \'pending\') DESC, name COLLATE NOCASE').map(({ logo, ...x }) => ({
+      const deleted = this.all("SELECT id, name, city, deleted FROM clubs WHERE status = 'deleted' ORDER BY deleted DESC").map((x) => ({ ...x, wipes: x.deleted + PURGE_DAYS * DAY,
+        events: this.one('SELECT COUNT(*) AS n FROM events WHERE club = ?', x.id).n }));
+      const gone = Object.fromEntries(this.all("SELECT id, name FROM clubs WHERE status IN ('deleted', 'purged')").map((x) => [x.id, x.name]));
+      const clubs = this.all('SELECT * FROM clubs WHERE status NOT IN (\'deleted\', \'purged\') ORDER BY (status = \'pending\') DESC, name COLLATE NOCASE').map(({ logo, was, ...x }) => ({
         ...x, powered: !!x.powered, logo: this.logoURL({ id: x.id, logo }), members: this.all('SELECT email, role, added FROM members WHERE club = ? ORDER BY role DESC, added', x.id).map((m) => ({ ...m, seen: seen[m.email] || 0 })),
         events: this.all('SELECT id, key, name, created, hidden, archived FROM events WHERE club = ? ORDER BY created DESC', x.id),
         payments: this.all('SELECT * FROM payments WHERE club = ? ORDER BY at DESC', x.id),
       }));
-      return json({ clubs, made, mail: !!env.RESEND_API_KEY, staff: this.staffList() });
+      // payments of deleted clubs still count in the totals
+      const oldPays = this.all(`SELECT * FROM payments WHERE club IN (${Object.keys(gone).map(() => '?').join(',') || "''"}) ORDER BY at DESC`, ...Object.keys(gone)).map((p) => ({ ...p, clubName: `${gone[p.club]} (deleted)` }));
+      return json({ clubs, deleted, oldPays, made, mail: !!env.RESEND_API_KEY, staff: this.staffList() });
     }
     this.fail('Not found', 404);
   }
@@ -717,6 +801,28 @@ export class FlagcastClubs extends DurableObject {
     }))).filter(Boolean);
     if (this.tvCache.size > 200) this.tvCache.clear();
     this.tvCache.set(cid, { at: now, list }); return list;
+  }
+  // wipe a deleted club's tournaments for good. One that doesn't answer stays (and so does the club) for the next try.
+  // The club row stays as 'purged' (name only) so its payments still show whose they were. → how many are left
+  async purge(c) {
+    let left = 0;
+    for (const e of this.all('SELECT id FROM events WHERE club = ?', c.id)) {
+      try { await this.golf(e.id, 'wipe', {}); this.sql.exec('DELETE FROM events WHERE id = ?', e.id); } catch { left++; }
+    }
+    if (!left) {
+      this.sql.exec("UPDATE clubs SET status = 'purged', was = NULL, logo = NULL, course = NULL, contact = '', phone = '', notes = '' WHERE id = ?", c.id);
+      this.note('Flagcast', c.id, `Wiped deleted club ${c.name} and its tournaments`);
+    }
+    return left;
+  }
+  // 30 days after a delete: wipe the clubs that are due, and wake again for the next one
+  async alarm() {
+    const now = Date.now();
+    let retry = false;
+    for (const c of this.all("SELECT * FROM clubs WHERE status = 'deleted' AND deleted < ?", now - PURGE_DAYS * DAY)) if (await this.purge(c)) retry = true;
+    const next = this.one("SELECT MIN(deleted) AS d FROM clubs WHERE status = 'deleted'")?.d;
+    if (retry) await this.ctx.storage.setAlarm(now + 3600000);
+    else if (next) await this.ctx.storage.setAlarm(Math.max(now + 60000, next + PURGE_DAYS * DAY));
   }
 
   me(u) {

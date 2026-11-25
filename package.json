@@ -1,6 +1,13 @@
 {
   "name": "flagcast",
   "private": true,
-  "scripts": { "dev": "wrangler dev", "deploy": "wrangler deploy" },
-  "devDependencies": { "wrangler": "^4" }
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "node tools/test-all.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4"
+  },
+  "type": "module"
 }

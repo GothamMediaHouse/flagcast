@@ -16,6 +16,7 @@ struct PlayerSettingsView: View {
     @AppStorage("flagcast.textSize") private var textSize = TextSize.standard.rawValue
     @State private var notif: UNAuthorizationStatus = .notDetermined
     @State private var recents: [Recent] = []
+    @State private var liveView = LiveView.enabled
 
     var body: some View {
         NavigationStack {
@@ -52,7 +53,9 @@ struct PlayerSettingsView: View {
                     } else {
                         Button("Change in iPhone Settings") { if let u = URL(string: UIApplication.openSettingsURLString) { openURL(u) } }
                     }
-                } header: { Text("Notifications") } footer: { Text("The desk can send your cart a note, like “Head to hole 10 for the shotgun start”.") }
+                    Toggle(isOn: $liveView) { Label("Live score on the lock screen", systemImage: "flag.fill") }
+                        .onChange(of: liveView) { _, on in LiveView.enabled = on }
+                } header: { Text("Notifications") } footer: { Text("The desk can send your cart a note, like “Head to hole 10 for the shotgun start”. On the tournament day your score, place and hole stay on the lock screen and in the Dynamic Island while the app is closed.") }
 
                 Section {
                     if recents.isEmpty { Text("None yet. Scan your cart card on the home screen.").foregroundStyle(.secondary) }

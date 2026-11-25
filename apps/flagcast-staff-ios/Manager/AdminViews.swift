@@ -33,6 +33,7 @@ struct AdminHome: View {
                 Text("ADMIN").font(.system(size: 10, weight: .bold)).tracking(1).padding(.horizontal, 6).padding(.vertical, 3).background(FC.red, in: RoundedRectangle(cornerRadius: 4))
                 Spacer()
                 Button { adding = true } label: { Label("New club", systemImage: "plus") }.buttonStyle(WhiteButton())
+                AccountMenu(onGreen: true)
             }
             Text("\(admin.clubs.count) clubs · \(admin.events.filter { !$0.hidden && !$0.archived }.count) tournaments" + (waiting > 0 ? " · \(waiting) waiting" : ""))
                 .font(.system(size: 13)).foregroundStyle(FC.onGreenMuted)
@@ -70,6 +71,7 @@ struct ClubsView: View {
     var embedded = false
     @State private var search = ""
     @State private var opened: AdminClub?
+    @State private var deleting: AdminClub?
     @State private var adding = false
     @AppStorage(ClubLook.key) private var look = ClubLook.photo
     private var shown: [AdminClub] {
@@ -78,7 +80,7 @@ struct ClubsView: View {
     }
     var body: some View {
         if embedded {
-            list.sheet(item: $opened) { c in NavigationStack { ClubDetail(club: admin.clubs.first { $0.id == c.id } ?? c) } }
+            list.sheet(item: $opened) { c in NavigationStack { ClubDetail(club: admin.clubs.first { $0.id == c.id } ?? c) } }.deleteClubAlert($deleting)
         } else {
             page
         }
@@ -93,6 +95,7 @@ struct ClubsView: View {
         .overlay(alignment: .bottom) { NoticeBar(text: admin.notice).padding(.bottom, 10).animation(.snappy, value: admin.notice) }
         .sheet(item: $opened) { c in NavigationStack { ClubDetail(club: admin.clubs.first { $0.id == c.id } ?? c) } }
         .sheet(isPresented: $adding) { NavigationStack { NewClub() } }
+        .deleteClubAlert($deleting)
         .task { try? await admin.refresh() }
     }
     private var list: some View {
@@ -116,9 +119,10 @@ struct ClubsView: View {
                 }
                 Picker("Club cards", selection: $look) { ForEach(ClubLook.allCases) { Text($0.title).tag($0) } }.pickerStyle(.segmented)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 300, maximum: 460), spacing: 14)], spacing: 14) {
-                    ForEach(shown) { c in ClubCard(club: c) { opened = c } }
+                    ForEach(shown) { c in ClubCard(club: c, open: { opened = c }, delete: { deleting = c }) }
                 }
                 if shown.isEmpty { Text(admin.clubs.isEmpty ? "No clubs yet" : "No club matches").foregroundStyle(FC.muted).padding(30) }
+                RecentlyDeleted()
             }
     }
 }
@@ -128,6 +132,7 @@ private struct ClubCard: View {
     @Environment(AdminModel.self) private var admin
     let club: AdminClub
     var open: () -> Void
+    var delete: () -> Void
     @State private var image: UIImage?
     @AppStorage(ClubLook.key) private var look = ClubLook.photo
     var body: some View {
@@ -150,6 +155,10 @@ private struct ClubCard: View {
                     Button("+5") { Task { await admin.act("credits", ["club": club.id, "add": 5]) } }.buttonStyle(WhiteButton()).disabled(club.credits < 0)
                     Spacer()
                     Button("Open", action: open).buttonStyle(WhiteButton())
+                    Menu { Button("Open Club", systemImage: "arrow.up.right", action: open); Button("Delete Club…", systemImage: "trash", role: .destructive, action: delete) } label: {
+                        Image(systemName: "ellipsis").font(.system(size: 17, weight: .bold)).frame(width: 44, height: 44).background(.white.opacity(0.18), in: RoundedRectangle(cornerRadius: 10))
+                    }
+                    .accessibilityLabel("More for \(club.name)")
                 }
             }
             .foregroundStyle(.white).padding(16)
@@ -157,6 +166,7 @@ private struct ClubCard: View {
         .overlay(alignment: .topTrailing) { if look == .photo, let u = logoURL(club.logo) { ClubLogoTile(url: u, name: club.name, size: 60).padding(12) } }
         .frame(height: 250).frame(maxWidth: .infinity).clipShape(RoundedRectangle(cornerRadius: 16))
         .contentShape(Rectangle()).onTapGesture(perform: open)
+        .contextMenu { Button("Open Club", systemImage: "arrow.up.right", action: open); Button("Delete Club…", systemImage: "trash", role: .destructive, action: delete) }
         .task(id: club.id) { image = await CourseImages.place([club.name, club.city].filter { !$0.isEmpty }.joined(separator: " "), key: club.id) }
     }
     private func stat(_ v: String, _ l: String) -> some View { Text(v).font(.system(size: 15, weight: .bold)) + Text(" \(l)").font(.caption) }
@@ -169,6 +179,8 @@ private struct ClubDetail: View {
     @Environment(\.dismiss) private var dismiss
     let club: AdminClub
     @State private var image: UIImage?
+    @State private var deleting: AdminClub?
+    @State private var newEvent = ""
     var body: some View {
         CardPage(image: image, kicker: club.statusText, title: club.name, sub: club.city.isEmpty ? nil : club.city) {
             HStack(spacing: 8) {
@@ -210,6 +222,17 @@ private struct ClubDetail: View {
                     ListRow(icon: m.role == "owner" ? "crown.fill" : "person.fill", iconColor: m.role == "owner" ? FC.flag.opacity(0.9) : FC.muted, title: m.email, sub: m.role == "owner" ? "Owner" : "Staff", last: i == club.members.count - 1)
                 }
             }
+            CardBox(title: "New tournament", footer: "Made by Flagcast, so it doesn’t use up one of the club’s tournaments.") {
+                HStack(spacing: 8) {
+                    BoxField(placeholder: "Name, e.g. Member-Guest 2027", text: $newEvent)
+                    Button("Make") {
+                        let n = newEvent
+                        Task { await admin.act("event", ["club": club.id, "name": n], done: "Made \(n). It’s at the top of Tournaments below."); newEvent = "" }
+                    }
+                    .buttonStyle(GreenButton()).disabled(newEvent.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                .padding(14)
+            }
             CardBox(title: "Tournaments") {
                 if club.events.isEmpty { Text("None yet.").foregroundStyle(FC.muted).padding(14) }
                 ForEach(Array(club.events.enumerated()), id: \.element.id) { i, e in
@@ -219,9 +242,12 @@ private struct ClubDetail: View {
                     .buttonStyle(.plain)
                 }
             }
+            Button(role: .destructive) { deleting = club } label: { Label("Delete Club", systemImage: "trash").foregroundStyle(FC.red) }.buttonStyle(PlainCardButton(full: true))
+            if !club.events.isEmpty { Help("For a test club. Its \(club.events.count == 1 ? "tournament goes" : "\(club.events.count) tournaments go") too, and you type the club’s name to confirm. For a real club, Switch Off instead.") }
         }
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         .overlay(alignment: .bottom) { NoticeBar(text: admin.notice).padding(.bottom, 10).animation(.snappy, value: admin.notice) }
+        .deleteClubAlert($deleting) { dismiss() }
         .task(id: club.id) { image = await CourseImages.place([club.name, club.city].filter { !$0.isEmpty }.joined(separator: " "), key: club.id) }
     }
 }
@@ -260,6 +286,7 @@ private struct AdminTournaments: View {
     @Environment(AppModel.self) private var model
     @State private var search = ""
     @State private var showHidden = false
+    @State private var deleting: AdminEvent?
     private var shown: [AdminEvent] {
         let q = search.lowercased()
         return admin.events.filter { (showHidden || (!$0.hidden && !$0.archived)) && (q.isEmpty || $0.name.lowercased().contains(q) || $0.clubName.lowercased().contains(q) || $0.id.contains(q)) }
@@ -282,6 +309,10 @@ private struct AdminTournaments: View {
                                 Button(e.locked ? "Unlock Results" : "Lock Results") { Task { await admin.act("lock", ["id": e.id, "locked": !e.locked]) } }
                                 Button(e.archived ? "Unarchive" : "Archive") { Task { await admin.act("archive", ["id": e.id, "on": !e.archived]) } }
                                 Button(e.hidden ? "Show on the Club’s List" : "Hide from the Club’s List") { Task { await admin.act(e.hidden ? "unhide" : "hide", ["id": e.id]) } }
+                                if !(e.hidden && e.archived) {
+                                    Divider()
+                                    Button("Delete Tournament…", role: .destructive) { deleting = e }
+                                }
                             } label: { Image(systemName: "ellipsis.circle").font(.title3).foregroundStyle(FC.link) }
                         }
                     }
@@ -292,6 +323,14 @@ private struct AdminTournaments: View {
         .overlay(alignment: .bottom) { NoticeBar(text: admin.notice).padding(.bottom, 10).animation(.snappy, value: admin.notice) }
         .task { await admin.refreshEvents() }
         .refreshable { await admin.refreshEvents() }
+        .confirmationDialog("Delete \(deleting?.name ?? "this tournament")?", isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible, presenting: deleting) { e in
+            Button("Delete Tournament", role: .destructive) {
+                Task {
+                    if !e.archived { await admin.act("archive", ["id": e.id, "on": true]) }
+                    await admin.act("hide", ["id": e.id], done: "Deleted. Turn on Show hidden and archived to bring it back.")
+                }
+            }
+        } message: { _ in Text("It comes off the club’s list and its results are locked. Its scores stay, so you can bring it back from Show hidden and archived.") }
     }
 }
 

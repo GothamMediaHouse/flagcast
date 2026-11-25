@@ -35,6 +35,7 @@ struct ClubsView: View {
     @AppStorage(ClubLook.key) private var look = ClubLook.photo
     @State private var search = ""
     @State private var opened: AdminClub?
+    @State private var deleting: AdminClub?
     private var shown: [AdminClub] {
         let q = search.lowercased()
         return model.clubs.filter { q.isEmpty || $0.name.lowercased().contains(q) || $0.city.lowercased().contains(q) || $0.members.contains { $0.email.contains(q) } }
@@ -65,17 +66,19 @@ struct ClubsView: View {
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: 0xecd58a)))
                     }
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 260, maximum: 420), spacing: 16)], spacing: 16) {
-                        ForEach(shown) { c in ClubCard(club: c) { opened = c } }
+                        ForEach(shown) { c in ClubCard(club: c, open: { opened = c }, delete: { deleting = c }) }
                     }
                     if shown.isEmpty {
                         VStack(spacing: 8) { Image(systemName: "building.2").font(.system(size: 30)).foregroundStyle(FC.muted); Text(model.clubs.isEmpty ? "No clubs yet" : "No club matches").font(.headline) }
                             .frame(maxWidth: .infinity, minHeight: 220)
                     }
+                    RecentlyDeleted().padding(.top, 12)
                 }
                 .padding(.horizontal, 20).padding(.vertical, 18)
             }
         }
         .background(FC.paper)
+        .deleteClubAlert($deleting)
         .sheet(isPresented: $model.newClub) { NewClubSheet() }
         .sheet(item: $opened) { c in
             VStack(spacing: 0) {
@@ -92,6 +95,7 @@ struct ClubCard: View {
     @Environment(AdminModel.self) private var model
     let club: AdminClub
     var open: () -> Void
+    var delete: () -> Void
     @State private var image: NSImage?
     @AppStorage(ClubLook.key) private var look = ClubLook.photo
     var body: some View {
@@ -115,6 +119,8 @@ struct ClubCard: View {
                     Button("+1") { Task { await model.act("credits", ["club": club.id, "add": 1]) } }.buttonStyle(GlassButton()).disabled(club.credits < 0)
                     Button("+5") { Task { await model.act("credits", ["club": club.id, "add": 5]) } }.buttonStyle(GlassButton()).disabled(club.credits < 0)
                     Button("Open club", action: open).buttonStyle(WhiteButton()).frame(maxWidth: .infinity)
+                    Menu { Button("Open Club", action: open); Divider(); Button("Delete Club…", role: .destructive, action: delete) } label: { Image(systemName: "ellipsis").font(.system(size: 14, weight: .bold)) }
+                        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().foregroundStyle(.white).help("More for this club")
                 }
             }
             .foregroundStyle(.white).padding(16)
@@ -122,6 +128,7 @@ struct ClubCard: View {
         .overlay(alignment: .topTrailing) { if look == .photo, let u = logoURL(club.logo) { ClubLogoTile(url: u, name: club.name, size: 64).padding(12) } }
         .frame(maxWidth: .infinity).frame(height: 262).clipShape(RoundedRectangle(cornerRadius: 14))
         .contentShape(Rectangle()).onTapGesture(count: 2, perform: open)
+        .contextMenu { Button("Open Club", action: open); Divider(); Button("Delete Club…", role: .destructive, action: delete) }
         .task(id: club.id) {
             image = await CourseImages.place([club.name, club.city].filter { !$0.isEmpty }.joined(separator: " "), key: club.id)
         }
@@ -153,6 +160,7 @@ struct NewClubSheet: View {
 
 struct ClubInspector: View {
     @Environment(AdminModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
     let club: AdminClub
     @State private var edit = ClubRequest()
     @State private var notes = ""
@@ -160,7 +168,7 @@ struct ClubInspector: View {
     @State private var pay = (amount: "", credits: 1, what: "Tournament", note: "")
     @State private var claim = ""
     @State private var newEvent = ""
-    @State private var confirmDelete = false
+    @State private var deleting: AdminClub?
 
     var body: some View {
         Form {
@@ -182,7 +190,7 @@ struct ClubInspector: View {
                     if club.status == "off" { Button("Switch On") { Task { await model.act("on", ["club": club.id], done: "Switched on.") } } }
                     if club.status == "active" { Button("Switch Off") { Task { await model.act("off", ["club": club.id], done: "Switched off.") } } }
                     Spacer()
-                    if club.events.isEmpty { Button("Delete Club…", role: .destructive) { confirmDelete = true } }
+                    Button("Delete Club…", role: .destructive) { deleting = club }.help(club.events.isEmpty ? "For a mistaken or spam request" : "For a test club: its tournaments are deleted too")
                 }
                 LabeledContent("Tournaments left") {
                     HStack { Text(club.creditsText).monospacedDigit().fontWeight(.semibold)
@@ -233,7 +241,7 @@ struct ClubInspector: View {
         }
         .formStyle(.grouped)
         .onAppear { edit = ClubRequest(name: club.name, contact: club.contact, phone: club.phone, city: club.city); notes = club.notes }
-        .confirmationDialog("Delete \(club.name)?", isPresented: $confirmDelete) { Button("Delete Club", role: .destructive) { Task { await model.act("delete", ["club": club.id], done: "Deleted.") } } } message: { Text("For a mistaken or spam request. It has no tournaments.") }
+        .deleteClubAlert($deleting) { dismiss() } // close its sheet
     }
 }
 

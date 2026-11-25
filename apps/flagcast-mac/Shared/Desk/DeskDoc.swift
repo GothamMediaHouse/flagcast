@@ -41,7 +41,7 @@ final class DeskDoc {
         do { set(try await Net.deskSave(id, key, ev)); flash("Saved. The screens and scorecards have it now.") }
         catch { flash(error.localizedDescription) }
     }
-    func revert() { if let e = try? JSONDecoder().decode(DeskEvent.self, from: savedData) { var x = ev; x.apply(setup: e); ev = x } }
+    func revert() { if let e = try? JSONDecoder().decode(DeskEvent.self, from: savedData) { var x = ev; x.apply(setup: e); x.v = e.v; ev = x } }
 
     func setLocked(_ on: Bool) async {
         do { try await Net.desk(id, key, "lock", ["locked": on]); ev.locked = on; flash(on ? "Results locked. Scoring is closed." : "Results unlocked.") }
@@ -61,7 +61,8 @@ final class DeskDoc {
         guard let fresh = try? await Net.deskGet(id, key) else { return }
         let keep = ev, wasDirty = dirty
         var e = fresh
-        if wasDirty { e.apply(setup: keep) }
+        // unsaved edits stay, still marked as made from the copy loaded earlier (v), so Save keeps what changed since
+        if wasDirty { e.apply(setup: keep); e.v = keep.v }
         ev = e
         savedData = fresh.setupData
     }

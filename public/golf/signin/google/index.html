@@ -32,22 +32,15 @@ const post = async (op, body) => {
   const r = await fetch(`/golf/api/club/${op}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'That didn’t work. Try again.'); return j;
 };
-async function signedIn(res) {
-  $('err').textContent = '';
-  try {
-    const { token } = await post('google', { idToken: res.credential });
-        try { localStorage.setItem('flagcast:club-token', token); } catch {}
-    location.href = q.get('next') === 'admin' ? '/golf/admin/' : '/golf/';
-  } catch (e) { $('err').textContent = e.message; }
-}
 const { google: clientId } = await post('config', {}).catch(() => ({ google: '' }));
 if (!clientId) { $('msg').textContent = 'Sign in with Google isn’t switched on yet. Use your email instead.'; }
 else {
   const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true;
   s.onload = () => {
-    // the apps: Google posts the sign-in to the server, which hands the session back to the app; the website: a popup
-    window.google.accounts.id.initialize(app ? { client_id: clientId, ux_mode: 'redirect', login_uri: `${location.origin}/golf/api/club/google-app`, auto_select: false }
-                                             : { client_id: clientId, callback: signedIn, ux_mode: 'popup', auto_select: false });
+    // Google posts the sign-in to the server (no popup: popups are unreliable in Safari on iPad and iPhone). The server
+    // hands the session back to the app on flagcastmanager://signin, or to the website on /golf/#signin=… (where to: this cookie)
+    document.cookie = `fc_google_mode=${app ? 'app' : q.get('next') === 'admin' ? 'admin' : 'web'}; Path=/golf/; Max-Age=600; Secure; SameSite=None`;
+    window.google.accounts.id.initialize({ client_id: clientId, ux_mode: 'redirect', login_uri: `${location.origin}/golf/api/club/google-app`, auto_select: false });
     window.google.accounts.id.renderButton($('g'), { theme: 'outline', size: 'large', text: 'signin_with', shape: 'pill', width: 300 });
   };
   document.head.appendChild(s);

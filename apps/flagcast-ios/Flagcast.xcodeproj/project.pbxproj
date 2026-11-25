@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		E5B65F45F4F2A76FDCB9B660 /* FlagcastLive.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9C0BB451379DD48285314DF4 /* FlagcastLive.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		4C8C4A3CC5A88081A15E61A2 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -14,12 +18,37 @@
 			remoteGlobalIDString = 2EC77CCA42522F1E261B9003;
 			remoteInfo = Flagcast;
 		};
+		20EC6D0104528937C93C107B /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FC85614A3A663B8811089934 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DEAA0F380A92B876ACCAAF7B;
+			remoteInfo = FlagcastLive;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		855BE29F5E827EC8AA061D81 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				E5B65F45F4F2A76FDCB9B660 /* FlagcastLive.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		83C0AAC3EE3CF4F6C2235A74 /* Flagcast.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Flagcast.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		87A9B4DE73F353ACF47E2BF3 /* FlagcastTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FlagcastTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		92F8F3E2AC6C1E807F32891E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		9C0BB451379DD48285314DF4 /* FlagcastLive.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = FlagcastLive.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		95C171CC0B65C8DF9776F2A7 /* Flagcast.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Flagcast.entitlements; sourceTree = "<group>"; };
+		CBF8747290EE150C38C6B60C /* FlagcastLive.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FlagcastLive.entitlements; sourceTree = "<group>"; };
+		46FEBA84A67A5E1E751886FA /* FlagcastLive-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "FlagcastLive-Info.plist"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -31,6 +60,16 @@
 		92CD4AE6CAC345B6567EAFE3 /* FlagcastTests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = FlagcastTests;
+			sourceTree = "<group>";
+		};
+		2DDF07E7DC55B9BA15D2486B /* FlagcastLive */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = FlagcastLive;
+			sourceTree = "<group>";
+		};
+		07B4216BFB9AA530BA3CDF9B /* LiveShared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = LiveShared;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -50,6 +89,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F4FD8EDD0247A9063B29338A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -58,7 +104,12 @@
 			children = (
 				21AFD03FD57949F4DF9A23F3 /* Flagcast */,
 				92CD4AE6CAC345B6567EAFE3 /* FlagcastTests */,
+				2DDF07E7DC55B9BA15D2486B /* FlagcastLive */,
+				07B4216BFB9AA530BA3CDF9B /* LiveShared */,
 				92F8F3E2AC6C1E807F32891E /* Info.plist */,
+				46FEBA84A67A5E1E751886FA /* FlagcastLive-Info.plist */,
+				95C171CC0B65C8DF9776F2A7 /* Flagcast.entitlements */,
+				CBF8747290EE150C38C6B60C /* FlagcastLive.entitlements */,
 				D0CD27767769580E84CE8F0C /* Products */,
 			);
 			sourceTree = "<group>";
@@ -68,6 +119,7 @@
 			children = (
 				83C0AAC3EE3CF4F6C2235A74 /* Flagcast.app */,
 				87A9B4DE73F353ACF47E2BF3 /* FlagcastTests.xctest */,
+				9C0BB451379DD48285314DF4 /* FlagcastLive.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -82,13 +134,16 @@
 				A963DCAB4DB3757C7CCFFE5F /* Sources */,
 				DB4709F4C47BF5A4AEDC1B9E /* Frameworks */,
 				2A70A84DA52C8C2F5D0425C0 /* Resources */,
+				855BE29F5E827EC8AA061D81 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				EB52D4678A99AFE2D0CAB82C /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				21AFD03FD57949F4DF9A23F3 /* Flagcast */,
+				07B4216BFB9AA530BA3CDF9B /* LiveShared */,
 			);
 			name = Flagcast;
 			packageProductDependencies = (
@@ -120,6 +175,29 @@
 			productReference = 87A9B4DE73F353ACF47E2BF3 /* FlagcastTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		DEAA0F380A92B876ACCAAF7B /* FlagcastLive */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 409E4E5E990AAF9B3D07707B /* Build configuration list for PBXNativeTarget "FlagcastLive" */;
+			buildPhases = (
+				10967B09F87C5F326FBA3F67 /* Sources */,
+				F4FD8EDD0247A9063B29338A /* Frameworks */,
+				A3BA13E580B5A37405BAE6DF /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				2DDF07E7DC55B9BA15D2486B /* FlagcastLive */,
+				07B4216BFB9AA530BA3CDF9B /* LiveShared */,
+			);
+			name = FlagcastLive;
+			packageProductDependencies = (
+			);
+			productName = FlagcastLive;
+			productReference = 9C0BB451379DD48285314DF4 /* FlagcastLive.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -136,6 +214,9 @@
 					D5202B54DABDF76CEFE8DB92 = {
 						CreatedOnToolsVersion = 27.0;
 						TestTargetID = 2EC77CCA42522F1E261B9003;
+					};
+					DEAA0F380A92B876ACCAAF7B = {
+						CreatedOnToolsVersion = 27.0;
 					};
 				};
 			};
@@ -155,6 +236,7 @@
 			targets = (
 				2EC77CCA42522F1E261B9003 /* Flagcast */,
 				D5202B54DABDF76CEFE8DB92 /* FlagcastTests */,
+				DEAA0F380A92B876ACCAAF7B /* FlagcastLive */,
 			);
 		};
 /* End PBXProject section */
@@ -168,6 +250,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		0D4507E66CB6A009E905D79E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A3BA13E580B5A37405BAE6DF /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -191,6 +280,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		10967B09F87C5F326FBA3F67 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -198,6 +294,11 @@
 			isa = PBXTargetDependency;
 			target = 2EC77CCA42522F1E261B9003 /* Flagcast */;
 			targetProxy = 4C8C4A3CC5A88081A15E61A2 /* PBXContainerItemProxy */;
+		};
+		EB52D4678A99AFE2D0CAB82C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = DEAA0F380A92B876ACCAAF7B /* FlagcastLive */;
+			targetProxy = 20EC6D0104528937C93C107B /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -266,6 +367,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Flagcast.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 15;
 				DEVELOPMENT_TEAM = C8KXPB4QNA;
@@ -277,7 +379,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.4.2;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.golf;
 				PRODUCT_NAME = Flagcast;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -295,6 +397,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = Flagcast.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 15;
 				DEVELOPMENT_TEAM = C8KXPB4QNA;
@@ -306,7 +409,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.4.2;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.golf;
 				PRODUCT_NAME = Flagcast;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -328,7 +431,7 @@
 				DEVELOPMENT_TEAM = C8KXPB4QNA;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.4.2;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.golf.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -347,13 +450,69 @@
 				DEVELOPMENT_TEAM = C8KXPB4QNA;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.1.0;
+				MARKETING_VERSION = 1.4.2;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.golf.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Flagcast.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Flagcast";
+			};
+			name = Release;
+		};
+		77AFE86B4F2E638BAE4ACFE4 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = FlagcastLive.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 15;
+				DEVELOPMENT_TEAM = C8KXPB4QNA;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "FlagcastLive-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.4.2;
+				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.golf.live;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		FF060F07F1D815F1DC4DBF22 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = FlagcastLive.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 15;
+				DEVELOPMENT_TEAM = C8KXPB4QNA;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "FlagcastLive-Info.plist";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.4.2;
+				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.golf.live;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
@@ -383,6 +542,15 @@
 			buildConfigurations = (
 				E7EF4F2E174CE79447BA06C3 /* Debug */,
 				DDA5CADC38601C5034CAE5E3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		409E4E5E990AAF9B3D07707B /* Build configuration list for PBXNativeTarget "FlagcastLive" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				77AFE86B4F2E638BAE4ACFE4 /* Debug */,
+				FF060F07F1D815F1DC4DBF22 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

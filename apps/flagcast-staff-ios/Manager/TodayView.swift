@@ -9,7 +9,7 @@ struct TodayView: View {
             if let d = model.current { DocHost(doc: d) { HomePage(doc: d) } }
             else { HomePage(doc: nil) }
         }
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { TournamentMenu() } }
+        .toolbar { ToolbarItem(placement: .topBarLeading) { AccountMenu() }; ToolbarItem(placement: .topBarTrailing) { TournamentMenu() } }
     }
 }
 
@@ -87,6 +87,7 @@ private struct HomePage: View {
                 HStack(alignment: .top, spacing: 14) { leaderboard(doc).frame(minWidth: 380); contestTile(doc).frame(width: 300) }
                 VStack(spacing: 14) { leaderboard(doc); contestTile(doc).frame(height: 190) }
             }
+            PinSheetCard(doc: doc)
             CodesCard(doc: doc)
             // on the day: the checks with their fixes (they cover what the status card shows on other days)
             if DayOfChecks.isEventDay(doc) { DayOfChecks(doc: doc) { tabs.tab = .screens }.card(padding: 16) } else { tiles(doc) }
@@ -316,6 +317,20 @@ extension String { var nilIfEmpty: String? { isEmpty ? nil : self } }
 
 /// The codes golfers and staff type on the join screen: the tournament code, each golf pro's and marshal's PIN,
 /// and the way to the cart codes (on Links). Read-only here: PINs are changed on Pros & marshals.
+/// One tap to today's pin sheet from Overview (club managers and admins; golf pros set pins in the phone app with their PIN).
+struct PinSheetCard: View {
+    let doc: DeskDoc
+    var body: some View {
+        let sheet = doc.live?.pinsheet ?? [:], holes = doc.live?.course.holes.count ?? 18
+        NavigationLink { PinsScreen() } label: {
+            ListRow(icon: "flag.fill", iconColor: FC.ok, title: "Pin sheet",
+                    sub: sheet.isEmpty ? "Set where the pin is on each green today" : "\(sheet.count) of \(holes) pins set · golfers see them now", last: true) { Chevron() }
+        }
+        .buttonStyle(.plain)
+        .card(padding: 0)
+    }
+}
+
 struct CodesCard: View {
     let doc: DeskDoc
     var body: some View {

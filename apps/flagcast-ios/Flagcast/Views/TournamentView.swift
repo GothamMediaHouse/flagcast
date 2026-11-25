@@ -44,12 +44,20 @@ struct TournamentScreen: View {
                 SideGamesHub(model: model)
                     .tabItem { Label("Games", systemImage: "trophy.fill") }.tag(TourTab.games)
             }
-            if let model, let s, Geo.mapped(s) {
+            if let model, let s, Geo.mapped(s) || Geo.trackingOn(s) {
                 CourseTab(model: model, state: s)
                     .tabItem { Label("Course", systemImage: "map.fill") }.tag(TourTab.course)
             }
         }
         .tint(Color.fcPrimary)
+        // a Demo tournament (Admin marked it, "Try a demo" opens it): say so, so nobody takes it for a real round
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if s?.brand.marked == true {
+                Text("Demo · a sample tournament").font(.caption.weight(.bold)).tracking(1.2).textCase(.uppercase)
+                    .foregroundStyle(Color.fcOnFlag).frame(maxWidth: .infinity).padding(.vertical, 5).background(Color.fcFlag)
+                    .accessibilityAddTraits(.isHeader)
+            }
+        }
         .environment(nav)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
@@ -93,7 +101,7 @@ struct TourHeader<Trailing: View, Below: View>: View {
                     } else {
                         Text(state?.title ?? title).font(.headline).lineLimit(1)
                     }
-                    if !subtitle.isEmpty { Text(subtitle).font(.caption).foregroundStyle(Color.fcOnGreenMuted).lineLimit(1) }
+                    if !subtitle.isEmpty { Text(subtitle).font(.caption).foregroundStyle(Color.fcOnGreenMuted).lineLimit(1).minimumScaleFactor(0.8) }
                 }
                 Spacer(minLength: 0)
                 trailing.frame(minWidth: 40, alignment: .trailing)
@@ -142,16 +150,33 @@ struct TourTitle: View {
     }
 }
 
-/// The Course tab: the hole you're on, following the scorecard, with the scores at the bottom.
+/// The Course tab: the hole you're on, following the scorecard, with the scores at the bottom; or Everyone, where
+/// every group is on the course right now (GroupsMapView). Everyone only, when the course isn't mapped yet.
+enum CourseMode: Hashable { case hole, everyone }
+
 struct CourseTab: View {
     @Bindable var model: ScorecardModel
     let state: EventState
+    @State private var mode: CourseMode = .hole
+
     var body: some View {
-        let h = model.currentHole()
-        CourseView(state: state, hole: h, onHole: { d in
-            guard let t = model.team else { return }
-            let ord = model.order(t), i = ord.firstIndex(of: model.currentHole()) ?? 0
-            model.hole = ord[(i + d + ord.count) % ord.count]
-        }, embedded: true, scorer: model)
+        let mapped = Geo.mapped(state)
+        VStack(spacing: 0) {
+            if mapped {
+                HeaderSwitch(options: [(CourseMode.hole, "Your hole"), (.everyone, "Everyone")], selection: $mode)
+                    .padding(.horizontal, 14).padding(.top, 6).padding(.bottom, 8)
+                    .background(Color(UIColor(hex: 0x0b1a12)).ignoresSafeArea(edges: .top))
+            }
+            if mapped && mode == .hole {
+                let h = model.currentHole()
+                CourseView(state: state, hole: h, onHole: { d in
+                    guard let t = model.team else { return }
+                    let ord = model.order(t), i = ord.firstIndex(of: model.currentHole()) ?? 0
+                    model.hole = ord[(i + d + ord.count) % ord.count]
+                }, embedded: true, scorer: model)
+            } else {
+                GroupsMapView(model: model, state: state)
+            }
+        }
     }
 }

@@ -35,6 +35,7 @@ main { max-width: 480px; margin: -18px auto 0; padding: 0 16px calc(40px + env(s
 .scan .frame i { width: min(68vw, 300px); aspect-ratio: 1; border: 3px solid var(--flag); border-radius: 18px; box-shadow: 0 0 0 100vmax rgba(0,0,0,.45); }
 .scan .bottom { background: #000; color: #fff; padding: 16px 20px calc(18px + env(safe-area-inset-bottom, 0px)); text-align: center; display: grid; gap: 10px; }
 .scan .bottom p { margin: 0; font-size: .95rem; }
+.demo { border: 2px solid var(--flag); }
 .foot { text-align: center; font-size: .78rem; color: var(--muted); }
 .foot a { color: var(--muted); }
 </style>
@@ -58,6 +59,13 @@ main { max-width: 480px; margin: -18px auto 0; padding: 0 16px calc(40px + env(s
       <button class="btn dark big" style="margin-top:12px">Open</button>
       <div class="err" id="joinErr" role="alert" hidden></div>
     </form>
+  </section>
+
+  <section class="box demo" aria-labelledby="h-demo">
+    <h2 id="h-demo">No code? Try a demo</h2>
+    <p>A live sample tournament on a sample cart. No sign-in.</p>
+    <button class="btn big" id="demoBtn">Try a demo</button>
+    <div class="err" id="demoErr" role="alert" hidden></div>
   </section>
 
   <section class="box" id="recentBox" hidden aria-labelledby="h-recent">
@@ -125,6 +133,16 @@ $('joinForm').addEventListener('submit', async (e) => {
   if (code && !CODE.test(code)) { err.textContent = 'The cart code is 6 letters and numbers.'; err.hidden = false; return; }
   try { await check(id); location.href = code ? `/g/${id}/s/${code}` : `/g/${id}`; }
   catch (x) { err.textContent = x.message; err.hidden = false; }
+});
+
+// no cart card (or an app reviewer): the live Demo tournament on its sample cart (GET /golf/api/demo)
+$('demoBtn').addEventListener('click', async () => {
+  const err = $('demoErr'); err.hidden = true; $('demoBtn').disabled = true;
+  try {
+    const r = await fetch('/golf/api/demo', { cache: 'no-store' }); const j = await r.json().catch(() => ({}));
+    if (!r.ok || !ID.test(j.id || '') || !CODE.test(j.code || '')) throw new Error(j.error || 'The demo isn’t available right now. Try again later.');
+    location.href = `/g/${j.id}/s/${j.code}`;
+  } catch (x) { err.textContent = /fetch/i.test(x.message) ? 'No signal. Check your connection and try again.' : x.message; err.hidden = false; $('demoBtn').disabled = false; }
 });
 
 $('proForm').addEventListener('submit', async (e) => {

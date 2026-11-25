@@ -192,7 +192,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const KEY = 'flagcast:admin-pass';
 let pass = (() => { try { return localStorage.getItem(KEY) || sessionStorage.getItem(KEY) || ''; } catch { return ''; } })();
-let clubs = [], events = null, logRows = null, tab = 'overview', sel = null, q = '', filter = '';
+let clubs = [], deletedClubs = [], oldPays = [], events = null, logRows = null, tab = 'overview', sel = null, q = '', filter = '';
 function toast(t) { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), 2800); }
 const date = (t) => t ? new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
 const when = (t) => t ? new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'never';
@@ -213,7 +213,7 @@ async function call(body) {
 }
 async function admin(body) {
   const j = await call(body);
-  if (j.clubs) { clubs = j.clubs; $('nomail').hidden = j.mail; staff = j.staff || []; }
+  if (j.clubs) { clubs = j.clubs; deletedClubs = j.deleted || []; oldPays = j.oldPays || []; $('nomail').hidden = j.mail; staff = j.staff || []; }
   if (body.op && !['events', 'log'].includes(body.op)) { events = null; logRows = null; }
   draw(); return j;
 }
@@ -306,7 +306,14 @@ function clubsView() {
       <div class="bt"><div><div class="nm">${esc(c.name)}</div><div class="town">${esc(c.city || 'No town on file')}</div></div>
         <div class="nums"><span><b>${c.credits < 0 ? 'Unlimited' : c.credits}</b> left</span><span><b>${c.events.length}</b> tournaments</span><span><b>${c.members.length}</b> staff</span></div>
         <div class="acts"><button class="gbtn" data-cr="1" ${c.credits < 0 ? 'disabled' : ''}>+1</button><button class="gbtn" data-cr="5" ${c.credits < 0 ? 'disabled' : ''}>+5</button><button class="wbtn" data-open="${c.id}">Open club</button></div></div></div>`;
-  }).join('') || '<div class="box empty">No club matches.</div>'}</div>`;
+  }).join('') || '<div class="box empty">No club matches.</div>'}</div>${deletedView()}`;
+}
+// clubs deleted in the last 30 days: Restore, or wipe now
+function deletedView() {
+  if (!deletedClubs.length) return '';
+  return `<h3 style="margin:22px 0 8px">Recently deleted</h3><p class="help">Kept ${30} days with their tournaments locked, then wiped for good.</p>
+  <table><tbody>${deletedClubs.map((c) => `<tr data-club="${esc(c.id)}"><td><b>${esc(c.name)}</b><br><small>${esc(c.city || '')}</small></td><td>${c.events} tournament${c.events === 1 ? '' : 's'}</td>
+    <td>Wiped ${date(c.wipes)}</td><td class="num"><button class="btn sm" data-a="restore">Restore</button> <button class="btn sm danger" data-a="purge">Delete now</button></td></tr>`).join('')}</tbody></table>`;
 }
 function clubDetailWrap() { const c = clubs.find((x) => x.id === sel); return c ? clubDetail(c) : (sel = null, clubsView()); }
 
@@ -360,7 +367,7 @@ async function checkCams() {
 
 function overview() {
   const wait = clubs.filter((c) => c.status === 'pending'), act = clubs.filter((c) => c.status === 'active');
-  const pays = clubs.flatMap((c) => c.payments.map((p) => ({ ...p, club: c.id })));
+  const pays = clubs.flatMap((c) => c.payments.map((p) => ({ ...p, club: c.id }))).concat(oldPays);
   const month = new Date(); month.setDate(1); month.setHours(0, 0, 0, 0);
   const evAll = clubs.flatMap((c) => c.events), evMonth = evAll.filter((e) => e.created >= month.getTime());
   const live = (events || []).filter((e) => !e.gone && !e.locked && !e.archived && (e.online || e.scored));
@@ -394,7 +401,7 @@ function clubDetail(c) {
   return `<div class="box" data-club="${c.id}">
     <div class="row" style="justify-content:space-between"><h2 style="margin:0">${esc(c.name)}</h2><div class="row">${pillFor(c.status)}
       ${c.status === 'pending' ? '<button class="btn sm primary" data-a="approve">Approve</button>' : c.status === 'active' ? '<button class="btn sm danger" data-a="off">Switch off</button>' : '<button class="btn sm" data-a="on">Switch on</button>'}
-      ${c.events.length ? '' : '<button class="btn sm danger" data-a="delete">Delete</button>'}</div></div>
+      <button class="btn sm danger" data-a="delete" title="${c.events.length ? 'For a test club: its tournaments are deleted too' : 'For a mistaken or spam request'}">Delete</button></div></div>
     <p class="help" style="margin:4px 0 0">Since ${date(c.created)}${c.by ? ` · asked by ${esc(c.by)}` : ''} · ${c.events.length} tournaments · ${money(paid)} paid</p>
 
     <div class="sub">Details</div>
@@ -515,7 +522,7 @@ function routerBox(e) {
 async function day(id, d, ok) { await call({ op: 'day', id, day: d }); toast(ok); events = null; await loadEvents(); }
 
 function paymentsView() {
-  const pays = clubs.flatMap((c) => c.payments.map((p) => ({ ...p, clubName: c.name, club: c.id }))).sort((a, b) => b.at - a.at);
+  const pays = clubs.flatMap((c) => c.payments.map((p) => ({ ...p, clubName: c.name, club: c.id }))).concat(oldPays).sort((a, b) => b.at - a.at);
   const byMonth = {}; for (const p of pays) { const k = new Date(p.at).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }); byMonth[k] = (byMonth[k] || 0) + p.amount; }
   return `<div class="stats">${Object.entries(byMonth).slice(0, 4).map(([k, v]) => `<div class="stat"><b>${money(v)}</b><span>${k}</span></div>`).join('') || '<div class="stat"><b>$0</b><span>No payments logged yet</span></div>'}</div>
   <div class="box"><div class="row" style="justify-content:space-between"><h2 style="margin:0">Payments</h2><button class="btn sm" data-csv="payments">Download CSV</button></div>
@@ -619,9 +626,22 @@ $('view').addEventListener('click', async (e) => {
     if (el.dataset.open) { sel = el.dataset.open; tab = 'clubs'; draw(); return; }
     if (el.hasAttribute('data-newclub')) { tab = 'overview'; draw(); document.querySelector('#newClub input')?.focus(); return; }
     if (el.dataset.a) {
-      if (el.dataset.a === 'delete' && !confirm('Delete this club? This can’t be undone.')) return;
+      let confirmName = '';
+      if (el.dataset.a === 'delete') {
+        const n = c?.events.length || 0;
+        if (!n && !confirm('Delete this club? Its people lose access to it. It waits 30 days in Recently deleted, where you can restore it.')) return;
+        if (n) {
+          confirmName = prompt(`Delete ${c.name}? Its people lose access and its ${n === 1 ? 'tournament is' : `${n} tournaments are`} locked. After 30 days in Recently deleted every score, team and photo is wiped and the links stop working.\n\nType the club’s name to confirm:`) || '';
+          if (!confirmName.trim()) return;
+        }
+      }
+      if (el.dataset.a === 'purge') {
+        const d = deletedClubs.find((x) => x.id === club);
+        confirmName = prompt(`Wipe ${d?.name} now? Its tournaments, scores, teams and photos are deleted for good and their links stop working. This can’t be undone.\n\nType the club’s name to confirm:`) || '';
+        if (!confirmName.trim()) return;
+      }
       if (el.dataset.a === 'off' && !confirm('Switch this club off? They won’t be able to make tournaments.')) return;
-      await admin({ op: el.dataset.a, club }); toast(el.dataset.a === 'approve' ? 'Approved. They’ve been emailed.' : 'Done.'); if (el.dataset.a === 'delete') sel = null; return;
+      await admin({ op: el.dataset.a, club, ...(confirmName ? { confirm: confirmName } : {}) }); toast(el.dataset.a === 'approve' ? 'Approved. They’ve been emailed.' : el.dataset.a === 'delete' ? 'Deleted. It’s in Recently deleted for 30 days.' : el.dataset.a === 'restore' ? 'Restored. Its tournaments stay locked until a desk unlocks them.' : 'Done.'); if (el.dataset.a === 'delete') sel = null; return;
     }
     if (el.dataset.cr) return void await admin({ op: 'credits', club, add: Number(el.dataset.cr) });
     if (el.dataset.set) return void await admin({ op: 'credits', club, set: Number(el.dataset.set) });
@@ -690,7 +710,7 @@ start();
 setInterval(() => {
   const a = document.activeElement;
   if ($('app').hidden || document.visibilityState !== 'visible' || $('dlg').open || (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName))) return;
-  call({}).then((j) => { clubs = j.clubs; staff = j.staff || []; $('nomail').hidden = j.mail; if (tab === 'overview' || tab === 'events') events = null; draw(); }).catch(() => {});
+  call({}).then((j) => { clubs = j.clubs; deletedClubs = j.deleted || []; oldPays = j.oldPays || []; staff = j.staff || []; $('nomail').hidden = j.mail; if (tab === 'overview' || tab === 'events') events = null; draw(); }).catch(() => {});
 }, 60000);
 // screens tab: refresh who's connected every 15 seconds
 setInterval(() => {

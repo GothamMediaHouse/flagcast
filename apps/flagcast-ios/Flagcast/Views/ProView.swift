@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// A golf pro or marshal, signed in with the PIN from the Manager (matches public/golf/app/pro/).
-/// Pros get Live, Scores, Screens and Contests; marshals only post contest results.
+/// Pros get Live, Scores, Screens, Pins (pin sheet + contests) and Replays; marshals post contest results and replays.
 @MainActor @Observable
 final class ProModel {
     let id: String
@@ -80,7 +80,7 @@ struct ProScreen: View {
                         ProLiveTab(model: model, s: s).tabItem { Label("Live", systemImage: "waveform.path.ecg") }
                         ProScoresTab(model: model, s: s).tabItem { Label("Scores", systemImage: "list.clipboard") }
                         ProScreensTab(model: model, s: s).tabItem { Label("Screens", systemImage: "tv") }
-                        ProContestsTab(model: model, s: s).tabItem { Label("Contests", systemImage: "flag") }
+                        ProPinsTab(model: model, s: s).tabItem { Label("Pins", systemImage: "flag") }
                         ProReplaysTab(model: model, s: s).tabItem { Label("Replays", systemImage: "arrow.counterclockwise.circle") }
                     }
                 } else {
@@ -124,13 +124,18 @@ struct ProLiveTab: View {
     var s: EventState
     @State private var flash = ""
     @State private var raised = ""
-    @State private var nudging: Team?
-    @State private var nudgeText = "Please keep up the pace of play. Thank you!"
+    @State private var messaging: MessageTo?
     @State private var confirmLock = false
+    @State private var files: [URL] = []
+    @State private var gettingFiles = false
 
     var body: some View {
         let stab = s.format.isStableford
         List {
+            Section {
+                Button { messaging = MessageTo(team: nil) } label: { Label("Message every golfer", systemImage: "megaphone") }
+                NavigationLink { ProTeamsView(model: model, s: s) } label: { Label("Fix a team or add a late group", systemImage: "person.2.badge.gearshape") }
+            } header: { Text("Golfers") } footer: { Text("Messages pop up on their phones. Nudge one cart below, or one golfer on it.") }
             Section("On the course") {
                 let lb = Core.leaderboard(s, s.scores)
                 if lb.isEmpty { Text("No teams yet.").foregroundStyle(Color.fcMuted) }
@@ -144,7 +149,7 @@ struct ProLiveTab: View {
                         Spacer()
                         Text(l.played > 0 ? Core.fmtPar(l.score, stab) : "—").font(.body.monospaced().weight(.semibold))
                             .foregroundStyle(!stab && l.score < 0 && l.played > 0 ? Color.fcRed : Color.fcInk)
-                        Button("Nudge") { nudgeText = "Please keep up the pace of play. Thank you!"; nudging = l.team }
+                        Button("Nudge") { messaging = MessageTo(team: s.team(l.teamId) ?? l.team) }
                             .buttonStyle(.bordered).tint(Color.fcGreen2)
                     }
                 }
@@ -175,19 +180,209 @@ struct ProLiveTab: View {
                     if s.locked { Task { await model.op(["op": "lock", "locked": false], ok: "Scoring open") } } else { confirmLock = true }
                 }
             }
+            Section {
+                Button { Task { await getFiles() } } label: {
+                    HStack { Label(files.isEmpty ? "Get the results files" : "Get them again (latest scores)", systemImage: "arrow.down.doc"); if gettingFiles { Spacer(); ProgressView() } }
+                }
+                .disabled(gettingFiles)
+                ForEach(files, id: \.self) { u in
+                    ShareLink(item: u) { Label(u.deletingPathExtension().lastPathComponent, systemImage: "square.and.arrow.up") }
+                }
+            } header: { Text("Results") } footer: {
+                Text("Results by flight, and every player’s round ready to post to GHIN (each hole capped at net double bogey). Send them to the handicap chair, or open them in Numbers or Excel.")
+            }
         }
         .refreshable { await model.feed.refresh() }
         .confirmationDialog("Close scoring?", isPresented: $confirmLock, titleVisibility: .visible) {
             Button("Close scoring", role: .destructive) { Task { await model.op(["op": "lock", "locked": true], ok: "Scoring closed") } }
         } message: { Text("Players won’t be able to change scores.") }
-        .alert("Message to \(nudging?.displayName ?? "this cart")", isPresented: Binding(get: { nudging != nil }, set: { if !$0 { nudging = nil } })) {
-            TextField("Message", text: $nudgeText)
-            Button("Send") {
-                let t = nudging
-                Task { if let t { await model.op(["op": "nudge", "team": t.id, "text": nudgeText], ok: "Sent to their phone") } }
-            }
-            Button("Cancel", role: .cancel) {}
+        .sheet(item: $messaging) { m in ProMessageSheet(model: model, to: m.team).presentationDetents([.medium, .large]) }
+    }
+
+    /// The day's two files from the server (results, GHIN posting), saved as CSV to share.
+    private func getFiles() async {
+        gettingFiles = true; defer { gettingFiles = false }
+        guard let r = await model.op(["op": "report"]) else { return }
+        let base = ((r["name"] as? String) ?? "").replacingOccurrences(of: "[^A-Za-z0-9 -]+", with: "", options: .regularExpression).trimmingCharacters(in: .whitespaces)
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("results", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        var out: [URL] = []
+        for (key, what) in [("results", "results"), ("ghin", "GHIN posting")] {
+            guard let rows = r[key] as? [[Any]], rows.count > 1 else { continue }
+            let text = rows.map { row in
+                row.map { c -> String in
+                    let v = c is NSNull ? "" : "\(c)"
+                    return "\"" + v.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+                }.joined(separator: ",")
+            }.joined(separator: "\r\n")
+            let u = dir.appendingPathComponent("\(base.isEmpty ? "Tournament" : base) - \(what).csv")
+            if (try? ("\u{FEFF}" + text).write(to: u, atomically: true, encoding: .utf8)) != nil { out.append(u) }
         }
+        files = out
+        model.toast = out.isEmpty ? "No scores yet." : (r["ghin"] is NSNull ? "Ready. Scramble scores can’t be posted for handicaps." : "Ready to share")
+    }
+}
+
+struct MessageTo: Identifiable { var team: Team?; var id: String { team?.id ?? "*" } }
+
+/// A message to every golfer (to == nil), a whole cart, or one golfer on it.
+struct ProMessageSheet: View {
+    var model: ProModel
+    var to: Team?
+    @State private var player = ""
+    @State private var text = ""
+    @Environment(\.dismiss) private var dismiss
+    private let quick = ["Weather delay. Please head back to the clubhouse.", "Play has resumed. Back to your holes.",
+                         "Lunch is ready at the clubhouse.", "Shotgun start in 10 minutes. Please head to your carts."]
+    var body: some View {
+        NavigationStack {
+            Form {
+                if let t = to, t.players.count > 1 {
+                    Picker("To", selection: $player) {
+                        Text("The whole cart").tag("")
+                        ForEach(t.players, id: \.id) { p in Text(p.name).tag(p.id) }
+                    }
+                }
+                Section {
+                    TextField("Message", text: $text, axis: .vertical).lineLimit(2...5)
+                        .onChange(of: text) { _, v in if v.count > 140 { text = String(v.prefix(140)) } }
+                } footer: {
+                    Text(to == nil ? "Pops up on every golfer’s phone." : player.isEmpty ? "Pops up on this cart’s phones."
+                         : "Pops up on their phone if they picked their name on the scorecard, otherwise on the cart’s phones.")
+                }
+                if to == nil {
+                    Section("Quick messages") { ForEach(quick, id: \.self) { q in Button(q) { text = q } } }
+                }
+            }
+            .navigationTitle(to.map { "Message \($0.displayName)" } ?? "Message every golfer")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Send") {
+                        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        var b: [String: Any?] = ["op": "nudge", "team": to?.id ?? "*", "text": t]
+                        if !player.isEmpty { b["player"] = player }
+                        Task { if await model.op(b, ok: to == nil ? "Sent to every golfer" : "Sent to their phone") != nil { dismiss() } }
+                    }
+                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .onAppear { if to != nil && text.isEmpty { text = "Please keep up the pace of play. Thank you!" } }
+        }
+    }
+}
+
+// ---- TEAMS: fix a team on the day (names, handicaps, add, take off or move a player) or add a late group ----
+struct ProTeamsView: View {
+    var model: ProModel
+    var s: EventState
+    var body: some View {
+        let st = model.feed.state ?? s
+        List {
+            Section {
+                NavigationLink { ProTeamEditor(model: model, team: nil) } label: { Label("Add a late group", systemImage: "plus.circle.fill") }
+            }
+            Section("Teams") {
+                ForEach(st.teams, id: \.id) { t in
+                    NavigationLink { ProTeamEditor(model: model, team: t) } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(t.displayName).font(.body.weight(.semibold)).lineLimit(1)
+                            Text(t.players.map(\.name).joined(separator: ", ")).font(.caption).foregroundStyle(Color.fcMuted).lineLimit(1)
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle("Teams")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct ProTeamEditor: View {
+    var model: ProModel
+    var team: Team?
+    struct Row: Identifiable { var id = UUID().uuidString; var pid: String?; var name: String; var hcp: String; var index: Double? }
+    @State private var name = ""
+    @State private var rows: [Row] = []
+    @State private var start = 1
+    @State private var newCode: String?
+    @State private var loaded = false
+    @Environment(\.dismiss) private var dismiss
+
+    private static func num(_ v: Double) -> String { v == v.rounded() ? String(Int(v)) : String(format: "%.1f", v) }
+
+    var body: some View {
+        let others = (model.feed.state?.teams ?? []).filter { $0.id != team?.id && $0.players.count < 4 }
+        Form {
+            Section("Team name") { TextField("Optional", text: $name).textInputAutocapitalization(.words) }
+            if team == nil {
+                Picker("Starts on hole", selection: $start) { ForEach(1...18, id: \.self) { Text("\($0)").tag($0) } }
+            }
+            Section {
+                ForEach($rows) { $r in
+                    HStack {
+                        TextField("Player name", text: $r.name).textInputAutocapitalization(.words)
+                        if r.index != nil {
+                            Text("Index \(Core.fmtIndex(r.index))").font(.caption).foregroundStyle(Color.fcMuted)
+                        } else {
+                            TextField("Hcp", text: $r.hcp).keyboardType(.numbersAndPunctuation).multilineTextAlignment(.trailing)
+                                .frame(width: 56).font(.body.monospaced())
+                        }
+                        if let pid = r.pid, team != nil, !others.isEmpty {
+                            Menu {
+                                Section("Move to") {
+                                    ForEach(others, id: \.id) { o in
+                                        Button(o.displayName) {
+                                            Task { if await model.op(["op": "move", "player": pid, "to": o.id], ok: "Moved to \(o.displayName)") != nil { dismiss() } }
+                                        }
+                                    }
+                                }
+                            } label: { Image(systemName: "arrow.left.arrow.right.circle") }
+                            .accessibilityLabel("Move to another cart")
+                        }
+                    }
+                }
+                .onDelete { rows.remove(atOffsets: $0) }
+                if rows.count < 4 {
+                    Button { rows.append(Row(pid: nil, name: "", hcp: "", index: nil)) } label: { Label("Add a player", systemImage: "person.badge.plus") }
+                }
+            } header: { Text("Players") } footer: {
+                Text(team == nil ? "Save to get the new cart’s code for their scorecard."
+                     : "Swipe left on a player to take them off. The arrows move a player, with their scores, to another cart.")
+            }
+        }
+        .navigationTitle(team?.displayName ?? "Late group")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") { Task { await save() } }.disabled(rows.allSatisfy { $0.name.trimmingCharacters(in: .whitespaces).isEmpty })
+            }
+        }
+        .onAppear {
+            guard !loaded else { return }
+            loaded = true
+            if let t = team {
+                name = t.name
+                rows = t.players.map { Row(pid: $0.id, name: $0.name, hcp: Self.num($0.hcp), index: $0.index) }
+            } else { rows = [Row(pid: nil, name: "", hcp: "", index: nil)] }
+        }
+        .alert("Late group added", isPresented: Binding(get: { newCode != nil }, set: { if !$0 { newCode = nil; dismiss() } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text("Their cart code is \(newCode ?? ""). They type the tournament code and this code in the Flagcast app.") }
+    }
+
+    private func save() async {
+        let players: [[String: Any]] = rows.filter { !$0.name.trimmingCharacters(in: .whitespaces).isEmpty }.map { r in
+            var p: [String: Any] = ["name": r.name.trimmingCharacters(in: .whitespaces)]
+            if let id = r.pid { p["id"] = id }
+            if r.index == nil { p["hcp"] = Double(r.hcp.replacingOccurrences(of: ",", with: ".")) ?? 0 }
+            return p
+        }
+        var b: [String: Any?] = ["op": "team", "team": team?.id ?? "new", "name": name.trimmingCharacters(in: .whitespaces), "players": players]
+        if team == nil { b["start"] = start }
+        guard let r = await model.op(b, ok: team == nil ? nil : "Team saved") else { return }
+        if team == nil { newCode = r["code"] as? String ?? "" } else { dismiss() }
     }
 }
 
@@ -373,6 +568,77 @@ struct ProScreensTab: View {
     private func switchTo(_ d: Display, _ page: PageRef?) {
         let p: Any = page.map { ["k": $0.k, "hole": $0.hole] as [String: Any] } ?? NSNull()
         Task { await model.op(["op": "screen", "display": d.id, "page": p], ok: page == nil ? "Back to its playlist" : "Screen switched") }
+    }
+}
+
+// ---- PINS: today's pin sheet (golfers see it as soon as it's set) and the contests, one tab so it fits ----
+struct ProPinsTab: View {
+    var model: ProModel
+    var s: EventState
+    @State private var part = 0
+    var body: some View {
+        VStack(spacing: 0) {
+            Picker("Show", selection: $part) { Text("Pin sheet").tag(0); Text("Contests").tag(1) }
+                .pickerStyle(.segmented).padding(.horizontal, 16).padding(.vertical, 8)
+            if part == 0 { ProPinSheet(model: model, s: s) } else { ProContestsTab(model: model, s: s) }
+        }
+    }
+}
+
+/// Every hole: Front / Middle / Back and Left / Center / Right, paces optional. Saves as you tap (day op pinsheet).
+struct ProPinSheet: View {
+    var model: ProModel
+    var s: EventState
+    @State private var pending: [Int: PinSpot?] = [:]
+    @State private var saves: [Int: Task<Void, Never>] = [:]
+
+    private func pin(_ n: Int) -> PinSpot? { if let p = pending[n] { return p }; return s.pinsheet[n] }
+
+    var body: some View {
+        List {
+            Section { EmptyView() } footer: { Text("Tap front, middle or back for each green. Golfers see the pin and the yards to it right away.") }
+            ForEach(s.course.holes, id: \.n) { h in
+                let p = pin(h.n)
+                Section {
+                    Picker("Depth", selection: Binding(get: { p?.d ?? "" }, set: { d in var q = p ?? PinSpot(); q.d = d; set(h.n, q) })) {
+                        Text("Front").tag("F"); Text("Middle").tag("M"); Text("Back").tag("B")
+                    }.pickerStyle(.segmented)
+                    Picker("Side", selection: Binding(get: { p == nil ? "" : p!.s }, set: { x in var q = p ?? PinSpot(); q.s = x; if x == "C" { q.off = 0 }; set(h.n, q) })) {
+                        Text("Left").tag("L"); Text("Center").tag("C"); Text("Right").tag("R")
+                    }.pickerStyle(.segmented)
+                    if let p {
+                        Stepper(value: Binding(get: { p.on }, set: { v in var q = p; q.on = v; set(h.n, q, wait: true) }), in: 0...60) {
+                            LabeledContent("Paces on", value: p.on > 0 ? "\(p.on)" : "—")
+                        }
+                        if p.s != "C" {
+                            Stepper(value: Binding(get: { p.off }, set: { v in var q = p; q.off = v; set(h.n, q, wait: true) }), in: 0...30) {
+                                LabeledContent("From the \(p.s == "L" ? "left" : "right")", value: p.off > 0 ? "\(p.off)" : "—")
+                            }
+                        }
+                        Button("Take this pin off", role: .destructive) { set(h.n, nil) }
+                    }
+                } header: {
+                    HStack {
+                        Text("Hole \(h.n) · Par \(h.par)")
+                        Spacer()
+                        Text(p.map { [$0.label, $0.paces].filter { !$0.isEmpty }.joined(separator: " · ") } ?? "Not set")
+                            .foregroundStyle(p == nil ? Color.fcMuted : Color.fcGreen)
+                    }
+                }
+            }
+        }
+        .refreshable { await model.feed.refresh() }
+        .onChange(of: s.pinsheet) { _, now in pending = pending.filter { n, p in now[n] != p } }
+    }
+
+    private func set(_ n: Int, _ p: PinSpot?, wait: Bool = false) {
+        pending[n] = .some(p)
+        saves[n]?.cancel()
+        saves[n] = Task {
+            if wait { try? await Task.sleep(for: .milliseconds(600)); if Task.isCancelled { return } }
+            let r = await model.op(["op": "pinsheet", "hole": n, "spot": p.map { $0.json as Any } ?? NSNull()], ok: p.map { "Hole \(n): \($0.label)" } ?? "Hole \(n) cleared")
+            if r == nil { pending[n] = nil }
+        }
     }
 }
 

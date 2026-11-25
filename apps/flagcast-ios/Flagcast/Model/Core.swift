@@ -305,6 +305,25 @@ enum Core {
         return filtered
     }
 
+    /// What the course map's group card shows about one group (public/golf/core.js groupInfo): its players, holes
+    /// played, score and place. Stroke play has a line per player: the group's score and place are its best player's.
+    struct GroupInfo { var name: String, thru: String, score: String, pos: String, players: [(id: String, name: String, hcp: Double, today: String)] }
+    static func groupInfo(_ ev: EventState, _ scores: Scores, _ teamId: String) -> GroupInfo? {
+        guard let team = ev.teams.first(where: { $0.id == teamId }) else { return nil }
+        let stab = ev.format.type == "stableford", lines = leaderboard(ev, scores).filter { $0.teamId == teamId }
+        let best = lines.first { $0.played > 0 } ?? lines.first, per = lines.count > 1
+        let players = team.players.map { p -> (id: String, name: String, hcp: Double, today: String) in
+            if per, let l = lines.first(where: { $0.key == "\(teamId):\(p.id)" }), l.played > 0 { return (p.id, p.name, p.hcp, fmtPar(l.score, stab)) }
+            // otherwise their own gross score to par over the holes they've finished
+            var d = 0, n = 0
+            for (i, v) in (scores[teamId]?[p.id] ?? []).enumerated() { if let v, v > 0 { d += v - (i < ev.course.holes.count ? ev.course.holes[i].par : 4); n += 1 } }
+            return (p.id, p.name, p.hcp, n > 0 && ev.format.type != "scramble" ? "\(fmtPar(d)) gross" : "")
+        }
+        return GroupInfo(name: best.map { per ? (team.name.isEmpty ? $0.entry.sub : team.name) : $0.name } ?? team.name,
+                         thru: best?.thru ?? "—", score: best.map { $0.played > 0 ? fmtPar($0.score, stab) : "—" } ?? "—",
+                         pos: best.map { $0.pos.isEmpty ? "—" : $0.pos } ?? "—", players: players)
+    }
+
     static func fmtPar(_ n: Int, _ stab: Bool = false) -> String {
         if stab { return "\(n) pts" }
         if n == 0 { return "E" }

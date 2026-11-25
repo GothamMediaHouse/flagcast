@@ -238,6 +238,47 @@ footer .wrap.legal{display:block;margin-top:32px;padding-top:20px;border-top:1px
 .scr .cam .bug.r i{display:inline-block;width:.6em;height:.6em;border-radius:50%;background:#e5483f;margin-right:.45em;vertical-align:-.02em;animation:blink 1.4s infinite}
 @keyframes blink{50%{opacity:.25}}
 @media (prefers-reduced-motion:reduce){.scr .cam .bug.r i{animation:none}}
+
+/* On the course */
+.feat{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;margin-top:44px}
+.f{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;min-width:0;display:flex;flex-direction:column}
+.f h3{margin:18px 20px 0}
+.f p{color:var(--muted);margin:8px 20px 22px;font-size:.95rem}
+.fvis{aspect-ratio:4/3;position:relative;overflow:hidden;background:#123628;color:#fff;line-height:1}
+.fvis svg{display:block;width:100%;height:100%}
+.fv-green{background:radial-gradient(120% 90% at 30% 20%,#1d5a41,#0b2219)}
+.fv-fly{background:url(/img/course-aerial.jpg) center/cover}
+.fv-fly::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(5,15,10,.1),rgba(5,15,10,.55))}
+.fv-fly svg{position:relative;z-index:1}
+.holecard{position:absolute;left:12px;top:12px;z-index:2;background:rgba(10,30,20,.85);border-left:3px solid var(--flag);padding:8px 12px;border-radius:4px}
+.holecard b{display:block;font:800 1.5rem var(--f-display);letter-spacing:.02em}
+.holecard span{font:600 .66rem var(--f-mono);letter-spacing:.1em;color:#cfdcd3}
+.fv-map{background:radial-gradient(100% 80% at 50% 40%,#2f6b45,#1e4a31)}
+.near{position:absolute;left:10px;right:10px;bottom:10px;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.near div{background:#f4f1e6;color:#14201a;border-radius:8px;padding:7px 9px;font:500 .72rem var(--f-body);line-height:1.25}
+.near small{display:block;font:600 .56rem var(--f-mono);letter-spacing:.1em;color:#56625a;text-transform:uppercase}
+.near b{font-weight:700;font-size:.85rem}
+.fv-games{background:#0b2219;padding:14px}
+.gtabs{display:flex;gap:5px;flex-wrap:wrap}
+.gtabs span{font:600 .62rem var(--f-mono);letter-spacing:.08em;text-transform:uppercase;padding:4px 7px;border-radius:999px;border:1px solid #2f5c48;color:#a9bcae}
+.gtabs span.on{background:var(--flag);border-color:var(--flag);color:#1a1a10}
+.gtable{margin-top:12px;display:grid;gap:5px}
+.gtable div{display:grid;grid-template-columns:22px 1fr auto;align-items:center;gap:8px;background:rgba(255,255,255,.06);border-radius:7px;padding:7px 10px;font:600 .82rem var(--f-body)}
+.gtable i{font:700 .95rem var(--f-display);font-style:normal;color:#a9bcae}
+.gtable em{font:700 1.05rem var(--f-display);font-style:normal;color:var(--flag)}
+.gtable div:first-child i{color:var(--flag)}
+.gnote{margin-top:10px;font:600 .58rem var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:#7f988a}
+@media (max-width:1060px){.feat{grid-template-columns:1fr 1fr}}
+@media (max-width:560px){.feat{grid-template-columns:1fr}}
+
+/* Club TVs */
+.clubtv{margin-top:48px;border:1.5px dashed #2f5c48;border-radius:14px;padding:24px 26px;display:grid;grid-template-columns:1.4fr 1fr;gap:24px;align-items:center}
+.clubtv h3{font-size:1.7rem;margin-top:10px}
+.clubtv p{color:var(--on-green-muted);margin-top:10px;max-width:60ch}
+.soontag{display:inline-block;background:var(--flag);color:#1a1a10;font:600 .66rem var(--f-mono);letter-spacing:.12em;text-transform:uppercase;padding:3px 8px;border-radius:3px}
+.tvlist{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.tvlist li{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:14px 12px;text-align:center;font:700 1.1rem var(--f-display);letter-spacing:.06em;text-transform:uppercase}
+@media (max-width:960px){.clubtv{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -250,6 +291,7 @@ footer .wrap.legal{display:block;margin-top:32px;padding-top:20px;border-top:1px
       <li><a href="#how">How it works</a></li>
       <li><a href="#screens">The screens</a></li>
       <li><a href="#app">The app</a></li>
+      <li><a href="#course">On the course</a></li>
       <li><a href="#packages">Packages</a></li>
       <li><a href="#sponsors">Sponsors</a></li>
       <li><a href="#faq">FAQ</a></li>
@@ -294,7 +336,7 @@ footer .wrap.legal{display:block;margin-top:32px;padding-top:20px;border-top:1px
     <div class="steps">
       <article><time>Weeks before</time><h3>Plan it</h3><p>Send us your format, field and sponsors. We map the camera spots, screens and run of show with your pro shop.</p></article>
       <article><time>Morning of</time><h3>We set up</h3><p>Cameras on the par 3s, screens in the clubhouse and tent, a QR card on every cart. Done before the first group arrives.</p></article>
-      <article><time>On the course</time><h3>Play live</h3><p>One player per cart keeps score on their phone. Leaderboards update in seconds, and every par 3 shot plays on the screens.</p></article>
+      <article><time>On the course</time><h3>Play live</h3><p>One player per cart keeps score on their phone, with GPS yards to the pin. Leaderboards update in seconds, and every par 3 shot plays on the screens.</p></article>
       <article><time>Awards dinner</time><h3>The big finish</h3><p>Final results, contest winners, your sponsors, your fundraising total and a highlight reel of the day.</p></article>
     </div>
   </div>
@@ -314,6 +356,14 @@ footer .wrap.legal{display:block;margin-top:32px;padding-top:20px;border-top:1px
       <div class="tv"><div class="scr"><img id="showimg" src="/img/board-leaderboard.jpg" alt="" width="1600" height="900"><div id="showcam" hidden><div class="cam"><video src="/img/par3-cam.mp4" poster="/img/par3-cam.jpg" muted loop playsinline autoplay preload="metadata" aria-label="Live tee shot on the par 3"></video><span class="bug">HOLE 7</span><span class="bug r"><i></i>LIVE</span></div></div></div></div>
       <div><h3 id="showh">Live leaderboard</h3><p id="showp"></p><ul id="showl"></ul></div>
     </div>
+    <div class="clubtv">
+      <div>
+        <span class="soontag">Coming soon</span>
+        <h3>Flagcast on the club’s own TVs</h3>
+        <p>Flagcast apps for Apple TV, Google TV, Fire TV and Roku. Pair each TV once with a code, and on tournament days it picks up the leaderboard, the par 3 cams and your sponsors by itself.</p>
+      </div>
+      <ul class="tvlist" aria-label="TV apps on the way"><li>Apple TV</li><li>Google TV</li><li>Fire TV</li><li>Roku</li></ul>
+    </div>
   </div>
 </section>
 
@@ -328,20 +378,81 @@ footer .wrap.legal{display:block;margin-top:32px;padding-top:20px;border-top:1px
       <h2>Scoring players actually use</h2>
       <p class="lede">Scan the card on the cart and you're in. No accounts and no passwords. It works in the phone's browser too, so nobody is left out.</p>
       <div class="modes">
-        <div class="mode"><span class="tag">For players</span><h3>Player</h3><ul><li>Enter scores hole by hole</li><li>Live leaderboard by flight</li><li>Watch the par 3 cams</li><li>Sponsor offers on each hole</li></ul></div>
-        <div class="mode"><span class="tag">For the pro shop</span><h3>Golf pro</h3><ul><li>See every cart live</li><li>Fix a score in a tap</li><li>Post news to the screens</li><li>Final results file for the club</li></ul></div>
+        <div class="mode"><span class="tag">For players</span><h3>Player</h3><ul><li>Score each hole on one screen</li><li>GPS yards to today’s pin</li><li>Fly the hole before you hit</li><li>See every group on the course</li><li>Side games and the live leaderboard</li><li>Watch the par 3 cams</li></ul></div>
+        <div class="mode"><span class="tag">For the pro shop</span><h3>Golf pro</h3><ul><li>See every cart live</li><li>Fix a score in a tap</li><li>Set the day’s pin positions</li><li>Post news to the screens</li><li>Final results file for the club</li></ul></div>
       </div>
     </div>
   </div>
 </section>
 
-<section id="manager" style="background:var(--paper-2)">
+<section id="course" style="background:var(--paper-2)">
+  <div class="wrap">
+    <span class="eyebrow">On the course</span>
+    <h2>A caddie in every cart</h2>
+    <p class="lede">The phone that keeps score also knows the course: yards to today’s pin, a flyover of every hole, where every group is, and games inside the game. All in your club’s logo and colours.</p>
+    <div class="feat">
+      <article class="f">
+        <div class="fvis fv-green" aria-hidden="true"><svg viewBox="-40 -14 230 168">
+          <defs><clipPath id="gclip"><path d="M40 20 C58 6 92 4 114 14 C136 24 146 46 140 70 C134 92 118 100 104 104 C92 108 86 118 74 128 C58 140 30 136 18 118 C6 100 10 82 20 70 C28 60 24 40 40 20 Z"/></clipPath><radialGradient id="gfill" cx="55%" cy="35%" r="75%"><stop offset="0" stop-color="#5fbf78"/><stop offset="1" stop-color="#2f8a4c"/></radialGradient><filter id="tsh"><feDropShadow dx="0" dy="1" stdDeviation="1.4" flood-color="#000" flood-opacity=".55"/></filter></defs>
+          <path d="M40 20 C58 6 92 4 114 14 C136 24 146 46 140 70 C134 92 118 100 104 104 C92 108 86 118 74 128 C58 140 30 136 18 118 C6 100 10 82 20 70 C28 60 24 40 40 20 Z" fill="#2a6e3e" stroke="#2a6e3e" stroke-width="14" stroke-linejoin="round"/>
+          <path d="M40 20 C58 6 92 4 114 14 C136 24 146 46 140 70 C134 92 118 100 104 104 C92 108 86 118 74 128 C58 140 30 136 18 118 C6 100 10 82 20 70 C28 60 24 40 40 20 Z" fill="url(#gfill)"/>
+          <g clip-path="url(#gclip)" transform="rotate(-25 75 70)" fill="#000" opacity=".07"><rect x="0" y="-20" width="14" height="190"/><rect x="28" y="-20" width="14" height="190"/><rect x="56" y="-20" width="14" height="190"/><rect x="84" y="-20" width="14" height="190"/><rect x="112" y="-20" width="14" height="190"/></g>
+          <path d="M118 112 C130 104 146 106 148 118 C150 132 134 140 122 136 C112 132 110 118 118 112 Z" fill="#e7d9b0" stroke="#f6efd9" stroke-width="2"/>
+          <path d="M-2 46 C2 36 14 36 16 46 C18 58 8 66 2 62 C-4 58 -4 52 -2 46 Z" fill="#e7d9b0" stroke="#f6efd9" stroke-width="2"/>
+          <ellipse cx="116" cy="40" rx="3" ry="1.6" fill="#0d2a18"/><line x1="116" y1="40" x2="116" y2="12" stroke="#fff" stroke-width="1.6"/><path d="M116 12 L130 16.5 L116 21 Z" fill="#e0453a"/>
+          <g filter="url(#tsh)" font-family="Barlow Condensed,Arial Narrow,sans-serif" text-anchor="middle" fill="#fff" font-weight="700">
+            <text x="64" y="34" font-size="12">BACK 168</text>
+            <text x="76" y="56" font-size="9.5" fill="#e8c547" letter-spacing="1.5">TO PIN</text><text x="76" y="94" font-size="42">161</text>
+            <text x="64" y="121" font-size="12">FRONT 142</text>
+          </g></svg></div>
+        <h3>Yards to today’s pin</h3>
+        <p>GPS yards to the front, the back and the flag, drawn right on the green. Your pro sets the pin sheet each morning, so “to pin” means today’s pin, not the middle.</p>
+      </article>
+      <article class="f">
+        <div class="fvis fv-fly" aria-hidden="true"><svg viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice">
+          <path d="M70 270 C120 220 150 170 210 140 S300 80 330 40" fill="none" stroke="#fff" stroke-width="3" stroke-dasharray="2 9" stroke-linecap="round"/>
+          <g fill="none" stroke="rgba(255,255,255,.7)" stroke-width="2"><path d="M120 205 a40 18 -40 0 1 60 -40"/><path d="M190 160 a40 18 -35 0 1 60 -40"/><path d="M255 110 a40 18 -30 0 1 55 -40"/></g>
+          <g font-family="IBM Plex Mono,monospace" font-size="17" font-weight="600" fill="#fff"><text x="182" y="206">250</text><text x="248" y="158">150</text><text x="312" y="108">50</text></g>
+          <circle cx="70" cy="270" r="6" fill="#e8c547"/><circle cx="330" cy="40" r="6" fill="#e0453a" stroke="#fff" stroke-width="2"/></svg>
+          <div class="holecard"><b>HOLE 7</b><span>PAR 4 · 412 YDS</span></div></div>
+        <h3>Fly the hole</h3>
+        <p>A drone-style flyover from the tee to the green, with yardages along the fairway and round every dogleg. Or fly all 18 back to back.</p>
+      </article>
+      <article class="f">
+        <div class="fvis fv-map" aria-hidden="true"><svg viewBox="0 0 400 300">
+          <ellipse cx="200" cy="112" rx="135" ry="78" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="2.5" stroke-dasharray="3 9" stroke-linecap="round"/>
+          <g font-family="Inter,sans-serif" font-size="15" font-weight="700" text-anchor="middle">
+            <g transform="translate(150 40)"><circle r="16" fill="#3b82f6" stroke="#fff" stroke-width="3"/><text y="5" fill="#fff">6</text></g>
+            <g transform="translate(304 62)"><circle r="16" fill="#3b82f6" stroke="#fff" stroke-width="3"/><text y="5" fill="#fff">3</text></g>
+            <g transform="translate(68 100)"><circle r="16" fill="#3b82f6" stroke="#fff" stroke-width="3"/><text y="5" fill="#fff">8</text></g>
+            <g transform="translate(92 160)"><circle r="16" fill="#3b82f6" stroke="#fff" stroke-width="3"/><text y="5" fill="#fff">11</text></g>
+            <g transform="translate(326 146)"><circle r="16" fill="#3b82f6" stroke="#fff" stroke-width="3"/><text y="5" fill="#fff">17</text></g>
+            <g transform="translate(214 189)"><circle r="16" fill="#3b82f6" stroke="#fff" stroke-width="3"/><text y="5" fill="#fff">14</text></g>
+            <g transform="translate(222 35)"><circle r="18" fill="#e8c547" opacity=".35"/><circle r="8" fill="#e8c547" stroke="#fff" stroke-width="3"/></g>
+          </g></svg>
+          <div class="near"><div><small>Group ahead</small><b>Nguyen</b> · Hole 6</div><div><small>Group behind</small><b>Rossi</b> · Hole 3</div></div></div>
+        <h3>Everyone on the map</h3>
+        <p>Every group live on the course map, with who’s ahead and who’s behind. Easy to keep pace, and to know when to wait on the tee.</p>
+      </article>
+      <article class="f">
+        <div class="fvis fv-games" aria-hidden="true">
+          <div class="gtabs"><span>Stableford</span><span class="on">Wolf</span><span>Vegas</span><span>Closest</span><span>Long drive</span></div>
+          <div class="gtable"><div><i>1</i>Drew N.<em>14 pts</em></div><div><i>2</i>Riley B.<em>11 pts</em></div><div><i>3</i>Sam K.<em>9 pts</em></div></div>
+          <div class="gnote">Points only · bragging rights</div></div>
+        <h3>Side games</h3>
+        <p>Stableford, Vegas, Wolf, closest to the pin and long drive, scored for each group as they play. Kept in points, for bragging rights.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="manager" style="background:var(--paper)">
   <div class="wrap mgr-grid">
     <div>
       <span class="eyebrow">Flagcast Manager</span>
       <h2>The whole day from the pro shop</h2>
-      <p class="lede">Your staff see every team, every score and every screen in one place, on the Mac in the pro shop or on a phone out on the course.</p>
-      <ul class="mgr-list"><li>Live scores from every cart, and fix one in a tap</li><li>Pick what each TV shows with one choice</li><li>Lock the results and print the final sheet</li></ul>
+      <p class="lede">Your staff see every team, every score and every screen in one place, on a Mac or Windows PC in the pro shop, or on an iPhone or iPad out on the course.</p>
+      <ul class="mgr-list"><li>Live scores from every cart, and fix one in a tap</li><li>Day-of checks: TVs on, cameras sending, quiet carts nudged in a tap</li><li>A pin sheet for each day, copied from yesterday in one tap</li><li>The tournament code, pro and marshal PINs and cart codes on one card</li><li>Your logo, colours and photos on the app, cart signs and screens</li><li>Pick what each TV shows with one choice</li><li>Lock the results and print the final sheet</li></ul>
       <p style="margin-top:22px"><a class="btn ghost" href="/download/">Download Manager</a></p>
     </div>
     <div class="mgr-vis">
@@ -362,7 +473,7 @@ footer .wrap.legal{display:block;margin-top:32px;padding-top:20px;border-top:1px
     <p class="lede">Every event is quoted for your day. We travel to tournaments anywhere in the US, and travel is quoted with your date. Every quote comes with a camera plan for your course.</p>
     <div class="pk">
       <div class="card"><span class="lvl">Package 1</span><h3>Par</h3><p class="for">Live scoring and leaderboards, no cameras. Great for smaller outings.</p>
-        <ul><li>Scoring app for every cart, any format</li><li>Live leaderboard on up to 2 screens</li><li>Contest results and sponsor slides</li><li>Final results file for your club</li><li>1 operator on site</li></ul>
+        <ul><li>Scoring app for every cart, any format</li><li>GPS yards to the pin, course flyovers and side games</li><li>Live leaderboard on up to 2 screens</li><li>Contest results and sponsor slides</li><li>Final results file for your club</li><li>1 operator on site</li></ul>
         <div class="q">Quote on request</div></div>
       <div class="card feature"><span class="lvl">Package 2</span><h3>Birdie</h3><p class="for">The full experience for a member-guest or charity outing.</p>
         <ul><li>Everything in Par</li><li>Live cameras on 2 par 3s, with instant replay</li><li>Up to 4 screens around the club</li><li>Par 3 cams in the app</li><li>Highlight reel at the awards</li><li>2 crew on site</li></ul>
@@ -414,10 +525,11 @@ footer .wrap.legal{display:block;margin-top:32px;padding-top:20px;border-top:1px
     <span class="eyebrow">Questions</span>
     <h2>Good to know</h2>
     <div class="faq">
-      <details><summary>Do players need to download anything?</summary><p>No. Players scan the QR code on their cart card and score in the phone's browser. </p></details>
+      <details><summary>Do players need to download anything?</summary><p>No. Players scan the QR code on their cart sign and score in the phone's browser, with GPS yards, the course map and side games included.</p></details>
+      <details><summary>Are the side games for money?</summary><p>No. Stableford, Vegas, Wolf and the rest are kept in points, just for bragging rights. Flagcast doesn’t take bets or handle any money.</p></details>
       <details><summary>What formats and handicaps do you handle?</summary><p>Stroke play, best ball, scramble, shamble, Stableford and match play, with full or percentage handicaps, multiple flights, net and gross.</p></details>
       <details><summary>What if the course has poor cell signal?</summary><p>Scores are saved on the phone and sent as soon as there is signal, so nothing is lost. We bring our own network for the cameras and screens.</p></details>
-      <details><summary>Do you bring the screens?</summary><p>Yes. We bring TVs and stands, or we can use the club’s own screens. We can also bring an LED wall for the tent or dinner.</p></details>
+      <details><summary>Do you bring the screens?</summary><p>Yes. We bring TVs and stands, or we can use the club’s own screens. We can also bring an LED wall for the tent or dinner. Apps for Apple TV, Google TV, Fire TV and Roku are coming soon, so the club’s own TVs can join in with a code.</p></details>
       <details><summary>Where do you work?</summary><p>Anywhere in the US. We bring the crew and the gear to your course, and travel is quoted with your date.</p></details>
       <details><summary>How far ahead should we book?</summary><p>Spring and summer weekends fill first, so two to three months ahead is best. We can sometimes do it with a couple of weeks’ notice.</p></details>
     </div>

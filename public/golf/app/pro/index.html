@@ -68,8 +68,9 @@ input, select, textarea { padding: 11px; border: 1.5px solid var(--line); border
 <div class="sheet" id="sheet" hidden><div id="sheetBody"></div></div>
 
 <script type="module">
-import { leaderboard, fmtPar, contestLeader, fmtDist } from '/golf/core.js';
+import { leaderboard, fmtPar, contestLeader, fmtDist, fmtIndex } from '/golf/core.js';
 import { eventId, post, live, esc } from '/golf/client.js';
+import { cleanPin, pinOf, pinLabel, pinPaces } from '/golf/gps.js';
 const $ = (id) => document.getElementById(id);
 const id = eventId();
 const pin = sessionStorage.getItem(`flagcast:pin:${id}`) || (() => { try { return localStorage.getItem(`flagcast:pin:${id}`); } catch { return null; } })();
@@ -78,9 +79,10 @@ const ICON = {
   live: '<path d="M3 12h4l3-8 4 16 3-8h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
   scores: '<rect x="4" y="3" width="16" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 8h8M8 12h8M8 16h5" stroke="currentColor" stroke-width="2"/>',
   screens: '<rect x="2" y="4" width="20" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 21h8M12 17v4" stroke="currentColor" stroke-width="2"/>',
+  pins: '<path d="M7 21V3l10 4-10 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><ellipse cx="9" cy="20" rx="6" ry="2" fill="none" stroke="currentColor" stroke-width="1.6"/>',
   contests: '<path d="M6 21V3l11 4-11 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
 };
-const TABS_PRO = [['live', 'Live'], ['scores', 'Scores'], ['screens', 'Screens'], ['contests', 'Contests']];
+const TABS_PRO = [['live', 'Live'], ['scores', 'Scores'], ['pins', 'Pins'], ['screens', 'Screens'], ['contests', 'Contests']];
 
 function toast(t) { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), 3000); }
 async function op(body, ok) {
@@ -106,6 +108,7 @@ function render() {
   if (tab === 'scores') m.innerHTML = scoresTab();
   if (tab === 'screens') m.innerHTML = screensTab();
   if (tab === 'contests') m.innerHTML = contestsTab();
+  if (tab === 'pins') m.innerHTML = pinsTab();
 }
 
 // LIVE: every cart, where it is, and a nudge; news to the screens; lock scoring; fundraising total
@@ -115,7 +118,10 @@ function liveTab() {
     const t = l.team;
     return `<div class="team"><span class="pos">${esc(l.pos)}</span><div><b>${esc(l.name)}</b><small>${l.sub ? `${esc(l.sub)} · ` : ''}Thru ${esc(l.thru)}</small></div><span class="tp ${!stab && l.score < 0 ? 'under' : ''}">${l.played ? esc(fmtPar(l.score, stab)) : '—'}</span><button class="btn" data-nudge="${t.id}">Nudge</button></div>`;
   }).join('');
-  return `<h2>On the course</h2>
+  return `<h2>Message every golfer</h2>
+  <div class="row"><input id="allMsg" maxlength="140" placeholder="Weather delay. Please head back to the clubhouse."><button class="btn dark" id="allGo">Send</button></div>
+  <p class="help">Pops up on every golfer’s phone. Nudge one cart below, or one golfer on it.</p>
+  <h2 style="margin-top:22px">On the course</h2>
   <div class="list">${rows || '<p class="help">No teams yet.</p>'}</div>
   <h3>News on every screen</h3>
   <div class="row"><input id="flash" maxlength="140" placeholder="Shotgun start in 10 minutes"><button class="btn dark" id="flashGo">Post</button></div>
@@ -123,11 +129,15 @@ function liveTab() {
   ${S.fund?.on ? `<h3>Fundraising</h3><div class="row"><input id="raised" type="number" min="0" value="${Number(S.fund.raised) || 0}"><button class="btn dark" id="raisedGo">Update total</button></div>` : ''}
   <h3>Scoring</h3>
   <div class="row"><button class="btn ${S.locked ? 'primary' : 'danger'}" id="lockGo">${S.locked ? 'Open scoring again' : 'Close scoring (results final)'}</button></div>
+  <h3>Results</h3>
+  <div class="row"><button class="btn" data-file="results">Download results (CSV)</button><button class="btn" data-file="ghin">Scores for GHIN posting (CSV)</button></div>
+  <p class="help">Results by flight, and every player’s round ready to post to GHIN (each hole capped at net double bogey). Send them to the handicap chair.</p>
   <div class="row" style="margin-top:22px"><button class="btn" id="signOut">Sign out</button></div>`;
 }
 
 // SCORES: fix any score; every fix is logged with who made it
 function scoresTab() {
+  if (lateOpen) return `<h2>Add a late group</h2>${teamBox(null)}<p class="help">Save to get the new cart’s code for their scorecard.</p>`;
   const t = S.teams.find((x) => x.id === fixTeam) || S.teams[0];
   if (!t) return '<p class="help">No teams yet.</p>';
   fixTeam = t.id;
@@ -138,7 +148,58 @@ function scoresTab() {
   <p class="help">Tap a hole to change it. PU means picked up.</p>
   <div class="grid" style="margin-top:10px"><table><thead><tr><th>Hole</th>${S.course.holes.map((h) => `<th>${h.n}</th>`).join('')}</tr><tr><th>Par</th>${S.course.holes.map((h) => `<th>${h.par}</th>`).join('')}</tr></thead>
   <tbody>${rows.map((p) => `<tr><td>${esc(p.name.split(' ')[0])}</td>${S.course.holes.map((h, i) => { const v = (sc[p.id] || [])[i]; return `<td><button data-fix="${p.id}" data-h="${h.n}" aria-label="${esc(p.name)} hole ${h.n}">${v == null ? '' : v === 0 ? 'PU' : v}</button></td>`; }).join('')}</tr>`).join('')}</tbody></table></div>
+  <h3>Fix this team</h3>${teamBox(t)}
+  <div class="row" style="margin-top:10px"><button class="btn" id="lateGo">Add a late group</button></div>
   <h3>Changes today</h3><div class="log" id="log">${logHtml()}</div>`;
+}
+
+// TEAMS on the day: names, handicaps, add or take off a player, move one (scores and all) to another cart, or a late group
+function teamBox(t) {
+  const late = !t, ps = late ? [{}] : t.players, others = late ? [] : S.teams.filter((x) => x.id !== t.id && x.players.length < 4);
+  const row = (p, i) => `<div class="row" data-prow="${i}" data-pid="${esc(p.id || '')}" style="margin-top:6px"><input data-pname style="flex:1 1 100%" placeholder="Player name" value="${esc(p.name || '')}">${p.index != null && p.index !== undefined ? `<span class="help" style="margin:0">Index ${esc(fmtIndex(p.index))}</span>` : `<input data-phcp inputmode="decimal" style="flex:0 0 64px" placeholder="Hcp" value="${p.name ? esc(String(p.hcp ?? 0)) : ''}">`}${p.id && others.length ? `<select data-pmove style="flex:0 0 auto"><option value="">Move to…</option>${others.map((o) => `<option value="${o.id}">${esc(o.name || o.players.map((x) => x.name).join(' / '))}</option>`).join('')}</select>` : ''}<button class="btn" data-prm="${i}" aria-label="Take off">✕</button></div>`;
+  return `<div class="box" id="teamBox" data-team="${late ? 'new' : t.id}">
+  <input id="tName" placeholder="Team name (optional)" value="${esc(late ? '' : t.name || '')}" style="width:100%">
+  ${late ? `<label class="help" style="display:flex;gap:8px;align-items:center;margin-top:8px">Starts on hole <select id="tStart" style="width:auto">${S.course.holes.map((h) => `<option>${h.n}</option>`).join('')}</select></label>` : ''}
+  <div id="tRows">${ps.map(row).join('')}</div>
+  <div class="row" style="margin-top:8px">${ps.length < 4 ? '<button class="btn" id="tAdd">Add a player</button>' : ''}<button class="btn primary" id="tSave">${late ? 'Add the group' : 'Save team'}</button>${late ? '<button class="btn" id="tCancel">Cancel</button>' : ''}</div></div>`;
+}
+function readTeam() {
+  return [...document.querySelectorAll('#tRows [data-prow]')].map((r) => {
+    const p = { name: r.querySelector('[data-pname]').value.trim() }, h = r.querySelector('[data-phcp]');
+    if (r.dataset.pid) p.id = r.dataset.pid;
+    if (h) p.hcp = Number(h.value.replace(',', '.')) || 0;
+    return p;
+  }).filter((p) => p.name);
+}
+let lateOpen = false;
+async function download(which) {
+  try {
+    const r = await op({ op: 'report' });
+    const rows = r[which];
+    if (!rows) return toast('Scramble scores can’t be posted for handicaps.');
+    if (rows.length < 2) return toast('No scores yet.');
+    const text = rows.map((x) => x.map((c) => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob(['\ufeff' + text], { type: 'text/csv' }));
+    a.download = `${(r.name || 'Tournament').replace(/[^\w -]+/g, '').trim() || 'Tournament'} - ${which === 'ghin' ? 'GHIN posting' : 'results'}.csv`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  } catch {}
+}
+function openMessage(t) {
+  $('sheetBody').innerHTML = `<div class="label">Message</div><h2 style="margin:4px 0 8px">${esc(t.name || t.players.map((p) => p.name).join(' / '))}</h2>
+  ${t.players.length > 1 ? `<select id="mTo" style="width:100%"><option value="">The whole cart</option>${t.players.map((p) => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select>` : ''}
+  <textarea id="mText" maxlength="140" rows="3" style="width:100%;margin-top:8px">Please keep up the pace of play. Thank you!</textarea>
+  <p class="help">One golfer: it pops up on their phone if they picked their name on the scorecard, otherwise on the cart’s phones.</p>
+  <div class="row" style="margin-top:8px"><button class="btn primary" data-m="send">Send</button><button class="btn" data-m="cancel">Cancel</button></div>`;
+  $('sheet').hidden = false;
+  $('sheet').onclick = (e) => {
+    if (e.target === $('sheet')) { $('sheet').hidden = true; return; }
+    const b = e.target.closest('[data-m]'); if (!b) return;
+    if (b.dataset.m === 'cancel') { $('sheet').hidden = true; return; }
+    const text = $('mText').value.trim(), player = $('mTo') ? $('mTo').value : '';
+    if (!text) return toast('Type the message first.');
+    $('sheet').hidden = true;
+    op({ op: 'nudge', team: t.id, ...(player ? { player } : {}), text }, 'Sent to their phone').catch(() => {});
+  };
 }
 const logHtml = () => log.slice(-20).reverse().map((x) => `<div>${new Date(x.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} · ${esc(x.by)} · ${esc(x.player)} (${esc(x.team)}) hole ${x.h}: ${x.from ?? '–'} → ${x.to ?? 'cleared'}</div>`).join('') || 'No changes yet.';
 async function loadLog() { try { const r = await op({ op: 'stats' }); log = r.log || []; const el = $('log'); if (el) el.innerHTML = logHtml(); } catch {} }
@@ -197,6 +258,23 @@ function replayBox() {
   ${list ? `<div class="list">${list}</div>` : ''}`;
 }
 
+// PINS: today's pin sheet. Golfers see it on their phones as soon as it's set (golf pros only; same as the Manager's Pin sheet)
+function pinsTab() {
+  const chip = (n, k, v, l, on) => `<button data-pn="${n}" data-pk="${k}" data-pv="${v}" aria-pressed="${on}">${l}</button>`;
+  const rows = S.course.holes.map((h) => {
+    const p = pinOf(S, h.n);
+    return `<div class="box"><div class="row" style="justify-content:space-between"><b>Hole ${h.n} <span class="help">par ${h.par}</span></b><span class="help">${p ? esc([pinLabel(p), pinPaces(p)].filter(Boolean).join(' · ')) : 'Not set'}</span></div>
+    <div class="chips" style="margin-top:8px">${['F', 'M', 'B'].map((d) => chip(h.n, 'd', d, { F: 'Front', M: 'Middle', B: 'Back' }[d], p?.d === d)).join('')}<span style="width:8px"></span>${['L', 'C', 'R'].map((x) => chip(h.n, 's', x, { L: 'Left', C: 'Center', R: 'Right' }[x], !!p && (p.s || 'C') === x)).join('')}</div>
+    ${p ? `<div class="row" style="margin-top:8px"><input type="number" min="0" max="60" inputmode="numeric" data-pon="${h.n}" value="${p.on || ''}" placeholder="Paces on (optional)">${p.s && p.s !== 'C' ? `<input type="number" min="0" max="30" inputmode="numeric" data-poff="${h.n}" value="${p.off || ''}" placeholder="Paces from the ${p.s === 'L' ? 'left' : 'right'}">` : ''}<button class="btn" data-pclear="${h.n}">Clear</button></div>` : ''}</div>`;
+  }).join('');
+  return `<h2>Pin sheet</h2><p class="help" style="margin:-4px 0 12px">Tap front, middle or back for each green. Golfers see the pin and the yards to it right away.</p><div class="list">${rows}</div>`;
+}
+function setPin(n, pin) {
+  S.pinsheet = { ...(S.pinsheet || {}) }; if (pin) S.pinsheet[n] = pin; else delete S.pinsheet[n];
+  render();
+  op({ op: 'pinsheet', hole: n, spot: pin }, pin ? `Hole ${n}: ${pinLabel(pin)}` : `Hole ${n} cleared`).catch(() => {});
+}
+
 // CONTESTS: closest to the pin and long drive results
 function contestsTab() {
   const names = S.teams.flatMap((t) => t.players.map((p) => p.name));
@@ -211,10 +289,22 @@ function contestsTab() {
   ${me.role !== 'pro' ? `<div style="margin-top:26px">${replayBox()}</div><div class="row" style="margin-top:22px"><button class="btn" id="signOut">Sign out</button></div>` : ''}`;
 }
 
-$('main').addEventListener('change', (e) => { if (e.target.id === 'fixTeam') { fixTeam = e.target.value; render(); } });
+$('main').addEventListener('change', (e) => {
+  if (e.target.id === 'fixTeam') { fixTeam = e.target.value; render(); }
+  if (e.target.dataset.pmove !== undefined && e.target.value) {
+    const to = S.teams.find((x) => x.id === e.target.value), pid = e.target.closest('[data-prow]').dataset.pid;
+    op({ op: 'move', player: pid, to: to.id }, `Moved to ${to.name || to.players.map((p) => p.name).join(' / ')}`).catch(() => {});
+    return;
+  }
+  const n = Number(e.target.dataset.pon || e.target.dataset.poff); if (!n) return;
+  const p = { ...(pinOf(S, n) || { d: 'M', s: 'C' }) }; p[e.target.dataset.pon ? 'on' : 'off'] = Number(e.target.value) || 0;
+  e.target.blur(); setPin(n, cleanPin(p));
+});
 $('main').addEventListener('click', async (e) => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.id === 'signOut') return signOut();
+  if (b.dataset.pn) { const n = Number(b.dataset.pn), p = { ...(pinOf(S, n) || { d: 'M', s: 'C' }) }; p[b.dataset.pk] = b.dataset.pv; return setPin(n, cleanPin(p)); }
+  if (b.dataset.pclear) return setPin(Number(b.dataset.pclear), null);
   if (b.id === 'rSave') {
     const url = $('rUrl').value.trim();
     op({ op: 'replay', hole: Number($('rHole').value), label: $('rLabel').value.trim(), url, screens: !!$('rScreens')?.checked }, $('rScreens')?.checked ? 'Replay on the screens' : 'Replay saved')
@@ -223,10 +313,20 @@ $('main').addEventListener('click', async (e) => {
   }
   if (b.dataset.rshow) { op({ op: 'take', kind: 'replay', replay: b.dataset.rshow }, 'Replay on the screens').catch(() => {}); return; }
   if (b.dataset.rdel) { if (confirm('Remove this replay?')) op({ op: 'replay', remove: b.dataset.rdel }, 'Removed').catch(() => {}); return; }
-  if (b.dataset.nudge) {
-    const t = S.teams.find((x) => x.id === b.dataset.nudge);
-    const text = prompt(`Message to ${t.name || 'this cart'}:`, 'Please keep up the pace of play. Thank you!');
-    if (text) op({ op: 'nudge', team: t.id, text }, 'Sent to their phone').catch(() => {});
+  if (b.dataset.nudge) { const t = S.teams.find((x) => x.id === b.dataset.nudge); if (t) openMessage(t); return; }
+  if (b.id === 'allGo') { const t = $('allMsg').value.trim(); if (!t) return toast('Type the message first.'); op({ op: 'nudge', team: '*', text: t }, 'Sent to every golfer').then(() => { $('allMsg').value = ''; }).catch(() => {}); return; }
+  if (b.dataset.file) return download(b.dataset.file);
+  if (b.id === 'lateGo') { lateOpen = true; render(); return; }
+  if (b.id === 'tCancel') { lateOpen = false; render(); return; }
+  if (b.id === 'tAdd') { const rows = $('tRows'); if (rows.children.length >= 4) return; rows.insertAdjacentHTML('beforeend', `<div class="row" data-prow="${rows.children.length}" data-pid="" style="margin-top:6px"><input data-pname style="flex:1 1 100%" placeholder="Player name"><input data-phcp inputmode="decimal" style="flex:0 0 64px" placeholder="Hcp"><button class="btn" data-prm="x" aria-label="Take off">✕</button></div>`); rows.lastElementChild.querySelector('input').focus(); return; }
+  if (b.dataset.prm !== undefined) { b.closest('[data-prow]').remove(); return; }
+  if (b.id === 'tSave') {
+    const box = $('teamBox'), isNew = box.dataset.team === 'new', players = readTeam();
+    if (!players.length) return toast('A team needs at least one player.');
+    op({ op: 'team', team: box.dataset.team, name: $('tName').value.trim(), players, ...(isNew ? { start: Number($('tStart').value) || 1 } : {}) }, isNew ? null : 'Team saved')
+      .then((r) => { if (isNew) { lateOpen = false; fixTeam = r.team; render(); $('sheetBody').innerHTML = `<div class="label">Late group added</div><h2 style="margin:4px 0 6px">Cart code ${esc(r.code)}</h2><p class="help">They type the tournament code and this cart code on the Flagcast app or the scorecard page.</p><div class="row" style="margin-top:10px"><button class="btn primary" onclick="this.closest('.sheet').hidden=true">OK</button></div>`; $('sheet').onclick = null; $('sheet').hidden = false; } })
+      .catch(() => {});
+    return;
   }
   if (b.id === 'flashGo') { const t = $('flash').value.trim(); if (!t) return; op({ op: 'flash', text: t }, 'On the screens').then(() => ($('flash').value = '')).catch(() => {}); }
   if (b.id === 'raisedGo') op({ op: 'fund', raised: Number($('raised').value) || 0 }, 'Total updated').catch(() => {});

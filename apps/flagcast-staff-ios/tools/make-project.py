@@ -13,7 +13,7 @@ def i(name): return hashlib.md5(('flagcast-staff-ios:' + name).encode()).hexdige
 TEAM = 'C8KXPB4QNA'
 # (target, product name, bundle id, version, build, Info.plist)
 TARGETS = [
-    ('Manager', 'Flagcast Manager', 'app.flagcast.manager', '2.9.3', '12', 'Manager-Info.plist'),
+    ('Manager', 'Flagcast Manager', 'app.flagcast.manager', '2.9.9', '12', 'Manager-Info.plist'),
     # Flagcast Admin is retired (Admin lives inside Manager): no target, so it can't be built or sent to TestFlight.
     # Its last build was 1.2.0 (4); the Admin/ folder stays for reference.
 ]
@@ -24,6 +24,7 @@ SHARED = [
     '../flagcast-mac/Shared/Net.swift', '../flagcast-mac/Shared/Desk.swift', '../flagcast-mac/Shared/Route.swift',
     '../flagcast-mac/Shared/UI.swift', '../flagcast-mac/Shared/Geo.swift', '../flagcast-mac/Shared/CourseImages.swift',
     '../flagcast-mac/Shared/Desk/DeskDoc.swift', '../flagcast-mac/Shared/Desk/DeskNav.swift', '../flagcast-mac/Shared/Desk/ScreenLogic.swift', '../flagcast-mac/Shared/Desk/ClubTVs.swift',
+    '../flagcast-mac/Shared/Desk/PinBoard.swift', '../flagcast-mac/Shared/Desk/GroupCard.swift',
     '../flagcast-mac/Shared/Admin/AdminModel.swift', '../flagcast-mac/Manager/AppModel.swift', '../flagcast-mac/Shared/AppleSignIn.swift',
     '../flagcast-mac/Shared/Branding.swift', '../flagcast-mac/Shared/DayOf.swift', '../flagcast-mac/Shared/Admin/EventDay.swift',
 ]

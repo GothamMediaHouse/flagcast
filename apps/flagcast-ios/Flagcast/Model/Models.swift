@@ -175,10 +175,12 @@ struct Flash: Codable, Hashable { var text: String; var at: Double }
 struct Brand: Codable, Hashable {
     var logo = "", accent = "", club = ""
     var demo = true, powered = false
+    /// Admin marked the tournament Demo: sample groups walk the course map on any day
+    var marked = false
     init() {}
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
-        logo = c.str(.logo); accent = c.str(.accent); club = c.str(.club); demo = c.bool(.demo, true); powered = c.bool(.powered, false)
+        logo = c.str(.logo); accent = c.str(.accent); club = c.str(.club); demo = c.bool(.demo, true); powered = c.bool(.powered, false); marked = c.bool(.marked, false)
     }
     /// the club logo's full address, or nil for the Flagcast logo
     var logoURL: URL? { demo || logo.isEmpty ? nil : URL(string: logo, relativeTo: Server.base)?.absoluteURL }
@@ -200,7 +202,9 @@ struct Photos: Codable, Hashable {
     func sponsor(_ id: String) -> URL? { url(sponsors[id]) }
 }
 struct News: Codable, Hashable { var text: String; var at: Double; var by: String? }
-struct Nudge: Codable, Hashable { var team: String; var text: String; var at: Double }
+/// From the pro shop: to one cart (team), one golfer on it (player), or everyone (team "*").
+/// A note to a cart: from the pro shop, or (from) a ready-made note another group sent from the course map.
+struct Nudge: Codable, Hashable { var team: String; var player: String? = nil; var text: String; var at: Double; var from: String? = nil }
 struct Ace: Codable, Hashable { var hole: Int; var name: String; var team: String; var at: Double }
 struct Take: Codable, Hashable { var kind: String; var text: String?; var sponsor: String?; var at: Double; var secs: Double? }
 /// "Routed to phones": Admin, the desk or a pro points every player's phone at something (public/golf/phonecast.js).
@@ -281,6 +285,45 @@ struct CourseMap: Codable, Hashable {
 /// scores[teamId][playerId or "T"] = 18 values: nil = not yet, 0 = picked up, else strokes
 typealias Scores = [String: [String: [Int?]]]
 
+
+/// Where the pin is on a green today (the Manager's Pin sheet; public/golf/gps.js cleanPin). d: F/M/B (front, middle,
+/// back), s: L/C/R (left, center, right), on: paces from the front edge, off: paces in from the left or right edge (0 = not given).
+struct PinSpot: Codable, Hashable {
+    var d = "M", s = "C", on = 0, off = 0
+    init(d: String = "M", s: String = "C", on: Int = 0, off: Int = 0) { self.d = d; self.s = s; self.on = on; self.off = off }
+    enum CodingKeys: String, CodingKey { case d, s, on, off }
+    init(from dec: Decoder) throws {
+        let c = try dec.container(keyedBy: CodingKeys.self)
+        d = c.str(.d, "M"); s = c.str(.s, "C"); on = c.int(.on, 0); off = c.int(.off, 0)
+    }
+    func encode(to e: Encoder) throws {
+        var c = e.container(keyedBy: CodingKeys.self)
+        try c.encode(d, forKey: .d); try c.encode(s, forKey: .s)
+        if on > 0 { try c.encode(on, forKey: .on) }
+        if off > 0 && s != "C" { try c.encode(off, forKey: .off) }
+    }
+    var json: [String: Any] { var o: [String: Any] = ["d": d, "s": s]; if on > 0 { o["on"] = on }; if off > 0 && s != "C" { o["off"] = off }; return o }
+    /// "Back right", "Middle", "Front left"
+    var label: String {
+        let depth = ["F": "Front", "M": "Middle", "B": "Back"][d] ?? "Middle", side = ["L": "left", "R": "right"][s] ?? ""
+        return side.isEmpty ? depth : "\(depth) \(side)"
+    }
+    /// "26 on · 4 R" (as on a printed pin sheet), "" with no paces
+    var paces: String { [on > 0 ? "\(on) on" : "", off > 0 && s != "C" ? "\(off) \(s)" : ""].filter { !$0.isEmpty }.joined(separator: " · ") }
+    /// Yards to the pin from the yards to the front, middle and back of the green: front + paces on when the paces
+    /// are known (a pace is about a yard), else halfway to the middle for a front or back pin.
+    func yards(f: Int?, m: Int?, b: Int?) -> Int? {
+        if on > 0, let f { return f + on }
+        switch d {
+        case "F": if let f, let m { return Int((Double(f + m) / 2).rounded()) }; return f ?? m
+        case "B": if let b, let m { return Int((Double(m + b) / 2).rounded()) }; return b ?? m
+        default: return m ?? f ?? b
+        }
+    }
+    /// Where it sits on the drawn green (a 150 × 140 box, back at the top): x, y
+    var spot: (x: Double, y: Double) { (["L": 44, "R": 116][s] ?? 80, ["B": 30, "F": 104][d] ?? 68) }
+}
+
 struct EventState: Codable, Hashable {
     var id = "", name = "", club = "", date = ""
     var course = Course()
@@ -303,15 +346,18 @@ struct EventState: Codable, Hashable {
     var live = LiveScreens()
     var replays: [Replay] = []
     var map = CourseMap()
+    var pinsheet: [Int: PinSpot] = [:]   // hole → where the pin is today
     var scores: Scores = [:]
     var online: [String: Int] = [:]
     var lastAt: [String: Double] = [:]   // team id → when that cart last entered a score (ms)
     var brand = Brand()
     var photos = Photos()
+    /// the desk turned off golfers' ready-made notes to other groups (day op "notes")
+    var notesOff = false
 
     enum CodingKeys: String, CodingKey {
         case id, name, club, date, course, format, sideGames, flights, teams, screens, cams, sponsors, schedule, displays, fund, contests
-        case locked, aces, flash, news, nudges, live, replays, map, scores, online, brand, lastAt, photos
+        case locked, aces, flash, news, nudges, live, replays, map, pinsheet, scores, online, brand, lastAt, photos, notesOff
     }
     init() {}
     init(from d: Decoder) throws {
@@ -335,11 +381,14 @@ struct EventState: Codable, Hashable {
         live = (try? c.decodeIfPresent(LiveScreens.self, forKey: .live)) ?? LiveScreens()
         replays = c.list(.replays)
         map = (try? c.decodeIfPresent(CourseMap.self, forKey: .map)) ?? CourseMap()
+        let rawPins = (try? c.decodeIfPresent([String: Lenient<PinSpot>].self, forKey: .pinsheet)) ?? [:]
+        pinsheet = Dictionary(uniqueKeysWithValues: rawPins.compactMap { k, v in Int(k).flatMap { n in v.value.map { (n, $0) } } })
         scores = (try? c.decodeIfPresent(Scores.self, forKey: .scores)) ?? [:]
         online = (try? c.decodeIfPresent([String: Int].self, forKey: .online)) ?? [:]
         brand = (try? c.decodeIfPresent(Brand.self, forKey: .brand)) ?? Brand()
         photos = (try? c.decodeIfPresent(Photos.self, forKey: .photos)) ?? Photos()
         lastAt = (try? c.decodeIfPresent([String: Double].self, forKey: .lastAt)) ?? [:]
+        notesOff = c.bool(.notesOff, false)
     }
     func encode(to e: Encoder) throws {
         var c = e.container(keyedBy: CodingKeys.self)
@@ -350,8 +399,9 @@ struct EventState: Codable, Hashable {
         try c.encode(sponsors, forKey: .sponsors); try c.encode(schedule, forKey: .schedule); try c.encode(displays, forKey: .displays)
         try c.encode(fund, forKey: .fund); try c.encode(contests, forKey: .contests); try c.encode(locked, forKey: .locked)
         try c.encode(aces, forKey: .aces); try c.encodeIfPresent(flash, forKey: .flash); try c.encode(news, forKey: .news)
-        try c.encode(nudges, forKey: .nudges); try c.encode(live, forKey: .live); try c.encode(replays, forKey: .replays); try c.encode(map, forKey: .map); try c.encode(scores, forKey: .scores); try c.encode(online, forKey: .online)
+        try c.encode(nudges, forKey: .nudges); try c.encode(live, forKey: .live); try c.encode(replays, forKey: .replays); try c.encode(map, forKey: .map); try c.encode(Dictionary(uniqueKeysWithValues: pinsheet.map { (String($0.key), $0.value) }), forKey: .pinsheet); try c.encode(scores, forKey: .scores); try c.encode(online, forKey: .online)
         try c.encode(brand, forKey: .brand); try c.encode(lastAt, forKey: .lastAt); try c.encode(photos, forKey: .photos)
+        try c.encode(notesOff, forKey: .notesOff)
     }
 
     /// "Sat, Nov 21" for the tournament's day (it's stored as 2026-11-21, a day where the club is)

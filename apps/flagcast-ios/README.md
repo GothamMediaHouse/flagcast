@@ -2,7 +2,7 @@
 
 The native iPhone app: cart scorecard, live leaderboard, par 3 cameras and replays, side games, and the golf pro / marshal tools. iOS 17+, iPhone only, no third-party packages. Bundle id `app.flagcast.golf`, team C8KXPB4QNA.
 
-It talks to the same API as the web pages (`golf.js`): `GET /golf/api/<id>/state`, the WebSocket at `/golf/api/<id>/ws`, and `POST …/cart`, `…/score`, `…/pro`, `…/hit`.
+It talks to the same API as the web pages (`golf.js`): `GET /golf/api/<id>/state`, the WebSocket at `/golf/api/<id>/ws`, and `POST …/cart`, `…/score`, `…/pro`, `…/hit`, `…/where` (the group's spot, and the other groups for the Course tab's Everyone map).
 
 ## Layout
 
@@ -30,3 +30,21 @@ Run the site with `npx wrangler dev` (no passcode needed on localhost), then lau
 ## Links
 
 Cart cards open the app with `flagcast://g/<id>/s/<CODE>`, and `https://flagcast.app/g/…` links handed to the app work too. True universal links still need the Associated Domains capability and an `apple-app-site-association` file on flagcast.app.
+
+## Live score on the lock screen (Live Activity)
+
+On the tournament day the scorecard starts a Live Activity: the team's score, place and hole on the lock screen and
+in the Dynamic Island (widget extension `FlagcastLive`, shared model in `LiveShared/`, app side in
+`Flagcast/Model/LiveView.swift`). The app sends its push token to `POST /golf/api/<id>/live`, and the server
+(`liveact.js`) pushes a new card through Apple whenever the team's card changes, so it stays live with the app closed.
+Settings → Live score on the lock screen turns it off.
+
+One-time setup for the server pushes (done by Matt, never pasted in chat):
+1. developer.apple.com → Certificates, IDs & Profiles → Keys → + → tick Apple Push Notifications service (APNs),
+   Sandbox & Production → download the .p8 file (it can only be downloaded once) and note its Key ID.
+2. Cloudflare → Workers → flagcast → Settings → Variables and Secrets: add secret `APNS_KEY` (paste the whole .p8 text)
+   and text variable `APNS_KEY_ID` (the 10-character Key ID). `APNS_TEAM_ID` defaults to C8KXPB4QNA.
+Without them the card still shows, but only updates while the app is open.
+
+Xcode signing (automatic) adds the Push Notifications and App Groups (`group.app.flagcast.golf`) capabilities and
+registers `app.flagcast.golf.live` the first time it builds.

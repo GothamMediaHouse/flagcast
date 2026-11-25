@@ -46,4 +46,30 @@ const ids = r.j.events.map((e) => e.id); assert.ok(ids.includes(aEv) && ids.incl
 r = await club('admin', { pass: PASS, op: 'events' }); assert.equal(r.status, 200); assert.ok(r.j.events.some((e) => e.id === bEv));
 ok('Flagcast staff (ADMIN_EMAIL sign-in or the passcode) still see every club’s tournaments');
 
+// deleting a test club with tournaments: only after typing its name, and its tournaments go too
+r = await club('admin', { pass: PASS, op: 'delete', club: aId }); assert.equal(r.status, 400); assert.match(r.j.error, /Type the club/);
+r = await club('admin', { pass: PASS, op: 'delete', club: aId, confirm: 'Club B' }); assert.equal(r.status, 400);
+r = await club('admin', { token: a, op: 'delete', club: aId, confirm: `Club A ${t}` }); assert.equal(r.status, 403);
+r = await club('admin', { pass: PASS, op: 'delete', club: aId, confirm: `  club a ${t} ` }); assert.equal(r.status, 200);
+assert.ok(!r.j.clubs.some((c) => c.id === aId)); assert.ok(r.j.deleted.some((c) => c.id === aId && c.events === 1));
+r = await club('me', { token: a }); assert.equal(r.j.club, null);
+r = await fetch(`${BASE}/golf/api/${aEv}/state`); assert.equal(r.status, 200); assert.equal((await r.json()).locked, true);
+ok('Delete puts the club in Recently deleted: its people lose access, its tournament is locked, nothing is wiped yet');
+r = await club('admin', { pass: PASS, op: 'credits', club: aId, add: 1 }); assert.equal(r.status, 410);
+r = await club('admin', { pass: PASS, op: 'restore', club: aId }); assert.equal(r.status, 200);
+assert.ok(r.j.clubs.some((c) => c.id === aId)); r = await club('me', { token: a }); assert.equal(r.j.club.id, aId); assert.ok(r.j.events.some((e) => e.id === aEv));
+ok('Restore brings the club back with its people and tournament');
+await club('admin', { pass: PASS, op: 'delete', club: aId, confirm: `Club A ${t}` });
+r = await club('admin', { pass: PASS, op: 'purge', club: aId }); assert.equal(r.status, 400);
+r = await club('admin', { pass: PASS, op: 'purge', club: aId, confirm: `Club A ${t}` }); assert.equal(r.status, 200);
+assert.ok(!r.j.deleted.some((c) => c.id === aId));
+r = await club('admin', { pass: PASS, op: 'events' }); assert.ok(!r.j.events.some((e) => e.id === aEv)); assert.ok(r.j.events.some((e) => e.id === bEv));
+r = await fetch(`${BASE}/golf/api/${aEv}/state`); assert.equal(r.status, 404);
+ok('Delete now (typing the name again) wipes its tournaments; other clubs keep theirs');
+
+// the passcode: a few wrong guesses, then a wait
+const codes = []; for (let i = 0; i < 6; i++) codes.push((await club('admin', { pass: `wrong-${i}` })).status);
+assert.ok(codes.every((c) => c === 403 || c === 429)); assert.equal(codes.at(-1), 429);
+ok('wrong Admin passcodes: five, then a 15 minute wait');
+
 console.log(`\n${n} passed`);

@@ -47,6 +47,17 @@ enum API {
         return try JSONDecoder().decode(EventState.self, from: data)
     }
 
+    /// "Try a demo": the live Demo tournament and its sample cart (GET /golf/api/demo), for anyone with no cart card,
+    /// such as Apple's reviewers. → (tournament id, cart code)
+    static func demo() async throws -> (id: String, code: String) {
+        let (data, r) = try await call(URLRequest(url: Server.base.appendingPathComponent("golf/api/demo")))
+        try check(data, r)
+        let j = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
+        guard let id = (j["id"] as? String).flatMap(Codes.eventId), let code = (j["code"] as? String).flatMap(Codes.cart)
+        else { throw APIError(status: 404, message: "The demo isn’t available right now. Try again later.") }
+        return (id, code)
+    }
+
     /// POST a JSON body to one of the tournament's API ops and return the JSON answer.
     @discardableResult
     static func post(_ id: String, _ op: String, _ body: [String: Any?]) async throws -> [String: Any] {

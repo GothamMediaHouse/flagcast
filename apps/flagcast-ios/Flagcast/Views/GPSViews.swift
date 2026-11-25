@@ -14,14 +14,14 @@ struct GPSCard: View {
 
     var body: some View {
         let h = state.map.holes[hole]
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             if let h, Geo.middle(h) != nil {
                 let me = loc.fix?.at
                 let o = Geo.origin(h, me)
                 let y = o.map { Geo.yardages(h, from: $0.at) }
                 HStack(spacing: 6) {
                     yard("Front", y?.f, big: false)
-                    yard(o?.me == true ? "To the middle" : "Middle, from tee", y?.m, big: true)
+                    yard(o?.me == true ? "To the middle" : "Middle", y?.m, big: true)
                     yard("Back", y?.b, big: false)
                 }
                 if let hz = y?.hz, !hz.isEmpty {
@@ -35,12 +35,12 @@ struct GPSCard: View {
                 }
                 Group {
                     if let e = loc.error { Text(e) }
-                    else if !loc.on { Text("Yards from the tee. Turn on GPS for yards from where you are\(Geo.trackingOn(state) ? " (during the tournament the desk sees where your group is)" : "").") }
+                    else if !loc.on { Text("Yards from the tee. Turn on GPS for yards from where you are\(Geo.trackingOn(state) ? " (during the tournament the desk and the other groups see where your group is)" : "").") }
                     else if loc.fix == nil { Text("Finding your spot…") }
                     else if o?.me != true { Text("You’re not on hole \(hole) yet, so these are from the tee.") }
                     else {
                         HStack(spacing: 4) {
-                            Text("GPS to within \(loc.fix!.acc) yds.\(Geo.trackingOn(state) ? " The desk can see where your group is until the results are final." : "")")
+                            Text("GPS to within \(loc.fix!.acc) yds.\(Geo.trackingOn(state) ? " The desk and the other groups can see where your group is until the results are final." : "")")
                             Button("Turn off") { loc.stop() }.underline().buttonStyle(.plain)
                         }
                     }
@@ -70,11 +70,11 @@ struct GPSCard: View {
         VStack(spacing: 3) {
             Text(label).font(.caption2.weight(.semibold)).tracking(0.8).textCase(.uppercase).lineLimit(1).minimumScaleFactor(0.7)
                 .foregroundStyle(big ? Color.fcFlag : Color.fcMuted)
-            Text(v.map(String.init) ?? "—").font(FCType.display(big ? 50 : 32)).monospacedDigit()
+            Text(v.map(String.init) ?? "—").font(FCType.display(big ? 42 : 28)).monospacedDigit()
                 .foregroundStyle(big ? Color.white : Color.fcInk)
                 .contentTransition(.numericText())
         }
-        .frame(maxWidth: .infinity).padding(.vertical, big ? 8 : 4)
+        .frame(maxWidth: .infinity).padding(.vertical, big ? 6 : 2)
         .background(big ? Color(UIColor(hex: 0x123628)) : .clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .accessibilityElement(children: .combine)
     }
@@ -394,10 +394,11 @@ struct CourseView: View {
 
     @ViewBuilder private var yardageBox: some View {
         if let h, let o = origin {
-            let y = Geo.yardages(h, from: o.at)
+            let y = Geo.yardages(h, from: o.at), pin = state.pinsheet[hole], toPin = pin?.yards(f: y.f, m: y.m, b: y.b)
             VStack(alignment: .trailing, spacing: 2) {
-                Text(y.m.map(String.init) ?? "—").font(FCType.display(40)).foregroundStyle(.white).monospacedDigit()
-                Text(o.me ? "to the middle" : "from the tee")
+                Text((toPin ?? y.m).map(String.init) ?? "—").font(FCType.display(40)).foregroundStyle(.white).monospacedDigit()
+                if let pin, toPin != nil { Text("to the pin · \(pin.label.lowercased())") }
+                else { Text(o.me ? "to the middle" : "from the tee") }
                 if y.f != nil || y.b != nil {
                     Text([y.f.map { "Front \($0)" }, y.b.map { "Back \($0)" }].compactMap { $0 }.joined(separator: " · "))
                 }
@@ -481,10 +482,11 @@ struct CourseView: View {
     /// Course tab: front, middle and back in big numbers, the middle on a green tile
     @ViewBuilder private var yardPanel: some View {
         if let h, let o = origin {
-            let y = Geo.yardages(h, from: o.at)
+            let y = Geo.yardages(h, from: o.at), toPin = state.pinsheet[hole]?.yards(f: y.f, m: y.m, b: y.b)
             HStack(spacing: 8) {
                 yard("Front", y.f, big: false)
-                yard(o.me ? "Middle" : "Middle, from the tee", y.m, big: true)
+                if let toPin { yard(o.me ? "To the pin" : "Pin, from the tee", toPin, big: true) }
+                else { yard(o.me ? "Middle" : "Middle, from the tee", y.m, big: true) }
                 yard("Back", y.b, big: false)
             }
             .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 4)
@@ -500,7 +502,7 @@ struct CourseView: View {
             Text(v.map(String.init) ?? "—").font(FCType.display(big ? 52 : 34)).monospacedDigit().foregroundStyle(.white)
                 .contentTransition(.numericText())
         }
-        .frame(maxWidth: .infinity).padding(.vertical, big ? 8 : 4)
+        .frame(maxWidth: .infinity).padding(.vertical, big ? 6 : 2)
         .background(big ? Color(UIColor(hex: 0x123628)) : .clear, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .accessibilityElement(children: .combine)
     }

@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import UIKit
 import UserNotifications
+import ActivityKit
 
 /// A score typed on this phone that the server hasn't confirmed yet. Kept on disk until it's sent, so a cart
 /// with no signal keeps scoring; `at` is when it was typed, so a late send never undoes a newer fix.
@@ -27,6 +28,8 @@ final class ScorecardModel {
     var hole: Int? { didSet { save("hole", hole) } }
     private(set) var pending: [PendingScore] { didSet { save("pending", pending) } }
     var side: SideConfig { didSet { save("side", side) } }
+    /// Which golfer holds this phone (a player id), "-" when they skipped the question, nil before it's asked.
+    var me: String? { didSet { save("me", me) } }
 
     private(set) var sending = false
     var toast: String?
@@ -54,6 +57,7 @@ final class ScorecardModel {
         hole = Store.get("\(base):hole", Int?.none)
         pending = Store.get("\(base):pending", [PendingScore]())
         side = Store.get("\(base):side", SideConfig())
+        me = Store.get("\(base):me", String?.none)
     }
 
     var state: EventState? { feed.state }
@@ -70,14 +74,15 @@ final class ScorecardModel {
         askForNotifications()
     }
 
-    // ---- group spot for the desk (only while the tournament is on): every 30 s, or sooner after a walk ----
+    // ---- group spot for the desk and the other golfers' Everyone map (only while the tournament is on): every 30 s,
+    // or sooner after a walk. A group that hides (GroupPrivacy) is still seen by the desk, not by other golfers ----
     @ObservationIgnored private var sentSpot: (at: GeoPoint, t: Date)?
     func reportSpot(_ at: GeoPoint, _ acc: Int) {
         guard let s = state, let t = teamId, Geo.trackingOn(s) else { return }
         if let last = sentSpot, Date().timeIntervalSince(last.t) < 30, (Geo.yds(last.at, at) ?? 0) < 25 { return }
         sentSpot = (at, Date())
         let h = currentHole()
-        Task { _ = try? await API.post(id, "where", ["code": code, "team": t, "at": [at.lat, at.lng], "acc": acc, "hole": h]) }
+        Task { _ = try? await API.post(id, "where", ["code": code, "team": t, "at": [at.lat, at.lng], "acc": acc, "hole": h, "hide": GroupPrivacy.hidden(code)]) }
     }
 
     func stop() {
@@ -107,6 +112,7 @@ final class ScorecardModel {
         if teamId == nil, let first = teams.first { teamId = first }
         settleHole()
         checkNudges(s)
+        LiveView.shared.update(self) // the lock screen live view
     }
 
     // ---- scores ----
@@ -153,6 +159,7 @@ final class ScorecardModel {
         teamId = id
         hole = nil
         settleHole()
+        LiveView.shared.update(self)
     }
 
     func value(_ p: String, _ h: Int) -> Int? {
@@ -193,6 +200,7 @@ final class ScorecardModel {
             celebrating = true
             toast = "Hole in one! It’s on the big screens now."
         }
+        LiveView.shared.update(self)
         send()
     }
 
@@ -248,13 +256,18 @@ final class ScorecardModel {
     private var nudgeKey: String { "golf:\(id):nudge" }
     private func checkNudges(_ s: EventState) {
         let seen = UserDefaults.standard.object(forKey: nudgeKey) as? Double ?? (Date().timeIntervalSince1970 * 1000 - 15 * 60000)
-        let mine = s.nudges.filter { teams.contains($0.team) && $0.at > seen }
+        // to everyone, to this cart, or to one golfer (only their phone, once they've said which one they are)
+        let mine = s.nudges.filter { n in
+            (n.team == "*" || teams.contains(n.team)) && (n.player == nil || me == nil || me == "-" || n.player == me) && n.at > seen
+        }
         guard let n = mine.last else { return }
         UserDefaults.standard.set(n.at, forKey: nudgeKey)
         nudge = n
-        if UIApplication.shared.applicationState != .active {
+        // with the lock screen live view on, the server's push shows the message there and buzzes once
+        let liveOn = LiveView.enabled && Activity<FlagcastLiveAttributes>.activities.contains { $0.attributes.event == id && $0.attributes.code == code && $0.activityState == .active }
+        if UIApplication.shared.applicationState != .active && !liveOn {
             let c = UNMutableNotificationContent()
-            c.title = "From the pro shop"
+            c.title = n.from.map { "From \($0)" } ?? "From the pro shop"
             c.body = n.text
             c.sound = .default
             UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "nudge-\(Int(n.at))", content: c, trigger: nil))
