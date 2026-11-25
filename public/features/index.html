@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Features · Flagcast</title>
+<meta name="description" content="Everything Flagcast does: the scoring app, GPS yards, flyovers, contests, par 3 cameras, the Manager for your pro shop and the screens around the club.">
+<meta property="og:title" content="Flagcast features">
+<meta property="og:description" content="Live par 3 cameras, live scoring and big-screen leaderboards for golf tournaments.">
+<meta property="og:image" content="https://flagcast.app/img/course-wide.jpg">
+<meta property="og:url" content="https://flagcast.app/features/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="apple-touch-icon" href="/golf/brand/app-icon-180.png">
+<link rel="icon" href="/brand/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+:root{
+  --paper:#f4f1e6; --paper-2:#ebe6d6; --ink:#14201a; --muted:#56625a; --line:#d8d2bf; --card:#fffdf6;
+  --green:#123628; --green-2:#1c4a37; --deep:#0b1a13; --on-green:#f4f1e6; --on-green-muted:#a9bcae;
+  --flag:#e8c547; --red:#c8312b;
+  --f-display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --f-body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--paper:#0f1713;--paper-2:#16211b;--ink:#e9eee6;--muted:#9fb0a5;--line:#2a3830;--card:#17231d;color-scheme:dark}}
+:root[data-theme="dark"]{--paper:#0f1713;--paper-2:#16211b;--ink:#e9eee6;--muted:#9fb0a5;--line:#2a3830;--card:#17231d;color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:76px}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.6 var(--f-body)}
+img{max-width:100%;height:auto;display:block}
+a{color:inherit}
+.wrap{max-width:1160px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1,h2,h3{font-family:var(--f-display);text-transform:uppercase;letter-spacing:.01em;line-height:.96;margin:0;text-wrap:balance}
+h2{font-size:clamp(2.3rem,5.4vw,3.8rem);font-weight:800}
+h3{font-size:1.4rem;font-weight:700}
+p{margin:0}
+.eyebrow{display:block;font:600 .76rem var(--f-mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-bottom:14px}
+.lede{font-size:1.15rem;color:var(--muted);max-width:60ch;margin-top:16px}
+section{padding-block:88px}
+.btn{display:inline-flex;align-items:center;gap:8px;font:700 1.05rem var(--f-display);text-transform:uppercase;letter-spacing:.06em;padding:13px 22px;border-radius:6px;text-decoration:none;border:0;cursor:pointer}
+.btn.primary{background:var(--flag);color:#1a1a10}
+.btn.ghost{border:1.5px solid currentColor;background:transparent;color:inherit}
+.btn:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--flag);outline-offset:2px}
+
+/* Nav */
+.nav{position:sticky;top:0;z-index:20;background:rgba(18,54,40,.96);backdrop-filter:blur(8px);color:var(--on-green)}
+.nav .wrap{display:flex;align-items:center;gap:22px;height:66px}
+.nav .logo img{height:40px;width:auto}
+.nav ul{display:flex;gap:22px;list-style:none;margin:0 0 0 auto;padding:0;font-weight:500;font-size:.95rem}
+.nav ul a{text-decoration:none;color:var(--on-green-muted);white-space:nowrap}
+.nav ul a[aria-current]{color:var(--on-green)}
+.nav ul a:hover{color:var(--on-green)}
+.nav .btn{padding:9px 16px;font-size:.95rem}
+.nav .login{color:var(--on-green);text-decoration:none;font-weight:600;font-size:.95rem;white-space:nowrap;padding-left:22px;border-left:1px solid rgba(244,241,230,.2)}
+.nav .login:hover{color:var(--flag)}
+.menu{display:none;margin-left:auto;background:none;border:1.5px solid var(--on-green-muted);color:var(--on-green);border-radius:6px;padding:7px 12px;font:600 .9rem var(--f-body)}
+
+
+footer{background:var(--deep);color:var(--on-green-muted);padding-block:44px;font-size:.92rem}
+footer .wrap{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:32px}
+footer img{height:44px;width:auto}
+footer h4{font:700 1rem var(--f-display);letter-spacing:.08em;text-transform:uppercase;color:var(--on-green);margin:0 0 10px}
+footer ul{list-style:none;padding:0;margin:0;display:grid;gap:6px}
+footer a{text-decoration:none}
+footer a:hover{color:var(--on-green)}
+footer .wrap.legal{display:block;margin-top:32px;padding-top:20px;border-top:1px solid rgba(244,241,230,.12);font:500 .72rem var(--f-mono);letter-spacing:.08em;text-transform:uppercase}
+@media (max-width:1180px){
+  .nav ul{display:none}
+  .nav ul.open{display:grid;position:absolute;top:66px;left:0;right:0;background:var(--green);padding:14px 16px 20px;gap:14px}
+  .menu{display:block;margin-left:14px;order:3}
+  .nav .login{order:1;margin-left:auto;padding-left:0;border-left:0}
+  .nav .btn{order:2;margin-left:18px}
+}
+/* Features */
+.fhero{background:radial-gradient(1200px 500px at 85% 10%,#1d5a41 0,transparent 60%),var(--green);color:var(--on-green);padding-block:72px 64px}
+.fhero h1{font-size:clamp(3rem,7.4vw,5.6rem);font-weight:800}
+.fhero .eyebrow,.dark .eyebrow{color:var(--on-green-muted)}
+.fhero .lede,.dark .lede{color:var(--on-green-muted)}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:28px}
+.btn.ghost.dark{color:var(--ink)}
+.dark .btn.ghost.dark,.fhero .btn.ghost{color:var(--on-green)}
+.jump{display:flex;flex-wrap:wrap;gap:8px;margin-top:36px}
+.jump a{font:600 .72rem var(--f-mono);letter-spacing:.1em;text-transform:uppercase;text-decoration:none;color:var(--on-green);border:1px solid rgba(244,241,230,.28);border-radius:999px;padding:7px 12px}
+.jump a:hover{border-color:var(--flag);color:var(--flag)}
+section.alt{background:var(--paper-2)}
+section.dark{background:var(--green);color:var(--on-green)}
+.fgrid{list-style:none;margin:40px 0 0;padding:0;display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.fgrid li{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:20px;min-width:0}
+.fgrid svg{width:28px;height:28px;fill:none;stroke:var(--green-2);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.fgrid h3{margin-top:12px;font-size:1.3rem}
+.fgrid p{margin-top:6px;color:var(--muted);font-size:.95rem}
+.fgrid .soon{display:inline-block;vertical-align:middle;margin-left:6px;background:var(--flag);color:#1a1a10;font:600 .6rem var(--f-mono);letter-spacing:.1em;padding:3px 7px;border-radius:3px}
+.dark .fgrid li{background:rgba(255,255,255,.05);border-color:rgba(244,241,230,.14)}
+.dark .fgrid svg{stroke:var(--flag)}
+.dark .fgrid p{color:var(--on-green-muted)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .fgrid svg{stroke:var(--flag)}}
+.end{text-align:center}
+.end .lede{margin-inline:auto}
+.end .cta{justify-content:center}
+@media (max-width:960px){
+  .nav ul{display:none}
+  .nav ul.open{display:grid;position:absolute;top:66px;left:0;right:0;background:var(--green);padding:14px 16px 20px;gap:14px}
+  .menu{display:block;margin-left:14px;order:3}
+  .nav .login{margin-left:auto;order:2;padding-left:0;border-left:0}
+  .nav .btn{display:none}
+  .fgrid{grid-template-columns:1fr 1fr}
+  footer .wrap{grid-template-columns:1fr 1fr}
+}
+@media (max-width:560px){
+  section{padding-block:60px}
+  .fgrid{grid-template-columns:1fr}
+  footer .wrap{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<nav class="nav" aria-label="Main">
+  <div class="wrap">
+    <a class="logo" href="/" aria-label="Flagcast home"><img src="/brand/wide-on-dark.svg" alt="Flagcast"></a>
+    <button class="menu" aria-expanded="false" aria-controls="navlinks">Menu</button>
+    <ul id="navlinks">
+      <li><a href="/#how">How it works</a></li>
+      <li><a href="/#screens">The screens</a></li>
+      <li><a href="/#app">The app</a></li>
+      <li><a href="/#course">On the course</a></li>
+      <li><a href="/#packages">Packages</a></li>
+      <li><a href="/#sponsors">Sponsors</a></li>
+      <li><a href="/#faq">FAQ</a></li>
+      <li><a href="/features/" aria-current="page">All features</a></li>
+    </ul>
+    <a class="login" href="/golf/">Club login</a>
+    <a class="btn primary" href="/#contact">Contact</a>
+  </div>
+</nav>
+
+<header class="fhero">
+  <div class="wrap">
+    <span class="eyebrow">Features</span>
+    <h1>Everything Flagcast does</h1>
+    <p class="lede">The app in every cart, the tools in the pro shop and the screens around the club. Here’s all of it in one place.</p>
+    <div class="cta"><a class="btn primary" href="/golf/app/#demo">Try the app</a><a class="btn ghost" href="/#contact">Get in touch</a></div>
+    <nav class="jump" aria-label="On this page"><a href="#players">For players</a><a href="#pros">For the golf pro</a><a href="#manager">Flagcast Manager</a><a href="#screens">The screens</a></nav>
+  </div>
+</header>
+
+<section id="players">
+  <div class="wrap">
+    <span class="eyebrow">For players</span>
+    <h2>The app in every cart</h2>
+    <p class="lede">One player per cart keeps score, and the same phone knows the course.</p>
+    <ul class="fgrid">
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><path d="M14 14h3v3h-3zM20 14v7M14 20h3"/></svg><h3>No download, no account</h3><p>Scan the card on the cart and you’re in. It runs in the Flagcast app on iPhone or in any phone’s browser, so nobody is left out.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="2.5" width="14" height="19" rx="2.5"/><path d="M9 7h6M9 11h6M9 15h3"/></svg><h3>Scoring on one screen</h3><p>Each hole on one screen: tap in the scores, mark a pick-up, and move on. Scores are saved on the phone and sent as soon as there’s signal.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21V3l10 4-10 4"/><ellipse cx="7" cy="21" rx="4" ry="1"/></svg><h3>Yards to today’s pin</h3><p>GPS yards to the front, the back and the flag, drawn on the green. The pro sets the pin sheet each morning, so it’s today’s pin, not the middle.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20c4-4 6-9 10-11s6-4 8-6"/><circle cx="3" cy="20" r="1.5"/><circle cx="21" cy="3" r="1.5"/></svg><h3>Fly the hole</h3><p>A drone-style flyover from tee to green with yardages along the way and round every dogleg. Or fly all 18 back to back.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></svg><h3>Everyone on the map</h3><p>Every group live on the course map, with who’s ahead and who’s behind, so it’s easy to keep pace.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><h3>Live leaderboard</h3><p>Updates seconds after a score goes in. Split by flight, net and gross, with movers marked as they climb.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.2"/><circle cx="15.5" cy="15.5" r="1.2"/><circle cx="12" cy="12" r="1.2"/></svg><h3>Side games</h3><p>Stableford, Vegas and Wolf scored for each group as they play. Kept in points, for bragging rights.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17 17 3l4 4L7 21z"/><path d="m7 13 2 2M10 10l2 2M13 7l2 2"/></svg><h3>Long drive and closest to the pin</h3><p>Players enter their own distance on the contest hole, with GPS to help. The pro checks it before it goes up on the board.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3v10l-6-3"/></svg><h3>Par 3 cams in your pocket</h3><p>Watch the par 3 cameras live, rewind a couple of minutes, and replay any shot.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="3"/><rect x="8.5" y="12" width="7" height="5" rx="1"/><path d="M10 5h4"/></svg><h3>Score on the lock screen</h3><p>On iPhone, your score and place stay on the lock screen and in the Dynamic Island, without opening the app.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 0 18c1.5 0 2-1 2-2s-1-1.5-1-2.5 1-1.5 2-1.5h2a4 4 0 0 0 4-4c0-4.5-4-8-9-8z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7" r="1"/></svg><h3>In your club’s colours</h3><p>Your club’s logo and colours on every screen the players see.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m10 8 6 4-6 4z"/></svg><h3>Try it before the day</h3><p>No code needed for the demo: open the app and tap Try a demo to play a sample round.</p></li>
+</ul>
+  </div>
+</section>
+
+<section id="pros" class="alt">
+  <div class="wrap">
+    <span class="eyebrow">For the golf pro</span>
+    <h2>Pro tools on the course</h2>
+    <p class="lede">The same app with a pro PIN turns into a run-the-day toolkit, so the pro never has to go back to the shop.</p>
+    <ul class="fgrid">
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><h3>Every cart, live</h3><p>See where every group is and which cards have gone quiet.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></svg><h3>Fix a score in a tap</h3><p>Correct any card from the course, and the boards update straight away.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V3h12l-3 4 3 4H5"/></svg><h3>Set the day’s pins</h3><p>Drop each pin on the green, or copy yesterday’s sheet in one tap.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg><h3>Check contest entries</h3><p>Long drive and closest to the pin entries wait for an OK, a change or a removal, so only checked numbers reach the screens.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h13v14H6a2 2 0 0 1-2-2zM17 9h3v8a2 2 0 0 1-2 2"/><path d="M7 9h7M7 13h7M7 16h4"/></svg><h3>Post news to the screens</h3><p>A quick message on every screen at the club: the shotgun start, the lunch call, the awards time.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.5"/><path d="M7.5 7.5a6.5 6.5 0 0 0 0 9M16.5 7.5a6.5 6.5 0 0 1 0 9M4.5 4.5a10.5 10.5 0 0 0 0 15M19.5 4.5a10.5 10.5 0 0 1 0 15"/></svg><h3>Go live from your phone</h3><p>Stand at any hole and send your iPhone’s camera to the screens and the players’ Cameras tab.</p></li>
+</ul>
+  </div>
+</section>
+
+<section id="manager">
+  <div class="wrap">
+    <span class="eyebrow">Flagcast Manager</span>
+    <h2>The whole day from the pro shop</h2>
+    <p class="lede">On a Mac or Windows PC in the pro shop, on an iPhone or iPad out on the course, or in any browser.</p>
+    <ul class="fgrid">
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><h3>Set up the course in minutes</h3><p>Search for your course, then fill in every hole from the map, doglegs included.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14.5a5 5 0 0 1 4.5 5"/></svg><h3>Teams, flights and handicaps</h3><p>Best ball, stroke play, scramble or Stableford, with handicaps, flights, net and gross.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/></svg><h3>Cart cards and signs</h3><p>Print a QR card for every cart and signs for the tee, in your club’s look.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M17 6l3 3M15 8l2 2"/></svg><h3>Every code on one card</h3><p>The tournament code, pro and marshal PINs and the cart codes, together where you need them.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><h3>Day-of checks</h3><p>TVs on, cameras sending, quiet carts nudged in a tap, before the first group tees off.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17 17 3l4 4L7 21z"/><path d="m7 13 2 2M10 10l2 2M13 7l2 2"/></svg><h3>Contests your way</h3><p>Choose whether golfers enter their own numbers, how many get checked, and whether there’s a prize in points.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg><h3>Pick what each TV shows</h3><p>The leaderboard, a par 3 cam, the contests or your sponsors, one choice per screen.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-3-5.4 3 1.1-6L3.2 9.4l6.1-.8z"/></svg><h3>Sponsors on every screen</h3><p>Hole sponsors on the camera feed, sponsor slides between leaderboard updates, and logos in the app.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg><h3>Lock the results</h3><p>Lock the final scores and print the results sheet for the awards and the club.</p></li>
+</ul>
+    <div class="cta"><a class="btn primary" href="/download/">Download Manager</a><a class="btn ghost dark" href="/golf/">Club login</a></div>
+  </div>
+</section>
+
+<section id="screens" class="dark">
+  <div class="wrap">
+    <span class="eyebrow">The screens</span>
+    <h2>Something to watch at every turn</h2>
+    <p class="lede">TVs in the clubhouse, the tent and the grill room rotate through the scores, the cameras and your sponsors.</p>
+    <ul class="fgrid">
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><h3>Live leaderboard</h3><p>Rotates between flights, with movers marked and sponsor slides in between.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3v10l-6-3"/></svg><h3>Par 3 cam</h3><p>Every tee shot on the par 3s live, with an instant replay and the hole sponsor on screen.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-3-5.4 3 1.1-6L3.2 9.4l6.1-.8z"/></svg><h3>Hole-in-one</h3><p>When someone makes an ace, every screen at the club stops for it.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17 17 3l4 4L7 21z"/><path d="m7 13 2 2M10 10l2 2M13 7l2 2"/></svg><h3>Contest boards</h3><p>Long drive and closest to the pin, updated as soon as an entry is checked.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-8-4.8-8-10.5A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 8 2.5C20 15.2 12 20 12 20z"/></svg><h3>Fundraising total</h3><p>A live total for your charity on every screen, revealed at the dinner.</p></li>
+<li><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M7 10.5h2M11 10.5h2M15 10.5h2"/></svg><h3>The club’s own TVs <span class="soon">Coming soon</span></h3><p>Apps for Apple TV, Google TV, Fire TV and Roku. Pair each TV once with a code and it joins every tournament by itself.</p></li>
+</ul>
+  </div>
+</section>
+
+<section class="end">
+  <div class="wrap">
+    <h2>Put your tournament on the big screen</h2>
+    <p class="lede">Tell us about your day and we’ll come back with a camera plan for your course.</p>
+    <div class="cta"><a class="btn primary" href="/#contact">Get in touch</a><a class="btn ghost dark" href="/#packages">See the packages</a></div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <div><img src="/brand/wide-on-dark.svg" alt="Flagcast"><p style="margin-top:14px;max-width:34ch">Live cameras, live scoring and big-screen leaderboards for golf tournaments.</p></div>
+    <div><h4>Flagcast</h4><ul><li><a href="/#how">How it works</a></li><li><a href="/#packages">Packages</a></li><li><a href="/#sponsors">Sponsors</a></li><li><a href="/#faq">FAQ</a></li><li><a href="/features/">All features</a></li></ul></div>
+    <div><h4>For clubs</h4><ul><li><a href="/golf/">Club login</a></li><li><a href="/download/">Download Manager</a></li></ul></div>
+    <div><h4>Contact</h4><ul><li><a href="mailto:hello@flagcast.app">hello@flagcast.app</a></li><li>Anywhere in the US</li></ul></div>
+  </div>
+  <div class="wrap legal">© 2026 Flagcast · <a href="/privacy/" style="color:inherit">Privacy</a> · <a href="/terms/" style="color:inherit">Terms</a> · <a href="/licenses/" style="color:inherit">Credits</a></div>
+</footer>
+
+<script>
+const m=document.querySelector('.menu'),ul=document.getElementById('navlinks');
+m.onclick=()=>{const o=ul.classList.toggle('open');m.setAttribute('aria-expanded',o)};
+</script>
+</body>
+</html>

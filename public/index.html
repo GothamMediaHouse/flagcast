@@ -48,13 +48,21 @@ section{padding-block:88px}
 .nav .wrap{display:flex;align-items:center;gap:22px;height:66px}
 .nav .logo img{height:40px;width:auto}
 .nav ul{display:flex;gap:22px;list-style:none;margin:0 0 0 auto;padding:0;font-weight:500;font-size:.95rem}
-.nav ul a{text-decoration:none;color:var(--on-green-muted)}
+.nav ul a{text-decoration:none;color:var(--on-green-muted);white-space:nowrap}
+.nav ul a[aria-current]{color:var(--on-green)}
 .nav ul a:hover{color:var(--on-green)}
 .nav .btn{padding:9px 16px;font-size:.95rem}
 .nav .login{color:var(--on-green);text-decoration:none;font-weight:600;font-size:.95rem;white-space:nowrap;padding-left:22px;border-left:1px solid rgba(244,241,230,.2)}
 .nav .login:hover{color:var(--flag)}
 .menu{display:none;margin-left:auto;background:none;border:1.5px solid var(--on-green-muted);color:var(--on-green);border-radius:6px;padding:7px 12px;font:600 .9rem var(--f-body)}
 
+@media (max-width:1180px){
+  .nav ul{display:none}
+  .nav ul.open{display:grid;position:absolute;top:66px;left:0;right:0;background:var(--green);padding:14px 16px 20px;gap:14px}
+  .menu{display:block;margin-left:14px;order:3}
+  .nav .login{order:1;margin-left:auto;padding-left:0;border-left:0}
+  .nav .btn{order:2;margin-left:18px}
+}
 /* Hero */
 .hero{background:radial-gradient(1200px 500px at 85% 10%,#1d5a41 0,transparent 60%),var(--green);color:var(--on-green);padding-block:72px 96px;overflow:hidden}
 .hero-grid{display:grid;grid-template-columns:1fr 1.1fr;gap:56px;align-items:center}
@@ -243,7 +251,7 @@ footer .wrap.legal{display:block;margin-top:32px;padding-top:20px;border-top:1px
 @media (prefers-reduced-motion:reduce){.scr .cam .bug.r i{animation:none}}
 
 /* On the course */
-.feat{display:grid;grid-template-columns:repeat(4,1fr);gap:20px;margin-top:44px}
+.feat{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:44px}
 .f{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;min-width:0;display:flex;flex-direction:column}
 .f h3{margin:18px 20px 0}
 .f p{color:var(--muted);margin:8px 20px 22px;font-size:.95rem}
@@ -271,6 +279,26 @@ footer .wrap.legal{display:block;margin-top:32px;padding-top:20px;border-top:1px
 .gtable em{font:700 1.05rem var(--f-display);font-style:normal;color:var(--flag)}
 .gtable div:first-child i{color:var(--flag)}
 .gnote{margin-top:10px;font:600 .58rem var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:#7f988a}
+.fv-lock{background:radial-gradient(110% 90% at 50% 0,#2d5c7a,#0e1c2b);display:flex;flex-direction:column;align-items:center;padding:16px 16px 0}
+.fv-lock .clock{font:300 3.1rem/1 var(--f-body);color:#fff;letter-spacing:-.02em}
+.fv-lock .day{font:500 .72rem var(--f-body);color:#d6e2ee;margin-bottom:14px}
+.la{width:100%;background:rgba(20,26,24,.82);border-radius:16px;padding:11px 13px;display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;color:#fff}
+.la .lg{width:30px;height:30px;border-radius:8px;background:var(--flag);color:#1a1a10;font:800 .8rem var(--f-display);display:grid;place-items:center}
+.la b{display:block;font:700 .85rem var(--f-body)}
+.la small{font:500 .68rem var(--f-body);color:#b9c6c0}
+.la .sc{text-align:right;font:800 1.7rem/1 var(--f-display);color:var(--flag)}
+.la .sc small{display:block;font:600 .56rem var(--f-mono);letter-spacing:.08em;color:#b9c6c0}
+.fv-ld{background:#0b2219;padding:14px;display:flex;flex-direction:column;gap:7px}
+.fv-ld .ldh{font:600 .6rem var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:#a9bcae}
+.fv-ld .ldh b{color:#fff;font:800 1.15rem var(--f-display);letter-spacing:.02em;display:block;margin-top:2px}
+.fv-ld .row{display:grid;grid-template-columns:1fr auto auto;gap:9px;align-items:center;background:rgba(255,255,255,.06);border-radius:7px;padding:7px 10px;font:600 .82rem var(--f-body);color:#fff}
+.fv-ld .row em{font:700 1.05rem var(--f-display);font-style:normal;color:var(--flag)}
+.fv-ld .ok{font:600 .58rem var(--f-mono);letter-spacing:.08em;text-transform:uppercase;padding:3px 6px;border-radius:999px;background:#2f8a4c;color:#fff}
+.fv-ld .wait{background:transparent;border:1px solid #7f988a;color:#cfdcd3}
+.applinks{display:flex;flex-wrap:wrap;align-items:center;gap:18px;margin-top:22px}
+.applinks .more{font-weight:600;color:var(--green-2)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .applinks .more{color:var(--flag)}}
+:root[data-theme="dark"] .applinks .more{color:var(--flag)}
 @media (max-width:1060px){.feat{grid-template-columns:1fr 1fr}}
 @media (max-width:560px){.feat{grid-template-columns:1fr}}
 
@@ -298,6 +326,7 @@ footer .wrap.legal{display:block;margin-top:32px;padding-top:20px;border-top:1px
       <li><a href="#packages">Packages</a></li>
       <li><a href="#sponsors">Sponsors</a></li>
       <li><a href="#faq">FAQ</a></li>
+      <li><a href="/features/">All features</a></li>
     </ul>
     <a class="login" href="/golf/">Club login</a>
     <a class="btn primary" href="#contact">Contact</a>
@@ -381,9 +410,10 @@ footer .wrap.legal{display:block;margin-top:32px;padding-top:20px;border-top:1px
       <span class="eyebrow">The Flagcast app</span>
       <h2>Scoring players actually use</h2>
       <p class="lede">Scan the card on the cart and you're in. No accounts and no passwords. It works in the phone's browser too, so nobody is left out.</p>
+      <div class="applinks"><a class="btn primary" href="/golf/app/#demo">Try the app</a><a class="more" href="/features/">See every feature →</a></div>
       <div class="modes">
-        <div class="mode"><span class="tag">For players</span><h3>Player</h3><ul><li>Score each hole on one screen</li><li>GPS yards to today’s pin</li><li>Fly the hole before you hit</li><li>See every group on the course</li><li>Side games and the live leaderboard</li><li>Watch the par 3 cams</li></ul></div>
-        <div class="mode"><span class="tag">For the pro shop</span><h3>Golf pro</h3><ul><li>See every cart live</li><li>Fix a score in a tap</li><li>Set the day’s pin positions</li><li>Post news to the screens</li><li>Final results file for the club</li></ul></div>
+        <div class="mode"><span class="tag">For players</span><h3>Player</h3><ul><li>Score each hole on one screen</li><li>GPS yards to today’s pin</li><li>Fly the hole before you hit</li><li>See every group on the course</li><li>Side games and the live leaderboard</li><li>Enter your own long drive and closest to the pin</li><li>Watch the par 3 cams, with replays</li><li>Your score on the iPhone lock screen</li></ul></div>
+        <div class="mode"><span class="tag">For the pro shop</span><h3>Golf pro</h3><ul><li>See every cart live</li><li>Fix a score in a tap</li><li>Set the day’s pin positions</li><li>Check long drive and closest to the pin entries</li><li>Post news to the screens</li><li>Go live from your iPhone at any hole</li><li>Final results file for the club</li></ul></div>
       </div>
     </div>
   </div>
@@ -445,6 +475,22 @@ footer .wrap.legal{display:block;margin-top:32px;padding-top:20px;border-top:1px
           <div class="gnote">Points only · bragging rights</div></div>
         <h3>Side games</h3>
         <p>Stableford, Vegas, Wolf, closest to the pin and long drive, scored for each group as they play. Kept in points, for bragging rights.</p>
+      </article>
+      <article class="f">
+        <div class="fvis fv-ld" aria-hidden="true">
+          <div class="ldh">Hole 12 · Long drive<b>Enter my drive</b></div>
+          <div class="row">Drew N.<em>284 yds</em><span class="ok">Checked</span></div>
+          <div class="row">Riley B.<em>271 yds</em><span class="ok">Checked</span></div>
+          <div class="row">Sam K.<em>266 yds</em><span class="ok wait">With the pro</span></div></div>
+        <h3>Long drive and closest to the pin</h3>
+        <p>Players enter their own drive or their distance to the pin, with GPS to help. The pro checks each entry before it goes up on the screens.</p>
+      </article>
+      <article class="f">
+        <div class="fvis fv-lock" aria-hidden="true">
+          <div class="clock">2:47</div><div class="day">Saturday, June 13</div>
+          <div class="la"><span class="lg"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#1a1a10" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 21V3l10 4-10 4"/></svg></span><span><b>Through 11 · 3rd</b><small>Net flight · Hole 12 next</small></span><span class="sc">−4<small>TO PAR</small></span></div></div>
+        <h3>Your score on the lock screen</h3>
+        <p>On iPhone, each group’s score and place stay on the lock screen and in the Dynamic Island while the phone is in a pocket.</p>
       </article>
     </div>
   </div>
@@ -576,7 +622,7 @@ footer .wrap.legal{display:block;margin-top:32px;padding-top:20px;border-top:1px
 <footer>
   <div class="wrap">
     <div><img src="/brand/wide-on-dark.svg" alt="Flagcast"><p style="margin-top:14px;max-width:34ch">Live cameras, live scoring and big-screen leaderboards for golf tournaments.</p></div>
-    <div><h4>Flagcast</h4><ul><li><a href="#how">How it works</a></li><li><a href="#packages">Packages</a></li><li><a href="#sponsors">Sponsors</a></li><li><a href="#faq">FAQ</a></li></ul></div>
+    <div><h4>Flagcast</h4><ul><li><a href="#how">How it works</a></li><li><a href="#packages">Packages</a></li><li><a href="#sponsors">Sponsors</a></li><li><a href="#faq">FAQ</a></li><li><a href="/features/">All features</a></li></ul></div>
     <div><h4>For clubs</h4><ul><li><a href="/golf/">Club login</a></li><li><a href="/download/">Download Manager</a></li></ul></div>
     <div><h4>Contact</h4><ul><li><a href="mailto:hello@flagcast.app">hello@flagcast.app</a></li><li>Anywhere in the US</li></ul></div>
   </div>
