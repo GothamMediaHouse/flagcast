@@ -135,6 +135,26 @@ final class CoreTests: XCTestCase {
         }
     }
 
+    /// Golfers' own entries: TVs leave out waiting ones; the pro's warnings (the same answers as test/contests.test.mjs)
+    func testContestChecks() throws {
+        let ld = try JSONDecoder().decode(Contest.self, from: Data(#"{"id":"a","kind":"ld","hole":7,"self":true,"check":"all","prize":50,"entries":[{"name":"Al","dist":280,"ok":true},{"name":"Bo","dist":301,"ok":false},{"name":"Cy","dist":250}]}"#.utf8))
+        XCTAssertEqual(Core.contestLeader(ld).map(\.name), ["Bo", "Al", "Cy"])
+        XCTAssertEqual(Core.contestLeader(ld, checked: true).map(\.name), ["Al", "Cy"])
+        XCTAssertEqual(ld.check, "all"); XCTAssertEqual(ld.prize, 50); XCTAssertTrue(ld.golfersEnter)
+        XCTAssertEqual(ld.waiting.map(\.name), ["Bo"])
+        let enc = try JSONSerialization.jsonObject(with: JSONEncoder().encode(ld)) as! [String: Any]
+        XCTAssertEqual(enc["self"] as? Bool, true)
+        var g = ContestEntry(name: "Zed", dist: 341); g.by = "golfer"
+        var a = ContestEntry(name: "A", dist: 290); a.by = "Pro"
+        let field = Contest(id: "b", kind: "ld", hole: 7, entries: [a, ContestEntry(name: "B", dist: 280), g])
+        XCTAssertEqual(Core.contestFlag(field, g), "51 yds past everyone else")
+        var y = ContestEntry(name: "Y", dist: 300); y.by = "golfer"; y.gps = 255
+        XCTAssertEqual(Core.contestFlag(Contest(id: "c", kind: "ld", hole: 7), y), "GPS from the tee said 255 yds")
+        var t = ContestEntry(name: "T", dist: 0.3); t.by = "golfer"
+        XCTAssertEqual(Core.contestFlag(Contest(id: "d", kind: "ctp", hole: 3), t), "Under 6 inches")
+        XCTAssertEqual(Core.contestFlag(field, a), "")
+    }
+
     func testSideGames() {
         var ran = 0
         for (k, c) in Self.typed.cases.enumerated() {

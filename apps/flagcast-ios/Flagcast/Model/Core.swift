@@ -369,9 +369,21 @@ enum Core {
     }
 
     /// Contest standings: closest to the pin (shortest wins) and long drive (longest wins).
-    static func contestLeader(_ c: Contest) -> [ContestEntry] {
-        let list = c.entries.filter { !$0.name.isEmpty && $0.dist > 0 }
+    /// checked: only the entries that count (not a golfer's entry still waiting for a pro's OK), for the TVs
+    static func contestLeader(_ c: Contest, checked: Bool = false) -> [ContestEntry] {
+        let list = c.entries.filter { !$0.name.isEmpty && $0.dist > 0 && (!checked || $0.ok) }
         return c.isLongDrive ? list.stableSorted { $0.dist > $1.dist } : list.stableSorted { $0.dist < $1.dist }
+    }
+
+    /// A word for the pro next to a golfer's entry that looks wrong ("" when it looks fine). Same as core.js contestFlag.
+    static func contestFlag(_ c: Contest, _ e: ContestEntry) -> String {
+        guard e.byGolfer else { return "" }
+        if c.isLongDrive {
+            if e.gps > 0 && abs(e.gps - e.dist) > 25 { return "GPS from the tee said \(Int(jsRound(e.gps))) yds" }
+            let rest = c.entries.filter { $0 != e && $0.name != e.name && $0.dist > 0 }.map(\.dist)
+            if rest.count >= 2, let top = rest.max(), e.dist > top + 30 { return "\(Int(jsRound(e.dist - top))) yds past everyone else" }
+        } else if e.dist < 0.5 { return "Under 6 inches" }
+        return ""
     }
 
     static func fmtDist(_ c: Contest, _ d: Double) -> String {

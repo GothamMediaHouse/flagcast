@@ -332,15 +332,31 @@ struct LeaderboardScreen: View {
         let l = Core.contestLeader(c)
         return VStack(alignment: .leading, spacing: 6) {
             Text("\(c.title) · Hole \(c.hole)").fcHeading(.headline)
-            if !c.sponsor.isEmpty { Text("Presented by \(c.sponsor)").font(.footnote).foregroundStyle(Color.fcMuted) }
+            if !c.sponsor.isEmpty || c.prize > 0 {
+                Text([c.sponsor.isEmpty ? nil : "Presented by \(c.sponsor)", c.prize > 0 ? "Winner gets \(c.prize) points" : nil].compactMap { $0 }.joined(separator: " · "))
+                    .font(.footnote).foregroundStyle(Color.fcMuted)
+            }
             if l.isEmpty { Text("No one on the board yet.").font(.footnote).foregroundStyle(Color.fcMuted) }
-            ForEach(Array(l.prefix(5).enumerated()), id: \.offset) { i, e in
+            // the top 5, plus your own cart's entries further down; ✓ checked by the pro, ◷ waiting
+            let rows: [(offset: Int, element: ContestEntry)] = l.enumerated().filter { $0.offset < 5 || mine.contains($0.element.team) }.map { (offset: $0.offset, element: $0.element) }
+            ForEach(rows, id: \.offset) { i, e in
                 HStack {
-                    Text("\(i + 1).").font(.subheadline.monospaced()).foregroundStyle(Color.fcMuted).frame(width: 24, alignment: .leading)
+                    Text("\(i + 1).").font(.subheadline.monospaced()).foregroundStyle(Color.fcMuted).frame(width: 28, alignment: .leading)
                     Text(e.name).font(.subheadline.weight(i == 0 ? .semibold : .regular))
                     Spacer()
                     Text(Core.fmtDist(c, e.dist)).font(.subheadline.monospaced())
+                    if e.byGolfer || e.waiting {
+                        Image(systemName: e.ok ? "checkmark" : "clock").font(.caption.weight(.bold)).foregroundStyle(e.ok ? Color.fcOK : Color.fcWarn)
+                            .frame(width: 16).accessibilityLabel(e.ok ? "Checked" : "Waiting for the pro")
+                    } else { Color.clear.frame(width: 16, height: 1) }
                 }
+                .padding(.vertical, 2).padding(.horizontal, 6)
+                .background(mine.contains(e.team) ? Color.fcFlag.opacity(0.16) : .clear, in: RoundedRectangle(cornerRadius: 8))
+                .padding(.horizontal, -6)
+            }
+            if l.contains(where: \.waiting) {
+                HStack(spacing: 12) { Label("checked by the pro", systemImage: "checkmark").foregroundStyle(Color.fcOK); Label("waiting", systemImage: "clock").foregroundStyle(Color.fcWarn) }
+                    .font(.caption2).labelStyle(.titleAndIcon)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

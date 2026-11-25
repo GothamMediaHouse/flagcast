@@ -105,6 +105,7 @@ private struct ContestsPage: View {
     @Bindable var doc: DeskDoc
     var body: some View {
         PhotoPage(image: doc.picture.image, kicker: "Closest to the pin and long drive", title: "Contests", height: 200) { EmptyView() } content: {
+            if (doc.live?.contests ?? []).contains(where: { !$0.waiting.isEmpty }) { ContestToCheck(doc: doc).card() }
             if doc.ev.contests.isEmpty { Text("No contests yet.").foregroundStyle(FC.muted).card() }
             ForEach($doc.ev.contests) { $c in
                 VStack(alignment: .leading, spacing: 10) {
@@ -118,6 +119,7 @@ private struct ContestsPage: View {
                         } label: { Image(systemName: "ellipsis.circle").font(.title3) }
                     }
                     TextField("Sponsor (optional)", text: $c.sponsor).padding(10).background(FC.paper2, in: RoundedRectangle(cornerRadius: 9))
+                    ContestSettings(c: $c)
                     Results(doc: doc, contest: c)
                 }
                 .card()
@@ -126,7 +128,7 @@ private struct ContestsPage: View {
                 Button { add("ctp") } label: { Label("Closest to Pin", systemImage: "flag") }.buttonStyle(PlainCardButton(full: true))
                 Button { add("ld") } label: { Label("Long Drive", systemImage: "arrow.up.right") }.buttonStyle(PlainCardButton(full: true))
             }
-            Help("Closest to the pin in feet (4.5 = 4 ft 6 in), long drive in yards. Save a new contest before entering results.")
+            Help("Closest to the pin in feet (4.5 = 4 ft 6 in), long drive in yards. Golfers can enter their own on the contest hole; TVs only show checked results. Points only, no money. Save a new contest or setting change.")
         }
     }
     private func add(_ kind: String) {
@@ -142,21 +144,16 @@ private struct Results: View {
     var body: some View {
         if let saved {
             let lead = Core.contestLeader(saved)
-            ForEach(Array(saved.entries.enumerated()), id: \.offset) { _, e in
-                HStack {
-                    if e == lead.first { Image(systemName: "crown.fill").foregroundStyle(FC.flag) }
-                    Text(e.name).font(.body.weight(e == lead.first ? .semibold : .regular)); Spacer()
-                    Text(Core.fmtDist(saved, e.dist)).monospacedDigit().foregroundStyle(FC.muted)
-                    Button(role: .destructive) { Task { await doc.day("contest", ["id": saved.id, "entries": saved.entries.filter { $0 != e }.map { ["name": $0.name, "dist": $0.dist] }]) } } label: { Image(systemName: "minus.circle") }
-                }
+            ForEach(Array(lead.enumerated()), id: \.offset) { i, e in
+                ContestResultRow(doc: doc, contest: saved, entry: e, place: i + 1)
+                Divider()
             }
             HStack {
                 TextField("Player", text: $name).padding(10).background(FC.paper2, in: RoundedRectangle(cornerRadius: 9))
                 TextField(saved.isLongDrive ? "Yards" : "Feet", text: $dist).keyboardType(.decimalPad).frame(width: 70).padding(10).background(FC.paper2, in: RoundedRectangle(cornerRadius: 9))
                 Button("Add") {
                     guard let d = Double(dist), !name.isEmpty else { return }
-                    let entries = saved.entries.filter { $0.name.lowercased() != name.lowercased() } + [ContestEntry(name: name, dist: d)]
-                    Task { if await doc.day("contest", ["id": saved.id, "entries": entries.map { ["name": $0.name, "dist": $0.dist] }], done: "Result posted.") != nil { name = ""; dist = "" } }
+                    Task { if await doc.day("ctp", ["id": saved.id, "name": name, "dist": d], done: "Result posted.") != nil { name = ""; dist = "" } }
                 }
                 .buttonStyle(GreenButton()).disabled(name.isEmpty || Double(dist) == nil)
             }

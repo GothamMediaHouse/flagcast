@@ -13,6 +13,7 @@ struct ScorecardScreen: View {
     @State private var replaySeen = 0.0
     @State private var page = Page.hole
     @State private var coverSeen = Set<String>()
+    @State private var entering: Contest?
     @Environment(Router.self) private var router
     @Environment(TourNav.self) private var nav
     enum Page: Hashable { case hole, round }
@@ -44,6 +45,7 @@ struct ScorecardScreen: View {
                              replays: model.state?.replays.filter { $0.hole == r.hole } ?? [])
         }
         .sheet(item: $camera) { l in CameraSheet(link: l, replays: model.state?.replays.filter { $0.hole == l.hole } ?? []) }
+        .sheet(item: $entering) { c in ContestEntrySheet(model: model, contest: c).presentationDetents([.medium, .large]) }
     }
 
     @ViewBuilder private var syncPill: some View {
@@ -195,8 +197,11 @@ struct ScorecardScreen: View {
     @ViewBuilder private func extras(_ s: EventState, _ h: Int) -> some View {
         let sp = s.sponsors.first { $0.spot == "hole" && $0.holes.contains(h) } ?? s.sponsors.first { $0.holes.contains(h) }
         let turn = h == 10 ? s.sponsors.first { $0.spot == "turn" } : nil
-        let cs = s.contests.filter { $0.hole == h }
+        // contests golfers enter themselves get a full-width card with Enter my drive / Enter my shot
+        let mine = s.contests.filter { $0.hole == h && $0.golfersEnter && !s.locked }
+        let cs = s.contests.filter { $0.hole == h && !($0.golfersEnter && !s.locked) }
         let tiles = (sp == nil ? 0 : 1) + (turn == nil ? 0 : 1) + cs.count
+        ForEach(mine) { c in contestCard(c) }
         if tiles > 0 {
             // one tile gets the whole width, so a sponsor's name fits on one line
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: tiles == 1 ? 1 : 2), spacing: 8) {
@@ -211,6 +216,41 @@ struct ScorecardScreen: View {
                 ForEach(cs) { c in contestTile(c) }
             }
         }
+    }
+
+    /// A contest golfers enter themselves: the leader, this cart's entries (✓ on the board, ◷ waiting for the pro), and the button.
+    private func contestCard(_ c: Contest) -> some View {
+        let top = Core.contestLeader(c).first
+        let ours = c.entries.filter { $0.team == model.teamId }
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: c.isLongDrive ? "arrow.up.right" : "scope").font(.footnote.weight(.bold)).foregroundStyle(Color.fcFlag)
+                    .frame(width: 28, height: 28).background(Color.fcFlag.opacity(0.22), in: RoundedRectangle(cornerRadius: 8))
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("\(c.isLongDrive ? "Long drive" : "Closest to the pin") · this hole").font(.subheadline.weight(.semibold))
+                    if !c.sponsor.isEmpty || c.prize > 0 {
+                        Text([c.sponsor.isEmpty ? nil : "Presented by \(c.sponsor)", c.prize > 0 ? "Winner gets \(c.prize) points" : nil].compactMap { $0 }.joined(separator: " · "))
+                            .font(.caption).foregroundStyle(Color.fcMuted).lineLimit(1)
+                    }
+                }
+            }
+            HStack { Text(top.map { "Leader: \($0.name)" } ?? "No one on the board yet").font(.footnote).foregroundStyle(Color.fcMuted); Spacer()
+                if let top { Text(Core.fmtDist(c, top.dist)).font(.footnote.monospaced()) } }
+            ForEach(ours, id: \.self) { e in
+                HStack(spacing: 6) {
+                    Text(e.name).font(.footnote); Spacer(); Text(Core.fmtDist(c, e.dist)).font(.footnote.monospaced())
+                    Image(systemName: e.ok ? "checkmark.circle.fill" : "clock").font(.footnote).foregroundStyle(e.ok ? Color.fcOK : Color.fcWarn)
+                        .accessibilityLabel(e.ok ? "On the board" : "Waiting for the pro to check it")
+                }
+            }
+            Button { entering = c } label: {
+                Text(c.isLongDrive ? "Enter my drive" : "Enter my shot").font(.subheadline.weight(.bold)).frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.borderedProminent).tint(Color.fcFlag).foregroundStyle(Color.fcOnFlag)
+        }
+        .padding(12)
+        .background(Color.fcCard, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Color.fcFlag, lineWidth: 1.5))
     }
 
     private func contestTile(_ c: Contest) -> some View {
@@ -750,5 +790,107 @@ struct SponsorTile: View {
         .disabled(link == nil)
         .accessibilityLabel("\(lead) \(sponsor.name)\(sponsor.offer.isEmpty ? "" : ", \(sponsor.offer)")")
         .task(id: banner) { bannerImage = await ClubPhoto.load(banner) }
+    }
+}
+
+
+/// A golfer enters their own long drive or closest to the pin. Long drive: stand at the ball (the phone's GPS, from
+/// the tee on the course map) or type the yards. Closest: feet and inches wheels. The server decides whether it waits
+/// for the pro's OK (golf.js enter).
+struct ContestEntrySheet: View {
+    var model: ScorecardModel
+    let contest: Contest
+    @State private var player = ""
+    @State private var useGPS = true
+    @State private var yards = ""
+    @State private var feet = 6
+    @State private var inches = 0
+    @State private var saving = false
+    @State private var error: String?
+    @State private var loc = Locator.shared
+    @Environment(\.dismiss) private var dismiss
+
+    private var tee: GeoPoint? { model.state?.map.holes[contest.hole]?.tee }
+    private var gpsYards: Int? {
+        guard let tee, let f = loc.fix, Date().timeIntervalSince(f.t) < 60 else { return nil }
+        return Geo.yds(tee, f.at).map { Int(jsRound($0)) }
+    }
+    private var gpsMode: Bool { contest.isLongDrive && tee != nil && useGPS }
+
+    var body: some View {
+        let players = model.team?.players ?? []
+        NavigationStack {
+            Form {
+                Section("Who hit it?") {
+                    Picker("Player", selection: $player) { ForEach(players, id: \.id) { p in Text(p.name.split(separator: " ").first.map(String.init) ?? p.name).tag(p.id) } }
+                        .pickerStyle(.segmented)
+                }
+                if contest.isLongDrive {
+                    if tee != nil {
+                        Section {
+                            Picker("How", selection: $useGPS) { Text("Stand at my ball").tag(true); Text("Type it").tag(false) }.pickerStyle(.segmented)
+                        }
+                    }
+                    Section {
+                        if gpsMode {
+                            VStack(spacing: 4) {
+                                Text(gpsYards.map(String.init) ?? "–").font(.system(size: 64, weight: .bold, design: .rounded)).monospacedDigit()
+                                Text("yds from the tee").font(.footnote).foregroundStyle(Color.fcMuted)
+                            }.frame(maxWidth: .infinity)
+                            Text(loc.error ?? (loc.fix.map { "GPS good to about \($0.acc) yds. Walk to the ball, then Save." } ?? "Finding your spot…"))
+                                .font(.footnote).foregroundStyle(Color.fcMuted)
+                        } else {
+                            HStack { TextField("Yards", text: $yards).keyboardType(.numberPad).font(.system(size: 34, weight: .bold, design: .rounded)); Text("yds").foregroundStyle(Color.fcMuted) }
+                        }
+                    } footer: { Text("Must be in the fairway.\(contest.check == "none" ? "" : " The pro can check it.")") }
+                } else {
+                    Section {
+                        HStack(spacing: 0) {
+                            Picker("Feet", selection: $feet) { ForEach(0..<100, id: \.self) { Text("\($0) ft").tag($0) } }.pickerStyle(.wheel)
+                            Picker("Inches", selection: $inches) { ForEach(0..<12, id: \.self) { Text("\($0) in").tag($0) } }.pickerStyle(.wheel)
+                        }
+                        .frame(height: 130)
+                    } footer: { Text("On the green only.\(contest.check == "none" ? "" : " The pro can check it.")") }
+                }
+                if let error { Section { Text(error).foregroundStyle(Color.fcRed) } }
+            }
+            .navigationTitle(contest.isLongDrive ? "Your drive on \(contest.hole)" : "Closest to the pin on \(contest.hole)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(saveLabel) { Task { await save() } }.disabled(saving || !ready).fontWeight(.bold)
+                }
+            }
+        }
+        .onAppear {
+            player = players.first { $0.id == model.me }?.id ?? players.first?.id ?? ""
+            useGPS = tee != nil
+            if contest.isLongDrive && tee != nil { loc.start() } // a typed drive sends the GPS number too, for the pro
+        }
+    }
+
+    private var ready: Bool {
+        guard !player.isEmpty else { return false }
+        if contest.isLongDrive { return gpsMode ? gpsYards != nil : (Int(yards).map { $0 >= 50 && $0 <= 450 } ?? false) }
+        return feet > 0 || inches > 0
+    }
+    private var saveLabel: String { gpsMode ? (gpsYards.map { "Save \($0) yds" } ?? "Save") : "Save" }
+
+    private func save() async {
+        guard let t = model.teamId else { return }
+        saving = true; error = nil
+        var body: [String: Any?] = ["code": model.code, "team": t, "contest": contest.id, "player": player]
+        if contest.isLongDrive {
+            if let f = loc.fix, Date().timeIntervalSince(f.t) < 60 { body["at"] = [f.at.lat, f.at.lng] }
+            if !gpsMode { body["dist"] = Double(yards) ?? 0 }
+        } else { body["dist"] = Double(feet) + Double(inches) / 12 }
+        do {
+            let r = try await API.post(model.id, "enter", body)
+            let ok = ((r["entry"] as? [String: Any])?["ok"] as? Bool) ?? false
+            model.toast = ok ? "Saved. It’s on the board." : "Saved. It shows once the pro checks it."
+            dismiss()
+        } catch { self.error = error.localizedDescription }
+        saving = false
     }
 }

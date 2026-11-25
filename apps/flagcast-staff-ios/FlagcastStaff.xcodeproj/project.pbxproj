@@ -23,6 +23,7 @@
 		6D92823E7DE2533BA08ACD03 = {isa = PBXBuildFile; fileRef = 322F5FB2ACB630676DC0E758; };
 		9563621603549C2F1BFB27C7 = {isa = PBXBuildFile; fileRef = C571E2502A33E366FE1DC24B; };
 		FB0522D7783997A2EB0E20D0 = {isa = PBXBuildFile; fileRef = 5479B39A253B8B638B6C7697; };
+		D1E4334CA5A63F3D698937E3 = {isa = PBXBuildFile; fileRef = A60EC4A3D442C6FF6844C72A; };
 		B8E1480F886B1DBDD3CB05E4 = {isa = PBXBuildFile; fileRef = 21C26F226881C80BCAC6FBEC; };
 		25D11A59641C9ED381AAC5F2 = {isa = PBXBuildFile; fileRef = 0E8BD471F8B2F04B31D90F63; };
 		B905603D4E4014D1F52C0C03 = {isa = PBXBuildFile; fileRef = 5821F4E446BC121536A5619F; };
@@ -51,6 +52,7 @@
 		322F5FB2ACB630676DC0E758 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ClubTVs.swift; path = "../flagcast-mac/Shared/Desk/ClubTVs.swift"; sourceTree = SOURCE_ROOT; };
 		C571E2502A33E366FE1DC24B = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = PinBoard.swift; path = "../flagcast-mac/Shared/Desk/PinBoard.swift"; sourceTree = SOURCE_ROOT; };
 		5479B39A253B8B638B6C7697 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GroupCard.swift; path = "../flagcast-mac/Shared/Desk/GroupCard.swift"; sourceTree = SOURCE_ROOT; };
+		A60EC4A3D442C6FF6844C72A = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = ContestCheck.swift; path = "../flagcast-mac/Shared/Desk/ContestCheck.swift"; sourceTree = SOURCE_ROOT; };
 		21C26F226881C80BCAC6FBEC = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AdminModel.swift; path = "../flagcast-mac/Shared/Admin/AdminModel.swift"; sourceTree = SOURCE_ROOT; };
 		0E8BD471F8B2F04B31D90F63 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppModel.swift; path = "../flagcast-mac/Manager/AppModel.swift"; sourceTree = SOURCE_ROOT; };
 		5821F4E446BC121536A5619F = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppleSignIn.swift; path = "../flagcast-mac/Shared/AppleSignIn.swift"; sourceTree = SOURCE_ROOT; };
@@ -89,6 +91,7 @@
 				6D92823E7DE2533BA08ACD03,
 				9563621603549C2F1BFB27C7,
 				FB0522D7783997A2EB0E20D0,
+				D1E4334CA5A63F3D698937E3,
 				B8E1480F886B1DBDD3CB05E4,
 				25D11A59641C9ED381AAC5F2,
 				B905603D4E4014D1F52C0C03,
@@ -143,6 +146,7 @@
 				322F5FB2ACB630676DC0E758,
 				C571E2502A33E366FE1DC24B,
 				5479B39A253B8B638B6C7697,
+				A60EC4A3D442C6FF6844C72A,
 				21C26F226881C80BCAC6FBEC,
 				0E8BD471F8B2F04B31D90F63,
 				5821F4E446BC121536A5619F,

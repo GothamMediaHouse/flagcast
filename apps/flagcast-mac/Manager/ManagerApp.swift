@@ -245,6 +245,10 @@ struct ManagerSidebar: View {
                         Image(systemName: s.icon).font(.system(size: 13)).frame(width: 18).foregroundStyle(on ? FC.green : FC.onGreenMuted)
                         Text(s.title).font(.system(size: 13, weight: on ? .semibold : .medium)).lineLimit(1).minimumScaleFactor(0.85)
                         Spacer()
+                        // golfers' contest entries waiting for a check
+                        if s == .contests, case let n = (Feeds.feed(e.id).state?.contests ?? []).reduce(0, { $0 + $1.waiting.count }), n > 0 {
+                            Text("\(n)").font(.system(size: 11, weight: .bold)).foregroundStyle(.white).padding(.horizontal, 6).padding(.vertical, 1).background(Color.red, in: Capsule())
+                        }
                         Text(s.keyLabel).font(.system(size: 11)).foregroundStyle(on ? FC.green.opacity(0.7) : FC.onGreenMuted)
                     }
                     .foregroundStyle(on ? FC.green : Color(hex: 0xdfe8e1))

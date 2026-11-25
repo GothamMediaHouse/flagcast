@@ -123,9 +123,26 @@ struct Sponsor: Codable, Hashable, Identifiable {
     }
 }
 
-struct ContestEntry: Codable, Hashable { var name: String, dist: Double }
+/// One result. ok false = a golfer's entry still waiting for a pro's OK (phones show it with a clock, TVs leave it off).
+/// by: "golfer" when a golfer entered it, else the staff member's name. gps: yards from the tee the phone measured.
+struct ContestEntry: Codable, Hashable {
+    var name: String, dist: Double
+    var ok: Bool = true, by: String = "", team: String = "", player: String = "", gps: Double = 0, okBy: String = "", at: Double = 0
+    init(name: String, dist: Double) { self.name = name; self.dist = dist }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        name = c.str(.name); dist = c.dbl(.dist, 0); ok = c.bool(.ok, true); by = c.str(.by); team = c.str(.team); player = c.str(.player)
+        gps = c.dbl(.gps, 0); okBy = c.str(.okBy); at = c.dbl(.at, 0)
+    }
+    var waiting: Bool { !ok }
+    var byGolfer: Bool { by == "golfer" }
+}
+/// A long drive or closest to the pin contest (golf.js cleanContest). golfersEnter: golfers enter their own on the
+/// contest hole. check: "top" (any entry that would make the top 3 waits for a pro's OK), "all" or "none". prize: points.
 struct Contest: Codable, Hashable, Identifiable {
     var id: String, kind: String, hole: Int, label: String, sponsor: String, entries: [ContestEntry]
+    var golfersEnter: Bool = true, check: String = "top", prize: Int = 0
+    enum CodingKeys: String, CodingKey { case id, kind, hole, label, sponsor, entries, golfersEnter = "self", check, prize }
     init(id: String, kind: String = "ctp", hole: Int, label: String = "", sponsor: String = "", entries: [ContestEntry] = []) {
         self.id = id; self.kind = kind; self.hole = hole; self.label = label; self.sponsor = sponsor; self.entries = entries
     }
@@ -133,9 +150,11 @@ struct Contest: Codable, Hashable, Identifiable {
         let c = try d.container(keyedBy: CodingKeys.self)
         id = c.str(.id); kind = c.str(.kind, "ctp"); hole = c.int(.hole, 1); label = c.str(.label); sponsor = c.str(.sponsor)
         entries = c.list(.entries)
+        golfersEnter = c.bool(.golfersEnter, true); check = c.str(.check, "top"); prize = c.int(.prize, 0)
     }
     var isLongDrive: Bool { kind == "ld" }
     var title: String { label.isEmpty ? (isLongDrive ? "Long drive" : "Closest to the pin") : label }
+    var waiting: [ContestEntry] { Core.contestLeader(self).filter(\.waiting) }
 }
 
 struct PageRef: Codable, Hashable { var k: String; var fl: String = ""; var hole: Int = 0; var sponsor: String = ""; var secs: Int = 12

@@ -648,6 +648,8 @@ struct ProContestsTab: View {
     var s: EventState
     @State private var names: [String: String] = [:]
     @State private var dists: [String: String] = [:]
+    @State private var changing: (Contest, ContestEntry)?
+    @State private var changeDist = ""
 
     var body: some View {
         let everyone = s.teams.flatMap { $0.players.map(\.name) }.filter { !$0.isEmpty }
@@ -657,8 +659,25 @@ struct ProContestsTab: View {
                 Section {
                     let lead = Core.contestLeader(c)
                     if lead.isEmpty { Text("No one yet.").foregroundStyle(Color.fcMuted) }
-                    ForEach(Array(lead.prefix(5).enumerated()), id: \.offset) { i, e in
-                        LabeledContent("\(i + 1). \(e.name)") { Text(Core.fmtDist(c, e.dist)).monospacedDigit() }
+                    // golfers' own entries: ✓ checked, ◷ waiting (OK it, or swipe to change or remove)
+                    ForEach(Array(lead.prefix(10).enumerated()), id: \.offset) { i, e in
+                        let flag = Core.contestFlag(c, e)
+                        HStack {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text("\(i + 1). \(e.name)")
+                                if !flag.isEmpty { Text(flag).font(.caption).foregroundStyle(Color.fcWarn) }
+                                else if e.byGolfer { Text(e.gps > 0 ? "Golfer · GPS \(Int(e.gps.rounded())) yds" : "Golfer · typed").font(.caption).foregroundStyle(Color.fcMuted) }
+                            }
+                            Spacer()
+                            Text(Core.fmtDist(c, e.dist)).monospacedDigit()
+                            if e.waiting {
+                                Button("OK") { check(c, e, "ok") }.buttonStyle(.borderedProminent).tint(Color.fcOK).controlSize(.small)
+                            } else if e.byGolfer { Image(systemName: "checkmark").foregroundStyle(Color.fcOK) }
+                        }
+                        .swipeActions {
+                            Button("Remove", role: .destructive) { check(c, e, "remove") }
+                            Button("Change") { changeDist = Self.plain(e.dist); changing = (c, e) }.tint(.orange)
+                        }
                     }
                     HStack {
                         TextField("Player", text: Binding(get: { names[c.id] ?? "" }, set: { names[c.id] = $0 }))
@@ -682,6 +701,21 @@ struct ProContestsTab: View {
             }
         }
         .refreshable { await model.feed.refresh() }
+        .alert(changing.map { "\($0.1.name): the right distance" } ?? "", isPresented: Binding(get: { changing != nil }, set: { if !$0 { changing = nil } })) {
+            TextField(changing?.0.isLongDrive == true ? "Yards" : "Feet (6.5 = 6 ft 6 in)", text: $changeDist).keyboardType(.decimalPad)
+            Button("Save") {
+                if let x = changing, let d = Double(changeDist.replacingOccurrences(of: ",", with: ".")), d > 0 {
+                    Task { _ = await model.op(["op": "check", "id": x.0.id, "name": x.1.name, "do": "change", "dist": d], ok: "Changed and checked") }
+                }
+                changing = nil
+            }
+            Button("Cancel", role: .cancel) { changing = nil }
+        }
+    }
+
+    static func plain(_ d: Double) -> String { d == d.rounded() ? String(Int(d)) : String(format: "%.2f", d) }
+    private func check(_ c: Contest, _ e: ContestEntry, _ what: String) {
+        Task { _ = await model.op(["op": "check", "id": c.id, "name": e.name, "do": what], ok: what == "remove" ? "Taken off" : "Checked") }
     }
 
     private func post(_ c: Contest) {
