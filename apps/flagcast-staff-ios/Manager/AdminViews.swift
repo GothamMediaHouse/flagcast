@@ -122,6 +122,7 @@ struct ClubsView: View {
                     ForEach(shown) { c in ClubCard(club: c, open: { opened = c }, delete: { deleting = c }) }
                 }
                 if shown.isEmpty { Text(admin.clubs.isEmpty ? "No clubs yet" : "No club matches").foregroundStyle(FC.muted).padding(30) }
+                RecentlyDeleted()
             }
     }
 }

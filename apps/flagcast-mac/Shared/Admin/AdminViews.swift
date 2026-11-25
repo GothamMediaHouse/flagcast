@@ -72,6 +72,7 @@ struct ClubsView: View {
                         VStack(spacing: 8) { Image(systemName: "building.2").font(.system(size: 30)).foregroundStyle(FC.muted); Text(model.clubs.isEmpty ? "No clubs yet" : "No club matches").font(.headline) }
                             .frame(maxWidth: .infinity, minHeight: 220)
                     }
+                    RecentlyDeleted().padding(.top, 12)
                 }
                 .padding(.horizontal, 20).padding(.vertical, 18)
             }

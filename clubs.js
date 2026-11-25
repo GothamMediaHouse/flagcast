@@ -40,6 +40,7 @@ const sixDigits = () => String(crypto.getRandomValues(new Uint32Array(1))[0] % 1
 const SESSION_DAYS = 90;
 const num = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
 const DAY = 86400000;
+const PURGE_DAYS = 30; // a deleted club waits this long in Admin's Recently deleted before it is wiped
 
 // safe string compare for passcodes
 function same(a, b) {
@@ -102,7 +103,8 @@ export class FlagcastClubs extends DurableObject {
       CREATE TABLE IF NOT EXISTS staff (email TEXT PRIMARY KEY, added INTEGER, by TEXT);`);
     // columns added after the first release
     for (const q of ['ALTER TABLE accounts ADD COLUMN google TEXT', 'ALTER TABLE clubs ADD COLUMN notes TEXT', 'ALTER TABLE events ADD COLUMN archived INTEGER DEFAULT 0', 'ALTER TABLE clubs ADD COLUMN course TEXT',
-      'ALTER TABLE clubs ADD COLUMN logo TEXT', 'ALTER TABLE clubs ADD COLUMN accent TEXT', 'ALTER TABLE clubs ADD COLUMN powered INTEGER DEFAULT 0']) { try { this.sql.exec(q); } catch {} }
+      'ALTER TABLE clubs ADD COLUMN logo TEXT', 'ALTER TABLE clubs ADD COLUMN accent TEXT', 'ALTER TABLE clubs ADD COLUMN powered INTEGER DEFAULT 0',
+      'ALTER TABLE clubs ADD COLUMN deleted INTEGER', 'ALTER TABLE clubs ADD COLUMN was TEXT']) { try { this.sql.exec(q); } catch {} }
     // the Flagcast course library (courselib.js): courses any club can pick in Find the course
     this.sql.exec('CREATE TABLE IF NOT EXISTS library (id TEXT PRIMARY KEY, name TEXT, city TEXT, state TEXT, data TEXT, club TEXT, updated INTEGER)');
     for (const c of SEED) if (!this.one('SELECT id FROM library WHERE id = ?', c.id)) this.libPut(c, '', 0);
@@ -404,6 +406,7 @@ export class FlagcastClubs extends DurableObject {
       if (!this.isStaff(b) && !(local && !env.GOLF_CREATE_PASS)) this.fail('That passcode is not right.', 403);
       const cid = clip(b.club, 10), c = cid ? this.one('SELECT * FROM clubs WHERE id = ?', cid) : null;
       const need = () => { if (!c) this.fail('That club isn’t there any more.', 404); };
+      if (c && ['deleted', 'purged'].includes(c.status) && !['restore', 'purge'].includes(b.op)) this.fail(c.status === 'deleted' ? 'That club is in Recently deleted. Restore it first.' : 'That club was deleted.', 410);
       let made = null;
       if (b.op === 'approve' || b.op === 'on') {
         need(); this.sql.exec('UPDATE clubs SET status = ? WHERE id = ?', 'active', cid);
@@ -413,16 +416,36 @@ export class FlagcastClubs extends DurableObject {
       if (b.op === 'delete') {
         need();
         // a mistaken or spam request (no tournaments), or a test club: with tournaments, only after typing the club's name.
-        // Its tournaments go too: scores, teams and photos are wiped, and their links stop working.
+        // Nothing is wiped yet: the club goes to Recently deleted for 30 days (Restore puts it back), its people lose access
+        // and its tournaments are locked and taken off lists. After 30 days (or Delete now) they are wiped for good.
         const evs = this.all('SELECT id, name FROM events WHERE club = ?', cid);
-        if (evs.length) {
-          if (!sameName(b.confirm, c.name)) this.fail(`This club has ${evs.length === 1 ? 'a tournament' : `${evs.length} tournaments`}. Type the club’s name to delete it and its tournaments.`);
-          const cam = this.one(`SELECT s.hole, e.name FROM streams s JOIN events e ON e.id = s.event WHERE e.club = ?`, cid);
-          if (cam) this.fail(`${cam.name} still streams hole ${cam.hole}. Stop that camera in Cameras first.`, 409);
-          for (const e of evs) { await this.golf(e.id, 'wipe', {}).catch(() => {}); this.sql.exec('DELETE FROM events WHERE id = ?', e.id); }
-        }
-        this.sql.exec('DELETE FROM clubs WHERE id = ?', cid); this.sql.exec('DELETE FROM members WHERE club = ?', cid);
-        this.note('Flagcast', '', `Admin: deleted club ${c.name}${evs.length ? ` and ${evs.length === 1 ? 'its tournament' : `its ${evs.length} tournaments`} (${evs.map((e) => e.name).join(', ')})` : ''}`);
+        if (c.status === 'deleted') this.fail('That club is already in Recently deleted.');
+        if (evs.length && !sameName(b.confirm, c.name)) this.fail(`This club has ${evs.length === 1 ? 'a tournament' : `${evs.length} tournaments`}. Type the club’s name to delete it and its tournaments.`);
+        const cam = this.one(`SELECT s.hole, e.name FROM streams s JOIN events e ON e.id = s.event WHERE e.club = ?`, cid);
+        if (cam) this.fail(`${cam.name} still streams hole ${cam.hole}. Stop that camera in Cameras first.`, 409);
+        const members = this.all('SELECT * FROM members WHERE club = ?', cid);
+        for (const e of evs) await this.golf(e.id, 'desk', { key: this.one('SELECT key FROM events WHERE id = ?', e.id).key, op: 'lock', locked: true }).catch(() => {});
+        this.sql.exec('UPDATE events SET hidden = 1 WHERE club = ? AND hidden = 0', cid); // (marked so Restore shows them again)
+        this.sql.exec('UPDATE clubs SET status = ?, deleted = ?, was = ? WHERE id = ?', 'deleted', now, JSON.stringify({ status: c.status, members, hid: evs.map((e) => e.id) }), cid);
+        this.sql.exec('DELETE FROM members WHERE club = ?', cid);
+        this.note('Flagcast', cid, `Admin: deleted club ${c.name}${evs.length ? ` and ${evs.length === 1 ? 'its tournament' : `its ${evs.length} tournaments`} (${evs.map((e) => e.name).join(', ')})` : ''} · Restore in Recently deleted for 30 days`);
+        await this.ctx.storage.setAlarm(now + PURGE_DAYS * DAY).catch(() => {});
+      }
+      // Recently deleted: put a club back with its people and tournaments, or wipe it now (type its name)
+      if (b.op === 'restore') {
+        need(); if (c.status !== 'deleted') this.fail('That club isn’t deleted.');
+        let was = {}; try { was = JSON.parse(c.was || '{}'); } catch {}
+        const back = [];
+        for (const m of was.members || []) if (!this.one('SELECT email FROM members WHERE email = ?', m.email)) { this.sql.exec('INSERT INTO members (email, club, role, added) VALUES (?, ?, ?, ?)', m.email, cid, m.role, m.added); back.push(m.email); }
+        for (const id of was.hid || []) this.sql.exec('UPDATE events SET hidden = 0 WHERE id = ? AND club = ?', id, cid);
+        this.sql.exec('UPDATE clubs SET status = ?, deleted = NULL, was = NULL WHERE id = ?', was.status && was.status !== 'deleted' ? was.status : 'off', cid);
+        this.note('Flagcast', cid, `Admin: restored club ${c.name} (${back.length} people back; tournaments stay locked until the desk unlocks them)`);
+      }
+      if (b.op === 'purge') {
+        need(); if (c.status !== 'deleted') this.fail('Delete the club first; it then waits 30 days in Recently deleted.');
+        if (!sameName(b.confirm, c.name)) this.fail('Type the club’s name to wipe it for good.');
+        const left = await this.purge(c);
+        if (left) this.fail(`${left} of its tournaments didn’t answer, so they weren’t wiped. Try again in a minute.`, 502);
       }
       if (b.op === 'create') {
         const name = clip(b.name, 80), email = clip(b.email, 254).toLowerCase();
@@ -623,17 +646,45 @@ export class FlagcastClubs extends DurableObject {
         return json({ events: out });
       }
       const seen = Object.fromEntries(this.all('SELECT email, MAX(seen) AS seen FROM sessions GROUP BY email').map((s) => [s.email, s.seen]));
-      const clubs = this.all('SELECT * FROM clubs ORDER BY (status = \'pending\') DESC, name COLLATE NOCASE').map(({ logo, ...x }) => ({
+      const deleted = this.all("SELECT id, name, city, deleted FROM clubs WHERE status = 'deleted' ORDER BY deleted DESC").map((x) => ({ ...x, wipes: x.deleted + PURGE_DAYS * DAY,
+        events: this.one('SELECT COUNT(*) AS n FROM events WHERE club = ?', x.id).n }));
+      const gone = Object.fromEntries(this.all("SELECT id, name FROM clubs WHERE status IN ('deleted', 'purged')").map((x) => [x.id, x.name]));
+      const clubs = this.all('SELECT * FROM clubs WHERE status NOT IN (\'deleted\', \'purged\') ORDER BY (status = \'pending\') DESC, name COLLATE NOCASE').map(({ logo, was, ...x }) => ({
         ...x, powered: !!x.powered, logo: this.logoURL({ id: x.id, logo }), members: this.all('SELECT email, role, added FROM members WHERE club = ? ORDER BY role DESC, added', x.id).map((m) => ({ ...m, seen: seen[m.email] || 0 })),
         events: this.all('SELECT id, key, name, created, hidden, archived FROM events WHERE club = ? ORDER BY created DESC', x.id),
         payments: this.all('SELECT * FROM payments WHERE club = ? ORDER BY at DESC', x.id),
       }));
-      return json({ clubs, made, mail: !!env.RESEND_API_KEY, staff: this.staffList() });
+      // payments of deleted clubs still count in the totals
+      const oldPays = this.all(`SELECT * FROM payments WHERE club IN (${Object.keys(gone).map(() => '?').join(',') || "''"}) ORDER BY at DESC`, ...Object.keys(gone)).map((p) => ({ ...p, clubName: `${gone[p.club]} (deleted)` }));
+      return json({ clubs, deleted, oldPays, made, mail: !!env.RESEND_API_KEY, staff: this.staffList() });
     }
     this.fail('Not found', 404);
   }
 
   mail(to, subject, text) { sendMail(this.env, to, subject, text).catch(() => {}); }
+
+  // wipe a deleted club's tournaments for good. One that doesn't answer stays (and so does the club) for the next try.
+  // The club row stays as 'purged' (name only) so its payments still show whose they were. → how many are left
+  async purge(c) {
+    let left = 0;
+    for (const e of this.all('SELECT id FROM events WHERE club = ?', c.id)) {
+      try { await this.golf(e.id, 'wipe', {}); this.sql.exec('DELETE FROM events WHERE id = ?', e.id); } catch { left++; }
+    }
+    if (!left) {
+      this.sql.exec("UPDATE clubs SET status = 'purged', was = NULL, logo = NULL, course = NULL, contact = '', phone = '', notes = '' WHERE id = ?", c.id);
+      this.note('Flagcast', c.id, `Wiped deleted club ${c.name} and its tournaments`);
+    }
+    return left;
+  }
+  // 30 days after a delete: wipe the clubs that are due, and wake again for the next one
+  async alarm() {
+    const now = Date.now();
+    let retry = false;
+    for (const c of this.all("SELECT * FROM clubs WHERE status = 'deleted' AND deleted < ?", now - PURGE_DAYS * DAY)) if (await this.purge(c)) retry = true;
+    const next = this.one("SELECT MIN(deleted) AS d FROM clubs WHERE status = 'deleted'")?.d;
+    if (retry) await this.ctx.storage.setAlarm(now + 3600000);
+    else if (next) await this.ctx.storage.setAlarm(Math.max(now + 60000, next + PURGE_DAYS * DAY));
+  }
 
   me(u) {
     const acct = this.one('SELECT hash, apple, google FROM accounts WHERE email = ?', u.email);

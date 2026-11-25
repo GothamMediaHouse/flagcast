@@ -33,6 +33,16 @@ struct AdminClub: Decodable, Identifiable, Hashable {
     var paid: Double { payments.reduce(0) { $0 + $1.amount } }
 }
 
+/// A club in Recently deleted (clubs.js admin op 'delete'): kept 30 days with its tournaments locked, then wiped.
+struct DeletedClub: Decodable, Identifiable, Hashable {
+    var id: String, name: String, city: String, deleted: Double, wipes: Double, events: Int
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        id = c.str(.id); name = c.str(.name); city = c.str(.city); deleted = c.dbl(.deleted, 0); wipes = c.dbl(.wipes, 0); events = c.int(.events, 0)
+    }
+    enum CodingKeys: String, CodingKey { case id, name, city, deleted, wipes, events }
+}
+
 /// One tournament on any club's list, with how it's going (op "events").
 struct AdminEvent: Decodable, Identifiable, Hashable {
     struct Disp: Decodable, Hashable, Identifiable { var id: String, name: String, place: String, group: String, online: Int, pages: Int, force: PageRef?, list: [PageRef]
@@ -111,6 +121,7 @@ enum AdminSection: String, CaseIterable, Identifiable {
 final class AdminModel {
     var section: AdminSection = .clubs
     var clubs: [AdminClub] = []
+    var deleted: [DeletedClub] = []
     var events: [AdminEvent] = []
     var log: [LogLine] = []
     var staff: [StaffMember] = []
@@ -154,9 +165,9 @@ final class AdminModel {
     func refresh() async throws {
         loading = true; defer { loading = false }
         let d = try await Net.post("/golf/api/club/admin", body([:]))
-        struct R: Decodable { var clubs: [Lenient<AdminClub>]; var mail: Bool?; var staff: [Lenient<StaffMember>]? }
+        struct R: Decodable { var clubs: [Lenient<AdminClub>]; var mail: Bool?; var staff: [Lenient<StaffMember>]?; var deleted: [Lenient<DeletedClub>]? }
         let r = try JSONDecoder().decode(R.self, from: d)
-        clubs = r.clubs.compactMap(\.value); mail = r.mail ?? true; staff = (r.staff ?? []).compactMap(\.value)
+        clubs = r.clubs.compactMap(\.value); mail = r.mail ?? true; staff = (r.staff ?? []).compactMap(\.value); deleted = (r.deleted ?? []).compactMap(\.value)
     }
     func refreshEvents() async {
         do {
@@ -177,13 +188,13 @@ final class AdminModel {
         do {
             try await call(op, extra)
             try await refresh()
-            if ["lock", "archive", "move", "hide", "unhide", "event", "claim", "demo", "delete"].contains(op) { await refreshEvents() }
+            if ["lock", "archive", "move", "hide", "unhide", "event", "claim", "demo", "delete", "restore", "purge"].contains(op) { await refreshEvents() }
             if let done { flash(done) }
         } catch { flash(error.localizedDescription) }
     }
     /// Delete a club. One with tournaments (a test club) goes with them, and only with its name typed (the server checks too). True when it's gone.
     func deleteClub(_ club: AdminClub, typed: String = "") async -> Bool {
-        await act("delete", ["club": club.id, "confirm": typed], done: club.events.isEmpty ? "Club deleted." : "Club and its tournaments deleted.")
+        await act("delete", ["club": club.id, "confirm": typed], done: "Deleted. It’s in Recently deleted for 30 days.")
         return !clubs.contains { $0.id == club.id }
     }
     /// The typed name matches the club's (case, spaces and curly quotes don't matter).
@@ -194,9 +205,12 @@ final class AdminModel {
     /// What deleting a club does, for the confirm.
     static func deleteMessage(_ club: AdminClub) -> String {
         let n = club.events.count
-        return n == 0 ? "For a mistaken or spam sign-up. Its people lose access to it. This can’t be undone."
-            : "This also deletes its \(n == 1 ? "tournament" : "\(n) tournaments") with every score, team and photo, and their links stop working. Its people lose access. This can’t be undone. Type \(club.name) to confirm."
+        return n == 0 ? "For a mistaken or spam sign-up. Its people lose access to it. It waits 30 days in Recently deleted, where you can restore it."
+            : "Its people lose access and its \(n == 1 ? "tournament is" : "\(n) tournaments are") locked. After 30 days in Recently deleted every score, team and photo is wiped and the links stop working. Type \(club.name) to confirm."
     }
+    func restoreClub(_ c: DeletedClub) async { await act("restore", ["club": c.id], done: "Restored. Its tournaments stay locked until a desk unlocks them.") }
+    /// Wipe a deleted club now (its name typed again).
+    func purgeClub(_ c: DeletedClub, typed: String) async { await act("purge", ["club": c.id, "confirm": typed], done: "Wiped for good.") }
     /// A club's branding (logo, accent, powered): nil when saved, else what went wrong (for the branding editor).
     func brand(_ club: String, _ changes: [String: Any]) async -> String? {
         do { var b = changes; b["club"] = club; try await call("brand", b); try await refresh(); return nil }
@@ -278,6 +292,37 @@ struct DeleteClubAlert: ViewModifier {
                 .disabled(!c.events.isEmpty && !AdminModel.nameMatches(typed, c.name))
             Button("Cancel", role: .cancel) {}
         } message: { c in Text(AdminModel.deleteMessage(c)) }
+    }
+}
+/// Recently deleted, under the clubs: Restore, or Delete now with the name typed.
+struct RecentlyDeleted: View {
+    @Environment(AdminModel.self) private var model
+    @State private var wiping: DeletedClub?
+    @State private var typed = ""
+    var body: some View {
+        if !model.deleted.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Recently deleted").font(.headline)
+                Text("Kept 30 days with their tournaments locked, then wiped for good.").font(.footnote).foregroundStyle(.secondary)
+                ForEach(model.deleted) { c in
+                    HStack {
+                        VStack(alignment: .leading) {
+                            Text(c.name).font(.subheadline.weight(.semibold))
+                            Text("\(c.events) tournament\(c.events == 1 ? "" : "s") · wiped \(Date(timeIntervalSince1970: c.wipes / 1000).formatted(date: .abbreviated, time: .omitted))").font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("Restore") { Task { await model.restoreClub(c) } }
+                        Button("Delete Now", role: .destructive) { typed = ""; wiping = c }
+                    }
+                    .padding(10).background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 10))
+                }
+            }
+            .alert("Wipe \(wiping?.name ?? "") now?", isPresented: Binding(get: { wiping != nil }, set: { if !$0 { wiping = nil } }), presenting: wiping) { c in
+                TextField(c.name, text: $typed)
+                Button("Delete Now", role: .destructive) { let t = typed; Task { await model.purgeClub(c, typed: t) } }.disabled(!AdminModel.nameMatches(typed, c.name))
+                Button("Cancel", role: .cancel) {}
+            } message: { c in Text("Its tournaments, scores, teams and photos are deleted for good and their links stop working. This can’t be undone. Type \(c.name) to confirm.") }
+        }
     }
 }
 extension View {
