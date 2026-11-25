@@ -64,6 +64,15 @@ async function sendMail(env, to, subject, text) {
   if (!r.ok) throw new Error(`mail ${r.status}`);
 }
 
+// for courses.js and contact.js: may this network do k again? (max times in mins minutes; true if the directory can't answer)
+export async function allowed(env, k, max, mins) {
+  if (!env.CLUBS) return true;
+  try {
+    const r = await env.CLUBS.get(env.CLUBS.idFromName('directory')).fetch(new Request('https://clubs/limit', { method: 'POST', body: JSON.stringify({ k, max, mins }) }));
+    return !!(await r.json()).ok;
+  } catch { return true; }
+}
+
 // the worker hands every /golf/api/club/* call (and /golf/api/new) to the one directory object
 export async function clubs(request, env, op) {
   if (request.method !== 'POST') return json({ error: 'Use POST' }, 405);
@@ -195,6 +204,13 @@ export class FlagcastClubs extends DurableObject {
       if (f && now - f.since < 15 * 60000 && f.n >= max) this.fail('Too many tries. Wait 15 minutes, or sign in with an emailed code.', 429);
     }
   }
+  // a general limit: true while k has been used fewer than max times in this window (and counts this use)
+  limit(k, max, win) {
+    const now = Date.now(), f = this.one('SELECT * FROM fails WHERE k = ?', k);
+    if (!f || now - f.since >= win) { this.sql.exec('INSERT OR REPLACE INTO fails (k, n, since) VALUES (?, 1, ?)', k, now); return true; }
+    if (f.n >= max) return false;
+    this.sql.exec('UPDATE fails SET n = n + 1 WHERE k = ?', k); return true;
+  }
   failed(keys) {
     const now = Date.now();
     for (const [k] of keys) {
@@ -212,6 +228,8 @@ export class FlagcastClubs extends DurableObject {
     const env = this.env, now = Date.now();
     // the course library (only reached from courses.js, never straight from the web)
     // is this live input one of Flagcast's cameras? (golf.js, before serving its playlists; never from the web)
+    // limits for the other parts of the worker (courses.js, contact.js): { k, max, mins } → { ok }. Never from the web
+    if (op === 'limit') return json({ ok: this.limit(`lim:${clip(b.k, 120)}`, num(b.max, 1, 10000, 10), num(b.mins, 1, 1440, 60) * 60000) });
     if (op === 'streamok') return json({ ok: !!this.one('SELECT hole FROM streams WHERE uid = ?', clip(b.uid, 40)) });
     if (op === 'lib-search') {
       const words = clip(b.q, 80).toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 1).slice(0, 5);
@@ -254,6 +272,8 @@ export class FlagcastClubs extends DurableObject {
     if (op === 'start') {
       const email = clip(b.email, 254).toLowerCase();
       if (!EMAIL.test(email)) this.fail('Type a full email address.');
+      // codes from one network: 10 an hour (so a script can't make Flagcast email lots of people)
+      if (this.ip && !this.limit(`start:${this.ip}`, 10, 3600000)) this.fail('Too many sign-in codes from this network. Try again in an hour, or use a password.', 429);
       const c = this.one('SELECT * FROM codes WHERE email = ?', email);
       if (c && now - c.sent < 30000) this.fail('A code was just sent. Wait half a minute before asking for another.', 429);
       const hour = Math.floor(now / 3600000), hourCount = c && c.hour === hour ? c.hourCount + 1 : 1;
@@ -346,6 +366,7 @@ export class FlagcastClubs extends DurableObject {
       const u = this.who(b.token);
       if (u.club) this.fail('You’re already part of a club.');
       const name = clip(b.name, 80); if (!name) this.fail('Type your club’s name.');
+      if (!this.limit(`request:${u.email}`, 3, DAY)) this.fail('You’ve asked a few times today. Flagcast will be in touch.', 429);
       const id = rand(10, 'abcdefghijkmnpqrstuvwxyz23456789');
       this.sql.exec('INSERT INTO clubs (id, name, contact, phone, city, status, created, by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', id, name, clip(b.contact, 80), clip(b.phone, 40), clip(b.city, 80), 'pending', now, u.email);
       this.sql.exec('INSERT OR REPLACE INTO members (email, club, role, added) VALUES (?, ?, ?, ?)', u.email, id, 'owner', now);

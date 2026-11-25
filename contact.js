@@ -3,6 +3,7 @@
 // Sends to CONTACT_TO (comma list), else hello@flagcast.app. Needs RESEND_API_KEY; From is MAIL_FROM.
 // On localhost with no RESEND_API_KEY it answers ok without sending, so the page can be tried.
 
+import { allowed } from './clubs.js';
 const EMAIL = /^[^\s@<>"',;]{1,64}@[^\s@<>"',;]{1,190}\.[a-z]{2,24}$/i;
 const clip = (s, n) => String(s ?? '').replace(/\r/g, '').trim().slice(0, n);
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
@@ -26,6 +27,8 @@ export async function contact(request, env) {
   if (!f.club && !f.message) return json({ error: 'Tell us the club or add a note.', field: 'message' }, 400);
 
   const local = /^(localhost|127\.0\.0\.1)$/.test(new URL(request.url).hostname);
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  if (ip && !(await allowed(env, `contact:${ip}`, 5, 60))) return json({ error: 'Thanks, we have your notes. Email hello@flagcast.app if it’s urgent.' }, 429);
   if (!env.RESEND_API_KEY) return local ? json({ ok: true, dev: true }) : json({ error: 'nomail' }, 503);
   const to = String(env.CONTACT_TO || 'hello@flagcast.app').split(/[\s,]+/).filter(Boolean);
   const details = [`Name: ${f.name}`, `Email: ${f.email}`, f.phone && `Phone: ${f.phone}`, f.club && `Club / course: ${f.club}`,

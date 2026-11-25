@@ -1,4 +1,4 @@
-// One-click installs and updates for the desktop apps (Flagcast Manager, Flagcast Admin).
+// One-click installs and updates for the desktop app (Flagcast Manager).
 // Builds live as GitHub releases on GothamMediaHouse/flagcast, tagged <app>-v<version>
 // (e.g. manager-v1.2.0), made by "Publish Flagcast Manager.command" on the Mac.
 //   /download/<app>              → the right installer for this computer (Mac .dmg or Windows .exe)
@@ -6,7 +6,8 @@
 //   /api/<app>/latest            → { version, date, notes, mac, win } (null when nothing is published)
 //   /updates/<app>/<file>        → update feeds: latest*.yml (electron-updater) and appcast.xml (Sparkle) served, other files redirect to the release
 const REPO = 'GothamMediaHouse/flagcast';
-const APPS = { manager: 'Flagcast Manager', admin: 'Flagcast Admin' };
+// (Flagcast Admin is retired: Admin lives inside Manager, so /download/admin and its update feed are gone)
+const APPS = { manager: 'Flagcast Manager' };
 const TTL = 300; // seconds a GitHub answer is reused
 
 const ver = (t) => (t.match(/-v(\d+)\.(\d+)\.(\d+)/) || []).slice(1).map(Number);

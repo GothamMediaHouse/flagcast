@@ -5,6 +5,7 @@
 //   GET /golf/api/courses/fc-<name>         → a Flagcast library course (courselib.js), same shape plus map and library:true
 //   POST /golf/api/courses/library {event,key} → save that tournament's course to the library
 //   GET /golf/api/courses/<id>              → { id, name, club, city, state, tees: [{ name, women, rating, slope, par, yards, holes: [{ par, yds, hcp }] }] }
+import { allowed } from './clubs.js';
 const API = 'https://api.golfcourseapi.com/v1';
 const DAY = 86400;
 
@@ -72,6 +73,11 @@ export async function courses(request, env, ctx) {
     return json({ courses: [...mine, ...(j.courses || []).filter((c) => !seen.has(String(c.club || c.name).toLowerCase()))] });
   };
   const hit = await cache.match(key); if (hit) return withLib(hit);
+  // GolfCourseAPI allows 35 lookups a day on its free plan: 6 an hour and 12 a day from one network, so nobody can use them all
+  const ip = request.headers.get('CF-Connecting-IP') || '';
+  if (ip && !((await allowed(env, `course-h:${ip}`, 6, 60)) && (await allowed(env, `course-d:${ip}`, 10, 1440)))) {
+    return mine.length ? json({ courses: mine }) : json({ error: 'Too many course lookups from this network. Type the numbers from the scorecard, or try again later.' }, 429);
+  }
   const ask = async (t) => {
     let r;
     try { r = await fetch(t, { headers: { Authorization: `Key ${env.GOLF_COURSE_API_KEY}`, Accept: 'application/json' } }); }
