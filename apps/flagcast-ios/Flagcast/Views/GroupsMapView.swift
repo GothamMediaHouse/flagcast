@@ -6,7 +6,7 @@ import MapKit
 /// the server leaves out groups that hide and spots older than 15 minutes, and never sends anyone's cart code.
 struct GroupSpot: Identifiable, Equatable {
     var id: String { team }
-    var team: String, name: String, hole: Int, at: GeoPoint, t: Date, me: Bool
+    var team: String, name: String, hole: Int, at: GeoPoint, t: Date, me: Bool, sample: Bool
 
     init?(_ d: [String: Any]) {
         guard let team = d["team"] as? String, let at = d["at"] as? [Double], at.count == 2 else { return nil }
@@ -16,6 +16,7 @@ struct GroupSpot: Identifiable, Equatable {
         self.at = GeoPoint(lat: at[0], lng: at[1])
         t = Date(timeIntervalSince1970: ((d["t"] as? NSNumber)?.doubleValue ?? 0) / 1000)
         me = d["me"] as? Bool ?? false
+        sample = d["sample"] as? Bool ?? false
     }
 }
 
@@ -45,6 +46,10 @@ struct GroupsMapView: View {
     @State private var expanded = false
     @State private var picked: String?
     @State private var follow = false
+    /// the ready-made notes golfers can send another group (empty when the desk turned them off)
+    @State private var notes: [String] = []
+    @State private var sentMsg: String?
+    @State private var sending = false
 
     static let stale: TimeInterval = 6 * 60
     private static let blue = Color(UIColor(hex: 0x3a8bff)), night = Color(UIColor(hex: 0x0b1a12))
@@ -168,7 +173,9 @@ struct GroupsMapView: View {
             .accessibilityLabel(expanded ? "Show less" : "Show every group")
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    if !on {
+                    if on, let g = pickedGroup {
+                        card(g)
+                    } else if !on {
                         Text(state.locked ? "The results are final, so the map of groups is off." : "Groups show here on the day of the tournament\(state.date.isEmpty ? "" : " (\(state.date))"), until the results are final.")
                             .font(.subheadline).foregroundStyle(Color.fcMuted)
                     } else {
@@ -186,7 +193,7 @@ struct GroupsMapView: View {
                 .padding(.horizontal, 16).padding(.bottom, 14)
             }
             .scrollDisabled(!expanded)
-            .frame(height: expanded ? 470 : (on ? 190 : 90))
+            .frame(height: pickedGroup != nil ? 360 : expanded ? 470 : (on ? 190 : 90))
         }
         .foregroundStyle(Color.fcInk)
         .background(Color.fcCard, in: UnevenRoundedRectangle(topLeadingRadius: 22, topTrailingRadius: 22))
@@ -297,12 +304,79 @@ struct GroupsMapView: View {
         }
     }
 
+    // ---- the card for a tapped group: who, where, how they're scoring, and a ready-made note ----
+    private var pickedGroup: GroupSpot? { picked.flatMap { p in groups.first { $0.team == p } } }
+    private func card(_ g: GroupSpot) -> some View {
+        let info = Core.groupInfo(state, state.scores, g.team), n = total
+        let whereText: String = {
+            if g.me { return "Your group" }
+            guard let gp = gap(g) else { return "" }
+            if gp == 0 { return "On your hole" }
+            return gp <= n / 2 ? "\(gp) hole\(gp == 1 ? "" : "s") ahead of you" : "\(n - gp) hole\(n - gp == 1 ? "" : "s") behind you"
+        }()
+        let sub = ["On hole \(g.hole > 0 ? "\(g.hole)" : "?")", whereText, g.me ? "" : away(g).map { "\(yards($0)) away" } ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                Text(g.hole > 0 ? "\(g.hole)" : "?").font(.system(size: 16, weight: .bold, design: .monospaced))
+                    .frame(width: 44, height: 44).background(g.me ? Color.fcFlag : Self.blue, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                    .foregroundStyle(g.me ? Color.fcOnFlag : .white)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(info?.name ?? g.name).font(.headline).lineLimit(1)
+                    Text(sub).font(.caption).foregroundStyle(Color.fcMuted)
+                }
+                Spacer(minLength: 0)
+                Button { picked = nil; sentMsg = nil } label: {
+                    Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).frame(width: 32, height: 32).background(Color.fcPaper2, in: Circle()).foregroundStyle(Color.fcMuted)
+                }
+                .buttonStyle(.plain).accessibilityLabel("Back to every group")
+            }
+            HStack(spacing: 6) {
+                stat("HOLE", g.hole > 0 ? "\(g.hole)" : "—"); stat("THRU", info?.thru ?? "—"); stat("SCORE", info?.score ?? "—"); stat("PLACE", info?.pos ?? "—")
+            }
+            if let info, !info.players.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(info.players, id: \.id) { p in
+                        HStack { Text(p.name).font(.subheadline); Spacer(); Text(p.today).font(.subheadline.monospacedDigit()).foregroundStyle(Color.fcMuted) }
+                            .padding(.vertical, 6)
+                        if p.id != info.players.last?.id { Divider() }
+                    }
+                }
+            } else if g.sample {
+                Text("A sample group on the demo.").font(.subheadline).foregroundStyle(Color.fcMuted)
+            }
+            if !g.me && !notes.isEmpty {
+                Text("Send a quick note. They see it with your group’s name.").font(.footnote).foregroundStyle(Color.fcMuted)
+                FlowChips(items: notes, disabled: sending) { k in Task { await send(k, to: g) } }
+                if let sentMsg { Text(sentMsg).font(.footnote.weight(.semibold)).foregroundStyle(Color.fcOK) }
+            }
+        }
+        .padding(.top, 2)
+    }
+    private func stat(_ label: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label).font(.system(size: 9.5, weight: .semibold, design: .monospaced)).tracking(1).foregroundStyle(Color.fcMuted)
+            Text(value).font(.system(size: 17, weight: .bold).monospacedDigit()).lineLimit(1).minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 9).padding(.vertical, 7)
+        .background(Color.fcPaper2, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+    private func send(_ k: Int, to g: GroupSpot) async {
+        guard let t = model.teamId, !sending else { return }
+        sending = true; sentMsg = nil
+        do {
+            _ = try await API.post(model.id, "where", ["code": model.code, "team": t, "note": k, "to": g.team])
+            sentMsg = "Sent to \(shortName(g.name))."
+        } catch let e as APIError { sentMsg = e.message } catch {}
+        sending = false
+    }
+
     // ---- data ----
     private func load() async {
         guard let t = model.teamId else { return }
         do {
             let r = try await API.post(model.id, "where", ["code": model.code, "team": t, "hide": GroupPrivacy.hidden(model.code)])
             groups = ((r["groups"] as? [[String: Any]]) ?? []).compactMap(GroupSpot.init)
+            notes = r["notes"] as? [String] ?? []
             serverNow = ((r["now"] as? NSNumber)?.doubleValue).map { Date(timeIntervalSince1970: $0 / 1000) } ?? Date()
             off = false; problem = nil
             if !fitted { fit() }
@@ -333,6 +407,7 @@ struct GroupsMapView: View {
         }
     }
     private func focus(_ g: GroupSpot) {
+        if picked != g.team { sentMsg = nil }
         picked = g.team; follow = false
         withAnimation(.snappy(duration: 0.25)) { expanded = false }
         withAnimation(.easeInOut(duration: 0.45)) { camera = .camera(MapCamera(centerCoordinate: g.at.coordinate, distance: 420)) }
@@ -379,5 +454,23 @@ struct GroupPin: View {
         .shadow(color: .black.opacity(0.55), radius: 3, y: 2)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(group.me ? "Your group, hole \(group.hole)" : "\(group.name), hole \(group.hole)")
+    }
+}
+
+/// Ready-made notes as buttons that wrap onto as many lines as they need.
+struct FlowChips: View {
+    var items: [String]
+    var disabled = false
+    var tap: (Int) -> Void
+    var body: some View {
+        FlowLayout(spacing: 6) {
+            ForEach(Array(items.enumerated()), id: \.offset) { k, t in
+                Button { tap(k) } label: {
+                    Text(t).font(.footnote.weight(.semibold)).padding(.horizontal, 12).padding(.vertical, 8)
+                        .background(Color.fcPaper, in: Capsule()).overlay(Capsule().stroke(Color.fcLine))
+                }
+                .buttonStyle(.plain).disabled(disabled)
+            }
+        }
     }
 }

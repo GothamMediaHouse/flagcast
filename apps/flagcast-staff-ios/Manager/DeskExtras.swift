@@ -326,7 +326,8 @@ private struct GroupsPage: View {
     @State private var camera: MapCameraPosition = .automatic
     @State private var picked: String?
 
-    struct Spot: Identifiable, Hashable { var id: String; var name: String; var start: Int; var hole: Int; var at: GeoPoint; var t: Double }
+    struct Spot: Identifiable, Hashable { var id: String; var name: String; var start: Int; var hole: Int; var at: GeoPoint; var t: Double; var since: Double = 0; var sample = false
+        var card: GroupCardSpot { GroupCardSpot(id: id, name: name, start: start, hole: hole, t: t, since: since, sample: sample) } }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -342,7 +343,7 @@ private struct GroupsPage: View {
                 HStack(spacing: 0) { map; list.frame(width: 320) }
             } else {
                 map
-                list.frame(maxHeight: 280)
+                list.frame(maxHeight: picked == nil ? 280 : 480)
             }
         }
         .background(FC.paper)
@@ -365,6 +366,7 @@ private struct GroupsPage: View {
                 Annotation(g.name, coordinate: coord(g.at)) {
                     Text(g.hole > 0 ? "\(g.hole)" : "•").font(.caption.bold()).frame(minWidth: 26, minHeight: 26).padding(.horizontal, 4)
                         .background(stale(g) ? Color.gray : FC.blue, in: Capsule()).overlay(Capsule().stroke(.white, lineWidth: picked == g.id ? 3 : 2)).foregroundStyle(.white)
+                        .onTapGesture { pick(g) }
                 }
             }
         }
@@ -378,9 +380,12 @@ private struct GroupsPage: View {
     private var list: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                if let g = groups.first(where: { $0.id == picked }) {
+                    GroupCard(doc: doc, group: g.card) { picked = nil }.padding(12)
+                }
                 if groups.isEmpty { Text("No groups yet. They show up when a scorecard has GPS on.").font(.subheadline).foregroundStyle(FC.muted).padding(16) }
                 ForEach(groups) { g in
-                    Button { picked = g.id; withAnimation { camera = .camera(MapCamera(centerCoordinate: coord(g.at), distance: 500, heading: 0, pitch: 0)) } } label: {
+                    Button { pick(g) } label: {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(g.name).font(.system(size: 16, weight: .semibold)).foregroundStyle(FC.ink)
                             Text("\(g.hole > 0 ? "On hole \(g.hole)" : "On the course") · thru \(thru(g.id)) · started on \(g.start) · \(ago(g.t))").font(.footnote).foregroundStyle(FC.muted)
@@ -391,11 +396,16 @@ private struct GroupsPage: View {
                     .buttonStyle(.plain)
                     .overlay(alignment: .bottom) { Rectangle().fill(FC.hairline).frame(height: 1) }
                 }
+                GolferNotesToggle(doc: doc).padding(16)
             }
         }
         .background(FC.card)
     }
 
+    private func pick(_ g: Spot) {
+        picked = g.id
+        withAnimation { camera = .camera(MapCamera(centerCoordinate: coord(g.at), distance: 500, heading: 0, pitch: 0)) }
+    }
     private func load() async {
         guard let r = await doc.day("groups") else { return }
         on = r["on"] as? Bool ?? false
@@ -403,7 +413,8 @@ private struct GroupsPage: View {
         groups = (r["groups"] as? [[String: Any]] ?? []).compactMap { g in
             guard let at = g["at"] as? [Double], at.count == 2 else { return nil }
             return Spot(id: g["team"] as? String ?? UUID().uuidString, name: g["name"] as? String ?? "Group", start: g["start"] as? Int ?? 1, hole: g["hole"] as? Int ?? 0,
-                        at: GeoPoint(lat: at[0], lng: at[1]), t: (g["t"] as? Double ?? now) - now + Date().timeIntervalSince1970 * 1000)
+                        at: GeoPoint(lat: at[0], lng: at[1]), t: (g["t"] as? Double ?? now) - now + Date().timeIntervalSince1970 * 1000,
+                        since: (g["since"] as? Double).map { $0 - now + Date().timeIntervalSince1970 * 1000 } ?? 0, sample: g["sample"] as? Bool ?? false)
         }
         if camera == .automatic, let first = groups.first { camera = .camera(MapCamera(centerCoordinate: coord(first.at), distance: 2500, heading: 0, pitch: 0)) }
         else if camera == .automatic, let any = doc.ev.map.holes.values.compactMap({ $0.m }).first { camera = .camera(MapCamera(centerCoordinate: coord(any), distance: 2500, heading: 0, pitch: 0)) }

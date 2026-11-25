@@ -203,7 +203,8 @@ struct Photos: Codable, Hashable {
 }
 struct News: Codable, Hashable { var text: String; var at: Double; var by: String? }
 /// From the pro shop: to one cart (team), one golfer on it (player), or everyone (team "*").
-struct Nudge: Codable, Hashable { var team: String; var player: String? = nil; var text: String; var at: Double }
+/// A note to a cart: from the pro shop, or (from) a ready-made note another group sent from the course map.
+struct Nudge: Codable, Hashable { var team: String; var player: String? = nil; var text: String; var at: Double; var from: String? = nil }
 struct Ace: Codable, Hashable { var hole: Int; var name: String; var team: String; var at: Double }
 struct Take: Codable, Hashable { var kind: String; var text: String?; var sponsor: String?; var at: Double; var secs: Double? }
 /// "Routed to phones": Admin, the desk or a pro points every player's phone at something (public/golf/phonecast.js).
@@ -351,10 +352,12 @@ struct EventState: Codable, Hashable {
     var lastAt: [String: Double] = [:]   // team id → when that cart last entered a score (ms)
     var brand = Brand()
     var photos = Photos()
+    /// the desk turned off golfers' ready-made notes to other groups (day op "notes")
+    var notesOff = false
 
     enum CodingKeys: String, CodingKey {
         case id, name, club, date, course, format, sideGames, flights, teams, screens, cams, sponsors, schedule, displays, fund, contests
-        case locked, aces, flash, news, nudges, live, replays, map, pinsheet, scores, online, brand, lastAt, photos
+        case locked, aces, flash, news, nudges, live, replays, map, pinsheet, scores, online, brand, lastAt, photos, notesOff
     }
     init() {}
     init(from d: Decoder) throws {
@@ -385,6 +388,7 @@ struct EventState: Codable, Hashable {
         brand = (try? c.decodeIfPresent(Brand.self, forKey: .brand)) ?? Brand()
         photos = (try? c.decodeIfPresent(Photos.self, forKey: .photos)) ?? Photos()
         lastAt = (try? c.decodeIfPresent([String: Double].self, forKey: .lastAt)) ?? [:]
+        notesOff = c.bool(.notesOff, false)
     }
     func encode(to e: Encoder) throws {
         var c = e.container(keyedBy: CodingKeys.self)
@@ -397,6 +401,7 @@ struct EventState: Codable, Hashable {
         try c.encode(aces, forKey: .aces); try c.encodeIfPresent(flash, forKey: .flash); try c.encode(news, forKey: .news)
         try c.encode(nudges, forKey: .nudges); try c.encode(live, forKey: .live); try c.encode(replays, forKey: .replays); try c.encode(map, forKey: .map); try c.encode(Dictionary(uniqueKeysWithValues: pinsheet.map { (String($0.key), $0.value) }), forKey: .pinsheet); try c.encode(scores, forKey: .scores); try c.encode(online, forKey: .online)
         try c.encode(brand, forKey: .brand); try c.encode(lastAt, forKey: .lastAt); try c.encode(photos, forKey: .photos)
+        try c.encode(notesOff, forKey: .notesOff)
     }
 
     /// "Sat, Nov 21" for the tournament's day (it's stored as 2026-11-21, a day where the club is)

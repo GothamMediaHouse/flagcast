@@ -48,10 +48,10 @@ export function demoGroups(ev, now = Date.now(), skip = new Set()) {
     // groups spread round the course, a little off the hour so they don't all tee off together
     const pos = clock / HOLE_MINS + (i * holes.length) / count + i * 0.13;
     const k = ((Math.floor(pos) % holes.length) + holes.length) % holes.length, h = holes[k];
-    let m = (pos - Math.floor(pos)) * legMins, f = 1;
+    let m = (pos - Math.floor(pos)) * legMins, f = 1; const into = m;
     for (const [a, b, mins] of LEGS) { if (m <= mins) { f = a + (b - a) * (m / mins); break; } m -= mins; }
     const side = f > 0 && f < 0.92 ? ((i * 7) % 5 - 2) * 6 : ((i * 3) % 3 - 1) * 3; // fairway spread; close on the green
     const at = along(h.path, f, side);
-    return { ...g, hole: h.n, at: [round6(at[0]), round6(at[1])], acc: 5, t: now - ((i * 17) % 40) * 1000, sample: true };
+    return { ...g, hole: h.n, at: [round6(at[0]), round6(at[1])], acc: 5, t: now - ((i * 17) % 40) * 1000, since: Math.round(now - into * (HOLE_MINS / legMins) * 60000), sample: true };
   });
 }

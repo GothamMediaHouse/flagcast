@@ -36,7 +36,7 @@ struct ScorecardScreen: View {
         .sensoryFeedback(.success, trigger: model.aces)
         .sensoryFeedback(.warning, trigger: model.nudge)
         .overlay { if model.celebrating { AceCelebration { model.celebrating = false } } }
-        .alert(model.nudge.map { n in n.team == "*" ? "A note for everyone" : n.player != nil && n.player == model.me ? "A note for you" : "A note for your cart" } ?? "", isPresented: Binding(get: { model.nudge != nil }, set: { if !$0 { model.nudge = nil } })) {
+        .alert(model.nudge.map { n in n.from.map { "From \($0)" } ?? (n.team == "*" ? "A note for everyone" : n.player != nil && n.player == model.me ? "A note for you" : "A note for your cart") } ?? "", isPresented: Binding(get: { model.nudge != nil }, set: { if !$0 { model.nudge = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(model.nudge?.text ?? "") }
         .fullScreenCover(item: $replay) { r in

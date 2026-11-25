@@ -128,7 +128,7 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
   <button class="btn primary" id="next">Next hole</button>
 </div>
 <div class="toast" id="toast" hidden></div>
-<div class="nudge" id="nudge" role="alertdialog" aria-labelledby="nudgeH" hidden><div><span class="label">From the pro shop</span><h2 id="nudgeH">A note for your cart</h2><p id="nudgeText"></p><button class="btn primary" onclick="this.closest('.nudge').hidden=true">OK</button></div></div>
+<div class="nudge" id="nudge" role="alertdialog" aria-labelledby="nudgeH" hidden><div><span class="label" id="nudgeFrom">From the pro shop</span><h2 id="nudgeH">A note for your cart</h2><p id="nudgeText"></p><button class="btn primary" onclick="this.closest('.nudge').hidden=true">OK</button></div></div>
 <div class="nudge" id="whoami" role="dialog" aria-labelledby="whoH" hidden><div><span class="label">Just once</span><h2 id="whoH">Which one are you?</h2><p>So the pro shop can send a note to you, not the whole cart.</p><div id="whoList" style="display:grid;gap:8px;margin-top:10px"></div><button class="btn" data-me="-" style="margin-top:8px">Skip</button></div></div>
 <script type="module">
 import { phoneBanner } from '/golf/phonecast.js';
@@ -245,7 +245,8 @@ function nudges() {
   if (!mine.length) return;
   const n = mine[mine.length - 1];
   try { localStorage.setItem(NKEY, String(n.at)); } catch {}
-  $('nudgeH').textContent = n.team === '*' ? 'A note for everyone' : n.player && n.player === me ? 'A note for you' : 'A note for your cart';
+  $('nudgeFrom').textContent = n.from ? 'From another group' : 'From the pro shop'; // n.from: a ready-made note a group sent from the course map
+  $('nudgeH').textContent = n.from ? n.from : n.team === '*' ? 'A note for everyone' : n.player && n.player === me ? 'A note for you' : 'A note for your cart';
   $('nudgeText').textContent = n.text; $('nudge').hidden = false;
   if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
 }

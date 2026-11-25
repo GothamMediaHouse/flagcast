@@ -261,7 +261,7 @@ final class ScorecardModel {
         nudge = n
         if UIApplication.shared.applicationState != .active {
             let c = UNMutableNotificationContent()
-            c.title = "From the pro shop"
+            c.title = n.from.map { "From \($0)" } ?? "From the pro shop"
             c.body = n.text
             c.sound = .default
             UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: "nudge-\(Int(n.at))", content: c, trigger: nil))

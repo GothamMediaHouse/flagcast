@@ -4,6 +4,7 @@
 // Only while the tournament is on: the server leaves out groups that hide and spots older than 15 minutes, and
 // never sends anyone's cart code.
 import { post, esc } from '/golf/client.js';
+import { groupInfo } from '/golf/core.js';
 import { TILES, TILE_CREDIT, middle, yds, holeMap, trackingOn, position, onGps, startGps, gpsWanted } from '/golf/gps.js';
 
 const LEAFLET = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/';
@@ -93,6 +94,22 @@ const STYLE = `
 .oc-sw input:checked + span { background: var(--ok); }
 .oc-sw input:checked + span::after { transform: translateX(20px); }
 .oc-sw input:focus-visible + span { outline: 2px solid var(--flag); outline-offset: 2px; }
+/* the card for a tapped group */
+.oc-card { display: grid; gap: 10px; padding-top: 2px; }
+.oc-ch { display: flex; gap: 12px; align-items: center; }
+.oc-ch .n { width: 44px; height: 44px; border-radius: 13px; background: #3a8bff; color: #fff; display: grid; place-items: center; font: 700 1rem var(--f-mono); flex: none; }
+.oc-ch .who { flex: 1; min-width: 0; } .oc-ch .who b { display: block; font-size: 1.08rem; } .oc-ch .who small { color: var(--muted); font-size: .8rem; }
+.oc-x { width: 34px; height: 34px; border-radius: 50%; border: 0; background: var(--paper-2); color: var(--muted); font-size: 1.1rem; cursor: pointer; flex: none; }
+.oc-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.oc-stats div { background: var(--paper-2); border-radius: 10px; padding: 7px 9px; min-width: 0; }
+.oc-stats small { display: block; font: 600 .6rem var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.oc-stats b { font-size: 1.05rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.oc-pl { display: grid; font-size: .9rem; } .oc-pl div { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); } .oc-pl div:last-child { border: 0; }
+.oc-pl em { font-style: normal; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.oc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.oc-chip { border: 1px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 999px; padding: 8px 12px; font: 600 .82rem var(--f-body); cursor: pointer; }
+.oc-chip:disabled { opacity: .5; }
+.oc-sent { font-size: .85rem; color: var(--ok, #2e8b57); font-weight: 600; margin: 0; }
 /* pins */
 .ocp { display: inline-flex; align-items: center; gap: 0; transform: translate(-15px, -15px); filter: drop-shadow(0 2px 4px rgba(0,0,0,.55)); white-space: nowrap; }
 .ocp .h { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: #3a8bff; color: #fff; border: 2.5px solid #fff; font: 700 12px var(--f-mono); position: relative; z-index: 1; }
@@ -122,7 +139,7 @@ export function groupsMap(opts) {
   document.body.appendChild(root);
   document.documentElement.style.overflow = 'hidden';
   const $ = (id) => root.querySelector('#' + id);
-  let map = null, L = null, layer = null, meDot = null, groups = [], off = false, err = '', now = Date.now(), fitted = false, timer = null, stopped = false, pick = null, follow = false, lastBody = '';
+  let map = null, L = null, layer = null, meDot = null, groups = [], off = false, err = '', now = Date.now(), fitted = false, timer = null, stopped = false, pick = null, follow = false, lastBody = '', notes = [], sentMsg = '', sending = false;
 
   const total = () => (opts.state()?.course?.holes || []).length || 18;
   const mine = () => groups.find((g) => g.me);
@@ -136,9 +153,35 @@ export function groupsMap(opts) {
     const t = opts.team(); if (!t) return;
     try {
       const r = await post('where', { code: opts.code, team: t, hide: hidden(opts.code) });
-      groups = r.groups || []; now = r.now || Date.now(); off = false; err = '';
+      groups = r.groups || []; now = r.now || Date.now(); notes = r.notes || []; off = false; err = '';
     } catch (e) { if (e.status === 409) { off = true; groups = []; } else err = e.message; }
     draw();
+  }
+
+  // the card for one group: who, where, how they're scoring, and a ready-made note to send them
+  function card(g, here) {
+    const s = opts.state(), info = s && groupInfo(s, s.scores || {}, g.team), gp = gap(g), n = total();
+    const where = g.me ? 'Your group' : gp == null ? '' : gp === 0 ? 'On your hole' : gp <= n / 2 ? `${gp} hole${gp === 1 ? '' : 's'} ahead of you` : `${n - gp} hole${n - gp === 1 ? '' : 's'} behind you`;
+    const sub = [`On hole ${g.hole || '?'}`, where, here && !g.me ? `${fmtYds(yds(here, g.at))} away` : ''].filter(Boolean).join(' · ');
+    let h = `<div class="oc-card"><div class="oc-ch"><span class="n">${g.hole || '?'}</span><span class="who"><b>${esc(info ? info.name : g.name)}</b><small>${esc(sub)}</small></span>
+      <button class="oc-x" data-oc="unpick" aria-label="Back to every group">×</button></div>`;
+    h += `<div class="oc-stats"><div><small>Hole</small><b>${g.hole || '—'}</b></div><div><small>Thru</small><b>${esc(info ? info.thru : '—')}</b></div>
+      <div><small>Score</small><b>${esc(info ? info.score : '—')}</b></div><div><small>Place</small><b>${esc(info ? info.pos : '—')}</b></div></div>`;
+    if (info && info.players.length) h += `<div class="oc-pl">${info.players.map((p) => `<div><span>${esc(p.name)}</span><em>${esc(p.today)}</em></div>`).join('')}</div>`;
+    else if (g.sample) h += `<p class="oc-note">A sample group on the demo.</p>`;
+    if (!g.me && notes.length) {
+      h += `<p class="oc-note" style="margin:0">Send a quick note. They see it with your group’s name.</p>
+        <div class="oc-chips">${notes.map((t, k) => `<button class="oc-chip" data-note="${k}" ${sending ? 'disabled' : ''}>${esc(t)}</button>`).join('')}</div>`;
+      if (sentMsg) h += `<p class="oc-sent" role="status">${esc(sentMsg)}</p>`;
+    }
+    return h + '</div>';
+  }
+  async function sendNote(k) {
+    const g = groups.find((x) => x.team === pick); if (!g || sending) return;
+    sending = true; sentMsg = ''; sheet();
+    try { await post('where', { code: opts.code, team: opts.team(), note: k, to: g.team }); sentMsg = `Sent to ${shortName(g.name)}.`; }
+    catch (e) { sentMsg = e.message; }
+    sending = false; sheet();
   }
 
   function sheet() {
@@ -147,7 +190,9 @@ export function groupsMap(opts) {
     live.classList.toggle('off', !on || !!err);
     live.querySelector('span').textContent = !on ? 'Off today' : err ? 'No signal' : `Live · ${others().length} group${others().length === 1 ? '' : 's'}`;
     let h = '';
-    if (!on) {
+    const picked = on && pick ? groups.find((x) => x.team === pick) : null;
+    if (picked) h = card(picked, here);
+    else if (!on) {
       h += `<p class="oc-note" style="margin-top:8px">${s && s.locked ? 'The results are final, so the map of groups is off.' : `Groups show here on the day of the tournament${s && s.date ? ` (${esc(s.date)})` : ''}, until the results are final.`}</p>`;
     } else {
       if (!gpsWanted()) h += `<button class="btn primary oc-cta" data-oc="gps">Show where I am</button>`;
@@ -213,8 +258,8 @@ export function groupsMap(opts) {
     if (all.length === 1) map.setView(all[0], 17); else if (all.length) map.fitBounds(all, { ...pad(), maxZoom: 18 });
   }
   function focus(g) {
-    pick = g.team; follow = false;
-    $('ocSheet').classList.add('min'); placeFabs();
+    pick = g.team; follow = false; sentMsg = '';
+    $('ocSheet').classList.remove('min'); setTimeout(placeFabs, 260); placeFabs();
     map && map.setView(g.at, 18, { animate: true });
     draw();
   }
@@ -247,10 +292,12 @@ export function groupsMap(opts) {
 
   root.addEventListener('click', onClick);
   function onClick(e) {
-    const b = e.target.closest('[data-oc],[data-team],[data-hole]'); if (!b) return;
+    const b = e.target.closest('[data-oc],[data-team],[data-hole],[data-note]'); if (!b) return;
     e.stopPropagation();
     const a = b.dataset.oc;
     if (a === 'close') return opts.onClose();
+    if (a === 'unpick') { pick = null; sentMsg = ''; return draw(); }
+    if (b.dataset.note != null) return sendNote(Number(b.dataset.note));
     if (a === 'sheet') { $('ocSheet').classList.toggle('min'); setTimeout(placeFabs, 260); placeFabs(); return; }
     if (a === 'gps') { startGps(); follow = true; return draw(); }
     if (a === 'all') { pick = null; follow = false; fit(); return draw(); }

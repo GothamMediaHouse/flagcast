@@ -127,7 +127,7 @@ export const SPOTS = ['title', 'leaderboard', 'hole', 'cam', 'contest', 'turn', 
 // (cam = one hole's camera, full frame)
 export const PAGE_KINDS = ['lb', 'p3', 'cam', 'contests', 'skins', 'fund', 'sponsors', 'sponsor', 'schedule'];
 // changes made on the day (desk or a pro's PIN); marshals only post contest results
-const DAY_OPS = new Set(['fix', 'ctp', 'contest', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay', 'scene', 'map', 'groups', 'pinsheet', 'report', 'team', 'move']);
+const DAY_OPS = new Set(['fix', 'ctp', 'contest', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay', 'scene', 'map', 'groups', 'pinsheet', 'report', 'team', 'move', 'notes']);
 // marshals post contest results and replays of shots at their hole
 const MARSHAL_OPS = new Set(['ctp', 'replay']);
 // a replay with no clip link replays the hole's live camera from this many seconds before it was marked
@@ -136,10 +136,14 @@ const num = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ?
 // what golfers see of the other groups on the course (POST …/where): name, hole and spot, no codes. Hidden
 // groups and spots older than 15 minutes are left out; your own group is marked me (even when hidden).
 export const GOLFER_SPOT_MINS = 15;
+// the notes golfers can send another group from the course map: ready-made only, so nothing rude gets typed.
+// The desk can turn them off (day op 'notes'). Index in this list is what a phone sends.
+export const GOLFER_NOTES = ['Nice round! 👏', 'Want to play through?', 'See you at the turn', 'We found a ball. Is it yours?'];
+export const GOLFER_NOTE_GAP = 60000; // one note a minute from each group
 export function golferGroups(ev, wh, mine, now = Date.now()) {
   const name = (t) => t.name || t.players.map((p) => String(p.name || '').split(' ').slice(-1)[0]).join(' / ');
   return ev.teams.filter((t) => { const w = wh[t.id]; return w && w.at && (t.id === mine || (!w.hide && now - w.t <= GOLFER_SPOT_MINS * 60000)); })
-    .map((t) => ({ team: t.id, name: name(t), hole: wh[t.id].hole || 0, at: wh[t.id].at, acc: wh[t.id].acc || 0, t: wh[t.id].t, ...(t.id === mine ? { me: true } : {}) }))
+    .map((t) => ({ team: t.id, name: name(t), hole: wh[t.id].hole || 0, at: wh[t.id].at, acc: wh[t.id].acc || 0, t: wh[t.id].t, since: wh[t.id].since || wh[t.id].t, ...(t.id === mine ? { me: true } : {}) }))
     .concat(ev.demo ? sampleGroups(ev, wh, mine, now).map(({ start, ...g }) => g) : []);
 }
 // a Demo tournament: sample groups walk the course (demogroups.js) so the maps aren't empty. Teams with a real
@@ -536,6 +540,8 @@ export class GolfEvent extends DurableObject {
     } else if (b.op === 'flash') {
       ev.flash = b.text ? { text: clip(b.text, 140), at: now } : null;
       if (b.text) ev.news = [...(ev.news || []), { text: clip(b.text, 140), at: now, by: clip(by, 40) }].slice(-30);
+    } else if (b.op === 'notes') { // golfers' ready-made notes to other groups from the course map: on (default) or off
+      if (b.off) ev.notesOff = true; else delete ev.notesOff;
     } else if (b.op === 'nudge') {
       // to one cart ({ team }), one golfer on it ({ team, player }: their phone if they picked their name, else the cart), or everyone ({ team: '*' })
       const all = b.team === '*', team = all ? null : ev.teams.find((t) => t.id === b.team); if (!all && !team) return json({ error: 'No such team' }, 404);
@@ -634,10 +640,28 @@ export class GolfEvent extends DurableObject {
     if (!trackingOn(ev)) return json({ error: 'Group tracking is only on during the tournament.', off: true, date: ev.date, locked: !!ev.locked, groups: [] }, 409);
     const wh = await this.spots(), now = Date.now(), was = wh[team.id];
     const hide = b.hide === undefined ? !!was?.hide : !!b.hide;
-    if (at) wh[team.id] = { at: at.map((x) => Math.round(x * 1e6) / 1e6), acc: num(b.acc, 0, 9999, 0), hole: num(b.hole, 0, 18, 0), t: now, ...(hide ? { hide: true } : {}) };
+    // since: when the group got to this hole (how long it's been on it, for pace of play)
+    if (at) { const hole = num(b.hole, 0, 18, 0); wh[team.id] = { at: at.map((x) => Math.round(x * 1e6) / 1e6), acc: num(b.acc, 0, 9999, 0), hole, t: now, since: was && was.hole === hole && was.since ? was.since : now, ...(hide ? { hide: true } : {}) }; }
     else if (was && hide !== !!was.hide) { wh[team.id] = { ...was }; if (hide) wh[team.id].hide = true; else delete wh[team.id].hide; }
     if (wh[team.id] !== was) await this.ctx.storage.put(`w:${team.id}`, wh[team.id]);
-    return json({ ok: true, now, on: true, hide, groups: golferGroups(ev, wh, team.id, now) });
+    let sent;
+    if (b.note != null) { // a ready-made note to another group (GOLFER_NOTES)
+      const k = Number(b.note), text = GOLFER_NOTES[k], to = String(b.to || '');
+      if (ev.notesOff) return json({ error: 'The tournament desk has turned off notes between groups.' }, 403);
+      if (!Number.isInteger(k) || !text || to === team.id) return json({ error: 'Pick a note to send.' }, 400);
+      const target = ev.teams.find((t) => t.id === to);
+      if (!target && !(ev.demo && /^sample\d+$/.test(to))) return json({ error: 'No such group' }, 404);
+      const last = (ev.nudges || []).filter((n) => n.fromTeam === team.id).pop();
+      if (last && now - last.at < GOLFER_NOTE_GAP) return json({ error: 'You just sent a note. Try again in a minute.' }, 429);
+      if (target) {
+        const from = team.name || team.players.map((p) => String(p.name || '').split(' ').slice(-1)[0]).join(' / ');
+        ev.nudges = [...(ev.nudges || []), { team: target.id, text, at: now, from: clip(from, 60), fromTeam: team.id }].slice(-50);
+        await this.ctx.storage.put('event', ev);
+        await this.broadcast();
+      }
+      sent = true;
+    }
+    return json({ ok: true, now, on: true, hide, groups: golferGroups(ev, wh, team.id, now), notes: ev.notesOff ? [] : GOLFER_NOTES, ...(sent ? { sent } : {}) });
   }
 
   // sponsor counts for the report: app views and taps, and seconds on the big screens

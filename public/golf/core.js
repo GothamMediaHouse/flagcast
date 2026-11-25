@@ -425,3 +425,22 @@ export function sideGames(ev, scores, teamIds, cfg = {}) {
   }
   return out;
 }
+
+// what the course map's group card shows about one group: its players, holes played, score and place.
+// For stroke play (a line per player) the group's score and place are its best player's; each player has their own.
+export function groupInfo(ev, scores, teamId) {
+  const team = (ev.teams || []).find((t) => t.id === teamId); if (!team) return null;
+  const stab = ev.format?.type === 'stableford', lines = leaderboard(ev, scores).filter((l) => l.teamId === teamId);
+  const best = lines.find((l) => l.played) || lines[0];
+  const per = lines.length > 1;
+  return {
+    name: best ? (per ? team.name || best.sub : best.name) : team.name,
+    thru: best ? best.thru : '—', score: best && best.played ? fmtPar(best.score, stab) : '—', pos: best && best.pos ? best.pos : '—',
+    players: (team.players || []).map((p) => {
+      const l = per ? lines.find((x) => x.key === `${teamId}:${p.id}`) : null;
+      // otherwise their own gross score to par over the holes they've finished
+      let d = 0, n = 0; ((scores || {})[teamId]?.[p.id] || []).forEach((v, i) => { if (typeof v === 'number' && v > 0) { d += v - (ev.course?.holes?.[i]?.par || 4); n++; } });
+      return { id: p.id, name: p.name, hcp: p.hcp, today: l && l.played ? fmtPar(l.score, stab) : n && ev.format?.type !== 'scramble' ? `${fmtPar(d)} gross` : '' };
+    }),
+  };
+}

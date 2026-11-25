@@ -87,6 +87,22 @@ body.groups .strip { display: none; }
 .g3n { font: 700 10px var(--f-mono); color: #fff; background: rgba(0,0,0,.5); border-radius: 50%; width: 20px; height: 20px; display: grid; place-items: center; }
 .leaflet-tooltip.gtip { background: rgba(10,24,16,.85); color: #fff; border: 0; font: 600 11px var(--f-body); padding: 2px 6px; box-shadow: none; }
 .leaflet-tooltip.gtip::before { display: none; }
+.gcard { display: grid; gap: 10px; }
+.gcard .gh { display: flex; gap: 10px; align-items: center; }
+.gcard .gh .n { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: #3a8bff; color: #fff; font: 700 .95rem var(--f-mono); flex: none; }
+.gcard .gh b { display: block; font-size: 1.05rem; } .gcard .gh small { color: var(--muted); }
+.gstats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.gstats div { background: var(--paper-2); border-radius: 8px; padding: 6px 8px; min-width: 0; }
+.gstats small { display: block; font: 600 .6rem var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.gstats b { font-variant-numeric: tabular-nums; white-space: nowrap; } .gstats b.warn { color: var(--warn); }
+.gpl { display: grid; } .gpl div { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--line); } .gpl div:last-child { border: 0; }
+.gpl em { font-style: normal; color: var(--muted); }
+.gpl button { border: 0; background: none; color: var(--green); font-weight: 600; font-size: .84rem; padding: 2px 4px; text-decoration: underline; }
+.gpl button[aria-pressed="true"] { background: var(--flag); color: var(--on-flag); border-radius: 6px; text-decoration: none; }
+.gchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.gchips button { border: 1px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 999px; padding: 6px 10px; font-size: .82rem; font-weight: 600; }
+.gsend { display: flex; gap: 6px; } .gsend input { flex: 1; min-width: 0; }
+.gnotes { display: flex; align-items: center; gap: 8px; margin: 6px 0 2px; font-size: .88rem; }
 .auto { margin-top: 16px; padding: 12px; border: 1.5px solid var(--flag); border-radius: 10px; background: var(--card); }
 .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--green); color: var(--on-green); padding: 10px 16px; border-radius: 10px; z-index: 1000; font-size: .9rem; box-shadow: 0 8px 24px rgba(0,0,0,.3); }
 </style>
@@ -104,6 +120,7 @@ body.groups .strip { display: none; }
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script type="module">
 import { eventId, api, post, esc } from '/golf/client.js';
+import { groupInfo } from '/golf/core.js';
 import { TILES, TILE_CREDIT, yds, middle, HZ_LABEL } from '/golf/gps.js';
 import { fetchGolf, buildMap, OSM_CREDIT } from '/golf/osm.js';
 import { holePath } from '/golf/flypath.js';
@@ -344,7 +361,7 @@ async function autoMap(all, btn) {
 
 // ---- where every group is ----
 const groupsLayer = L.layerGroup().addTo(map);
-let GROUPS = [], gTimer = null, fitted = false, TRACK = null;
+let GROUPS = [], gTimer = null, fitted = false, TRACK = null, PICK = null, TO = null; // PICK: the group whose card is open; TO: one player to message
 const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : `${Math.floor(m / 60)} h ${m % 60} min ago`; };
 const thru = (teamId) => { const sc = S?.scores?.[teamId] || {}; return Math.max(0, ...Object.values(sc).map((a) => a.filter((v) => v != null).length)); };
 const short = (n) => String(n || '').split(/\s+/).map((w) => w[0]).join('').slice(0, 3).toUpperCase() || '•';
@@ -356,6 +373,33 @@ async function loadGroups() {
   } catch (e) { toast(e.message); }
   if (mode === 'groups') drawGroups();
 }
+const PACE_MINS = 15; // more than this on one hole shows as slow
+const NUDGES = [['Please pick up the pace', 'Please pick up the pace. Thank you!'], ['Come to the clubhouse', 'Please come to the clubhouse.'], ['Weather delay', 'Weather delay. Please head in.']]; // [button, message]
+// the card for one group: who, where, how they're scoring, how long on this hole, and a message to them
+function groupCard(g) {
+  const info = S ? groupInfo(S, S.scores || {}, g.team) : null, mins = g.since ? Math.max(0, Math.round((Date.now() - g.since) / 60000)) : null;
+  const team = (S?.teams || []).find((t) => t.id === g.team), to = TO && info?.players.find((p) => p.id === TO);
+  return `<div class="gcard"><div class="row" style="margin:0"><button class="btn" data-back>‹ All groups</button></div>
+    <div class="gh"><span class="n">${g.hole || '?'}</span><span style="flex:1;min-width:0"><b>${esc(info ? info.name : g.name)}</b><small>${[team?.cart ? `Cart ${esc(team.cart)}` : '', g.start ? `started hole ${g.start}` : '', g.sample ? 'sample group on the demo' : '', `GPS ${ago(g.t)}`].filter(Boolean).join(' · ')}</small></span></div>
+    <div class="gstats"><div><small>Hole</small><b>${g.hole || '—'}</b></div><div><small>Thru</small><b>${esc(info ? info.thru : '—')}</b></div><div><small>Score</small><b>${esc(info ? info.score : '—')}</b></div>
+      <div><small>On hole</small><b class="${mins != null && mins > PACE_MINS ? 'warn' : ''}">${mins == null ? '—' : `${mins} min`}</b></div></div>
+    ${info ? `<div class="gpl">${info.players.map((p) => `<div><span>${esc(p.name)}${p.hcp != null ? ` <em>· ${esc(p.hcp)}</em>` : ''}</span><button data-to="${esc(p.id)}" aria-pressed="${TO === p.id}">${TO === p.id ? 'Messaging' : 'Message'}</button></div>`).join('')}</div>` : ''}
+    <div class="gchips">${NUDGES.map(([t], i) => `<button data-nudge="${i}">${esc(t)}</button>`).join('')}</div>
+    <div class="gsend"><input id="gmsg" maxlength="140" placeholder="${to ? `A note to ${esc(to.name)}` : 'A note to the whole group'}" aria-label="Message"><button class="btn primary" data-send>Send</button></div>
+    <p class="help" style="margin:0">${to ? `Goes to ${esc(to.name)}’s phone if they picked their name, otherwise the cart.` : 'Pops up on every scorecard in this group.'}</p></div>`;
+}
+async function sendNudge(text) {
+  const g = GROUPS.find((x) => x.team === PICK); if (!g || !text.trim()) return;
+  if (g.sample) { toast(`Sent to ${String(g.name).split(' / ')[0]} (a sample group, so nobody gets it).`); return; }
+  const b = { op: 'nudge', team: g.team, text: text.trim(), ...(TO ? { player: TO } : {}) };
+  try { if (key) await post('desk', { key, ...b }); else await post('pro', { pin, ...b }); toast('Sent'); const i = $('gmsg'); if (i) i.value = ''; }
+  catch (e) { toast(e.message); }
+}
+async function setNotes(off) {
+  try { if (key) await post('desk', { key, op: 'notes', off }); else await post('pro', { pin, op: 'notes', off }); if (S) S.notesOff = off; toast(off ? 'Golfer notes are off' : 'Golfer notes are on'); }
+  catch (e) { toast(e.message); }
+  drawGroups();
+}
 function drawGroups() {
   groupsLayer.clearLayers();
   for (const g of GROUPS) {
@@ -365,10 +409,14 @@ function drawGroups() {
       .on('click', () => pickGroup(g));
   }
   if (d3on && D3 && mode === 'groups') D3.groups(GROUPS, pickGroup);
-  const teams = (S?.teams || []).length;
-  $('panel').innerHTML = `<h2>Groups on the course</h2>
+  const teams = (S?.teams || []).length, picked = PICK && GROUPS.find((x) => x.team === PICK);
+  if (picked) {
+    if (document.activeElement && document.activeElement.id === 'gmsg') return; // don't wipe a note being typed
+    $('panel').innerHTML = groupCard(picked);
+  } else $('panel').innerHTML = `<h2>Groups on the course</h2>
     ${TRACK && TRACK.on === false ? `<div class="hint">Group tracking is off. ${TRACK.locked ? 'The results are final, so group spots were wiped.' : TRACK.date ? `It turns on on the tournament day (${esc(TRACK.date)}) and stops when the results are made final.` : 'Set the tournament date in Setup. Tracking turns on that day and stops when the results are made final.'}</div>` : ''}
     <p class="help">${GROUPS.length} of ${teams} groups sharing their spot. A group shows up once a player turns on GPS on their scorecard. Grey means not seen for 10 minutes. Updates every 15 seconds.</p>
+    <label class="gnotes"><input type="checkbox" id="gnotes" ${S?.notesOff ? '' : 'checked'}> Golfers can send ready-made notes to other groups (“Nice round!”, “Want to play through?”)</label>
     ${GROUPS.map((g, i) => `<button class="grp ${Date.now() - g.t > 10 * 60000 ? 'old' : ''}" data-g="${i}"><span class="n">${g.hole || '?'}</span><span style="flex:1;min-width:0"><b>${esc(g.name)}</b><small>${g.hole ? `On hole ${g.hole}` : 'On the course'} · thru ${thru(g.team)} · started on ${g.start} · ${ago(g.t)}</small></span></button>`).join('') || '<p class="help">No groups yet.</p>'}`;
   if (!fitted && GROUPS.length) { fitted = true; map.fitBounds(GROUPS.map((g) => g.at), { padding: [50, 50], maxZoom: 17 }); }
 }
@@ -385,7 +433,17 @@ function setMode(m) {
   } else { groupsLayer.clearLayers(); drawMap(); drawPanel(); }
 }
 $('mode').addEventListener('click', (e) => { const b = e.target.closest('[data-mode]'); if (b) setMode(b.dataset.mode); });
-$('panel').addEventListener('click', (e) => { const b = e.target.closest('[data-g]'); if (b) pickGroup(GROUPS[Number(b.dataset.g)]); });
+$('panel').addEventListener('click', (e) => {
+  if (mode !== 'groups') return;
+  const b = e.target.closest('[data-g],[data-back],[data-to],[data-nudge],[data-send]'); if (!b) return;
+  if (b.dataset.g != null) return pickGroup(GROUPS[Number(b.dataset.g)]);
+  if (b.hasAttribute('data-back')) { PICK = null; TO = null; return drawGroups(); }
+  if (b.dataset.to) { TO = TO === b.dataset.to ? null : b.dataset.to; return drawGroups(); }
+  if (b.dataset.nudge != null) return sendNudge(NUDGES[Number(b.dataset.nudge)][1]);
+  if (b.hasAttribute('data-send')) return sendNudge($('gmsg').value);
+});
+$('panel').addEventListener('keydown', (e) => { if (e.target.id === 'gmsg' && e.key === 'Enter') sendNudge(e.target.value); });
+$('panel').addEventListener('change', (e) => { if (e.target.id === 'gnotes') setNotes(!e.target.checked); });
 
 // ---- saving ----
 let timer = null, saving = false, again = false;
@@ -426,7 +484,7 @@ async function set3D(on) {
   if (mode === 'groups') { D3.groups(GROUPS, pickGroup); D3.overview(groupPts()); } else D3.show(hole);
 }
 const groupPts = () => (GROUPS.length ? GROUPS.map((g) => g.at) : Object.values(MAP.holes).flatMap((h) => [h.tee, middle(h)]));
-function pickGroup(g) { if (d3on && D3) D3.focus(g.at); else map.setView(g.at, Math.max(map.getZoom(), 18)); }
+function pickGroup(g) { if (PICK !== g.team) TO = null; PICK = g.team; if (d3on && D3) D3.focus(g.at); else map.setView(g.at, Math.max(map.getZoom(), 18)); drawGroups(); }
 $('d3').onclick = () => set3D(!d3on);
 $('fly').onclick = async () => { if (!d3on) await set3D(true); if (!D3) return; const p = D3.flyHole(hole); drawFly(); await p; drawFly(); };
 $('flyAll').onclick = async () => { if (!d3on) await set3D(true); if (!D3) return; const p = D3.flyEvery(mappedHoles()); drawFly(); await p; drawFly(); };
