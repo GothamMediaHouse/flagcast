@@ -54,6 +54,7 @@ enum Geo {
     /// 11:00 UTC the next) and until the results are final. The server checks the same thing.
     static func trackingOn(_ s: EventState, now: Date = Date()) -> Bool {
         guard !s.locked else { return false }
+        if s.brand.marked { return true } // a Demo tournament: any day, sample groups walk the course (demogroups.js)
         let parts = s.date.split(separator: "-").compactMap { Int($0) }
         guard parts.count == 3, s.date.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil else { return false }
         var c = DateComponents(); c.year = parts[0]; c.month = parts[1]; c.day = parts[2]

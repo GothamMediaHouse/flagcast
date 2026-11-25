@@ -175,10 +175,12 @@ struct Flash: Codable, Hashable { var text: String; var at: Double }
 struct Brand: Codable, Hashable {
     var logo = "", accent = "", club = ""
     var demo = true, powered = false
+    /// Admin marked the tournament Demo: sample groups walk the course map on any day
+    var marked = false
     init() {}
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
-        logo = c.str(.logo); accent = c.str(.accent); club = c.str(.club); demo = c.bool(.demo, true); powered = c.bool(.powered, false)
+        logo = c.str(.logo); accent = c.str(.accent); club = c.str(.club); demo = c.bool(.demo, true); powered = c.bool(.powered, false); marked = c.bool(.marked, false)
     }
     /// the club logo's full address, or nil for the Flagcast logo
     var logoURL: URL? { demo || logo.isEmpty ? nil : URL(string: logo, relativeTo: Server.base)?.absoluteURL }

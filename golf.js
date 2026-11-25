@@ -18,6 +18,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { defaultHoles, courseHcp } from './public/golf/core.js';
 import { trackingOn, cleanPin } from './public/golf/gps.js';
+import { demoGroups } from './demogroups.js';
 import { clubs } from './clubs.js';
 import { resultsRows, ghinRows } from './report.js';
 import { camPlaylist } from './stream.js';
@@ -138,7 +139,14 @@ export const GOLFER_SPOT_MINS = 15;
 export function golferGroups(ev, wh, mine, now = Date.now()) {
   const name = (t) => t.name || t.players.map((p) => String(p.name || '').split(' ').slice(-1)[0]).join(' / ');
   return ev.teams.filter((t) => { const w = wh[t.id]; return w && w.at && (t.id === mine || (!w.hide && now - w.t <= GOLFER_SPOT_MINS * 60000)); })
-    .map((t) => ({ team: t.id, name: name(t), hole: wh[t.id].hole || 0, at: wh[t.id].at, acc: wh[t.id].acc || 0, t: wh[t.id].t, ...(t.id === mine ? { me: true } : {}) }));
+    .map((t) => ({ team: t.id, name: name(t), hole: wh[t.id].hole || 0, at: wh[t.id].at, acc: wh[t.id].acc || 0, t: wh[t.id].t, ...(t.id === mine ? { me: true } : {}) }))
+    .concat(ev.demo ? sampleGroups(ev, wh, mine, now).map(({ start, ...g }) => g) : []);
+}
+// a Demo tournament: sample groups walk the course (demogroups.js) so the maps aren't empty. Teams with a real
+// phone on the map (and your own) are left to that phone.
+export function sampleGroups(ev, wh, mine, now = Date.now()) {
+  const real = new Set(ev.teams.filter((t) => t.id === mine || (wh[t.id] && now - wh[t.id].t <= GOLFER_SPOT_MINS * 60000)).map((t) => t.id));
+  return demoGroups(ev, now, real);
 }
 
 // the course map for hole GPS: per hole the tee, the front, middle and back of the green, and hazards
@@ -503,7 +511,8 @@ export class GolfEvent extends DurableObject {
         return json({ now, on: false, date: ev.date, locked: !!ev.locked, groups: [] });
       }
       const wh = await this.spots();
-      return json({ now, on: true, groups: ev.teams.filter((t) => wh[t.id]).map((t) => ({ team: t.id, name: t.name || t.players.map((p) => p.name.split(' ').slice(-1)[0]).join(' / '), start: t.start, ...wh[t.id] })) });
+      const real = ev.teams.filter((t) => wh[t.id]).map((t) => ({ team: t.id, name: t.name || t.players.map((p) => p.name.split(' ').slice(-1)[0]).join(' / '), start: t.start, ...wh[t.id] }));
+      return json({ now, on: true, groups: ev.demo ? real.concat(sampleGroups(ev, wh, null, now)) : real });
     }
     if (b.op === 'fix') {
       const team = ev.teams.find((t) => t.id === b.team); if (!team) return json({ error: 'No such team' }, 404);

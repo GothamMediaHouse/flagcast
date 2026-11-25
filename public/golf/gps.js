@@ -39,6 +39,7 @@ const HZ_COLOR = { bunker: '#f2e2b0', water: '#5fb4ff', trees: '#7fd18b', layup:
 // group tracking runs only while the tournament is on: on its date (US time zones: 04:00 UTC that day to
 // 11:00 UTC the next) and until the results are made final. The server checks the same thing.
 export function trackingOn(S, now = Date.now()) {
+  if (S && !S.locked && (S.demo || S.brand?.marked)) return true; // a Demo tournament (Admin's switch): any day, sample groups walk it
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((S && S.date) || ''); if (!m || S.locked) return false;
   const d = Date.UTC(+m[1], +m[2] - 1, +m[3]);
   return now >= d + 4 * 3600000 && now <= d + 35 * 3600000;
