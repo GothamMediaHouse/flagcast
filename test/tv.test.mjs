@@ -61,9 +61,34 @@ assert.equal(s.displays.find((x) => x.id === add.tv.id).name, 'Bar TV');
 ok('renaming it renames its screen');
 
 const list = await post('/golf/api/tv/list', { id: later.id, key: later.key });
-assert.equal(list.tvs[0].on, true);
+assert.equal(list.tvs[0].on, true); assert.equal(list.added, 1);
+let sl = await (await fetch(`${BASE}/golf/api/${later.id}/state`)).json();
+assert.ok(sl.displays.find((x) => x.id === add.tv.id)?.tv);
+assert.equal((await post('/golf/api/tv/list', { id: later.id, key: later.key })).added, 0);
+ok('opening another tournament gives the club TV a screen card there too');
+
+// its own list in the other tournament, and pinned to it
+const gl = await desk(later, 'get');
+await desk(later, 'save', { setup: { ...gl, displays: gl.displays.map((x) => x.id === add.tv.id ? { ...x, playlist: [{ k: 'lb', fl: '', hole: 0, sponsor: '', secs: 33 }] } : x) } });
+sl = await (await fetch(`${BASE}/golf/api/${later.id}/state`)).json();
+assert.equal(sl.displays.find((x) => x.id === add.tv.id).playlist[0].secs, 33);
+const pin = await post('/golf/api/tv/edit', { id: later.id, key: later.key, tv: add.tv.id, event: later.id });
+assert.equal(pin.tvs[0].event, later.id); assert.equal(pin.tvs[0].eventName, 'Next one');
+now = await post('/golf/api/tv/now', { token: got.token, today, feed: 1 });
+assert.equal(now.event.id, later.id); assert.ok(now.feed.pages.length);
+assert.equal((await post('/golf/api/tv/edit', { id: later.id, key: later.key, tv: add.tv.id, event: '' })).tvs[0].event, '');
+ok('its own list in that tournament, and Always show this tournament');
+
 await post('/golf/api/tv/remove', { id: ev.id, key: ev.key, tv: add.tv.id });
 assert.equal((await call('/golf/api/tv/now', { token: got.token, today })).status, 401);
 s = await (await fetch(`${BASE}/golf/api/${ev.id}/state`)).json();
 assert.ok(!s.displays.some((x) => x.id === add.tv.id));
+sl = await (await fetch(`${BASE}/golf/api/${later.id}/state`)).json();
+assert.ok(!sl.displays.some((x) => x.id === add.tv.id));
 ok('removing it unpairs the TV and takes it off the tournament');
+
+// a Manager that loaded the setup before the TV was removed saves it: the TV doesn't come back
+await desk(later, 'save', { setup: gl });
+sl = await (await fetch(`${BASE}/golf/api/${later.id}/state`)).json();
+assert.ok(!sl.displays.some((x) => x.id === add.tv.id));
+ok('an older setup saved after removing it doesn’t bring it back');

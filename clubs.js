@@ -718,7 +718,7 @@ export class FlagcastClubs extends DurableObject {
     const c = this.one('SELECT * FROM clubs WHERE id = ?', ev.club); if (!c) this.fail('This tournament has no club.', 404);
     return c;
   }
-  tvRow(t) { return { id: t.id, name: t.name, where: t.place || '', kind: t.kind || '', event: t.event || '', added: t.added, seen: t.seen || 0, on: Date.now() - (t.seen || 0) < 3 * 60000 }; }
+  tvRow(t) { return { id: t.id, name: t.name, where: t.place || '', kind: t.kind || '', event: t.event || '', eventName: t.event ? this.one('SELECT name FROM events WHERE id = ?', t.event)?.name || '' : '', added: t.added, seen: t.seen || 0, on: Date.now() - (t.seen || 0) < 3 * 60000 }; }
   async tvRoute(op, b, now) {
     const ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', KINDS = ['appletv', 'androidtv', 'firetv', 'roku', 'web'];
     if (op === 'hello') { // a TV that isn't connected: a new code (10 minutes), 30 an hour from one network
@@ -750,22 +750,33 @@ export class FlagcastClubs extends DurableObject {
       this.sql.exec('INSERT INTO tvs (id, club, name, place, kind, token, event, joined, added, seen) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)', id, club.id, name, clip(b.where, 40), c.kind, token, '', '', now, 0);
       this.sql.exec('UPDATE tvcodes SET tv = ?, token = ? WHERE code = ?', id, token, code);
       this.note(b.token ? this.who(b.token).email : 'Manager', club.id, `Added a TV: ${name}`);
-      return json({ ok: true, tv: this.tvRow(this.one('SELECT * FROM tvs WHERE id = ?', id)), tvs: this.all('SELECT * FROM tvs WHERE club = ? ORDER BY added', club.id).map((t) => this.tvRow(t)) });
+      let added = 0;
+      if (!b.token) try { added = (await this.golf(clip(b.id, 8), 'tvjoin', { tv: { id, name, where: clip(b.where, 40) } })).added || 0; } catch {}
+      return json({ ok: true, added, tv: this.tvRow(this.one('SELECT * FROM tvs WHERE id = ?', id)), tvs: this.all('SELECT * FROM tvs WHERE club = ? ORDER BY added', club.id).map((t) => this.tvRow(t)) });
     }
     if (op === 'list' || op === 'edit' || op === 'remove') {
       const club = this.tvClub(b), t = b.tv ? this.one('SELECT * FROM tvs WHERE id = ? AND club = ?', clip(b.tv, 12), club.id) : null;
       if (op !== 'list' && !t) this.fail('That TV isn’t in your club.', 404);
+      // the tournaments a TV may be one of the screens of: the club's latest ones, the one it joined, the one asking
+      const where = async () => [...new Set([...(await this.tvEvents(club.id, now)).map((e) => e.id), t?.joined, b.token ? '' : clip(b.id, 8)].filter(Boolean))];
       if (op === 'edit') {
         const ev = b.event === undefined ? t.event : (b.event && this.one('SELECT id FROM events WHERE id = ? AND club = ?', clip(b.event, 8), club.id) ? clip(b.event, 8) : '');
-        this.sql.exec('UPDATE tvs SET name = ?, place = ?, event = ? WHERE id = ?', clip(b.name ?? t.name, 40) || t.name, clip(b.where ?? t.place, 40), ev, t.id);
-        if (t.joined) await this.golf(t.joined, 'tvjoin', { tv: { id: t.id, name: clip(b.name ?? t.name, 40) || t.name, where: clip(b.where ?? t.place, 40) } }).catch(() => {});
+        const name = clip(b.name ?? t.name, 40) || t.name, place = clip(b.where ?? t.place, 40);
+        this.sql.exec('UPDATE tvs SET name = ?, place = ?, event = ? WHERE id = ?', name, place, ev, t.id);
+        if (name !== t.name || place !== (t.place || '')) await Promise.all((await where()).map((id) => this.golf(id, 'tvjoin', { only: true, tv: { id: t.id, name, where: place } }).catch(() => {})));
       }
       if (op === 'remove') {
         this.sql.exec('DELETE FROM tvs WHERE id = ?', t.id);
-        if (t.joined) await this.golf(t.joined, 'tvleave', { tv: t.id }).catch(() => {});
+        await Promise.all((await where()).map((id) => this.golf(id, 'tvleave', { tv: t.id }).catch(() => {})));
         this.note('Manager', club.id, `Removed a TV: ${t.name}`);
       }
-      return json({ tvs: this.all('SELECT * FROM tvs WHERE club = ? ORDER BY added', club.id).map((x) => this.tvRow(x)) });
+      const tvs = this.all('SELECT * FROM tvs WHERE club = ? ORDER BY added', club.id);
+      // a Manager with this tournament open: every club TV is one of its screens, so it gets a card with its own list
+      let added = 0;
+      if (op !== 'remove' && !b.token && tvs.length) {
+        try { added = (await this.golf(clip(b.id, 8), 'tvjoin', { tvs: tvs.map((x) => ({ id: x.id, name: x.name, where: x.place || '' })) })).added || 0; } catch {}
+      }
+      return json({ tvs: tvs.map((x) => this.tvRow(x)), added });
     }
     if (op === 'now') { // a connected TV: what it shows now
       const t = b.token && this.one('SELECT * FROM tvs WHERE token = ?', clip(b.token, 60));

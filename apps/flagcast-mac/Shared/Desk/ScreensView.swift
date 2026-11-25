@@ -261,8 +261,12 @@ struct ScreenWall: View {
                 .padding(.top, 6)
                 HStack {
                     Spacer()
-                    Button(role: .destructive) { doc.ev.displays.removeAll { $0.id == id } } label: { Label("Remove This TV", systemImage: "trash") }
-                        .buttonStyle(.borderless).controlSize(.small)
+                    if d.wrappedValue.tv {
+                        Text("Club TV: remove it under Club TVs").font(.caption).foregroundStyle(FC.muted)
+                    } else {
+                        Button(role: .destructive) { doc.ev.displays.removeAll { $0.id == id } } label: { Label("Remove This TV", systemImage: "trash") }
+                            .buttonStyle(.borderless).controlSize(.small)
+                    }
                 }
             } label: { Text("Customize…").font(.system(size: 12, weight: .semibold)).foregroundStyle(FC.link) }
             if !isSaved { Label("New TV: press Save to switch it on.", systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(FC.muted) }

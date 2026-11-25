@@ -62,7 +62,12 @@ final class DeskDoc {
         let keep = ev, wasDirty = dirty
         var e = fresh
         // unsaved edits stay, still marked as made from the copy loaded earlier (v), so Save keeps what changed since
-        if wasDirty { e.apply(setup: keep); e.v = keep.v }
+        if wasDirty {
+            e.apply(setup: keep); e.v = keep.v
+            // club TVs that joined or were removed since (Club TVs): their cards show or go now, the edits stay
+            for d in fresh.displays where d.tv && !e.displays.contains(where: { $0.id == d.id }) { e.displays.append(d) }
+            e.displays.removeAll { d in d.tv && !fresh.displays.contains { $0.id == d.id } }
+        }
         ev = e
         savedData = fresh.setupData
     }

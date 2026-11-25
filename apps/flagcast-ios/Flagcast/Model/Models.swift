@@ -153,11 +153,13 @@ struct Display: Codable, Hashable, Identifiable {
     var id: String, name: String, playlist: [PageRef]
     /// where it hangs ("Clubhouse bar") and a group to send to together ("Clubhouse")
     var place = "", group = ""
+    /// one of the club's TVs (Club TVs): it's in every tournament, and removing it is done there
+    var tv = false
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
-        id = c.str(.id); name = c.str(.name); playlist = c.list(.playlist); place = c.str(.place); group = c.str(.group)
+        id = c.str(.id); name = c.str(.name); playlist = c.list(.playlist); place = c.str(.place); group = c.str(.group); tv = c.bool(.tv, false)
     }
-    enum CodingKeys: String, CodingKey { case id, name, playlist, place = "where", group }
+    enum CodingKeys: String, CodingKey { case id, name, playlist, place = "where", group, tv }
 }
 
 struct Fund: Codable, Hashable {

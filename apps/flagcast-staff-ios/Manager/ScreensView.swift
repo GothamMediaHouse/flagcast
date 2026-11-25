@@ -177,7 +177,8 @@ private struct TVCard: View {
                 PlaylistList(playlist: $display.playlist, choices: doc.pageChoices,
                              others: doc.ev.displays.filter { $0.id != display.id }.map { ($0.id, $0.name) },
                              copyTo: { ids in let l = display.playlist; for i in doc.ev.displays.indices where ids.contains(doc.ev.displays[i].id) { doc.ev.displays[i].playlist = l }; doc.flash("Copied. Save to put it on those TVs.") })
-                Button("Remove This TV", role: .destructive) { let id = display.id; doc.ev.displays.removeAll { $0.id == id } }.font(.subheadline).padding(.top, 6)
+                if display.tv { Text("Club TV: remove it under Club TVs").font(.caption).foregroundStyle(.secondary).padding(.top, 6) }
+                else { Button("Remove This TV", role: .destructive) { let id = display.id; doc.ev.displays.removeAll { $0.id == id } }.font(.subheadline).padding(.top, 6) }
             } label: { Text("Customize…").font(.subheadline.weight(.semibold)).foregroundStyle(FC.link) }
             if !saved { Label("New TV: press Save to switch it on.", systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(FC.muted) }
         }

@@ -243,7 +243,7 @@ table.t .n { width: 64px; }
   <div id="staff"></div>
   <div class="row"><button class="btn" id="addPro">Add golf pro</button><button class="btn" id="addMarshal">Add marshal</button></div>
   <h3>Club TVs</h3>
-  <p class="help">TVs with the Flagcast TV app (Apple TV, Google TV, Fire TV, Roku), or any TV’s browser at flagcast.app/tv. Open it on the TV and type the code it shows. A club TV shows the tournament of the day by itself, so you only add it once.</p>
+  <p class="help">TVs with the Flagcast TV app (Apple TV, Google TV, Fire TV, Roku), or any TV’s browser at flagcast.app/tv. Open it on the TV and type the code it shows. A club TV shows the tournament of the day by itself, so you only add it once. Each one also gets a screen below, where you pick what it shows in this tournament.</p>
   <div id="tvs"><p class="help">Loading…</p></div>
   <div class="row" id="tvadd"><input id="tvcode" placeholder="TV code" maxlength="6" autocomplete="off" style="text-transform:uppercase;letter-spacing:.2em;font-family:var(--f-mono);width:9rem" aria-label="TV code">
     <input id="tvname" placeholder="Name, like Clubhouse bar" maxlength="40" aria-label="TV name"><button class="btn primary" id="addTV">Add a TV</button></div>
@@ -699,24 +699,36 @@ async function tvCall(op, b = {}) {
 function drawTVs() {
   if (!TVS) return;
   $('tvs').innerHTML = TVS.length ? TVS.map((t) => `<div class="card2" data-tv="${esc(t.id)}"><div class="row" style="margin:0;justify-content:space-between">
-    <div><b>${esc(t.name)}</b> <span class="help" style="margin:0">${esc(KINDS[t.kind] || 'TV')}${t.where ? ` · ${esc(t.where)}` : ''}</span></div>
-    <div class="row" style="margin:0"><span class="pill ${t.on ? 'live' : 'off'}">${t.on ? 'On' : 'Off'}</span><button class="btn" data-tvren="${esc(t.id)}">Rename</button><button class="btn danger" data-tvdel="${esc(t.id)}">Remove</button></div></div></div>`).join('')
+    <div><b>${esc(t.name)}</b> <span class="help" style="margin:0">${esc(KINDS[t.kind] || 'TV')}${t.where ? ` · ${esc(t.where)}` : ''}${t.event ? ` · Always shows ${t.event === eventId() ? 'this tournament' : esc(t.eventName || 'another tournament')}` : ''}</span></div>
+    <div class="row" style="margin:0"><span class="pill ${t.on ? 'live' : 'off'}">${t.on ? 'On' : 'Off'}</span><button class="btn" data-tvpin="${esc(t.id)}">${t.event === eventId() ? 'Show the tournament of the day' : 'Always show this tournament'}</button><button class="btn" data-tvren="${esc(t.id)}">Rename</button><button class="btn danger" data-tvdel="${esc(t.id)}">Remove</button></div></div></div>`).join('')
     : '<p class="help">No club TVs yet.</p>';
 }
-async function loadTVs() { try { TVS = (await tvCall('list')).tvs; drawTVs(); } catch (e) { $('tvs').innerHTML = `<p class="help">${esc(e.message)}</p>`; } }
+// the server makes every club TV one of this tournament's screens when it's asked from here: show new ones, gone ones go
+async function gotTVs(j) {
+  TVS = j.tvs; drawTVs();
+  if (!EV) return;
+  const have = (EV.displays || []).filter((d) => d.tv).map((d) => d.id).sort().join(), want = TVS.map((t) => t.id).sort().join();
+  if (!j.added && have === want) return;
+  const fresh = await desk('get').catch(() => null); if (!fresh) return;
+  if (!dirty) { EV = fresh; fill(); return; }
+  EV.displays = EV.displays.filter((d) => !d.tv || fresh.displays.some((x) => x.id === d.id));
+  for (const d of fresh.displays) if (d.tv && !EV.displays.some((x) => x.id === d.id)) EV.displays.push(d);
+  drawStaff();
+}
+async function loadTVs() { try { await gotTVs(await tvCall('list')); } catch (e) { $('tvs').innerHTML = `<p class="help">${esc(e.message)}</p>`; } }
 loadTVs(); setInterval(loadTVs, 60000);
 $('tvadd').addEventListener('click', async (e) => {
   if (!e.target.closest('#addTV')) return;
   const code = $('tvcode').value.trim(); if (!code) return toast('Type the code on the TV.');
-  try { const j = await tvCall('add', { code, name: $('tvname').value.trim() }); TVS = j.tvs; drawTVs(); $('tvcode').value = ''; $('tvname').value = ''; toast(`${j.tv.name} is connected.`); }
+  try { const j = await tvCall('add', { code, name: $('tvname').value.trim() }); await gotTVs(j); $('tvcode').value = ''; $('tvname').value = ''; toast(`${j.tv.name} is connected.`); }
   catch (err) { toast(err.message); }
 });
 $('tvs').addEventListener('click', async (e) => {
   const b = e.target.closest('button'); if (!b) return;
   try {
-    if (b.dataset.tvren) { const t = TVS.find((x) => x.id === b.dataset.tvren); const name = prompt('Name for this TV', t?.name || ''); if (!name) return; TVS = (await tvCall('edit', { tv: t.id, name })).tvs; }
-    if (b.dataset.tvdel) { const t = TVS.find((x) => x.id === b.dataset.tvdel); if (!confirm(`Remove ${t?.name || 'this TV'}? It goes back to showing a code.`)) return; TVS = (await tvCall('remove', { tv: t.id })).tvs; }
-    drawTVs();
+    if (b.dataset.tvpin) { const t = TVS.find((x) => x.id === b.dataset.tvpin), on = t.event !== eventId(); await gotTVs(await tvCall('edit', { tv: t.id, event: on ? eventId() : '' })); toast(on ? `${t.name} always shows this tournament now.` : `${t.name} shows the tournament of the day.`); }
+    if (b.dataset.tvren) { const t = TVS.find((x) => x.id === b.dataset.tvren); const name = prompt('Name for this TV', t?.name || ''); if (!name) return; await gotTVs(await tvCall('edit', { tv: t.id, name })); }
+    if (b.dataset.tvdel) { const t = TVS.find((x) => x.id === b.dataset.tvdel); if (!confirm(`Remove ${t?.name || 'this TV'}? It goes back to showing a code.`)) return; await gotTVs(await tvCall('remove', { tv: t.id })); }
   } catch (err) { toast(err.message); }
 });
 $('s-staff').addEventListener('input', (e) => {

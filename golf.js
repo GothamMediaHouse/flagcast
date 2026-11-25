@@ -202,6 +202,8 @@ export function cleanMap(m) {
 // TVs (removing one is done from the club's TV list, tv.js), and keep them marked as TVs whatever the app sends back
 function keepTVs(s, before) {
   const tvs = (before || []).filter((d) => d.tv);
+  // only the club directory adds a club TV (tvjoin): one the server doesn't have was removed since the app loaded it
+  s.displays = s.displays.filter((d) => !d.tv || tvs.some((t) => t.id === d.id));
   for (const d of s.displays) if (tvs.some((t) => t.id === d.id)) d.tv = true;
   for (const t of tvs) if (!s.displays.some((d) => d.id === t.id) && s.displays.length < 20) s.displays.push(t);
 }
@@ -448,19 +450,33 @@ export class GolfEvent extends DurableObject {
     // tvinfo: what a TV needs to pick today's tournament. tvjoin { tv: { id, name, where } }: the TV becomes one of this
     // tournament's screens (so the Manager's screen controls and playlists work for it). tvleave { tv: id }: it's gone
     if (op === 'tvinfo') return json({ name: ev.name, date: ev.date || '', locked: !!ev.locked, created: ev.created || 0, last: Math.max(0, ...Object.values(await this.scores()).flatMap((p) => Object.values(p).flatMap((arr) => arr.map((x) => (x ? x.at || 0 : 0))))) });
+    // tvjoin also takes { tvs: [...] } (every club TV at once, when a Manager opens this tournament) and { only: true }
+    // (rename the TV where it already is, don't add it). It answers { added }: how many TVs are new here.
     if (op === 'tvjoin' || op === 'tvleave') {
-      const t = b.tv || {}, id = op === 'tvjoin' ? t.id : b.tv;
-      if (!/^[a-z0-9]{3,12}$/.test(id || '')) return json({ error: 'Bad TV' }, 400);
       ev.displays = ev.displays || [];
-      const have = ev.displays.find((d) => d.id === id);
-      if (op === 'tvleave') { if (!have) return json({ ok: true }); ev.displays = ev.displays.filter((d) => d.id !== id); }
-      else if (have) { if (!t.name || (have.name === clip(t.name, 40) && have.tv)) return json({ ok: true }); have.name = clip(t.name, 40); have.tv = true; if (t.where) have.where = clip(t.where, 40); }
-      else { if (ev.displays.length >= 20) return json({ error: 'This tournament already has 20 screens.' }, 409);
-        ev.displays.push({ id, name: clip(t.name, 40) || 'TV', where: clip(t.where, 40), group: '', tv: true, playlist: [] }); }
-      ev.v = (ev.v || 0) + 1;
-      await this.ctx.storage.put('event', ev);
-      await this.broadcast();
-      return json({ ok: true });
+      const list = op === 'tvleave' ? [b.tv] : Array.isArray(b.tvs) ? b.tvs.slice(0, 40) : [b.tv || {}];
+      let changed = false, added = 0, full = false;
+      for (const t of list) {
+        const id = op === 'tvjoin' ? t?.id : t;
+        if (!/^[a-z0-9]{3,12}$/.test(id || '')) return json({ error: 'Bad TV' }, 400);
+        const have = ev.displays.find((d) => d.id === id);
+        if (op === 'tvleave') { if (have) { ev.displays = ev.displays.filter((d) => d.id !== id); changed = true; } continue; }
+        if (have) {
+          const w = b.only ? clip(t.where || '', 40) : clip(t.where, 40) || have.where || '';
+          if (!t.name || (have.name === clip(t.name, 40) && have.tv && (have.where || '') === w)) { if (!have.tv) { have.tv = true; changed = true; } continue; }
+          have.name = clip(t.name, 40); have.tv = true; have.where = w; changed = true;
+        } else if (!b.only) {
+          if (ev.displays.length >= 20) { full = true; continue; }
+          ev.displays.push({ id, name: clip(t.name, 40) || 'TV', where: clip(t.where, 40), group: '', tv: true, playlist: [] }); added++; changed = true;
+        }
+      }
+      if (changed) {
+        ev.v = (ev.v || 0) + 1;
+        await this.ctx.storage.put('event', ev);
+        await this.broadcast();
+      }
+      if (full && list.length === 1) return json({ error: 'This tournament already has 20 screens.' }, 409);
+      return json({ ok: true, added });
     }
     // the club was deleted in Flagcast Admin (clubs.js admin op 'delete'): wipe everything. Never routed from the web.
     if (op === 'wipe') {
