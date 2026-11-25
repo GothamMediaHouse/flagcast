@@ -183,7 +183,7 @@ final class GoLiveModel {
             v.maxKeyFrameIntervalDuration = 2
             v.expectedFrameRate = 30
             try? await s.stream.setVideoSettings(v)
-            await s.stream.setBitRateStrategy(GoLiveRate(inner: StreamVideoAdaptiveBitRateStrategy(mamimumVideoBitrate: 2_500_000)) { [weak self] bytes, weak in
+            await s.stream.setBitRateStrategy(GoLiveRate(mamimumVideoBitRate: 2_500_000) { [weak self] bytes, weak in
                 Task { @MainActor in
                     guard let self else { return }
                     self.kbps = bytes * 8 / 1000
@@ -288,10 +288,15 @@ extension GoLiveModel: MTHKViewRepresentable.PreviewSource {
 
 /// The adaptive bitrate, plus the upload rate and "not enough signal" for the screen.
 struct GoLiveRate: StreamBitRateStrategy {
+    let mamimumVideoBitRate: Int
+    let mamimumAudioBitRate = 0
     let inner: StreamVideoAdaptiveBitRateStrategy
     let report: @Sendable (_ bytesPerSecond: Int, _ weak: Bool) -> Void
-    var mamimumVideoBitRate: Int { inner.mamimumVideoBitRate }
-    var mamimumAudioBitRate: Int { 0 }
+    init(mamimumVideoBitRate: Int, report: @escaping @Sendable (_ bytesPerSecond: Int, _ weak: Bool) -> Void) {
+        self.mamimumVideoBitRate = mamimumVideoBitRate
+        inner = StreamVideoAdaptiveBitRateStrategy(mamimumVideoBitrate: mamimumVideoBitRate)
+        self.report = report
+    }
     func adjustBitrate(_ event: NetworkMonitorEvent, stream: some StreamConvertible) async {
         switch event {
         case .status(let r): report(r.currentBytesOutPerSecond, false)
