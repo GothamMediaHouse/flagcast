@@ -6,8 +6,8 @@ import { mkdtempSync, writeFileSync, rmSync, existsSync, readdirSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const SERVER = ['groupnotes', 'pinsheet', 'protools', 'screens', 'stalesave', 'where', 'live'];
-const ADMIN = ['clubs', 'trydemo'];
+const SERVER = ['groupnotes', 'pinsheet', 'protools', 'screens', 'stalesave', 'where', 'live', 'tv'];
+const ADMIN = ['trydemo', 'clubs']; // clubs ends by locking out wrong passcodes, so it goes last
 const all = readdirSync('test').filter((f) => f.endsWith('.test.mjs')).map((f) => f.replace('.test.mjs', ''));
 const offline = all.filter((t) => !SERVER.includes(t) && !ADMIN.includes(t));
 let failed = 0;
