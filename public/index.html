@@ -51,6 +51,8 @@ section{padding-block:88px}
 .nav ul a{text-decoration:none;color:var(--on-green-muted)}
 .nav ul a:hover{color:var(--on-green)}
 .nav .btn{padding:9px 16px;font-size:.95rem}
+.nav .login{color:var(--on-green);text-decoration:none;font-weight:600;font-size:.95rem;white-space:nowrap;padding-left:22px;border-left:1px solid rgba(244,241,230,.2)}
+.nav .login:hover{color:var(--flag)}
 .menu{display:none;margin-left:auto;background:none;border:1.5px solid var(--on-green-muted);color:var(--on-green);border-radius:6px;padding:7px 12px;font:600 .9rem var(--f-body)}
 
 /* Hero */
@@ -195,7 +197,7 @@ form [aria-invalid="true"]{border-color:#c8312b}
 form.done .sent{display:block}
 
 footer{background:var(--deep);color:var(--on-green-muted);padding-block:44px;font-size:.92rem}
-footer .wrap{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:32px}
+footer .wrap{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:32px}
 footer img{height:44px;width:auto}
 footer h4{font:700 1rem var(--f-display);letter-spacing:.08em;text-transform:uppercase;color:var(--on-green);margin:0 0 10px}
 footer ul{list-style:none;padding:0;margin:0;display:grid;gap:6px}
@@ -206,7 +208,8 @@ footer .wrap.legal{display:block;margin-top:32px;padding-top:20px;border-top:1px
 @media (max-width:960px){
   .nav ul{display:none}
   .nav ul.open{display:grid;position:absolute;top:66px;left:0;right:0;background:var(--green);padding:14px 16px 20px;gap:14px}
-  .menu{display:block}
+  .menu{display:block;margin-left:14px;order:3}
+  .nav .login{margin-left:auto;order:2;padding-left:0;border-left:0}
   .nav .btn{display:none}
   .hero-grid,.show,.app-grid,.mgr-grid,.book-grid,.split{grid-template-columns:1fr}
   .mgr-vis .ph2{right:0}
@@ -296,6 +299,7 @@ footer .wrap.legal{display:block;margin-top:32px;padding-top:20px;border-top:1px
       <li><a href="#sponsors">Sponsors</a></li>
       <li><a href="#faq">FAQ</a></li>
     </ul>
+    <a class="login" href="/golf/">Club login</a>
     <a class="btn primary" href="#contact">Contact</a>
   </div>
 </nav>
@@ -572,7 +576,8 @@ footer .wrap.legal{display:block;margin-top:32px;padding-top:20px;border-top:1px
 <footer>
   <div class="wrap">
     <div><img src="/brand/wide-on-dark.svg" alt="Flagcast"><p style="margin-top:14px;max-width:34ch">Live cameras, live scoring and big-screen leaderboards for golf tournaments.</p></div>
-    <div><h4>Flagcast</h4><ul><li><a href="#how">How it works</a></li><li><a href="#packages">Packages</a></li><li><a href="#sponsors">Sponsors</a></li><li><a href="#faq">FAQ</a></li><li><a href="/download/">Download Manager</a></li></ul></div>
+    <div><h4>Flagcast</h4><ul><li><a href="#how">How it works</a></li><li><a href="#packages">Packages</a></li><li><a href="#sponsors">Sponsors</a></li><li><a href="#faq">FAQ</a></li></ul></div>
+    <div><h4>For clubs</h4><ul><li><a href="/golf/">Club login</a></li><li><a href="/download/">Download Manager</a></li></ul></div>
     <div><h4>Contact</h4><ul><li><a href="mailto:hello@flagcast.app">hello@flagcast.app</a></li><li>Anywhere in the US</li></ul></div>
   </div>
   <div class="wrap legal">© 2026 Flagcast · <a href="/privacy/" style="color:inherit">Privacy</a> · <a href="/terms/" style="color:inherit">Terms</a> · <a href="/licenses/" style="color:inherit">Credits</a></div>
