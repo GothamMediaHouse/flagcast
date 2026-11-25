@@ -144,8 +144,6 @@ $('demoBtn').addEventListener('click', async () => {
     location.href = `/g/${j.id}/s/${j.code}`;
   } catch (x) { err.textContent = /fetch/i.test(x.message) ? 'No signal. Check your connection and try again.' : x.message; err.hidden = false; $('demoBtn').disabled = false; }
 });
-// flagcast.app "Try the app" links here with #demo: open the demo straight away
-if (location.hash === '#demo') { $('h-demo').scrollIntoView({ block: 'center' }); $('demoBtn').click(); }
 
 $('proForm').addEventListener('submit', async (e) => {
   e.preventDefault();
