@@ -277,6 +277,25 @@ export class FlagcastClubs extends DurableObject {
       this.note(admin ? 'admin' : 'desk', e?.club || '', `Course library: saved ${name}`);
       return json({ ok: true, id });
     }
+    // Go live from an iPhone at the hole (golf.js day op 'golive', from the desk, Admin or a pro's PIN): the hole's live
+    // input, the same one an NDI camera would use (made once, reused, recorded), for the phone to send to.
+    // Only from the tournament itself (it passes its desk key). → { uid, srt, rtmps, playback, state }
+    if (op === 'golive') {
+      const tid = String(b.id || '').toLowerCase();
+      if (!/^[a-z0-9]{8}$/.test(tid) || !b.key) this.fail('Not found', 404);
+      // a club's tournament is on the list; one Flagcast made without a club isn't, so ask the tournament itself
+      let e = this.one('SELECT * FROM events WHERE id = ?', tid);
+      if (!e) { const d = await this.golf(tid, 'desk', { key: String(b.key), op: 'get' }).catch(() => null); if (d && d.key) e = { id: tid, key: d.key, name: d.name || '', club: '' }; }
+      if (!e || !same(String(b.key), e.key)) this.fail('Not found', 404);
+      if (!streamReady(this.env)) this.fail('Live video isn’t switched on for Flagcast yet. Ask Flagcast to set up Cloudflare Stream.', 409);
+      const hole = num(b.hole, 1, 18, 0); if (!hole) this.fail('Pick a hole.');
+      const old = this.one('SELECT uid FROM streams WHERE event = ? AND hole = ?', e.id, hole);
+      const input = await liveInput(this.env, fetch, { uid: old?.uid, name: `${clip(b.name || e.name, 80)} · hole ${hole}` }).catch((x) => this.fail(x.message, 502));
+      this.sql.exec('INSERT OR REPLACE INTO streams (event, hole, uid, updated) VALUES (?, ?, ?, ?)', e.id, hole, input.uid, Date.now());
+      const state = old ? await inputState(this.env, fetch, input.uid) : 'disconnected';
+      if (!old) this.note(clip(b.by, 40) || 'Desk', e.club || '', `Go live: hole ${hole} camera from an iPhone · ${clip(b.name || e.name, 80)}`);
+      return json({ ok: true, hole, uid: input.uid, srt: input.srt, rtmps: input.rtmps, playback: input.playback, state });
+    }
     if (op === 'course') { // only from a tournament (GolfEvent) after its map was saved: the club keeps the latest one
       const e = this.one('SELECT * FROM events WHERE id = ?', clip(b.id, 8));
       if (!e || !b.key || !same(b.key, e.key)) this.fail('Not found', 404);

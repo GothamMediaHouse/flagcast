@@ -10,8 +10,11 @@ const API = 'https://api.cloudflare.com/client/v4';
 
 export const streamReady = (env) => !!(env.CF_ACCOUNT_ID && env.CF_STREAM_TOKEN);
 
+// tests point this at a stand-in on this computer (CF_STREAM_API=http://127.0.0.1:<port>); nothing else can
+const apiBase = (env) => (/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(env.CF_STREAM_API || '') ? env.CF_STREAM_API : API);
+
 async function call(env, fetcher, method, path, body) {
-  const r = await fetcher(`${API}/accounts/${env.CF_ACCOUNT_ID}/stream${path}`, {
+  const r = await fetcher(`${apiBase(env)}/accounts/${env.CF_ACCOUNT_ID}/stream${path}`, {
     method, headers: { Authorization: `Bearer ${env.CF_STREAM_TOKEN}`, 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -33,7 +36,8 @@ export const camUid = (url) => (String(url || '').match(/\/golf\/api\/cam\/([0-9
 
 /**
  * The live input for one tournament hole: the one we made before (uid) if it still exists, else a new one, recorded.
- * → { uid, rtmps: { url, streamKey }, playback }
+ * → { uid, rtmps: { url, streamKey }, srt: { url, streamId, passphrase }, playback }
+ * (SRT is what an iPhone at the hole sends with: it copes better with a patchy cell signal than RTMPS.)
  */
 export async function liveInput(env, fetcher, { uid, name }) {
   let input = null;
@@ -47,7 +51,11 @@ export async function liveInput(env, fetcher, { uid, name }) {
       recording: { mode: 'automatic', timeoutSeconds: 0, requireSignedURLs: false },
     });
   }
-  return { uid: input.uid, rtmps: { url: input.rtmps?.url || '', streamKey: input.rtmps?.streamKey || '' }, playback: playbackURL(input.uid) };
+  return {
+    uid: input.uid, rtmps: { url: input.rtmps?.url || '', streamKey: input.rtmps?.streamKey || '' },
+    srt: { url: input.srt?.url || '', streamId: input.srt?.streamId || '', passphrase: input.srt?.passphrase || '' },
+    playback: playbackURL(input.uid),
+  };
 }
 
 /** Is the camera sending? → 'connected' | 'disconnected' | 'unknown' */

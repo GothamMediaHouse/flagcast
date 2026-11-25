@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		4A72ED523F0F4097D798AD57 /* HaishinKit in Frameworks */ = {isa = PBXBuildFile; productRef = 0CEA63D0133CB108360F83EF /* HaishinKit */; };
+		B0FA824C41FEC6C4F4729568 /* SRTHaishinKit in Frameworks */ = {isa = PBXBuildFile; productRef = 267F1DBF6FBE22710B6AC138 /* SRTHaishinKit */; };
+		C7D29C73675D3DF67CE3A628 /* RTMPHaishinKit in Frameworks */ = {isa = PBXBuildFile; productRef = B403D2F66132D5AB9FCB3799 /* RTMPHaishinKit */; };
 		E5B65F45F4F2A76FDCB9B660 /* FlagcastLive.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 9C0BB451379DD48285314DF4 /* FlagcastLive.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -79,6 +82,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4A72ED523F0F4097D798AD57 /* HaishinKit in Frameworks */,
+				B0FA824C41FEC6C4F4729568 /* SRTHaishinKit in Frameworks */,
+				C7D29C73675D3DF67CE3A628 /* RTMPHaishinKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -147,6 +153,9 @@
 			);
 			name = Flagcast;
 			packageProductDependencies = (
+				0CEA63D0133CB108360F83EF /* HaishinKit */,
+				267F1DBF6FBE22710B6AC138 /* SRTHaishinKit */,
+				B403D2F66132D5AB9FCB3799 /* RTMPHaishinKit */,
 			);
 			productName = Flagcast;
 			productReference = 83C0AAC3EE3CF4F6C2235A74 /* Flagcast.app */;
@@ -229,6 +238,9 @@
 			);
 			mainGroup = 9A6B93D0797A0DEB198EBCA6;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				7DE3B9D5D3BED21474A954E6 /* XCRemoteSwiftPackageReference "HaishinKit.swift" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = D0CD27767769580E84CE8F0C /* Products */;
 			projectDirPath = "";
@@ -379,7 +391,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.5.0;
+				MARKETING_VERSION = 1.6.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.golf;
 				PRODUCT_NAME = Flagcast;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -409,7 +421,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.5.0;
+				MARKETING_VERSION = 1.6.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.golf;
 				PRODUCT_NAME = Flagcast;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -431,7 +443,7 @@
 				DEVELOPMENT_TEAM = C8KXPB4QNA;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.5.0;
+				MARKETING_VERSION = 1.6.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.golf.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -450,7 +462,7 @@
 				DEVELOPMENT_TEAM = C8KXPB4QNA;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 1.5.0;
+				MARKETING_VERSION = 1.6.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.golf.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -476,7 +488,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.5.0;
+				MARKETING_VERSION = 1.6.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.golf.live;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -504,7 +516,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 1.5.0;
+				MARKETING_VERSION = 1.6.0;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.golf.live;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -556,6 +568,35 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		7DE3B9D5D3BED21474A954E6 /* XCRemoteSwiftPackageReference "HaishinKit.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/HaishinKit/HaishinKit.swift.git";
+			requirement = {
+				kind = exactVersion;
+				version = 2.3.2;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		0CEA63D0133CB108360F83EF /* HaishinKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7DE3B9D5D3BED21474A954E6 /* XCRemoteSwiftPackageReference "HaishinKit.swift" */;
+			productName = HaishinKit;
+		};
+		267F1DBF6FBE22710B6AC138 /* SRTHaishinKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7DE3B9D5D3BED21474A954E6 /* XCRemoteSwiftPackageReference "HaishinKit.swift" */;
+			productName = SRTHaishinKit;
+		};
+		B403D2F66132D5AB9FCB3799 /* RTMPHaishinKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 7DE3B9D5D3BED21474A954E6 /* XCRemoteSwiftPackageReference "HaishinKit.swift" */;
+			productName = RTMPHaishinKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = FC85614A3A663B8811089934 /* Project object */;
 }

@@ -154,7 +154,7 @@ export const SPOTS = ['title', 'leaderboard', 'hole', 'cam', 'contest', 'turn', 
 // (cam = one hole's camera, full frame)
 export const PAGE_KINDS = ['lb', 'p3', 'cam', 'contests', 'skins', 'fund', 'sponsors', 'sponsor', 'schedule'];
 // changes made on the day (desk or a pro's PIN); marshals only post contest results
-const DAY_OPS = new Set(['fix', 'ctp', 'contest', 'check', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay', 'scene', 'map', 'groups', 'pinsheet', 'report', 'team', 'move', 'notes']);
+const DAY_OPS = new Set(['fix', 'ctp', 'contest', 'check', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay', 'scene', 'map', 'groups', 'pinsheet', 'report', 'team', 'move', 'notes', 'golive']);
 // marshals post contest results and replays of shots at their hole
 const MARSHAL_OPS = new Set(['ctp', 'check', 'replay']);
 // a replay with no clip link replays the hole's live camera from this many seconds before it was marked
@@ -773,6 +773,34 @@ export class GolfEvent extends DurableObject {
         const mins = num(b.mins, 0, 600, 0);
         if (b.page && PAGE_KINDS.includes(b.page.k)) ev.live.force[id] = { k: b.page.k, fl: clip(b.page.fl, 12), hole: num(b.page.hole, 0, 18, 0), sponsor: clip(b.page.sponsor, 12), at: now, ...(mins ? { until: now + mins * 60000 } : {}) };
         else delete ev.live.force[id];
+      }
+    } else if (b.op === 'golive') {
+      // Go live from an iPhone at the hole (desk, Admin or a pro): { hole } → the hole's live input to send to, and the
+      // hole's camera link points at it, so the TVs, the Cameras tab, the live page and replays play it like any
+      // camera. { hole, stop: true } when the phone stops: the camera link comes off again (unless the hole had a
+      // camera before), and screens and phones pointed at it go back.
+      const hole = Number(b.hole);
+      if (!Number.isInteger(hole) || hole < 1 || !ev.course.holes[hole - 1]) return json({ error: 'Pick a hole' }, 400);
+      ev.golive = ev.golive || {}; ev.cams = ev.cams || {};
+      const was = ev.golive[hole];
+      if (b.stop) {
+        if (!was) return json({ ok: true });
+        delete ev.golive[hole];
+        if (!was.had) delete ev.cams[hole];
+        if (ev.live.phone && ['cam', 'p3'].includes(ev.live.phone.k) && ev.live.phone.hole === hole) ev.live.phone = null;
+        for (const [id, f] of Object.entries(ev.live.force || {})) if (f && f.k === 'cam' && f.hole === hole) delete ev.live.force[id];
+      } else {
+        if (!this.env.CLUBS) return json({ error: 'Live video isn’t switched on here.' }, 409);
+        const r = await this.env.CLUBS.get(this.env.CLUBS.idFromName('directory')).fetch(new Request('https://clubs/golive', { method: 'POST', body: JSON.stringify({ id: ev.id, key: ev.key, hole, name: ev.name, by: clip(by, 40) }) }));
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) return json({ error: j.error || 'Flagcast couldn’t start the live video. Try again.' }, r.status || 502);
+        // someone's camera is already sending on this hole: don't cut it off from another phone
+        if (j.state === 'connected' && !b.take) return json({ error: `Hole ${hole}’s camera is already live${was ? ` from ${was.by}’s phone` : ''}. Stop that one first.`, live: true, by: was?.by || '' }, 409);
+        ev.golive[hole] = { by: clip(by, 40), at: now, had: was ? !!was.had : !!ev.cams[hole] };
+        ev.cams[hole] = j.playback;
+        await this.ctx.storage.put('event', ev);
+        await this.broadcast();
+        return json({ ok: true, hole, playback: j.playback, srt: j.srt, rtmps: j.rtmps });
       }
     } else if (b.op === 'scene') { // saved routings: save what every screen shows now, put one back, or delete one
       ev.scenes = ev.scenes || [];

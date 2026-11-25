@@ -336,17 +336,38 @@ private struct BigScreensCard: View {
 private struct CamerasCard: View {
     let doc: DeskDoc
     @State private var replay = ReplayDraft()
+    @State private var goingLive = false
     private var par3s: [Hole] { doc.ev.course.holes.filter { $0.par == 3 } }
+    private var phoneLive: [Int: String] { doc.live?.golive ?? [:] }
+    /// par 3s, plus any other hole live from a phone now
+    private var camHoles: [Hole] { doc.ev.course.holes.filter { $0.par == 3 || phoneLive[$0.n] != nil } }
 
     var body: some View {
-        CardBox(title: "Par 3 cameras", footer: "Flagcast sets up the cameras. Pick “Par 3 camera” for a TV to show them; a hole without a camera shows a drawing of the hole.") {
-            if par3s.isEmpty { Text("This course has no par 3s.").font(.subheadline).foregroundStyle(FC.muted).padding(14) }
-            ForEach(par3s, id: \.n) { h in
+        CardBox(title: "Cameras", footer: "Go live sends this iPhone’s camera to a hole: the club TVs and the players’ Cameras tab show it. Pick “Par 3 camera” for a TV to show a hole’s camera; a hole without one shows a drawing of the hole.") {
+            Button { goingLive = true } label: {
+                Label("Go live from this iPhone", systemImage: "video.badge.plus").font(.system(size: 15, weight: .semibold)).foregroundStyle(FC.link)
+                    .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading).padding(.horizontal, 14)
+            }
+            .buttonStyle(.plain)
+            .overlay(alignment: .bottom) { Rectangle().fill(FC.hairline).frame(height: 1).padding(.leading, 14) }
+            .fullScreenCover(isPresented: $goingLive) {
+                GoLiveView(model: GoLiveModel(holes: GoLiveHole.from(doc.ev.course.holes)) { [doc] body in
+                    var b = body
+                    let op = b.removeValue(forKey: "op") as? String ?? ""
+                    return try await Net.desk(doc.id, doc.key, op, b)
+                }, liveNow: phoneLive)
+            }
+            if camHoles.isEmpty { Text("This course has no par 3s.").font(.subheadline).foregroundStyle(FC.muted).padding(14) }
+            ForEach(camHoles, id: \.n) { h in
                 let on = !(doc.live?.cams[h.n] ?? doc.ev.cams[h.n] ?? "").isEmpty
                 HStack {
                     Text("Hole \(h.n)").font(.system(size: 15, weight: .semibold))
                     Spacer()
-                    Label(on ? "Camera set up" : "No camera", systemImage: on ? "video.fill" : "video.slash").font(.subheadline).foregroundStyle(on ? FC.ok : FC.muted)
+                    if let who = phoneLive[h.n] {
+                        Label("Live from \(who)’s phone", systemImage: "dot.radiowaves.left.and.right").font(.subheadline).foregroundStyle(FC.ok)
+                    } else {
+                        Label(on ? "Camera set up" : "No camera", systemImage: on ? "video.fill" : "video.slash").font(.subheadline).foregroundStyle(on ? FC.ok : FC.muted)
+                    }
                 }
                 .padding(.horizontal, 14).frame(minHeight: 46)
                 .overlay(alignment: .bottom) { Rectangle().fill(FC.hairline).frame(height: 1).padding(.leading, 14) }

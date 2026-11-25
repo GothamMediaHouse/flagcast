@@ -345,6 +345,14 @@ struct PinSpot: Codable, Hashable {
     var spot: (x: Double, y: Double) { (["L": 44, "R": 116][s] ?? 80, ["B": 30, "F": 104][d] ?? 68) }
 }
 
+/// who is sending a hole's camera from their iPhone
+struct GoLiveWho: Codable, Hashable {
+    var by = ""
+    enum CodingKeys: String, CodingKey { case by }
+    init(by: String) { self.by = by }
+    init(from d: Decoder) throws { by = ((try? d.container(keyedBy: CodingKeys.self).decodeIfPresent(String.self, forKey: .by)) ?? nil) ?? "" }
+}
+
 struct EventState: Codable, Hashable {
     var id = "", name = "", club = "", date = ""
     var course = Course()
@@ -375,10 +383,12 @@ struct EventState: Codable, Hashable {
     var photos = Photos()
     /// the desk turned off golfers' ready-made notes to other groups (day op "notes")
     var notesOff = false
+    /// holes live from someone's iPhone now (day op "golive"): hole → who
+    var golive: [Int: String] = [:]
 
     enum CodingKeys: String, CodingKey {
         case id, name, club, date, course, format, sideGames, flights, teams, screens, cams, sponsors, schedule, displays, fund, contests
-        case locked, aces, flash, news, nudges, live, replays, map, pinsheet, scores, online, brand, lastAt, photos, notesOff
+        case locked, aces, flash, news, nudges, live, replays, map, pinsheet, scores, online, brand, lastAt, photos, notesOff, golive
     }
     init() {}
     init(from d: Decoder) throws {
@@ -410,6 +420,8 @@ struct EventState: Codable, Hashable {
         photos = (try? c.decodeIfPresent(Photos.self, forKey: .photos)) ?? Photos()
         lastAt = (try? c.decodeIfPresent([String: Double].self, forKey: .lastAt)) ?? [:]
         notesOff = c.bool(.notesOff, false)
+        let rawLive = (try? c.decodeIfPresent([String: GoLiveWho].self, forKey: .golive)) ?? [:]
+        golive = Dictionary(uniqueKeysWithValues: rawLive.compactMap { k, v in Int(k).map { ($0, v.by) } })
     }
     func encode(to e: Encoder) throws {
         var c = e.container(keyedBy: CodingKeys.self)
@@ -423,6 +435,7 @@ struct EventState: Codable, Hashable {
         try c.encode(nudges, forKey: .nudges); try c.encode(live, forKey: .live); try c.encode(replays, forKey: .replays); try c.encode(map, forKey: .map); try c.encode(Dictionary(uniqueKeysWithValues: pinsheet.map { (String($0.key), $0.value) }), forKey: .pinsheet); try c.encode(scores, forKey: .scores); try c.encode(online, forKey: .online)
         try c.encode(brand, forKey: .brand); try c.encode(lastAt, forKey: .lastAt); try c.encode(photos, forKey: .photos)
         try c.encode(notesOff, forKey: .notesOff)
+        try c.encode(Dictionary(uniqueKeysWithValues: golive.map { (String($0.key), GoLiveWho(by: $0.value)) }), forKey: .golive)
     }
 
     /// "Sat, Nov 21" for the tournament's day (it's stored as 2026-11-21, a day where the club is)

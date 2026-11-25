@@ -126,6 +126,7 @@ struct ProLiveTab: View {
     @State private var raised = ""
     @State private var messaging: MessageTo?
     @State private var confirmLock = false
+    @State private var goingLive = false
     @State private var files: [URL] = []
     @State private var gettingFiles = false
 
@@ -136,6 +137,20 @@ struct ProLiveTab: View {
                 Button { messaging = MessageTo(team: nil) } label: { Label("Message every golfer", systemImage: "megaphone") }
                 NavigationLink { ProTeamsView(model: model, s: s) } label: { Label("Fix a team or add a late group", systemImage: "person.2.badge.gearshape") }
             } header: { Text("Golfers") } footer: { Text("Messages pop up on their phones. Nudge one cart below, or one golfer on it.") }
+            Section {
+                Button { goingLive = true } label: { Label("Go live from this phone", systemImage: "video.badge.plus") }
+                ForEach(s.golive.keys.sorted(), id: \.self) { h in
+                    Label("Hole \(h) is live from \(s.golive[h] ?? "")’s phone", systemImage: "dot.radiowaves.left.and.right")
+                        .font(.footnote).foregroundStyle(Color.fcRed)
+                }
+            } header: { Text("Camera") } footer: { Text("Stand at a hole with the phone on a mount. It shows on the club TVs and in the players’ Cameras tab.") }
+            .fullScreenCover(isPresented: $goingLive) {
+                GoLiveView(model: GoLiveModel(holes: GoLiveHole.from(s.course.holes)) { [model] body in
+                    var b: [String: Any?] = body.mapValues { $0 }
+                    b["pin"] = model.pin
+                    return try await API.post(model.id, "pro", b)
+                }, liveNow: s.golive)
+            }
             Section("On the course") {
                 let lb = Core.leaderboard(s, s.scores)
                 if lb.isEmpty { Text("No teams yet.").foregroundStyle(Color.fcMuted) }

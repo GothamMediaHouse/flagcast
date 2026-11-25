@@ -27,7 +27,11 @@ SHARED = [
     '../flagcast-mac/Shared/Desk/PinBoard.swift', '../flagcast-mac/Shared/Desk/GroupCard.swift', '../flagcast-mac/Shared/Desk/ContestCheck.swift',
     '../flagcast-mac/Shared/Admin/AdminModel.swift', '../flagcast-mac/Manager/AppModel.swift', '../flagcast-mac/Shared/AppleSignIn.swift',
     '../flagcast-mac/Shared/Branding.swift', '../flagcast-mac/Shared/DayOf.swift', '../flagcast-mac/Shared/Admin/EventDay.swift',
+    '../flagcast-ios/Flagcast/Views/GoLiveView.swift',
 ]
+# Swift packages: HaishinKit sends Go live video (SRT, or RTMPS) from the camera
+PACKAGES = [('HaishinKit.swift', 'https://github.com/HaishinKit/HaishinKit.swift.git', '2.3.2', ['HaishinKit', 'SRTHaishinKit', 'RTMPHaishinKit'])]
+PRODUCTS = [(pkg, prod) for pkg, _, _, prods in PACKAGES for prod in prods]
 FONTS = ['../flagcast-mac/Shared/Fonts/BarlowCondensed-Bold.ttf', '../flagcast-mac/Shared/Fonts/BarlowCondensed-SemiBold.ttf']
 
 def settings(t, prod, bid, ver, build, plist):
@@ -101,6 +105,8 @@ files += ''.join(f'''		{i('ref'+f)} = {{isa = PBXFileReference; lastKnownFileTyp
 ''' for f in SHARED + FONTS)
 buildfiles = ''.join(f'''		{i(t+'bf'+f)} = {{isa = PBXBuildFile; fileRef = {i('ref'+f)}; }};
 ''' for t, *_ in TARGETS if t in FULL for f in SHARED + FONTS)
+buildfiles += ''.join(f'''		{i(t+'pbf'+prod)} = {{isa = PBXBuildFile; productRef = {i('prod'+prod)}; }};
+''' for t, *_ in TARGETS if t in FULL for _, prod in PRODUCTS)
 groups = ''.join(f'''		{i(t+'group')} = {{
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = {t};
@@ -120,7 +126,7 @@ phases = ''
 for t, *_ in TARGETS:
     full = t in FULL
     phases += phase(t+'src', 'PBXSourcesBuildPhase', ''.join(f'				{i(t+"bf"+f)},\n' for f in SHARED) if full else '')
-    phases += phase(t+'fw', 'PBXFrameworksBuildPhase')
+    phases += phase(t+'fw', 'PBXFrameworksBuildPhase', ''.join(f'				{i(t+"pbf"+prod)},\n' for _, prod in PRODUCTS) if full else '')
     phases += phase(t+'res', 'PBXResourcesBuildPhase', ''.join(f'				{i(t+"bf"+f)},\n' for f in FONTS) if full else '')
 targets = ''.join(f'''		{i(t+'target')} = {{
 			isa = PBXNativeTarget;
@@ -138,6 +144,8 @@ targets = ''.join(f'''		{i(t+'target')} = {{
 				{i(t+'group')},
 			);
 			name = {t};
+			packageProductDependencies = (
+{''.join(f"				{i('prod'+p)},{chr(10)}" for _, p in PRODUCTS) if t in FULL else ''}			);
 			productName = "{prod}";
 			productReference = {i(t+'product')};
 			productType = "com.apple.product-type.application";
@@ -146,6 +154,20 @@ targets = ''.join(f'''		{i(t+'target')} = {{
 cfgs = ''.join(cfg(t+'debug', 'Debug', settings(t, prod, bid, ver, b, pl)) + cfg(t+'release', 'Release', settings(t, prod, bid, ver, b, pl)) for t, prod, bid, ver, b, pl in TARGETS)
 lists = cfglist('projcfgs', 'projdebug', 'projrelease') + ''.join(cfglist(t+'cfgs', t+'debug', t+'release') for t, *_ in TARGETS)
 shared_children = ''.join(f'				{i("ref"+f)},\n' for f in SHARED + FONTS)
+pkgs = ''.join(f'''		{i('pkg'+n)} = {{
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "{url}";
+			requirement = {{
+				kind = exactVersion;
+				version = {ver};
+			}};
+		}};
+''' for n, url, ver, _ in PACKAGES) + ''.join(f'''		{i('prod'+prod)} = {{
+			isa = XCSwiftPackageProductDependency;
+			package = {i('pkg'+pkg)};
+			productName = {prod};
+		}};
+''' for pkg, prod in PRODUCTS)
 out = f'''// !$*UTF8*$!
 {{
 	archiveVersion = 1;
@@ -203,6 +225,8 @@ out = f'''// !$*UTF8*$!
 			);
 			mainGroup = {i('maingroup')};
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+{''.join(f"				{i('pkg'+n)},{chr(10)}" for n, *_ in PACKAGES)}			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = {i('products')};
 			projectDirPath = "";
@@ -210,7 +234,7 @@ out = f'''// !$*UTF8*$!
 			targets = (
 {''.join(f"				{i(t+'target')},{chr(10)}" for t, *_ in TARGETS)}			);
 		}};
-{cfg('projdebug', 'Debug', debug)}{cfg('projrelease', 'Release', release)}{cfgs}{lists}	}};
+{cfg('projdebug', 'Debug', debug)}{cfg('projrelease', 'Release', release)}{cfgs}{lists}{pkgs}	}};
 	rootObject = {P};
 }}
 '''

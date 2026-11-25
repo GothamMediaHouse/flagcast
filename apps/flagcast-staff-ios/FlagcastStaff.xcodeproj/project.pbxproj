@@ -30,8 +30,12 @@
 		B931FD2C98E409C12E1EBD92 = {isa = PBXBuildFile; fileRef = A38EFC18BA2501B0B74E8497; };
 		F07131FC8FDB97C21E94F879 = {isa = PBXBuildFile; fileRef = 7666093064319FAA872B33B0; };
 		9FDD1881D825B7FE79EF9B6F = {isa = PBXBuildFile; fileRef = 4DF00BB00E706AA1C19D42BD; };
+		976A0A4F56714B3EEC596007 = {isa = PBXBuildFile; fileRef = 4FC9A47D4A047C9F1A594968; };
 		C24C43B25E9CE97C05F1003B = {isa = PBXBuildFile; fileRef = 114899359BB15ED7EB36B371; };
 		8662ED94914FC53C12B47FD4 = {isa = PBXBuildFile; fileRef = 77C6E0EA06822F88CEE86CA2; };
+		E08E74BB6FDF520C934F4CB6 = {isa = PBXBuildFile; productRef = D280C9E35617136B83BF41DD; };
+		74B6CBF93CADC24D0D6D2AFE = {isa = PBXBuildFile; productRef = 53C78698D1AA89F81721B4B5; };
+		BD4A898E32EC8E5F87D7DD2F = {isa = PBXBuildFile; productRef = 6FDB9451F1F1AB0104C98395; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -59,6 +63,7 @@
 		A38EFC18BA2501B0B74E8497 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = Branding.swift; path = "../flagcast-mac/Shared/Branding.swift"; sourceTree = SOURCE_ROOT; };
 		7666093064319FAA872B33B0 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = DayOf.swift; path = "../flagcast-mac/Shared/DayOf.swift"; sourceTree = SOURCE_ROOT; };
 		4DF00BB00E706AA1C19D42BD = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = EventDay.swift; path = "../flagcast-mac/Shared/Admin/EventDay.swift"; sourceTree = SOURCE_ROOT; };
+		4FC9A47D4A047C9F1A594968 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = GoLiveView.swift; path = "../flagcast-ios/Flagcast/Views/GoLiveView.swift"; sourceTree = SOURCE_ROOT; };
 		114899359BB15ED7EB36B371 = {isa = PBXFileReference; lastKnownFileType = file; name = BarlowCondensed-Bold.ttf; path = "../flagcast-mac/Shared/Fonts/BarlowCondensed-Bold.ttf"; sourceTree = SOURCE_ROOT; };
 		77C6E0EA06822F88CEE86CA2 = {isa = PBXFileReference; lastKnownFileType = file; name = BarlowCondensed-SemiBold.ttf; path = "../flagcast-mac/Shared/Fonts/BarlowCondensed-SemiBold.ttf"; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
@@ -98,6 +103,7 @@
 				B931FD2C98E409C12E1EBD92,
 				F07131FC8FDB97C21E94F879,
 				9FDD1881D825B7FE79EF9B6F,
+				976A0A4F56714B3EEC596007,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -105,6 +111,9 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				E08E74BB6FDF520C934F4CB6,
+				74B6CBF93CADC24D0D6D2AFE,
+				BD4A898E32EC8E5F87D7DD2F,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -153,6 +162,7 @@
 				A38EFC18BA2501B0B74E8497,
 				7666093064319FAA872B33B0,
 				4DF00BB00E706AA1C19D42BD,
+				4FC9A47D4A047C9F1A594968,
 				114899359BB15ED7EB36B371,
 				77C6E0EA06822F88CEE86CA2,
 			);
@@ -183,6 +193,11 @@
 				B46DE96E854FDD1D4A0A0D2F,
 			);
 			name = Manager;
+			packageProductDependencies = (
+				D280C9E35617136B83BF41DD,
+				53C78698D1AA89F81721B4B5,
+				6FDB9451F1F1AB0104C98395,
+			);
 			productName = "Flagcast Manager";
 			productReference = 423BA520DEA3D9C00BA33862;
 			productType = "com.apple.product-type.application";
@@ -204,6 +219,9 @@
 			);
 			mainGroup = ACEC4E7546EEC76EB59BD252;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5051180F48BBF9CFEFBF5FB3,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 1FCBB4530CB8837DD8BF4E1B;
 			projectDirPath = "";
@@ -321,6 +339,29 @@
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
+		};
+		5051180F48BBF9CFEFBF5FB3 = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/HaishinKit/HaishinKit.swift.git";
+			requirement = {
+				kind = exactVersion;
+				version = 2.3.2;
+			};
+		};
+		D280C9E35617136B83BF41DD = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5051180F48BBF9CFEFBF5FB3;
+			productName = HaishinKit;
+		};
+		53C78698D1AA89F81721B4B5 = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5051180F48BBF9CFEFBF5FB3;
+			productName = SRTHaishinKit;
+		};
+		6FDB9451F1F1AB0104C98395 = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5051180F48BBF9CFEFBF5FB3;
+			productName = RTMPHaishinKit;
 		};
 	};
 	rootObject = 5961221B02C6E16AAC64844A;
