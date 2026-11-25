@@ -6,7 +6,7 @@ import { mkdtempSync, writeFileSync, rmSync, existsSync, readdirSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const SERVER = ['groupnotes', 'pinsheet', 'protools', 'screens', 'stalesave', 'where'];
+const SERVER = ['groupnotes', 'pinsheet', 'protools', 'screens', 'stalesave', 'where', 'live'];
 const ADMIN = 'clubs';
 const all = readdirSync('test').filter((f) => f.endsWith('.test.mjs')).map((f) => f.replace('.test.mjs', ''));
 const offline = all.filter((t) => !SERVER.includes(t) && t !== ADMIN);
