@@ -11,18 +11,20 @@
 //   POST /golf/api/<id>/pro                { pin, op, … }   a golf pro or marshal with a PIN from the Manager (see pro() below)
 //   POST /golf/api/<id>/where              { code, team, at?: [lat, lng], acc, hole, hide? }   a group's spot, from a scorecard with GPS on
 //                                          → { groups }   where the other groups are, for the golfers' course map
+//   POST /golf/api/<id>/live               { code, team, token, env, player? } | { code, team, token, end: true }   the lock screen live view (liveact.js)
 //   GET  /golf/api/<id>/photo/<slot>       a photo the club added: cover, h<n> (a hole), s-<sponsor id> (a banner)
 //   POST /golf/api/<id>/hit                { list: [{ s: sponsorId, k: 'view'|'tap'|'secs', n }] }   sponsor counts for the report
 //
 // Pages: /g/<id> live page · /g/<id>/board screens · /g/<id>/desk#<key> desk · /g/<id>/map#<key> course map · /g/<id>/s/<code> cart · /g/<id>/cards QR cards
 import { DurableObject } from 'cloudflare:workers';
-import { defaultHoles, courseHcp } from './public/golf/core.js';
+import { defaultHoles, courseHcp, leaderboard } from './public/golf/core.js';
 import { trackingOn, cleanPin } from './public/golf/gps.js';
 import { demoGroups } from './demogroups.js';
 import { same, pinProblem, mergeTeams, stamp, PIN_WAIT, PIN_TRIES_IP, PIN_TRIES_ALL } from './setup.js';
 import { clubs } from './clubs.js';
 import { resultsRows, ghinRows } from './report.js';
 import { camPlaylist } from './stream.js';
+import { liveCard, cardKey, livePayload, sendLive, TOKEN, LIVE_MAX, LIVE_HOURS } from './liveact.js';
 import { brandFor, logoOf, cleanLogo, decodeLogo, cleanPhoto, photoLinks, PHOTO_SLOT } from './brand.js';
 
 const ID = /^[a-z0-9]{8}$/;
@@ -111,7 +113,7 @@ export async function golf(request, env) {
   if ((m = url.pathname.match(/^\/golf\/api\/([a-z0-9]{8})\/photo\/([a-z0-9-]{1,14})$/)) && (request.method === 'GET' || request.method === 'HEAD')) {
     return cors(request, await env.GOLF.get(env.GOLF.idFromName(m[1])).fetch(request));
   }
-  if ((m = url.pathname.match(/^\/golf\/api\/([a-z0-9]{8})\/(state|ws|cart|score|desk|pro|hit|where|logo)$/))) {
+  if ((m = url.pathname.match(/^\/golf\/api\/([a-z0-9]{8})\/(state|ws|cart|score|desk|pro|hit|where|live|logo)$/))) {
     const stub = env.GOLF.get(env.GOLF.idFromName(m[1]));
     return cors(request, await stub.fetch(request));
   }
@@ -296,6 +298,59 @@ export class GolfEvent extends DurableObject {
   async broadcast() {
     const s = JSON.stringify({ t: 'state', s: await this.publicState() });
     for (const w of this.ctx.getWebSockets()) { try { w.send(s); } catch {} }
+    this.ctx.waitUntil(this.liveUpdate().catch(() => {}));
+  }
+
+  // ---- the golfers' lock screen live view (liveact.js): one Apple push token per phone, for its team ----
+  async liveTokens() {
+    if (!this.la) this.la = (await this.ctx.storage.get('la')) || {};
+    return this.la;
+  }
+  async live(b) {
+    const ev = this.ev, team = ev.teams.find((t) => t.id === b.team);
+    if (!team || team.code !== String(b.code || '').toUpperCase()) return json({ error: 'Not your scorecard' }, 403);
+    const token = String(b.token || '').toLowerCase();
+    if (!TOKEN.test(token)) return json({ error: 'Bad token' }, 400);
+    const la = await this.liveTokens(), now = Date.now();
+    if (b.end) delete la[token];
+    else {
+      const was = la[token];
+      la[token] = { team: team.id, env: b.env === 'dev' ? 'dev' : 'prod', player: String(b.player || '').slice(0, 12), at: now,
+        last: was && was.team === team.id ? was.last : '', msgAt: was && was.team === team.id ? was.msgAt || 0 : 0 };
+      const old = Object.entries(la).filter(([, x]) => now - x.at > LIVE_HOURS * 3600e3).map(([k]) => k);
+      for (const k of old) delete la[k];
+      const keys = Object.keys(la); if (keys.length > LIVE_MAX) for (const k of keys.sort((x, y) => la[x].at - la[y].at).slice(0, keys.length - LIVE_MAX)) delete la[k];
+    }
+    await this.ctx.storage.put('la', la);
+    if (!b.end) this.ctx.waitUntil(this.liveUpdate().catch(() => {}));
+    return json({ ok: true, card: b.end ? null : liveCard(ev, (await this.publicState()).scores, team.id, la[token].player, now) });
+  }
+  // after every change: each registered phone whose card changed gets it from Apple. One run at a time;
+  // a change during a run makes it go round again.
+  async liveUpdate() {
+    if (this.laBusy) { this.laAgain = true; return; }
+    if (!this.env.APNS_KEY || !this.env.APNS_KEY_ID) return;
+    const la = await this.liveTokens(); if (!Object.keys(la).length) return;
+    this.laBusy = true;
+    try {
+      do {
+        this.laAgain = false;
+        const ev = await this.load(); if (!ev) return;
+        const { scores } = await this.publicState(), now = Date.now();
+        const board = leaderboard(ev, scores);
+        let dirty = false;
+        await Promise.all(Object.entries(la).map(async ([token, x]) => {
+          const card = liveCard(ev, scores, x.team, x.player, now, board);
+          if (!card) { delete la[token]; dirty = true; return; }
+          const key = cardKey(card); if (key === x.last) return;
+          const loud = !!card.msg && card.msgAt > (x.msgAt || 0);
+          const r = await sendLive(this.env, token, x.env, livePayload(card, { alert: loud, now }), loud || card.final ? 10 : 5);
+          if (r === 'gone' || (r === 'ok' && card.final)) { delete la[token]; dirty = true; return; }
+          if (r === 'ok') { x.last = key; if (loud) x.msgAt = card.msgAt; dirty = true; }
+        }));
+        if (dirty) await this.ctx.storage.put('la', la);
+      } while (this.laAgain);
+    } finally { this.laBusy = false; }
   }
 
   async fetch(request) {
@@ -352,7 +407,7 @@ export class GolfEvent extends DurableObject {
       return this.desk(b);
     }
     // the par 3 camera links: only from Flagcast Admin (clubs.js admin op 'cams'). Never routed from the web
-    // (the worker only forwards state|ws|cart|score|desk|pro|hit|where|logo), so only the directory object reaches it.
+    // (the worker only forwards state|ws|cart|score|desk|pro|hit|where|live|logo), so only the directory object reaches it.
     // the club's branding, from the club directory (clubs.js) when it changes or the tournament is made or moved,
     // and Admin's Demo switch (Flagcast's logo whatever the club has). Never routed from the web.
     if (op === 'brand') {
@@ -377,6 +432,7 @@ export class GolfEvent extends DurableObject {
     if (op === 'pro') return this.pro(b, request.headers.get('CF-Connecting-IP') || '');
     if (op === 'hit') return this.hit(b, request.headers.get('CF-Connecting-IP') || '');
     if (op === 'where') return this.where(b);
+    if (op === 'live') return this.live(b);
     return json({ error: 'Not found' }, 404);
   }
 

@@ -48,6 +48,10 @@
 			</dict>
 		</dict>
 	</dict>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
+	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Flagcast shows yardages to the green and hazards from where you are. During a tournament the desk can see where your group is on the course.</string>
 	<key>NSCameraUsageDescription</key>

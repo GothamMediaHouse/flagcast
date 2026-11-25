@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import UIKit
 import UserNotifications
+import ActivityKit
 
 /// A score typed on this phone that the server hasn't confirmed yet. Kept on disk until it's sent, so a cart
 /// with no signal keeps scoring; `at` is when it was typed, so a late send never undoes a newer fix.
@@ -111,6 +112,7 @@ final class ScorecardModel {
         if teamId == nil, let first = teams.first { teamId = first }
         settleHole()
         checkNudges(s)
+        LiveView.shared.update(self) // the lock screen live view
     }
 
     // ---- scores ----
@@ -157,6 +159,7 @@ final class ScorecardModel {
         teamId = id
         hole = nil
         settleHole()
+        LiveView.shared.update(self)
     }
 
     func value(_ p: String, _ h: Int) -> Int? {
@@ -197,6 +200,7 @@ final class ScorecardModel {
             celebrating = true
             toast = "Hole in one! It’s on the big screens now."
         }
+        LiveView.shared.update(self)
         send()
     }
 
@@ -259,7 +263,9 @@ final class ScorecardModel {
         guard let n = mine.last else { return }
         UserDefaults.standard.set(n.at, forKey: nudgeKey)
         nudge = n
-        if UIApplication.shared.applicationState != .active {
+        // with the lock screen live view on, the server's push shows the message there and buzzes once
+        let liveOn = LiveView.enabled && Activity<FlagcastLiveAttributes>.activities.contains { $0.attributes.event == id && $0.attributes.code == code && $0.activityState == .active }
+        if UIApplication.shared.applicationState != .active && !liveOn {
             let c = UNMutableNotificationContent()
             c.title = n.from.map { "From \($0)" } ?? "From the pro shop"
             c.body = n.text
