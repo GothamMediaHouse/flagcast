@@ -109,9 +109,41 @@ struct RootView: View {
         }
         .ignoresSafeArea()
         .background(FC.paper)
+        // the window has no title bar of its own: the pages' headers sit up beside the traffic lights. Keep it that way
+        // even when a page (Course map's inspector) brings a window toolbar, which would otherwise cover the headers.
+        .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        .background(ClearTitleBar())
         .alert("Flagcast", isPresented: Binding(get: { model.error != nil }, set: { if !$0 { model.error = nil } })) {
             Button("OK") { model.error = nil }
         } message: { Text(model.error ?? "") }
+    }
+}
+
+/// Keeps the Manager window's title bar see-through and its toolbar out of the way, so nothing paints over the top of the pages.
+struct ClearTitleBar: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { Watcher() }
+    func updateNSView(_ v: NSView, context: Context) { (v as? Watcher)?.apply() }
+    final class Watcher: NSView {
+        private var seen: NSObjectProtocol?
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let seen { NotificationCenter.default.removeObserver(seen) }
+            guard let w = window else { return }
+            apply()
+            // SwiftUI can add a toolbar back later (after an inspector shows): put it right again when the window next updates
+            seen = NotificationCenter.default.addObserver(forName: NSWindow.didUpdateNotification, object: w, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.apply() }
+            }
+        }
+        deinit { if let seen { NotificationCenter.default.removeObserver(seen) } }
+        func apply() {
+            guard let w = window else { return }
+            if !w.titlebarAppearsTransparent { w.titlebarAppearsTransparent = true }
+            if w.titleVisibility != .hidden { w.titleVisibility = .hidden }
+            if !w.styleMask.contains(.fullSizeContentView) { w.styleMask.insert(.fullSizeContentView) }
+            if w.titlebarSeparatorStyle != .none { w.titlebarSeparatorStyle = .none }
+            if let t = w.toolbar, t.isVisible, t.items.isEmpty { t.isVisible = false }
+        }
     }
 }
 

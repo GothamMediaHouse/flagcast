@@ -44,7 +44,7 @@ struct ClubsView: View {
         @Bindable var model = model
         VStack(spacing: 0) {
             AdminHeader(title: "Clubs", sub: "\(model.clubs.count) club\(model.clubs.count == 1 ? "" : "s") · \(model.clubs.filter { $0.status == "pending" }.count) waiting", search: $search, prompt: "Find a club") {
-                Picker("Club cards", selection: $look) { ForEach(ClubLook.allCases) { Text($0.title).tag($0) } }.pickerStyle(.segmented).labelsHidden().frame(width: 230).help("How the club cards look: the logo on the place photo, or on the club’s colour")
+                Picker("Club cards", selection: $look) { ForEach(ClubLook.allCases) { Text($0.title).tag($0) } }.pickerStyle(.segmented).labelsHidden().frame(width: 200).help("How the clubs show: cards with the logo on the place photo or on the club’s colour, or a compact list")
                 Button { model.newClub = true } label: { Label("New club", systemImage: "plus") }.buttonStyle(GreenButton()).help("Set up a club")
             }
             ScrollView {
@@ -65,8 +65,17 @@ struct ClubsView: View {
                         .background(Color(hex: 0xfff8e1), in: RoundedRectangle(cornerRadius: 12))
                         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color(hex: 0xecd58a)))
                     }
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 260, maximum: 420), spacing: 16)], spacing: 16) {
-                        ForEach(shown) { c in ClubCard(club: c, open: { opened = c }, delete: { deleting = c }) }
+                    ForEach(shown.clubSections) { sec in
+                        VStack(alignment: .leading, spacing: 10) {
+                            ClubSectionHeading(title: sec.title, count: sec.clubs.count)
+                            if look == .list {
+                                VStack(spacing: 6) { ForEach(sec.clubs) { c in ClubRow(club: c, open: { opened = c }, delete: { deleting = c }) } }
+                            } else {
+                                LazyVGrid(columns: [GridItem(.adaptive(minimum: 260, maximum: 420), spacing: 16)], spacing: 16) {
+                                    ForEach(sec.clubs) { c in ClubCard(club: c, open: { opened = c }, delete: { deleting = c }) }
+                                }
+                            }
+                        }
                     }
                     if shown.isEmpty {
                         VStack(spacing: 8) { Image(systemName: "building.2").font(.system(size: 30)).foregroundStyle(FC.muted); Text(model.clubs.isEmpty ? "No clubs yet" : "No club matches").font(.headline) }
@@ -113,7 +122,7 @@ struct ClubCard: View {
                     Text(club.city.isEmpty ? "No town on file" : club.city).font(.system(size: 12)).foregroundStyle(Color(hex: 0xdfe8e1))
                 }
                 HStack(spacing: 16) {
-                    stat(club.creditsText, "left"); stat("\(club.events.count)", "tournaments"); stat("\(club.members.count)", "staff")
+                    stat(club.creditsText, "left"); stat("\(club.events.count)", club.events.count == 1 ? "tournament" : "tournaments"); stat("\(club.members.count)", "staff")
                 }
                 HStack(spacing: 6) {
                     Button("+1") { Task { await model.act("credits", ["club": club.id, "add": 1]) } }.buttonStyle(GlassButton()).disabled(club.credits < 0)
@@ -135,6 +144,60 @@ struct ClubCard: View {
     }
     private func stat(_ v: String, _ l: String) -> some View {
         (Text(v).font(.system(size: 15, weight: .bold)).foregroundStyle(.white) + Text(" \(l)").font(.system(size: 12)).foregroundStyle(Color(hex: 0xcfdbd2)))
+    }
+}
+
+/// A heading over a group of clubs: "ACTIVE  4".
+struct ClubSectionHeading: View {
+    var title: String
+    var count: Int
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(title.uppercased()).font(.system(size: 11, weight: .bold)).tracking(0.8).foregroundStyle(FC.muted)
+            Text("\(count)").font(.system(size: 11, weight: .bold)).foregroundStyle(FC.muted).padding(.horizontal, 6).padding(.vertical, 1).background(FC.paper2, in: Capsule())
+            Rectangle().fill(FC.line).frame(height: 1)
+        }
+    }
+}
+
+/// One club as a compact row (the List look): logo, name and town, status, left / tournaments / staff, +1, +5, Open.
+struct ClubRow: View {
+    @Environment(AdminModel.self) private var model
+    let club: AdminClub
+    var open: () -> Void
+    var delete: () -> Void
+    var body: some View {
+        HStack(spacing: 12) {
+            ClubLogoTile(url: logoURL(club.logo), name: club.name, size: 34)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(club.name).font(.system(size: 14, weight: .semibold)).foregroundStyle(FC.ink).lineLimit(1)
+                Text(club.city.isEmpty ? "No town on file" : club.city).font(.system(size: 12)).foregroundStyle(FC.muted).lineLimit(1)
+            }
+            .frame(minWidth: 180, maxWidth: .infinity, alignment: .leading)
+            Text(club.statusText.uppercased()).font(.system(size: 10, weight: .bold)).tracking(0.6).padding(.horizontal, 6).padding(.vertical, 2)
+                .background(club.status == "active" ? FC.flag : club.status == "pending" ? FC.paper2 : FC.red, in: RoundedRectangle(cornerRadius: 4))
+                .foregroundStyle(club.status == "off" ? .white : FC.onFlag)
+                .frame(width: 70, alignment: .leading)
+            HStack(spacing: 14) {
+                stat(club.creditsText, "left").frame(width: 100, alignment: .leading)
+                stat("\(club.events.count)", club.events.count == 1 ? "tournament" : "tournaments").frame(width: 120, alignment: .leading)
+                stat("\(club.members.count)", "staff").frame(width: 60, alignment: .leading)
+            }
+            HStack(spacing: 6) {
+                Button("+1") { Task { await model.act("credits", ["club": club.id, "add": 1]) } }.buttonStyle(PlainCardButton()).disabled(club.credits < 0)
+                Button("+5") { Task { await model.act("credits", ["club": club.id, "add": 5]) } }.buttonStyle(PlainCardButton()).disabled(club.credits < 0)
+                Button("Open", action: open).buttonStyle(GreenButton())
+                Menu { Button("Open Club", action: open); Divider(); Button("Delete Club…", role: .destructive, action: delete) } label: { Image(systemName: "ellipsis").font(.system(size: 13, weight: .bold)) }
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().foregroundStyle(FC.muted).help("More for this club")
+            }
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8)
+        .background(FC.card, in: RoundedRectangle(cornerRadius: 10)).overlay(RoundedRectangle(cornerRadius: 10).stroke(FC.line))
+        .contentShape(Rectangle()).onTapGesture(count: 2, perform: open)
+        .contextMenu { Button("Open Club", action: open); Divider(); Button("Delete Club…", role: .destructive, action: delete) }
+    }
+    private func stat(_ v: String, _ l: String) -> some View {
+        Text(v).font(.system(size: 13, weight: .bold)).foregroundStyle(FC.ink) + Text(" \(l)").font(.system(size: 12)).foregroundStyle(FC.muted)
     }
 }
 

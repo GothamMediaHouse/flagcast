@@ -9,9 +9,9 @@ struct AdminClub: Decodable, Identifiable, Hashable {
         init(from d: Decoder) throws { let c = try d.container(keyedBy: CodingKeys.self); email = c.str(.email); role = c.str(.role); added = c.dbl(.added, 0); seen = c.dbl(.seen, 0) }
         enum CodingKeys: String, CodingKey { case email, role, added, seen }
     }
-    struct Ev: Decodable, Hashable, Identifiable { var id: String, key: String, name: String, created: Double, hidden: Bool, archived: Bool
-        init(from d: Decoder) throws { let c = try d.container(keyedBy: CodingKeys.self); id = c.str(.id); key = c.str(.key); name = c.str(.name); created = c.dbl(.created, 0); hidden = c.int(.hidden, 0) != 0; archived = c.int(.archived, 0) != 0 }
-        enum CodingKeys: String, CodingKey { case id, key, name, created, hidden, archived }
+    struct Ev: Decodable, Hashable, Identifiable { var id: String, key: String, name: String, created: Double, hidden: Bool, archived: Bool, demo: Bool
+        init(from d: Decoder) throws { let c = try d.container(keyedBy: CodingKeys.self); id = c.str(.id); key = c.str(.key); name = c.str(.name); created = c.dbl(.created, 0); hidden = c.int(.hidden, 0) != 0; archived = c.int(.archived, 0) != 0; demo = c.int(.demo, 0) != 0 }
+        enum CodingKeys: String, CodingKey { case id, key, name, created, hidden, archived, demo }
     }
     struct Payment: Decodable, Hashable, Identifiable { var id: String, amount: Double, credits: Int, what: String, note: String, at: Double
         init(from d: Decoder) throws { let c = try d.container(keyedBy: CodingKeys.self); id = c.str(.id); amount = c.dbl(.amount, 0); credits = c.int(.credits, 0); what = c.str(.what); note = c.str(.note); at = c.dbl(.at, 0) }
@@ -31,6 +31,25 @@ struct AdminClub: Decodable, Identifiable, Hashable {
     var creditsText: String { credits < 0 ? "Unlimited" : "\(credits)" }
     var statusText: String { status == "active" ? "Active" : status == "pending" ? "Waiting" : "Off" }
     var paid: Double { payments.reduce(0) { $0 + $1.amount } }
+    /// the Demo club: one with a tournament Admin marked Demo, or "Demo" as its town
+    var isDemo: Bool { events.contains { $0.demo } || city.caseInsensitiveCompare("Demo") == .orderedSame }
+    /// tournaments still showing (deleted ones are only archived)
+    var liveEvents: Int { events.filter { !$0.archived }.count }
+}
+
+/// A heading's worth of Admin's Clubs list.
+struct ClubSection: Identifiable { var id: String; var title: String; var clubs: [AdminClub] }
+
+extension Array where Element == AdminClub {
+    /// Admin's Clubs list in sections, A to Z in each: waiting to join, active, switched off, then the Demo on its own
+    var clubSections: [ClubSection] {
+        let byName = sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        let real = byName.filter { !$0.isDemo }
+        return [ClubSection(id: "pending", title: "Waiting to join", clubs: real.filter { $0.status == "pending" }),
+                ClubSection(id: "active", title: "Active", clubs: real.filter { $0.status == "active" }),
+                ClubSection(id: "off", title: "Switched off", clubs: real.filter { !["pending", "active"].contains($0.status) }),
+                ClubSection(id: "demo", title: "Demo", clubs: byName.filter { $0.isDemo })].filter { !$0.clubs.isEmpty }
+    }
 }
 
 /// A club in Recently deleted (clubs.js admin op 'delete'): kept 30 days with its tournaments locked, then wiped.

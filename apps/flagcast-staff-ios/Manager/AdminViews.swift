@@ -118,8 +118,28 @@ struct ClubsView: View {
                     .padding(14).background(Color(hex: 0xfff8e1), in: RoundedRectangle(cornerRadius: 14)).overlay(RoundedRectangle(cornerRadius: 14).stroke(Color(hex: 0xecd58a)))
                 }
                 Picker("Club cards", selection: $look) { ForEach(ClubLook.allCases) { Text($0.title).tag($0) } }.pickerStyle(.segmented)
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 300, maximum: 460), spacing: 14)], spacing: 14) {
-                    ForEach(shown) { c in ClubCard(club: c, open: { opened = c }, delete: { deleting = c }) }
+                ForEach(shown.clubSections) { sec in
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 8) {
+                            Text(sec.title.uppercased()).font(.caption.weight(.bold)).tracking(0.8).foregroundStyle(FC.muted)
+                            Text("\(sec.clubs.count)").font(.caption.weight(.bold)).foregroundStyle(FC.muted).padding(.horizontal, 6).padding(.vertical, 1).background(FC.paper2, in: Capsule())
+                            Rectangle().fill(FC.line).frame(height: 1)
+                        }
+                        .accessibilityElement(children: .combine)
+                        if look == .list {
+                            VStack(spacing: 0) {
+                                ForEach(sec.clubs) { c in
+                                    ClubRow(club: c, open: { opened = c }, delete: { deleting = c })
+                                    if c.id != sec.clubs.last?.id { Divider().padding(.leading, 64) }
+                                }
+                            }
+                            .background(FC.card, in: RoundedRectangle(cornerRadius: 14)).overlay(RoundedRectangle(cornerRadius: 14).stroke(FC.line))
+                        } else {
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 300, maximum: 460), spacing: 14)], spacing: 14) {
+                                ForEach(sec.clubs) { c in ClubCard(club: c, open: { opened = c }, delete: { deleting = c }) }
+                            }
+                        }
+                    }
                 }
                 if shown.isEmpty { Text(admin.clubs.isEmpty ? "No clubs yet" : "No club matches").foregroundStyle(FC.muted).padding(30) }
                 RecentlyDeleted()
@@ -149,7 +169,7 @@ private struct ClubCard: View {
                     Text(club.name).font(FC.display(30)).lineLimit(1).minimumScaleFactor(0.6)
                     Text(club.city.isEmpty ? "No town on file" : club.city).font(.caption).opacity(0.85)
                 }
-                HStack(spacing: 14) { stat(club.creditsText, "left"); stat("\(club.events.count)", "tournaments"); stat("\(club.members.count)", "staff") }
+                HStack(spacing: 14) { stat(club.creditsText, "left"); stat("\(club.events.count)", club.events.count == 1 ? "tournament" : "tournaments"); stat("\(club.members.count)", "staff") }
                 HStack(spacing: 6) {
                     Button("+1") { Task { await admin.act("credits", ["club": club.id, "add": 1]) } }.buttonStyle(WhiteButton()).disabled(club.credits < 0)
                     Button("+5") { Task { await admin.act("credits", ["club": club.id, "add": 5]) } }.buttonStyle(WhiteButton()).disabled(club.credits < 0)
@@ -170,6 +190,44 @@ private struct ClubCard: View {
         .task(id: club.id) { image = await CourseImages.place([club.name, club.city].filter { !$0.isEmpty }.joined(separator: " "), key: club.id) }
     }
     private func stat(_ v: String, _ l: String) -> some View { Text(v).font(.system(size: 15, weight: .bold)) + Text(" \(l)").font(.caption) }
+}
+
+/// One club as a compact row (the List look): logo, name, town, left / tournaments / staff, status; ⋯ has +1, +5 and Delete.
+private struct ClubRow: View {
+    @Environment(AdminModel.self) private var admin
+    let club: AdminClub
+    var open: () -> Void
+    var delete: () -> Void
+    var body: some View {
+        HStack(spacing: 12) {
+            ClubLogoTile(url: logoURL(club.logo), name: club.name, size: 40)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(club.name).font(.subheadline.weight(.semibold)).foregroundStyle(FC.ink).lineLimit(1)
+                Text([club.city.isEmpty ? "No town on file" : club.city, "\(club.creditsText) left", "\(club.events.count) \(club.events.count == 1 ? "tournament" : "tournaments")", "\(club.members.count) staff"].joined(separator: " · "))
+                    .font(.caption).foregroundStyle(FC.muted).lineLimit(2)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            if club.status != "active" {
+                Text(club.statusText.uppercased()).font(.system(size: 10, weight: .bold)).tracking(0.6).padding(.horizontal, 6).padding(.vertical, 2)
+                    .background(club.status == "pending" ? FC.flag : FC.red, in: RoundedRectangle(cornerRadius: 4))
+                    .foregroundStyle(club.status == "off" ? .white : FC.onFlag)
+            }
+            Menu {
+                Button("Open Club", systemImage: "arrow.up.right", action: open)
+                Button("Add 1 Tournament", systemImage: "plus") { Task { await admin.act("credits", ["club": club.id, "add": 1]) } }.disabled(club.credits < 0)
+                Button("Add 5 Tournaments", systemImage: "plus.circle") { Task { await admin.act("credits", ["club": club.id, "add": 5]) } }.disabled(club.credits < 0)
+                Divider()
+                Button("Delete Club…", systemImage: "trash", role: .destructive, action: delete)
+            } label: {
+                Image(systemName: "ellipsis").font(.system(size: 15, weight: .bold)).foregroundStyle(FC.muted).frame(width: 44, height: 44)
+            }
+            .accessibilityLabel("More for \(club.name)")
+        }
+        .padding(.leading, 12).padding(.vertical, 6)
+        .contentShape(Rectangle()).onTapGesture(perform: open)
+        .accessibilityAddTraits(.isButton)
+        .contextMenu { Button("Open Club", systemImage: "arrow.up.right", action: open); Button("Delete Club…", systemImage: "trash", role: .destructive, action: delete) }
+    }
 }
 
 /// A club: approve / switch on or off, tournaments left, its people and tournaments.

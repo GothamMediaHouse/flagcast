@@ -694,7 +694,7 @@ export class FlagcastClubs extends DurableObject {
       const gone = Object.fromEntries(this.all("SELECT id, name FROM clubs WHERE status IN ('deleted', 'purged')").map((x) => [x.id, x.name]));
       const clubs = this.all('SELECT * FROM clubs WHERE status NOT IN (\'deleted\', \'purged\') ORDER BY (status = \'pending\') DESC, name COLLATE NOCASE').map(({ logo, was, ...x }) => ({
         ...x, powered: !!x.powered, logo: this.logoURL({ id: x.id, logo }), members: this.all('SELECT email, role, added FROM members WHERE club = ? ORDER BY role DESC, added', x.id).map((m) => ({ ...m, seen: seen[m.email] || 0 })),
-        events: this.all('SELECT id, key, name, created, hidden, archived FROM events WHERE club = ? ORDER BY created DESC', x.id),
+        events: this.all('SELECT id, key, name, created, hidden, archived, demo FROM events WHERE club = ? ORDER BY created DESC', x.id),
         payments: this.all('SELECT * FROM payments WHERE club = ? ORDER BY at DESC', x.id),
       }));
       // payments of deleted clubs still count in the totals

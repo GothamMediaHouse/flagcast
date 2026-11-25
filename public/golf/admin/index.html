@@ -44,6 +44,17 @@ main { max-width: 1240px; padding: 18px 20px 60px; }
 .seg { display: inline-flex; background: var(--paper-2); border-radius: 8px; padding: 2px; }
 .seg button { border: 0; background: none; padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
 .seg button[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.csec { margin-bottom: 22px; }
+.csec h4 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font: 700 11px var(--f-body); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.csec h4 .n { background: var(--paper-2); border-radius: 999px; padding: 1px 6px; letter-spacing: 0; }
+.csec h4::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.clist { display: grid; gap: 6px; }
+.crow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 12px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+.crow .who { flex: 1 1 180px; min-width: 0; } .crow .who b { display: block; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .crow .who small { color: var(--muted); font-size: 12px; }
+.crow .st { font-size: 10px; font-weight: 700; letter-spacing: .05em; padding: 2px 6px; border-radius: 4px; background: var(--flag); color: var(--on-flag); }
+.crow .st.pending { background: var(--paper-2); } .crow .st.off { background: var(--red); color: #fff; }
+.crow .nums { display: flex; gap: 14px; font-size: 12px; color: var(--muted); } .crow .nums b { color: var(--ink); font-size: 13px; }
+.crow .acts { display: flex; gap: 6px; margin-left: auto; }
 .cgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
 .ccard { position: relative; height: 262px; border-radius: 14px; overflow: hidden; color: #fff; }
 .ccard .back { position: absolute; inset: 0; display: grid; place-items: center; padding: 40px 48px 118px; }
@@ -264,7 +275,7 @@ const HEAD = { overview: ['Overview', () => `${clubs.filter((c) => c.status === 
 function drawHead() {
   const [t, sub] = HEAD[tab] || [tab, () => ''];
   $('aTitle').textContent = t; $('aSub').textContent = sub();
-  $('aActs').innerHTML = tab === 'clubs' && !sel ? `<span class="seg" title="How the club cards look: the logo on the place photo, or on the club’s colour"><button data-look="photo" aria-pressed="${look === 'photo'}">Logo on photo</button><button data-look="logo" aria-pressed="${look === 'logo'}">Logo on colour</button></span><button class="gbtn-green" data-newclub>+ New club</button>`
+  $('aActs').innerHTML = tab === 'clubs' && !sel ? `<span class="seg" title="How the clubs show: cards with the logo on the place photo or on the club’s colour, or a compact list"><button data-look="photo" aria-pressed="${look === 'photo'}">Photo</button><button data-look="logo" aria-pressed="${look === 'logo'}">Colour</button><button data-look="list" aria-pressed="${look === 'list'}">List</button></span><button class="gbtn-green" data-newclub>+ New club</button>`
     : tab === 'clubs' && sel ? '<button class="pbtn" data-allclubs>← All clubs</button>' : '';
 }
 function draw() {
@@ -293,20 +304,42 @@ function approvals() {
   return clubs.filter((c) => c.status === 'pending').map((c) => `<div class="banner" data-club="${c.id}"><span class="ex">!</span><div><b>${esc(c.name)} asked to join</b><small>${esc([`Signed up ${date(c.created)}`, c.city, c.by, c.contact, c.phone].filter(Boolean).join(' · '))}</small></div>
     <button class="pbtn" data-a="off">Decline</button><button class="gbtn-green" data-a="approve">Approve</button></div>`).join('');
 }
-function clubsView() {
-  const list = clubs.filter((c) => !q || `${c.name} ${c.city} ${c.contact} ${c.members.map((m) => m.email).join(' ')}`.toLowerCase().includes(q));
-  return `${approvals()}<div class="row" style="margin-bottom:14px"><input id="q" type="search" placeholder="Find a club" value="${esc(q)}" style="max-width:320px"></div>
-  <div class="cgrid">${list.map((c) => {
-    const ph = photoOf(c.id), back = look === 'logo' && c.logo;
-    return `<div class="ccard" data-club="${c.id}" ondblclick="this.querySelector('[data-open]').click()">
+// the Demo club: one with a tournament Admin marked Demo, or "Demo" as its town (it gets its own section)
+const isDemo = (c) => c.events.some((e) => e.demo) || (c.city || '').toLowerCase() === 'demo';
+// Clubs in sections, A to Z in each: waiting to join, active, switched off, then the Demo
+function clubSections(list) {
+  const byName = [...list].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })), real = byName.filter((c) => !isDemo(c));
+  return [['Waiting to join', real.filter((c) => c.status === 'pending')], ['Active', real.filter((c) => c.status === 'active')],
+    ['Switched off', real.filter((c) => !['pending', 'active'].includes(c.status))], ['Demo', byName.filter(isDemo)]].filter(([, cs]) => cs.length);
+}
+const stLabel = (c) => (c.status === 'active' ? 'ACTIVE' : c.status === 'pending' ? 'WAITING' : 'OFF');
+const tourns = (n) => `${n} tournament${n === 1 ? '' : 's'}`;
+function clubCard(c) {
+  const ph = photoOf(c.id), back = look === 'logo' && c.logo;
+  return `<div class="ccard" data-club="${c.id}" ondblclick="this.querySelector('[data-open]').click()">
       <div class="tilebox" ${ph ? `data-photo='${esc(JSON.stringify(ph))}'` : ''}></div>
       ${back ? `<div class="back" style="background:${esc(c.accent || '#123628')}"><img src="${esc(c.logo)}" alt=""></div>` : ''}
-      <span class="st ${c.status}">${c.status === 'active' ? 'ACTIVE' : c.status === 'pending' ? 'WAITING' : 'OFF'}</span>
+      <span class="st ${c.status}">${stLabel(c)}</span>
       ${look === 'photo' && c.logo ? `<span class="lt">${tile(c.logo, c.name, 64)}</span>` : ''}
       <div class="bt"><div><div class="nm">${esc(c.name)}</div><div class="town">${esc(c.city || 'No town on file')}</div></div>
-        <div class="nums"><span><b>${c.credits < 0 ? 'Unlimited' : c.credits}</b> left</span><span><b>${c.events.length}</b> tournaments</span><span><b>${c.members.length}</b> staff</span></div>
+        <div class="nums"><span><b>${c.credits < 0 ? 'Unlimited' : c.credits}</b> left</span><span><b>${c.events.length}</b> ${c.events.length === 1 ? 'tournament' : 'tournaments'}</span><span><b>${c.members.length}</b> staff</span></div>
         <div class="acts"><button class="gbtn" data-cr="1" ${c.credits < 0 ? 'disabled' : ''}>+1</button><button class="gbtn" data-cr="5" ${c.credits < 0 ? 'disabled' : ''}>+5</button><button class="wbtn" data-open="${c.id}">Open club</button></div></div></div>`;
-  }).join('') || '<div class="box empty">No club matches.</div>'}</div>${deletedView()}`;
+}
+// the List look: one compact row a club
+function clubRow(c) {
+  return `<div class="crow" data-club="${c.id}" ondblclick="this.querySelector('[data-open]').click()">
+    ${tile(c.logo, c.name, 34)}
+    <div class="who"><b>${esc(c.name)}</b><small>${esc(c.city || 'No town on file')}</small></div>
+    <span class="st ${c.status}">${stLabel(c)}</span>
+    <span class="nums"><span><b>${c.credits < 0 ? 'Unlimited' : c.credits}</b> left</span><span><b>${c.events.length}</b> ${c.events.length === 1 ? 'tournament' : 'tournaments'}</span><span><b>${c.members.length}</b> staff</span></span>
+    <span class="acts"><button class="pbtn" data-cr="1" ${c.credits < 0 ? 'disabled' : ''}>+1</button><button class="pbtn" data-cr="5" ${c.credits < 0 ? 'disabled' : ''}>+5</button><button class="gbtn-green" data-open="${c.id}">Open</button></span></div>`;
+}
+function clubsView() {
+  const list = clubs.filter((c) => !q || `${c.name} ${c.city} ${c.contact} ${c.members.map((m) => m.email).join(' ')}`.toLowerCase().includes(q));
+  const secs = clubSections(list).map(([t, cs]) => `<div class="csec"><h4>${esc(t)} <span class="n">${cs.length}</span></h4>
+    ${look === 'list' ? `<div class="clist">${cs.map(clubRow).join('')}</div>` : `<div class="cgrid">${cs.map(clubCard).join('')}</div>`}</div>`).join('');
+  return `${approvals()}<div class="row" style="margin-bottom:14px"><input id="q" type="search" placeholder="Find a club" value="${esc(q)}" style="max-width:320px"></div>
+  ${secs || '<div class="box empty">No club matches.</div>'}${deletedView()}`;
 }
 // clubs deleted in the last 30 days: Restore, or wipe now
 function deletedView() {

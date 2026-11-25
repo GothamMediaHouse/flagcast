@@ -317,9 +317,9 @@ struct TournamentLogoField: View {
 /// How Admin's club cards look (both kept, picked on the Clubs page and remembered on each device): the club's logo
 /// on a tile over its place photo, or the logo big on the club's own colour. A club with no logo yet keeps its photo either way.
 enum ClubLook: String, CaseIterable, Identifiable {
-    case photo, logo
+    case photo, logo, list
     var id: String { rawValue }
-    var title: String { self == .photo ? "Logo on photo" : "Logo on colour" }
+    var title: String { self == .photo ? "Photo" : self == .logo ? "Colour" : "List" }
     static let key = "admin.clubLook"
 }
 
