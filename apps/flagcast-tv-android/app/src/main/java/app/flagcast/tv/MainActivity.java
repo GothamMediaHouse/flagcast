@@ -77,10 +77,20 @@ public class MainActivity extends Activity {
     @Override protected void onPause() { web.onPause(); super.onPause(); }
     @Override protected void onDestroy() { handler.removeCallbacksAndMessages(null); web.destroy(); super.onDestroy(); }
 
-    /** OK / select on the remote reloads (handy if a TV looks stuck); Back leaves the app as usual */
+    /**
+     * OK / select and Back go to the page first (window.fcTv): on the code screen OK starts "Watch a demo", and Back
+     * leaves the demo. Otherwise OK reloads (handy if a TV looks stuck) and Back leaves the app as usual.
+     */
     @Override public boolean onKeyDown(int code, KeyEvent e) {
-        if (code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER) { load(); return true; }
-        return super.onKeyDown(code, e);
+        boolean ok = code == KeyEvent.KEYCODE_DPAD_CENTER || code == KeyEvent.KEYCODE_ENTER;
+        boolean back = code == KeyEvent.KEYCODE_BACK;
+        if (!ok && !back) return super.onKeyDown(code, e);
+        if (failed) { if (ok) load(); else finish(); return true; }
+        web.evaluateJavascript("window.fcTv ? fcTv('" + (ok ? "ok" : "back") + "') : false", (r) -> {
+            if ("true".equals(r)) return;
+            if (ok) load(); else finish();
+        });
+        return true;
     }
 
     @Override protected void onNewIntent(Intent i) { super.onNewIntent(i); }

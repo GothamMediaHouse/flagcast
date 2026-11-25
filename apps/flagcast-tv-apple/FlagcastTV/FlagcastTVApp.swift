@@ -21,7 +21,7 @@ struct Root: View {
             Theme.bg.ignoresSafeArea()
             switch store.screen {
             case .starting: ProgressView().tint(Theme.dim)
-            case .pairing: PairView(hello: store.hello, problem: store.problem)
+            case .pairing: PairView(hello: store.hello, problem: store.problem) { store.watchDemo() }
             case .idle: if let n = store.now { IdleView(now: n) }
             case .live: if let n = store.now, let f = n.feed { BoardView(feed: f, eventName: n.event?.name ?? "") }
             }
@@ -31,6 +31,18 @@ struct Root: View {
                     .padding(40)
             }
         }
+        .overlay(alignment: .topTrailing) {
+            if store.demo && store.screen == .live {
+                // focusable, so the remote has something to press and Menu reaches onExitCommand
+                Button { store.stopDemo() } label: {
+                    Text("DEMO · CONNECT YOUR CLUB").font(Theme.mono(18, .semibold)).tracking(2).foregroundStyle(Color(hex: "1a1a10"))
+                        .padding(.horizontal, 14).padding(.vertical, 6).background(Theme.flag, in: .rect(cornerRadius: 8))
+                }
+                .buttonStyle(.plain).padding(40)
+            }
+        }
+        // Menu on the remote leaves the demo for the code screen (and nothing else: a club screen keeps playing)
+        .onExitCommand(perform: store.demo ? { store.stopDemo() } : nil)
         .animation(.easeInOut(duration: 0.5), value: store.screen)
     }
 }

@@ -5,6 +5,7 @@ import SwiftUI
 struct PairView: View {
     let hello: Hello?
     let problem: String?
+    var watchDemo: () -> Void = {}
 
     var body: some View {
         HStack(spacing: 120) {
@@ -37,6 +38,11 @@ struct PairView: View {
                         Text(mins > 0 ? "New code in \(mins) min" : "New code soon").font(Theme.mono(22)).foregroundStyle(Color(hex: "6f8577"))
                     }
                 }
+                Button(action: watchDemo) {
+                    Label("Watch a demo", systemImage: "play.fill").font(.system(size: 30, weight: .semibold)).padding(.horizontal, 24)
+                }
+                .padding(.top, 10)
+                Text("No club yet? See what your TVs would show.").font(.system(size: 22)).foregroundStyle(Theme.dim)
             }
             .padding(.vertical, 70).padding(.horizontal, 60)
             .background(Theme.panel, in: .rect(cornerRadius: 36))

@@ -5,6 +5,7 @@
 sub init()
     m.reg = CreateObject("roRegistrySection", "flagcast")
     m.pairing = invalid
+    m.demo = false
     m.feedKey = ""
     m.pages = []
     m.idx = 0
@@ -54,6 +55,8 @@ end function
 sub nextStep()
     if token() <> ""
         call("now", { token: token(), today: today(), feed: 1 })
+    else if m.demo
+        call("demo", {})
     else if m.pairing = invalid
         call("hello", { kind: "roku" })
     else
@@ -88,6 +91,21 @@ sub onResult()
             if s = 410 then m.pairing = invalid
             later(3)
         end if
+    else if op = "demo"
+        if not m.demo then return
+        if s = 200 and j.feed <> invalid
+            showBoard(j.feed)
+            m.top.findNode("demoTag").visible = true
+            later(10)
+        else if m.top.findNode("board").visible
+            later(15)
+        else
+            m.demo = false
+            msg = "The demo isn’t available right now."
+            if j.error <> invalid then msg = j.error
+            if m.pairing <> invalid then showPair(m.pairing.code, msg)
+            later(3)
+        end if
     else if op = "now"
         if s = 401
             m.reg.Delete("token")
@@ -113,6 +131,7 @@ sub only(id as String)
     for each g in ["pair", "idle", "board"]
         m.top.findNode(g).visible = (g = id)
     end for
+    if id <> "board" then m.top.findNode("demoTag").visible = false
     if id <> "board" then stopVideo()
 end sub
 
@@ -346,8 +365,21 @@ sub addSponsor(parent as Object, s as Object, x as Integer, y as Integer, w as I
     end if
 end sub
 
-' OK on the remote: check now (handy if a TV looks stuck)
+' OK on the code screen: "Watch a demo" (the live Demo tournament). Back leaves the demo for the code (a new one if
+' it ran out). Otherwise OK checks now (handy if a TV looks stuck)
 function onKeyEvent(key as String, press as Boolean) as Boolean
+    if press and key = "OK" and token() = "" and not m.demo and m.top.findNode("pair").visible
+        m.demo = true
+        nextStep()
+        return true
+    end if
+    if press and key = "back" and m.demo
+        m.demo = false
+        stopVideo()
+        m.pairing = invalid
+        nextStep()
+        return true
+    end if
     if press and key = "OK"
         nextStep()
         return true

@@ -11,6 +11,8 @@ final class TVStore {
     var now: Now?
     var problem: String?
     var offline = false
+    /// "Watch a demo" on the code screen: the live Demo tournament until Menu is pressed (or the club adds this TV)
+    var demo = false
 
     private let tokenKey = "flagcast.tv.token"
     private var token: String? {
@@ -31,8 +33,31 @@ final class TVStore {
 
     private func run() async {
         while !Task.isCancelled {
-            if let t = token { await check(t) } else { await pair() }
+            if let t = token { await check(t) } else if demo { await showDemo() } else { await pair() }
         }
+    }
+
+    func watchDemo() { demo = true; problem = nil; screen = .starting; start() }
+    func stopDemo() { guard demo else { return }; demo = false; now = nil; offline = false; screen = .pairing; start() }
+
+    // ---- "Watch a demo" ----
+    private func showDemo() async {
+        do {
+            let n: Now = try await Server.post("demo", [:])
+            guard demo else { return }
+            now = n; offline = false
+            screen = n.feed != nil ? .live : .pairing
+        } catch {
+            guard demo else { return }
+            if now == nil { demo = false; screen = .pairing; problem = (error as? ServerError)?.errorDescription ?? "Can’t reach Flagcast. Check the Apple TV’s internet."; return }
+            offline = true
+        }
+        // the code is still good while the demo plays: if the club adds this TV meanwhile, show the club's screens
+        if let h = hello, Date().timeIntervalSince1970 * 1000 < h.exp,
+           let w: Wait = try? await Server.post("wait", ["code": h.code, "pair": h.pair]), let t = w.token {
+            token = t; hello = nil; demo = false; screen = .starting; return
+        }
+        await sleep(10)
     }
 
     // ---- not connected ----

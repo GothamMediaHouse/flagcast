@@ -10,6 +10,8 @@
 //   POST /golf/api/tv/list    { id, key | token }               → { tvs }
 //   POST /golf/api/tv/edit    { id, key | token, tv, name?, where?, event? }   event: always show this tournament ('' = today's)
 //   POST /golf/api/tv/remove  { id, key | token, tv }
+//   POST /golf/api/tv/demo    { }                              → like now, for the live Demo tournament ("Watch a demo" on
+//                                                               the code screen, for app reviewers and clubs looking around)
 //   GET  /golf/api/tv/sponsor/<event>/<sponsor>                a sponsor's logo as a file (Roku can't show data: images)
 import { clubs } from './clubs.js';
 import { tvFeed } from './tvfeed.js';
@@ -29,6 +31,7 @@ export async function tv(request, env) {
       'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; img-src data:" } });
   }
   const op = url.pathname.slice('/golf/api/tv/'.length);
+  if (op === 'demo' && request.method === 'POST') return demo(request, env, `${url.protocol}//${url.host}`);
   if (!OPS.includes(op)) return json({ error: 'Not found' }, 404);
   if (request.method !== 'POST') return json({ error: 'Use POST' }, 405);
   const body = await request.text();
@@ -46,4 +49,17 @@ export async function tv(request, env) {
 async function stateOf(env, id) {
   const r = await env.GOLF.get(env.GOLF.idFromName(id)).fetch(new Request(`https://golf/golf/api/${id}/state`));
   return r.ok ? r.json() : null;
+}
+
+// "Watch a demo": the tournament Flagcast Admin marked Demo (the same one the player app's "Try a demo" opens), as a
+// TV that isn't any club's would show it. No token: it isn't paired, joins no screens list and counts as no TV.
+async function demo(request, env, origin) {
+  const none = () => json({ error: 'The demo isn’t available right now. Try again later.' }, 404);
+  const r = await clubs(new Request(request.url, { method: 'POST', headers: request.headers, body: '{}' }), env, 'demo-find');
+  const { id } = await r.json().catch(() => ({}));
+  if (!id) return none();
+  const S = await stateOf(env, id);
+  if (!S?.brand?.marked) return none();
+  return json({ tv: { id: 'demo', name: 'Demo' }, club: { name: 'Flagcast', logo: '', accent: '', flagcast: true },
+    event: { id: S.id, name: S.name || 'Demo tournament', date: S.date || '' }, next: null, check: 10, feed: tvFeed(S, '', origin) });
 }

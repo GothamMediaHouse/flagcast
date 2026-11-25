@@ -24,8 +24,16 @@
       <Label id="code" text="······" translation="[1040,410]" width="760" horizAlign="center" color="0xE8C547FF">
         <Font role="font" uri="font:BoldSystemFontFile" size="120" />
       </Label>
-      <Label id="pairNote" translation="[1080,640]" width="680" horizAlign="center" wrap="true" color="0x6F8577FF">
+      <Label id="pairNote" translation="[1080,600]" width="680" horizAlign="center" wrap="true" color="0x6F8577FF">
         <Font role="font" uri="font:SystemFontFile" size="24" />
+      </Label>
+      <!-- "Watch a demo": OK on the remote -->
+      <Rectangle translation="[1220,670]" width="400" height="70" color="0xE8C547FF" />
+      <Label text="OK  ▶  Watch a demo" translation="[1220,686]" width="400" horizAlign="center" color="0x1A1A10FF">
+        <Font role="font" uri="font:BoldSystemFontFile" size="30" />
+      </Label>
+      <Label text="No club yet? See what your TVs would show." translation="[1040,800]" width="760" horizAlign="center" color="0x8FA596FF">
+        <Font role="font" uri="font:SystemFontFile" size="22" />
       </Label>
     </Group>
 
@@ -73,6 +81,9 @@
       </Group>
     </Group>
 
+    <Label id="demoTag" text="DEMO · PRESS BACK TO CONNECT YOUR CLUB" translation="[1180,1030]" width="700" horizAlign="right" visible="false" color="0xE8C547FF">
+      <Font role="font" uri="font:BoldSystemFontFile" size="22" />
+    </Label>
     <Label id="offline" text="Reconnecting…" translation="[40,1030]" visible="false" color="0xC98B7FFF">
       <Font role="font" uri="font:SystemFontFile" size="22" />
     </Label>

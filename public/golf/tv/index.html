@@ -47,6 +47,11 @@ iframe#board { position: absolute; inset: 0; width: 100%; height: 100%; border: 
 #idle .row img { max-height: 5vw; max-width: 14vw; object-fit: contain; }
 #idle .row b { font-size: 1.7vw; }
 #idle .clock { position: absolute; right: 3vw; top: 2.4vw; font-family: var(--f-mono); font-size: 1.4vw; color: var(--dim); }
+/* "Watch a demo": the one thing to press on the code screen, and the way back from the demo */
+.demo { margin-top: .6vw; font: 700 1.6vw Inter, system-ui, sans-serif; color: #1a1a10; background: var(--flag); border: 0; border-radius: 1vw; padding: 1vw 2.4vw; cursor: pointer; }
+.demo:focus-visible, .demo:focus { outline: .35vw solid #fff; outline-offset: .35vw; }
+#demohint { font-size: 1.1vw; color: var(--dim); }
+#demobar { position: absolute; right: 2vw; top: 1.6vw; z-index: 6; font-family: var(--f-mono); font-size: 1vw; letter-spacing: .14em; padding: .5vw 1vw; }
 #offline { position: absolute; left: 2vw; bottom: 1.6vw; font-family: var(--f-mono); font-size: 1vw; color: #c98b7f; display: none; z-index: 5; background: rgba(0,0,0,.6); padding: .3vw .8vw; border-radius: .4vw; }
 </style>
 </head>
@@ -67,6 +72,8 @@ iframe#board { position: absolute; inset: 0; width: 100%; height: 100%; border: 
     <div id="code" aria-label="TV code"></div>
     <div id="pairmsg"></div>
     <span id="expires"></span>
+    <button class="demo" id="demoBtn">▶ Watch a demo</button>
+    <span id="demohint">No club yet? See what your TVs would show.</span>
   </div>
 </section>
 <section class="view" id="idle">
@@ -80,6 +87,7 @@ iframe#board { position: absolute; inset: 0; width: 100%; height: 100%; border: 
   <div class="sponsors" id="sponsors"><span class="label">Thanks to our sponsors</span><div class="row" id="sprow"></div></div>
 </section>
 <iframe id="board" title="Leaderboard" hidden allow="autoplay; fullscreen"></iframe>
+<button class="demo" id="demobar" hidden>DEMO · CONNECT YOUR CLUB</button>
 <div id="offline">Reconnecting…</div>
 <script type="module">
 const $ = (id) => document.getElementById(id);
@@ -96,16 +104,23 @@ async function post(op, body) {
   const r = await fetch(`/golf/api/tv/${op}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), cache: 'no-store' });
   const j = await r.json().catch(() => ({})); return { status: r.status, ...j };
 }
-const show = (id) => { for (const v of ['pair', 'idle']) $(v).classList.toggle('on', v === id); $('board').hidden = id !== 'board'; };
+const show = (id) => {
+  for (const v of ['pair', 'idle']) $(v).classList.toggle('on', v === id); $('board').hidden = id !== 'board';
+  $('demobar').hidden = !(demo && id === 'board');
+  if (id === 'pair') $('demoBtn').focus(); else if (demo && id === 'board') $('demobar').focus();
+};
+let demo = false;
 let timer = 0;
 const later = (fn, ms) => { clearTimeout(timer); timer = setTimeout(fn, ms); };
 
 // ---- not connected: show a code until someone types it in the Manager ----
 let pairing = null;
 async function pair() {
+  if (demo) return;
   show('pair');
   if (!pairing || Date.now() > pairing.exp - 15000) {
     const r = await post('hello', { kind: KIND }).catch(() => null);
+    if (demo) return;
     if (!r || !r.code) { $('pairmsg').textContent = r?.error || 'Can’t reach Flagcast. Check the TV’s internet.'; return later(pair, 15000); }
     pairing = r; $('pairmsg').textContent = '';
     $('code').innerHTML = [...r.code].map((c) => `<span>${esc(c)}</span>`).join('');
@@ -115,8 +130,40 @@ async function pair() {
   const w = await post('wait', { code: pairing.code, pair: pairing.pair }).catch(() => null);
   if (w?.token) { store.set('fc.tv.token', w.token); pairing = null; return now(); }
   if (w?.expired) pairing = null;
-  later(pair, 3000);
+  if (!demo) later(pair, 3000);
 }
+
+// ---- "Watch a demo": the live Demo tournament's board until Back (or the club adds this TV meanwhile) ----
+async function demoTick() {
+  if (!demo) return;
+  const r = await post('demo', {}).catch(() => null);
+  if (!demo) return;
+  $('offline').style.display = r ? 'none' : 'block';
+  if (r?.event) {
+    const src = `/g/${r.event.id}/board`;
+    if (current !== src) { current = src; $('board').src = src; }
+    show('board');
+  } else if (r && !current) { demo = false; $('pairmsg').textContent = r.error || 'The demo isn’t available right now.'; return pair(); }
+  // the code still works while the demo plays
+  if (pairing && Date.now() < pairing.exp) {
+    const w = await post('wait', { code: pairing.code, pair: pairing.pair }).catch(() => null);
+    if (w?.token) { store.set('fc.tv.token', w.token); pairing = null; stopDemo(false); return now(); }
+  }
+  later(demoTick, 10000);
+}
+function startDemo() { demo = true; $('pairmsg').textContent = ''; demoTick(); }
+function stopDemo(back = true) { if (!demo) return; demo = false; current = ''; $('board').src = 'about:blank'; $('demobar').hidden = true; if (back) pair(); }
+$('demoBtn').addEventListener('click', startDemo);
+$('demobar').addEventListener('click', () => stopDemo());
+// the Android TV / Fire TV app passes the remote's OK and Back here first: true = the page handled it
+window.fcTv = (key) => {
+  if (key === 'ok' && !demo && $('pair').classList.contains('on')) { startDemo(); return true; }
+  if (key === 'ok' && demo) { stopDemo(); return true; }
+  if (key === 'back' && demo) { stopDemo(); return true; }
+  return false;
+};
+// a remote's Back: Escape, Backspace, or GoBack / BrowserBack on TV browsers
+addEventListener('keydown', (e) => { if (demo && ['Escape', 'Backspace', 'GoBack', 'BrowserBack'].includes(e.key)) { e.preventDefault(); stopDemo(); } });
 
 // ---- connected: what to show now ----
 let current = '', sponsorsFor = '';
