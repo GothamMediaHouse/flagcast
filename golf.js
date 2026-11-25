@@ -13,13 +13,15 @@
 //                                          → { groups }   where the other groups are, for the golfers' course map
 //   POST /golf/api/<id>/live               { code, team, token, env, player? } | { code, team, token, end: true }   the lock screen live view (liveact.js)
 //   GET  /golf/api/<id>/photo/<slot>       a photo the club added: cover, h<n> (a hole), s-<sponsor id> (a banner)
+//   POST /golf/api/<id>/enter              { code, team, contest, player, dist, at?: [lat, lng], acc? }   a golfer's own long drive / closest to the pin
+//                                          (only when the contest lets golfers enter; at = where the phone is, for a GPS drive from the tee)
 //   POST /golf/api/<id>/hit                { list: [{ s: sponsorId, k: 'view'|'tap'|'secs', n }] }   sponsor counts for the report
 //   GET  /golf/api/demo                    → { id, name, code, team }   "Try a demo": the newest Demo tournament and its sample cart
 //
 // Pages: /g/<id> live page · /g/<id>/board screens · /g/<id>/desk#<key> desk · /g/<id>/map#<key> course map · /g/<id>/s/<code> cart · /g/<id>/cards QR cards
 import { DurableObject } from 'cloudflare:workers';
-import { defaultHoles, courseHcp, leaderboard } from './public/golf/core.js';
-import { trackingOn, cleanPin } from './public/golf/gps.js';
+import { defaultHoles, courseHcp, leaderboard, contestNeedsOk } from './public/golf/core.js';
+import { trackingOn, cleanPin, yds, holeMap } from './public/golf/gps.js';
 import { demoGroups } from './demogroups.js';
 import { same, pinProblem, mergeTeams, stamp, PIN_WAIT, PIN_TRIES_IP, PIN_TRIES_ALL } from './setup.js';
 import { clubs } from './clubs.js';
@@ -127,7 +129,7 @@ export async function golf(request, env) {
   if ((m = url.pathname.match(/^\/golf\/api\/([a-z0-9]{8})\/photo\/([a-z0-9-]{1,14})$/)) && (request.method === 'GET' || request.method === 'HEAD')) {
     return cors(request, await env.GOLF.get(env.GOLF.idFromName(m[1])).fetch(request));
   }
-  if ((m = url.pathname.match(/^\/golf\/api\/([a-z0-9]{8})\/(state|ws|cart|score|desk|pro|hit|where|live|logo)$/))) {
+  if ((m = url.pathname.match(/^\/golf\/api\/([a-z0-9]{8})\/(state|ws|cart|score|desk|pro|hit|where|live|logo|enter)$/))) {
     const stub = env.GOLF.get(env.GOLF.idFromName(m[1]));
     return cors(request, await stub.fetch(request));
   }
@@ -152,9 +154,9 @@ export const SPOTS = ['title', 'leaderboard', 'hole', 'cam', 'contest', 'turn', 
 // (cam = one hole's camera, full frame)
 export const PAGE_KINDS = ['lb', 'p3', 'cam', 'contests', 'skins', 'fund', 'sponsors', 'sponsor', 'schedule'];
 // changes made on the day (desk or a pro's PIN); marshals only post contest results
-const DAY_OPS = new Set(['fix', 'ctp', 'contest', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay', 'scene', 'map', 'groups', 'pinsheet', 'report', 'team', 'move', 'notes']);
+const DAY_OPS = new Set(['fix', 'ctp', 'contest', 'check', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay', 'scene', 'map', 'groups', 'pinsheet', 'report', 'team', 'move', 'notes']);
 // marshals post contest results and replays of shots at their hole
-const MARSHAL_OPS = new Set(['ctp', 'replay']);
+const MARSHAL_OPS = new Set(['ctp', 'check', 'replay']);
 // a replay with no clip link replays the hole's live camera from this many seconds before it was marked
 export const REPLAY_BACK = 25;
 const num = (v, lo, hi, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
@@ -280,13 +282,40 @@ function cleanSetup(s, old) {
         k: x.k, fl: clip(x.fl, 12), hole: num(x.hole, 0, 18, 0), sponsor: clip(x.sponsor, 12), secs: num(x.secs, 4, 300, 12) })),
     })),
     fund: { on: !!s.fund?.on, label: clip(s.fund?.label, 80), goal: num(s.fund?.goal, 0, 1e9, 0), raised: num(s.fund?.raised, 0, 1e9, 0), give: /^https:\/\//.test(s.fund?.give || '') ? clip(s.fund.give, 300) : '' },
-    contests: (Array.isArray(s.contests) ? s.contests : []).slice(0, 30).map((c) => ({
-      id: clip(c.id, 12) || rand(5, 'abcdefghijkmnpqrstuvwxyz23456789'), kind: c.kind === 'ld' ? 'ld' : 'ctp', hole: num(c.hole, 1, 18, 1),
-      label: clip(c.label, 60), sponsor: clip(c.sponsor, 60),
-      entries: (Array.isArray(c.entries) ? c.entries : []).slice(0, 50).map((e) => ({ name: clip(e.name, 50), dist: num(e.dist, 0, 999, 0) })).filter((e) => e.name),
-    })),
+    contests: (Array.isArray(s.contests) ? s.contests : []).slice(0, 30).map(cleanContest),
   };
 }
+
+// a long drive or closest to the pin contest. self: golfers enter their own results on the contest hole (default on).
+// check: which golfer entries wait for a pro's OK before they count on the TVs: 'top' (any that would make the top 3,
+// the default), 'all' or 'none' (trust golfers). prize: points for the winner, 0 = none (points only, never money).
+// An entry: { name, dist, ok, by, team?, player?, gps?, at?, okBy? }. dist is yards (long drive) or feet (closest);
+// ok false = waiting for a check (phones show it with a clock, TVs leave it off); gps = yards from the tee the phone measured.
+export function cleanContest(c) {
+  c = c || {};
+  return {
+    id: clip(c.id, 12) || rand(5, 'abcdefghijkmnpqrstuvwxyz23456789'), kind: c.kind === 'ld' ? 'ld' : 'ctp', hole: num(c.hole, 1, 18, 1),
+    label: clip(c.label, 60), sponsor: clip(c.sponsor, 60),
+    self: c.self !== false, check: ['all', 'none'].includes(c.check) ? c.check : 'top', prize: Math.round(num(c.prize, 0, 100000, 0)),
+    entries: (Array.isArray(c.entries) ? c.entries : []).slice(0, 200).map(cleanEntry).filter((e) => e.name),
+  };
+}
+const cleanEntry = (e) => {
+  e = e || {};
+  const out = { name: clip(e.name, 50).trim(), dist: Math.round(num(e.dist, 0, 999, 0) * 100) / 100, ok: e.ok !== false, by: clip(e.by, 40) };
+  if (e.team) out.team = clip(e.team, 12);
+  if (e.player) out.player = clip(e.player, 12);
+  if (Number(e.gps) > 0) out.gps = Math.round(num(e.gps, 0, 999, 0));
+  if (Number(e.at) > 0) out.at = Number(e.at);
+  if (e.okBy) out.okBy = clip(e.okBy, 40);
+  return out;
+};
+// the same player: by player id when both have one, else by name
+const samePlayer = (a, b) => (a.player && b.player ? a.player === b.player : a.name.toLowerCase() === b.name.toLowerCase());
+// a golfer's distance must look like golf: a long drive of 50 to 450 yards, a closest to the pin under 200 feet
+export const contestRange = (c) => (c.kind === 'ld' ? [50, 450] : [0.01, 200]);
+// every contest change (golfer entries, checks, fixes) for the desk; never in the public state
+const contestLog = (ev, x) => { ev.clog = [...(ev.clog || []), { at: Date.now(), ...x }].slice(-300); };
 
 export class GolfEvent extends DurableObject {
   constructor(ctx, env) {
@@ -309,7 +338,7 @@ export class GolfEvent extends DurableObject {
   // what anyone can see: the setup without the cart codes or the desk key
   async publicState() {
     const ev = await this.load(), sc = await this.scores();
-    const { key, pins, log, logo, clubBrand, demo, photos, removed, ...rest } = ev; // logos and photos go by address, not in the state
+    const { key, pins, log, clog, logo, clubBrand, demo, photos, removed, ...rest } = ev; // logos and photos go by address, not in the state
 
     const teams = ev.teams.map(({ code, sv, ...t }) => ({ ...t, players: t.players.map(({ ghin, ...p }) => p) })); // GHIN numbers stay with the desk
     const online = Object.fromEntries((ev.displays || []).map((d) => [d.id, this.ctx.getWebSockets(`d:${d.id}`).length]));
@@ -500,6 +529,7 @@ export class GolfEvent extends DurableObject {
     if (op === 'pro') return this.pro(b, request.headers.get('CF-Connecting-IP') || '');
     if (op === 'hit') return this.hit(b, request.headers.get('CF-Connecting-IP') || '');
     if (op === 'where') return this.where(b);
+    if (op === 'enter') return this.enter(b);
     if (op === 'live') return this.live(b);
     return json({ error: 'Not found' }, 404);
   }
@@ -568,6 +598,12 @@ export class GolfEvent extends DurableObject {
       // the tournament's own logo (instead of the club's): '' takes it off; left out, it stays as it is
       let logo = ev.logo || '';
       if (b.setup?.logo !== undefined) { try { logo = cleanLogo(b.setup.logo); } catch (e) { return json({ error: e.message }, e.status || 400); } }
+      // contest results only change through their own ops (golfers, marshals, the desk's results), so a Save made from an
+      // older copy never wipes them; a Manager that doesn't know a contest setting yet keeps what's there
+      if (b.setup && Array.isArray(b.setup.contests)) b.setup = { ...b.setup, contests: b.setup.contests.map((c) => {
+        const was = (ev.contests || []).find((x) => x.id === c?.id);
+        return was ? { self: was.self, check: was.check, prize: was.prize, ...c, entries: was.entries } : { ...c, entries: [] };
+      }) };
       const s = cleanSetup(b.setup || {}, ev);
       keepTVs(s, ev.displays);
       const pp = pinProblem(s.pins, ev.pins || []); if (pp) return json({ error: pp }, 400);
@@ -627,7 +663,7 @@ export class GolfEvent extends DurableObject {
     ev.live = ev.live || { force: {}, take: null };
     // a timed send (Send now for 5 or 15 minutes) is over: the screen is back on its playlist
     for (const [id, f] of Object.entries(ev.live.force || {})) if (f && f.until && f.until <= now) delete ev.live.force[id];
-    if (b.op === 'stats') return json({ stats: await this.getStats(), log: ev.log || [] });
+    if (b.op === 'stats') return json({ stats: await this.getStats(), log: ev.log || [], clog: ev.clog || [] });
     if (b.op === 'report') { // the results and GHIN posting files (rows; the app makes the CSV)
       const S = await this.publicState();
       return json({ name: ev.name || 'Tournament', results: resultsRows(S), ghin: ghinRows(ev, S) });
@@ -691,14 +727,31 @@ export class GolfEvent extends DurableObject {
       await this.ctx.storage.put('event', ev);
       return json({ ok: true });
     }
-    if (b.op === 'ctp') { // a marshal at the hole: one result, replacing that player's earlier one
+    if (b.op === 'ctp') { // a marshal or the pro at the hole: one result (checked), replacing that player's earlier one
       const c = ev.contests.find((x) => x.id === b.id); if (!c) return json({ error: 'No such contest' }, 404);
       const name = clip(b.name, 50).trim(); if (!name) return json({ error: 'Who was it?' }, 400);
-      const entries = [...c.entries.filter((e) => e.name.toLowerCase() !== name.toLowerCase()), { name, dist: num(b.dist, 0, 999, 0) }];
-      c.entries = cleanSetup({ contests: [{ ...c, entries }] }, ev).contests[0].entries;
-    } else if (b.op === 'contest') {
+      const was = c.entries.find((e) => e.name.toLowerCase() === name.toLowerCase());
+      const e = cleanEntry({ ...(was || {}), name, dist: b.dist, ok: true, by: clip(by, 40), okBy: clip(by, 40), at: now });
+      c.entries = [...c.entries.filter((x) => x !== was), e];
+      contestLog(ev, { by: clip(by, 40), id: c.id, name, did: 'entered', dist: e.dist });
+    } else if (b.op === 'contest') { // the desk's whole list of results (an entry that's there already keeps its check and who sent it)
       const c = ev.contests.find((x) => x.id === b.id); if (!c) return json({ error: 'No such contest' }, 404);
-      c.entries = cleanSetup({ contests: [{ ...c, entries: b.entries }] }, ev).contests[0].entries;
+      c.entries = (Array.isArray(b.entries) ? b.entries : []).slice(0, 200).map((x) => {
+        const n = cleanEntry(x), was = c.entries.find((e) => e.name.toLowerCase() === n.name.toLowerCase());
+        if (was && was.dist === n.dist) return was;
+        return cleanEntry({ ...(was || {}), ...n, ok: true, by: was ? was.by : clip(by, 40), okBy: clip(by, 40), at: now });
+      }).filter((e) => e.name);
+      contestLog(ev, { by: clip(by, 40), id: c.id, did: 'results' });
+    } else if (b.op === 'check') { // a golfer's entry: OK it, change its distance (that OKs it too) or take it off
+      const c = ev.contests.find((x) => x.id === b.id); if (!c) return json({ error: 'No such contest' }, 404);
+      const name = clip(b.name, 50).trim().toLowerCase(), e = c.entries.find((x) => x.name.toLowerCase() === name);
+      if (!e) return json({ error: 'That entry isn’t there any more.' }, 404);
+      if (b.do === 'remove') c.entries = c.entries.filter((x) => x !== e);
+      else if (b.do === 'change' || b.do === 'ok') {
+        if (b.do === 'change') { const d = num(b.dist, 0, 999, 0); if (!(d > 0)) return json({ error: 'Type the distance.' }, 400); e.dist = Math.round(d * 100) / 100; }
+        e.ok = true; e.okBy = clip(by, 40);
+      } else return json({ error: 'OK, change or remove?' }, 400);
+      contestLog(ev, { by: clip(by, 40), id: c.id, name: e.name, did: b.do, dist: e.dist });
     } else if (b.op === 'flash') {
       ev.flash = b.text ? { text: clip(b.text, 140), at: now } : null;
       if (b.text) ev.news = [...(ev.news || []), { text: clip(b.text, 140), at: now, by: clip(by, 40) }].slice(-30);
@@ -824,6 +877,41 @@ export class GolfEvent extends DurableObject {
       sent = true;
     }
     return json({ ok: true, now, on: true, hide, groups: golferGroups(ev, wh, team.id, now), notes: ev.notesOff ? [] : GOLFER_NOTES, ...(sent ? { sent } : {}) });
+  }
+
+  // a golfer's own long drive or closest to the pin, from the cart's scorecard on the contest hole. One entry a player
+  // a contest: sending again replaces it until a pro has checked it. Whether it waits for a check: see cleanContest.
+  async enter(b) {
+    const ev = this.ev, team = ev.teams.find((t) => t.id === b.team), now = Date.now();
+    if (!team || team.code !== String(b.code || '').toUpperCase()) return json({ error: 'Not your scorecard' }, 403);
+    if (ev.locked) return json({ error: 'The results are final.' }, 423);
+    const c = (ev.contests || []).find((x) => x.id === b.contest);
+    if (!c) return json({ error: 'That contest isn’t in this tournament any more.' }, 404);
+    if (!c.self) return json({ error: 'A marshal or the golf pro enters the results for this one.' }, 403);
+    const p = team.players.find((x) => x.id === b.player);
+    if (!p) return json({ error: 'Pick who hit it.' }, 400);
+    // a GPS drive: yards from the hole's tee (on the course map) to where the phone is
+    let gps = 0;
+    const at = Array.isArray(b.at) && b.at.length === 2 ? b.at.map(Number) : null;
+    if (c.kind === 'ld' && at && at.every(Number.isFinite) && Math.abs(at[0]) <= 90 && Math.abs(at[1]) <= 180) {
+      const tee = holeMap(ev, c.hole)?.tee;
+      if (tee) gps = Math.round(yds(tee, at));
+    }
+    const dist = Number(b.dist) > 0 ? Number(b.dist) : gps, [lo, hi] = contestRange(c);
+    if (!(dist >= lo && dist <= hi)) return json({ error: c.kind === 'ld' ? 'A long drive has to be between 50 and 450 yards.' : 'Closest to the pin has to be under 200 feet.' }, 400);
+    const me = { name: p.name, player: p.id }, was = c.entries.find((e) => samePlayer(e, me));
+    if (was && was.okBy) return json({ error: `${p.name}’s ${c.kind === 'ld' ? 'drive' : 'shot'} has been checked. Ask the golf pro to change it.` }, 409);
+    // too many tries from one cart: 12 in all per contest
+    const tries = (ev.clog || []).filter((x) => x.id === c.id && x.team === team.id && x.did === 'golfer').length;
+    if (tries >= 12) return json({ error: 'That’s a lot of changes. Ask the golf pro.' }, 429);
+    const others = c.entries.filter((e) => e !== was);
+    const e = cleanEntry({ name: p.name, player: p.id, team: team.id, dist, by: 'golfer', at: now, ...(gps ? { gps } : {}) });
+    e.ok = !contestNeedsOk(c, others, e);
+    c.entries = [...others, e];
+    contestLog(ev, { by: p.name, team: team.id, id: c.id, name: p.name, did: 'golfer', dist: e.dist, ...(gps ? { gps } : {}) });
+    await this.ctx.storage.put('event', ev);
+    await this.broadcast();
+    return json({ ok: true, entry: e });
   }
 
   // sponsor counts for the report: app views and taps, and seconds on the big screens

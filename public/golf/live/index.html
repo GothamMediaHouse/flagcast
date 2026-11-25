@@ -64,6 +64,7 @@ main { max-width: 720px; margin: 0 auto; padding: 14px max(16px, env(safe-area-i
 .ct { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-top: 12px; }
 .ct h3 { font-size: 1.15rem; }
 .ct .sp { font-size: .8rem; color: var(--muted); }
+.ct i.wait { font-style: normal; color: #d9a43a; } .ct i.okd { font-style: normal; color: #3aa76d; }
 .ct ol { margin: 8px 0 0; padding-left: 20px; }
 .ct li { display: list-item; padding: 3px 0; }
 .ct li span { float: right; font-family: var(--f-mono); }
@@ -138,7 +139,8 @@ function cardTable(l) {
 function contestBox(c) {
   const l = contestLeader(c);
   return `<div class="ct"><h3>${esc(c.label || (c.kind === 'ld' ? 'Long drive' : 'Closest to the pin'))} · Hole ${c.hole}</h3>${c.sponsor ? `<div class="sp">Presented by ${esc(c.sponsor)}</div>` : ''}
-    ${l.length ? `<ol>${l.slice(0, 5).map((e) => `<li>${esc(e.name)} <span>${fmtDist(c, e.dist)}</span></li>`).join('')}</ol>` : '<p class="sp" style="margin:6px 0 0">No one on the board yet.</p>'}</div>`;
+    ${l.length ? `<ol>${l.slice(0, 5).map((e) => `<li>${esc(e.name)} <span>${fmtDist(c, e.dist)}${e.ok === false ? ' <i class="wait" title="Waiting for the pro to check it">◷</i>' : e.by === 'golfer' ? ' <i class="okd" title="Checked">✓</i>' : ''}</span></li>`).join('')}</ol>` : '<p class="sp" style="margin:6px 0 0">No one on the board yet.</p>'}
+    ${c.prize ? `<p class="sp" style="margin:6px 0 0">Winner gets ${c.prize.toLocaleString()} points</p>` : ''}</div>`;
 }
 
 function p3View() {

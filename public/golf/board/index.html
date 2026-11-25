@@ -63,6 +63,8 @@ header .pill { font-size: .9vw; padding: .2vw .7vw; }
 .presented { font-size: 1.3vw; color: var(--dim); }
 .presented b { color: var(--txt); }
 /* contests, sponsors, fund */
+.prize { margin-top: .6vw; color: var(--flag); font-size: 1.1vw; font-weight: 600; }
+.ctfoot { margin-top: 1.4vw; opacity: .7; font-size: 1.1vw; }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(28vw, 1fr)); gap: 1.6vw; margin-top: 1.6vw; }
 .sponsors { display: grid; grid-template-columns: repeat(auto-fit, minmax(20vw, 1fr)); gap: 1.4vw; margin-top: 2vw; }
 .sp { background: var(--panel); border: 1px solid var(--rule); border-radius: .5vw; height: 11vw; display: grid; place-items: center; text-align: center; padding: 1vw; }
@@ -274,14 +276,15 @@ function p3Slide(s) {
   return `<div class="p3"><div class="cam">${camHtml(S.cams[h.n], h.n)}</div>
   <div class="p3info"><div><div class="sub">Par 3</div><div class="bignum">Hole ${h.n}</div><div class="facts">${h.yds ? `<b>${h.yds}</b> yds · ` : ''}Par <b>3</b> · SI ${h.hcp}${st.avg ? ` · Avg <b>${st.avg.toFixed(2)}</b>` : ''}</div></div>
   ${sp ? `<div class="presented">Presented by <b>${esc(sp.name)}</b>${sp.line ? `<br>${esc(sp.line)}` : ''}</div>` : ''}
-  ${cs.map((c) => { const l = contestLeader(c).slice(0, 3), csp = c.sponsor || spot('contest', h.n)[0]?.name; return `<div class="box"><h3>${c.kind === 'ld' ? 'Long drive' : 'Closest to the pin'}${csp ? ` · ${esc(csp)}` : ''}</h3><div class="rows">${l.length ? l.map((e, i) => `<div><span>${i + 1}. ${esc(e.name)}</span><span>${fmtDist(c, e.dist)}</span></div>`).join('') : '<div><span>No one on the board yet</span><span></span></div>'}</div></div>`; }).join('')}
+  ${cs.map((c) => { const l = contestLeader(c, true).slice(0, 3), csp = c.sponsor || spot('contest', h.n)[0]?.name; return `<div class="box"><h3>${c.kind === 'ld' ? 'Long drive' : 'Closest to the pin'}${csp ? ` · ${esc(csp)}` : ''}</h3><div class="rows">${l.length ? l.map((e, i) => `<div><span>${i + 1}. ${esc(e.name)}</span><span>${fmtDist(c, e.dist)}</span></div>`).join('') : '<div><span>No one on the board yet</span><span></span></div>'}</div></div>`; }).join('')}
   <div class="box stats"><div><b>${st.aces.length}</b><span>Aces</span></div><div><b>${st.birdie + st.eagle - st.aces.length}</b><span>Birdies</span></div><div><b>${st.par0}</b><span>Pars</span></div><div><b>${st.bogey + st.worse}</b><span>Over</span></div></div>
   </div></div>`;
 }
 
 function contestsSlide() {
-  return `<div class="sub">Contests</div><h2>On the board</h2><div class="grid2">${S.contests.map((c) => { const l = contestLeader(c).slice(0, 5);
-    return `<div class="box"><h3>${esc(c.label || (c.kind === 'ld' ? 'Long drive' : 'Closest to the pin'))} · Hole ${c.hole}${c.sponsor ? ` · ${esc(c.sponsor)}` : ''}</h3><div class="rows">${l.length ? l.map((e, i) => `<div><span>${i + 1}. ${esc(e.name)}</span><span>${fmtDist(c, e.dist)}</span></div>`).join('') : '<div><span>No one yet</span><span></span></div>'}</div></div>`; }).join('')}</div>`;
+  return `<div class="sub">Contests</div><h2>On the board</h2><div class="grid2">${S.contests.map((c) => { const l = contestLeader(c, true).slice(0, 5); // TVs: checked entries only
+    return `<div class="box"><h3>${esc(c.label || (c.kind === 'ld' ? 'Long drive' : 'Closest to the pin'))} · Hole ${c.hole}${c.sponsor ? ` · ${esc(c.sponsor)}` : ''}</h3><div class="rows">${l.length ? l.map((e, i) => `<div><span>${i + 1}. ${esc(e.name)}</span><span>${fmtDist(c, e.dist)}</span></div>`).join('') : '<div><span>No one yet</span><span></span></div>'}</div>${c.prize ? `<div class="prize">Winner gets ${c.prize.toLocaleString()} points</div>` : ''}</div>`; }).join('')}</div>
+  ${S.contests.some((c) => c.self) ? '<div class="ctfoot">Enter yours on the contest hole in the Flagcast app · Points only, no wagering</div>' : ''}`;
 }
 
 function skinsSlide() {

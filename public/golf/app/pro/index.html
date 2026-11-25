@@ -68,7 +68,7 @@ input, select, textarea { padding: 11px; border: 1.5px solid var(--line); border
 <div class="sheet" id="sheet" hidden><div id="sheetBody"></div></div>
 
 <script type="module">
-import { leaderboard, fmtPar, contestLeader, fmtDist, fmtIndex } from '/golf/core.js';
+import { leaderboard, fmtPar, contestLeader, contestFlag, fmtDist, fmtIndex } from '/golf/core.js';
 import { eventId, post, live, esc } from '/golf/client.js';
 import { cleanPin, pinOf, pinLabel, pinPaces } from '/golf/gps.js';
 const $ = (id) => document.getElementById(id);
@@ -278,12 +278,14 @@ function setPin(n, pin) {
 // CONTESTS: closest to the pin and long drive results
 function contestsTab() {
   const names = S.teams.flatMap((t) => t.players.map((p) => p.name));
-  return `<h2>Contests</h2>
+  const waiting = (S.contests || []).reduce((n, c) => n + c.entries.filter((e) => e.ok === false).length, 0);
+  return `<h2>Contests</h2>${waiting ? `<p class="help" style="color:#c48a1a"><b>${waiting} to check.</b> Golfers’ entries near the top wait for your OK before the TVs show them.</p>` : ''}
   <datalist id="names">${names.map((n) => `<option value="${esc(n)}">`).join('')}</datalist>
   <div class="list">${(S.contests || []).map((c) => {
     const lead = contestLeader(c);
     return `<div class="box"><b>${c.kind === 'ld' ? 'Long drive' : 'Closest to the pin'} · Hole ${c.hole}</b>${c.sponsor ? `<div class="help">${esc(c.sponsor)}</div>` : ''}
-    <div class="log">${lead.slice(0, 5).map((e, i) => `<div>${i + 1}. ${esc(e.name)} · ${fmtDist(c, e.dist)}</div>`).join('') || 'No one yet.'}</div>
+    <div class="log">${lead.slice(0, 8).map((e, i) => `<div>${i + 1}. ${esc(e.name)} · ${fmtDist(c, e.dist)} ${e.ok === false ? '<span style="color:#c48a1a">◷ waiting</span>' : '<span style="color:#2f9a60">✓</span>'}${contestFlag(c, e) ? ` <small style="color:#c48a1a">${esc(contestFlag(c, e))}</small>` : ''}
+      <span class="row" style="display:inline-flex;gap:4px">${e.ok === false ? `<button class="btn dark" data-chk="ok" data-cid="${c.id}" data-name="${esc(e.name)}">OK</button>` : ''}<button class="btn" data-chk="change" data-cid="${c.id}" data-name="${esc(e.name)}">Change</button><button class="btn" data-chk="remove" data-cid="${c.id}" data-name="${esc(e.name)}">Remove</button></span></div>`).join('') || 'No one yet.'}</div>
     <div class="row" style="margin-top:10px"><input list="names" data-cname="${c.id}" placeholder="Player"><input type="number" step="${c.kind === 'ld' ? 1 : 0.1}" min="0" data-cdist="${c.id}" placeholder="${c.kind === 'ld' ? 'Yards' : 'Feet (6.5 = 6 ft 6 in)'}" inputmode="decimal"><button class="btn dark" data-ctp="${c.id}">Post</button></div></div>`;
   }).join('') || '<p class="help">No contests set up.</p>'}</div>
   ${me.role !== 'pro' ? `<div style="margin-top:26px">${replayBox()}</div><div class="row" style="margin-top:22px"><button class="btn" id="signOut">Sign out</button></div>` : ''}`;
@@ -340,6 +342,12 @@ $('main').addEventListener('click', async (e) => {
     const kind = b.dataset.take, text = ($('takeText') || {}).value || '', secs = Number(($('takeSecs') || {}).value) || 25;
     if (kind === 'msg' && !text.trim()) return toast('Type the announcement first.');
     op({ op: 'take', kind, text, sponsor: kind === 'sponsor' ? $('takeSp').value : '', secs }, kind === 'clear' ? 'Screens back to normal' : 'On every screen').catch(() => {});
+  }
+  if (b.dataset.chk) {
+    const body = { op: 'check', id: b.dataset.cid, name: b.dataset.name, do: b.dataset.chk };
+    if (b.dataset.chk === 'change') { const d = prompt(`${b.dataset.name}: the right distance`); if (d == null) return; body.dist = Number(d); if (!(body.dist > 0)) return toast('Type the distance.'); }
+    op(body, b.dataset.chk === 'remove' ? 'Taken off' : 'Checked').catch(() => {});
+    return;
   }
   if (b.dataset.ctp) {
     const name = document.querySelector(`[data-cname="${b.dataset.ctp}"]`).value.trim(), dist = Number(document.querySelector(`[data-cdist="${b.dataset.ctp}"]`).value);

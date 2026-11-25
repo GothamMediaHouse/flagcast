@@ -80,6 +80,10 @@ table.t .n { width: 64px; }
 .link b { font-size: .95rem; }
 .contest { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin-bottom: 12px; }
 .contest .entries { display: grid; gap: 6px; margin-top: 10px; }
+.ctrow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+.ctrow b { font-family: var(--f-mono); } .ctrow small { color: var(--muted); } .ctrow small.warn { color: #c48a1a; font-weight: 600; }
+.ctrow .wait { color: #c48a1a; } .ctrow .okd { color: #2f9a60; } .ctrow .btn { padding: 4px 10px; } .ctrow > span:nth-child(2) { flex: 1; min-width: 120px; }
+.ctcheck { border-color: #c48a1a; } .ctcount { flex: none; margin-left: auto; background: #d9534f; color: #fff; border-radius: 9px; padding: 0 7px; font-size: .75rem; } .ctcheck h3 small { font-weight: 400; color: var(--muted); }
 .entry { display: grid; grid-template-columns: 1fr 120px auto; gap: 6px; }
 .sponsor { display: grid; grid-template-columns: 1fr 1.3fr 170px 110px; gap: 8px; align-items: center; margin-bottom: 10px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
 .sponsor .wide2 { grid-column: span 2; }
@@ -191,7 +195,8 @@ table.t .n { width: 64px; }
 
 <section id="s-contests" hidden>
   <h2>Contests</h2>
-  <p class="help">Closest to the pin is measured in feet (4.5 = 4 ft 6 in). Long drive in yards. Results go on the screens as soon as you add them.</p>
+  <p class="help">Closest to the pin is measured in feet (4.5 = 4 ft 6 in). Long drive in yards. Golfers can enter their own on the contest hole in the Flagcast app; the ones that need a check wait here, and the TVs only show checked results. Points only, no money.</p>
+  <div class="contest ctcheck" id="ctcheck" hidden></div><datalist id="ctnames"></datalist>
   <div id="contests" style="margin-top:12px"></div>
   <div class="row"><button class="btn" id="addCtp">Add closest to the pin</button><button class="btn" id="addLd">Add long drive</button><span class="help">Set the contest’s hole and name, then Save before entering results.</span></div>
 </section>
@@ -282,7 +287,7 @@ table.t .n { width: 64px; }
 <script type="module">
 import { defaultHoles, leaderboard, courseHcp, coursePar, parseIndex, fmtIndex, netDoubleBogey } from '/golf/core.js';
 import { eventId, post, live, esc } from '/golf/client.js';
-import { fmtPar, contestLeader, fmtDist, playHoles } from '/golf/core.js';
+import { fmtPar, contestLeader, contestFlag, fmtDist, playHoles } from '/golf/core.js';
 import { GREEN_PATH, pinSpot, pinLabel, pinPaces, pinYards, yds, middle } from '/golf/gps.js';
 import { SECTIONS, sectionTitle, mountSidebar, menuButton, paintPhoto, courseView, holeView, dayLine, today, rememberLink, shrinkPhoto } from '/golf/shell.js';
 
@@ -568,6 +573,7 @@ function readTables() {
   for (const box of document.querySelectorAll('.contest')) {
     const c = EV.contests[box.dataset.c]; if (!c) continue;
     c.hole = Number(box.querySelector('[data-ck="hole"]').value) || 1; c.label = box.querySelector('[data-ck="label"]').value.trim(); c.sponsor = box.querySelector('[data-ck="sponsor"]').value.trim();
+    c.self = box.querySelector('[data-ck="self"]').value === '1'; c.check = box.querySelector('[data-ck="check"]').value; c.prize = Math.max(0, Math.round(Number(box.querySelector('[data-ck="prize"]').value) || 0));
   }
   // camera links are Flagcast's (Admin): the desk doesn't change them
   for (const row of document.querySelectorAll('.sponsor')) {
@@ -602,23 +608,68 @@ document.addEventListener('click', (e) => {
 });
 
 // ---- contests ----
+// the settings are part of the setup (Save); the results are live (golfers, marshals, the pro and this desk add them straight away)
+const ctTitle = (c) => c.label || (c.kind === 'ld' ? 'Long drive' : 'Closest to the pin');
 function drawContests() {
-  $('contests').innerHTML = EV.contests.map((c, i) => `<div class="contest" data-c="${i}">
+  $('contests').innerHTML = EV.contests.map((c, i) => `<div class="contest" data-c="${i}" data-id="${esc(c.id)}">
     <div class="grid"><label class="f">${c.kind === 'ld' ? 'Long drive' : 'Closest to the pin'} on hole<input data-ck="hole" type="number" min="1" max="18" value="${c.hole}"></label>
     <label class="f">Name<input data-ck="label" value="${esc(c.label)}" placeholder="${c.kind === 'ld' ? 'Long drive' : 'Closest to the pin'}"></label>
-    <label class="f">Sponsor<input data-ck="sponsor" value="${esc(c.sponsor)}"></label><div style="align-self:end"><button class="btn danger" data-delc="${i}">Remove contest</button></div></div>
-    <div class="entries">${(c.entries.length ? c.entries : []).map((en, k) => `<div class="entry"><input data-en="${k}" data-ek="name" value="${esc(en.name)}" placeholder="Player"><input data-en="${k}" data-ek="dist" type="number" step="0.1" value="${en.dist}" placeholder="${c.kind === 'ld' ? 'Yards' : 'Feet'}"><button class="btn" data-ecut="${k}">Remove</button></div>`).join('')}
-      <div class="entry"><input data-new="name" placeholder="Player"><input data-new="dist" type="number" step="0.1" placeholder="${c.kind === 'ld' ? 'Yards' : 'Feet'}"><button class="btn dark" data-eadd="1">Add result</button></div></div></div>`).join('') || '<p class="help">No contests yet.</p>';
+    <label class="f">Sponsor<input data-ck="sponsor" value="${esc(c.sponsor)}"></label><div style="align-self:end"><button class="btn danger" data-delc="${i}">Remove contest</button></div>
+    <label class="f">Golfers enter their own<select data-ck="self"><option value="1"${c.self !== false ? ' selected' : ''}>Yes, on hole ${c.hole}</option><option value="0"${c.self === false ? ' selected' : ''}>No, staff enter results</option></select></label>
+    <label class="f">Check golfers’ entries<select data-ck="check"><option value="top"${!c.check || c.check === 'top' ? ' selected' : ''}>Only the top 3</option><option value="all"${c.check === 'all' ? ' selected' : ''}>Every entry</option><option value="none"${c.check === 'none' ? ' selected' : ''}>Trust golfers</option></select></label>
+    <label class="f">Winner gets (points)<input data-ck="prize" type="number" min="0" step="10" value="${c.prize || ''}" placeholder="None"></label></div>
+    <div class="entries ctres"></div></div>`).join('') || '<p class="help">No contests yet.</p>';
+  drawResults();
 }
+// the live results under each contest, and the To check list at the top
+function drawResults() {
+  if (!EV) return;
+  const live = (id) => (LIVE?.contests || []).find((x) => x.id === id);
+  for (const box of document.querySelectorAll('.contest')) {
+    const c = live(box.dataset.id), el = box.querySelector('.ctres'); if (!el) continue;
+    if (!c) { el.innerHTML = '<p class="help">Save, then results can go in.</p>'; continue; }
+    const keep = { name: el.querySelector('[data-new="name"]')?.value || '', dist: el.querySelector('[data-new="dist"]')?.value || '' };
+    el.innerHTML = contestLeader(c).map((en, k) => `<div class="ctrow"><span class="n">${k + 1}.</span><span>${esc(en.name)}${en.by === 'golfer' ? ' <small>entered it</small>' : ''}</span><b>${fmtDist(c, en.dist)}</b>
+        <span class="${en.ok === false ? 'wait' : 'okd'}">${en.ok === false ? '◷ waiting' : '✓'}</span>${contestFlag(c, en) ? `<small class="warn">${esc(contestFlag(c, en))}</small>` : ''}
+        ${en.ok === false ? `<button class="btn dark" data-chk="ok" data-name="${esc(en.name)}">OK</button>` : ''}<button class="btn" data-chk="change" data-name="${esc(en.name)}">Change</button><button class="btn" data-chk="remove" data-name="${esc(en.name)}">Remove</button></div>`).join('')
+      + `<div class="entry"><input data-new="name" placeholder="Player" list="ctnames" value="${esc(keep.name)}"><input data-new="dist" type="number" step="0.1" placeholder="${c.kind === 'ld' ? 'Yards' : 'Feet'}" value="${esc(keep.dist)}"><button class="btn dark" data-eadd="1">Add result</button></div>`;
+  }
+  const wait = (LIVE?.contests || []).flatMap((c) => contestLeader(c).filter((e) => e.ok === false).map((e) => ({ c, e })));
+  $('ctcheck').hidden = !wait.length;
+  $('ctcheck').innerHTML = `<h3>To check <small>${wait.length} waiting</small></h3>` + wait.map(({ c, e }) => `<div class="ctrow" data-id="${esc(c.id)}"><span>${esc(e.name)} · ${esc(ctTitle(c))} ${c.hole}</span><b>${fmtDist(c, e.dist)}</b>
+    <small${contestFlag(c, e) ? ' class="warn"' : ''}>${esc(contestFlag(c, e) || (e.gps ? `GPS from the tee: ${e.gps} yds` : 'Typed'))}</small>
+    <button class="btn dark" data-chk="ok" data-name="${esc(e.name)}">OK</button><button class="btn" data-chk="change" data-name="${esc(e.name)}">Change</button><button class="btn" data-chk="remove" data-name="${esc(e.name)}">Remove</button></div>`).join('');
+  $('ctnames').innerHTML = (LIVE?.teams || []).flatMap((t) => t.players.map((p) => `<option value="${esc(p.name)}">`)).join('');
+  // a red count on Contests in the sidebar while entries wait
+  ctWaiting = wait.length; ctBadge();
+}
+let ctWaiting = 0;
+function ctBadge() {
+  const sec = document.querySelector('a.sec[data-sec="contests"]'); if (!sec) return;
+  let k = sec.querySelector('.ctcount'); if (!k) { k = document.createElement('span'); k.className = 'ctcount'; sec.append(k); }
+  k.textContent = ctWaiting || ''; k.hidden = !ctWaiting;
+}
+setInterval(ctBadge, 2000); // the sidebar is drawn again now and then
+async function checkEntry(id, name, what) {
+  const c = (LIVE?.contests || []).find((x) => x.id === id); if (!c) return;
+  const b = { id, name, do: what };
+  if (what === 'change') {
+    const e = c.entries.find((x) => x.name === name), d = prompt(`${name}: ${c.kind === 'ld' ? 'yards' : 'feet (4.5 = 4 ft 6 in)'}`, e ? e.dist : '');
+    if (d == null) return; b.dist = Number(d); if (!(b.dist > 0)) return toast('Type the distance.');
+  }
+  try { await desk('check', b); toast(what === 'remove' ? 'Taken off.' : 'Checked. It’s on the screens.'); } catch (err) { toast(err.message); }
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-chk]'); if (!b) return;
+  const id = b.closest('[data-id]')?.dataset.id; if (id) checkEntry(id, b.dataset.name, b.dataset.chk);
+});
 $('contests').addEventListener('click', async (e) => {
-  const b = e.target.closest('button'); const box = e.target.closest('.contest'); if (!b || !box) return;
-  const c = EV.contests[box.dataset.c];
-  if (!c || (!b.dataset.eadd && b.dataset.ecut === undefined)) return;
-  if (!LIVE || !LIVE.contests.find((x) => x.id === c.id)) return toast('Save first, then add results.');
-  const entries = [...box.querySelectorAll('[data-en][data-ek="name"]')].map((inp) => ({ name: inp.value.trim(), dist: Number(box.querySelector(`[data-en="${inp.dataset.en}"][data-ek="dist"]`).value) || 0 }));
-  if (b.dataset.ecut !== undefined) entries.splice(Number(b.dataset.ecut), 1);
-  if (b.dataset.eadd) { const n = box.querySelector('[data-new="name"]').value.trim(), d = Number(box.querySelector('[data-new="dist"]').value); if (!n || !(d > 0)) return toast('Type the player and the distance.'); entries.push({ name: n, dist: d }); }
-  try { await desk('contest', { id: c.id, entries }); c.entries = entries; drawContests(); toast('On the screens.'); } catch (err) { toast(err.message); }
+  const b = e.target.closest('button'); const box = e.target.closest('.contest'); if (!b || !box || !b.dataset.eadd) return;
+  const c = (LIVE?.contests || []).find((x) => x.id === box.dataset.id);
+  if (!c) return toast('Save first, then add results.');
+  const n = box.querySelector('[data-new="name"]').value.trim(), d = Number(box.querySelector('[data-new="dist"]').value);
+  if (!n || !(d > 0)) return toast('Type the player and the distance.');
+  try { await desk('ctp', { id: c.id, name: n, dist: d }); box.querySelector('[data-new="name"]').value = ''; box.querySelector('[data-new="dist"]').value = ''; toast('On the screens.'); } catch (err) { toast(err.message); }
 });
 $('addCtp').onclick = () => { readTables(); const p3 = EV.course.holes.find((h) => h.par === 3 && !EV.contests.some((c) => c.hole === h.n)); EV.contests.push({ id: rid(), kind: 'ctp', hole: p3 ? p3.n : 1, label: '', sponsor: '', entries: [] }); drawContests(); setDirty(); };
 $('addLd').onclick = () => { readTables(); const p5 = EV.course.holes.find((h) => h.par === 5); EV.contests.push({ id: rid(), kind: 'ld', hole: p5 ? p5.n : 1, label: '', sponsor: '', entries: [] }); drawContests(); setDirty(); };
@@ -924,7 +975,7 @@ async function start() {
   mountSidebar($('side'), { current: { id: eventId(), key, name: EV.name, date: EV.date, locked: EV.locked }, section: tab, onSection: showTab })
     .then((side) => { SIDE = side; if (!(side.me?.events || []).some((e) => e.id === eventId())) rememberLink({ id: eventId(), key, name: EV.name }, side.me?.email); });
   live((s) => {
-    LIVE = s; drawReplays(); if (!dirty) { EV.locked = s.locked; drawLock(); setDirty(false); }
+    LIVE = s; drawReplays(); drawResults(); if (!dirty) { EV.locked = s.locked; drawLock(); setDirty(false); }
     drawHero(); if (tab === 'overview') drawOverview(); if (tab === 'scores') drawScores(); if (tab === 'pins' && !pinBusy) drawPins(); if (tab === 'links') drawLinks();
     if (SIDE) SIDE.setCurrent({ name: s.name, date: s.date, locked: s.locked });
   });

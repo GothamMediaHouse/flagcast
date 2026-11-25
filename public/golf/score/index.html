@@ -84,6 +84,16 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
 .nudge { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: grid; place-items: center; z-index: 60; padding: 20px; }
 .nudge > div { background: var(--card); border-radius: 16px; padding: 22px; max-width: 360px; width: 100%; text-align: center; }
 .nudge h2 { font-size: 1.8rem; margin-top: 6px; }
+.ctcard.self { border: 1.5px solid var(--club, var(--flag)); }
+.ctcard .ctgo { width: 100%; margin-top: 10px; }
+.ctmine { margin-top: 6px; font-size: .85rem; } .ctmine .wait { color: #c48a1a; } .ctmine .okd { color: #2f9a60; }
+.ctsheet > div { display: grid; gap: 10px; }
+.ctsheet .seg { display: flex; gap: 6px; } .ctsheet .seg button { flex: 1; border: 1px solid var(--line); background: var(--paper); border-radius: 10px; padding: 10px 4px; font-size: .9rem; min-height: 44px; }
+.ctsheet .seg button[aria-pressed="true"] { background: var(--flag); color: var(--on-flag); border-color: var(--flag); font-weight: 700; }
+.ctbig { font-family: var(--f-display); font-size: 4rem; font-weight: 800; line-height: 1; } .ctbig small { display: block; font-family: var(--f-body, inherit); font-size: .85rem; font-weight: 400; color: var(--muted); }
+.ctin, .ctwheels label { display: flex; align-items: center; gap: 8px; justify-content: center; } .ctin input { font-size: 2rem; width: 140px; text-align: center; padding: 8px; border-radius: 10px; border: 1px solid var(--line); }
+.ctwheels { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } .ctwheels select { font-size: 1.8rem; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); }
+.ctfine { font-size: .8rem !important; color: var(--muted); margin: 0; }
 .nudge p { font-size: 1.1rem; }
 .nudge .btn { width: 100%; padding: 14px; }
 .sg h2 { font-size: 2rem; }
@@ -131,12 +141,14 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
   <button class="btn primary" id="next">Next hole</button>
 </div>
 <div class="toast" id="toast" hidden></div>
+<div class="nudge ctsheet" id="ctsheet" role="dialog" aria-label="Enter your result" hidden><div id="ctbody"></div></div>
 <div class="nudge" id="nudge" role="alertdialog" aria-labelledby="nudgeH" hidden><div><span class="label" id="nudgeFrom">From the pro shop</span><h2 id="nudgeH">A note for your cart</h2><p id="nudgeText"></p><button class="btn primary" onclick="this.closest('.nudge').hidden=true">OK</button></div></div>
 <div class="nudge" id="whoami" role="dialog" aria-labelledby="whoH" hidden><div><span class="label">Just once</span><h2 id="whoH">Which one are you?</h2><p>So the pro shop can send a note to you, not the whole cart.</p><div id="whoList" style="display:grid;gap:8px;margin-top:10px"></div><button class="btn" data-me="-" style="margin-top:8px">Skip</button></div></div>
 <script type="module">
 import { phoneBanner } from '/golf/phonecast.js';
 import { applyBrand } from '/golf/brandmark.js';
 import { gpsCard } from '/golf/gpscard.js';
+import { startGps, position, holeMap } from '/golf/gps.js';
 import { groupsMap, hidden as groupHidden } from '/golf/groupsmap.js';
 import { onGps, yds, trackingOn, mapped } from '/golf/gps.js';
 import { leaderboard, playHoles, teamCard, strokesOn, playing, fmtPar, mark, contestLeader, fmtDist, sideGames } from '/golf/core.js';
@@ -179,6 +191,68 @@ function setScore(p, h, v) {
   store.set('pending', pending);
   render(); send();
 }
+
+// ---- long drive / closest to the pin on its hole: the leader, this cart's entries, and Enter my drive / Enter my shot ----
+const ctName = (c) => (c.kind === 'ld' ? 'Long drive' : 'Closest to the pin');
+function contestCard(c, t) {
+  const top = contestLeader(c)[0], mine = (c.entries || []).filter((e) => e.team === t.id);
+  return `<div class="note ctcard${c.self ? ' self' : ''}"><b>${ctName(c)}</b>${c.sponsor ? ` · ${esc(c.sponsor)}` : ''}${c.prize ? ` · winner gets ${c.prize.toLocaleString()} points` : ''}<br>
+    ${top ? `Leader: ${esc(top.name)}, ${fmtDist(c, top.dist)}${top.ok === false ? ' (being checked)' : ''}.` : 'No one on the board yet.'}
+    ${mine.map((e) => `<div class="ctmine">${esc(e.name)}: ${fmtDist(c, e.dist)} <span class="${e.ok === false ? 'wait' : 'okd'}">${e.ok === false ? '◷ waiting for the pro' : '✓ on the board'}</span></div>`).join('')}
+    ${c.self && !S.locked ? `<button class="btn primary ctgo" data-enter="${c.id}">${c.kind === 'ld' ? 'Enter my drive' : 'Enter my shot'}</button>` : c.self ? '' : ' A marshal measures at the green.'}</div>`;
+}
+let ctx = null; // the entry sheet: { c, p, mode: 'gps' | 'type', ft, inch }
+const gpsRedraw = () => { if (ctx && ctx.mode === 'gps') drawEntry(); };
+function openEntry(id) {
+  const c = S.contests.find((x) => x.id === id), t = team(); if (!c || !t) return;
+  const me = t.players.find((p) => p.id === store.get('me', '')) || t.players[0];
+  const mapped = !!S.map?.holes?.[c.hole]?.tee || !!S.map?.holes?.[String(c.hole)]?.tee;
+  ctx = { c, p: me?.id, mode: c.kind === 'ld' && mapped ? 'gps' : 'type', ft: 6, inch: 0, mapped };
+  if (c.kind === 'ld' && mapped) startGps(gpsRedraw); // a typed drive sends the GPS number too, for the pro
+  $('ctsheet').hidden = false; drawEntry();
+}
+function drawEntry() {
+  if (!ctx) return;
+  const { c } = ctx, t = team(), ld = c.kind === 'ld', fx = position(), tee = holeMap(S, c.hole)?.tee;
+  const g = fx && fx.at && tee ? Math.round(yds(tee, fx.at)) : 0;
+  const opts = (n, v) => Array.from({ length: n }, (_, i) => `<option${i === v ? ' selected' : ''}>${i}</option>`).join('');
+  $('ctbody').innerHTML = `<h2>${ld ? `Your drive on ${c.hole}` : `Closest to the pin on ${c.hole}`}</h2><p>Who hit it?</p>
+    <div class="seg">${t.players.map((p) => `<button data-ctp="${p.id}" aria-pressed="${p.id === ctx.p}">${esc(p.name.split(' ')[0])}</button>`).join('')}</div>
+    ${ld && ctx.mapped ? `<div class="seg"><button data-ctm="gps" aria-pressed="${ctx.mode === 'gps'}">Stand at my ball</button><button data-ctm="type" aria-pressed="${ctx.mode === 'type'}">Type it</button></div>` : ''}
+    ${ld && ctx.mode === 'gps' ? `<div class="ctbig">${g || '–'}<small>yds from the tee</small></div><p class="ctfine">${fx && fx.at ? `GPS good to about ${fx.acc} yds. Walk to the ball, then Save.` : fx && fx.error ? esc(fx.error) : 'Finding your spot…'}</p>`
+      : ld ? `<label class="ctin"><input id="ctyds" type="number" inputmode="numeric" min="50" max="450" placeholder="Yards"> <span>yds</span></label>`
+      : `<div class="ctwheels"><label><select id="ctft">${opts(100, ctx.ft)}</select><span>feet</span></label><label><select id="ctinch">${opts(12, ctx.inch)}</select><span>inches</span></label></div>`}
+    <button class="btn primary" id="ctsave"${ld && ctx.mode === 'gps' && !g ? ' disabled' : ''}>Save${ld && ctx.mode === 'gps' && g ? ` ${g} yds` : ''}</button>
+    <button class="btn" id="ctcancel">Cancel</button>
+    <p class="ctfine">${ld ? 'Must be in the fairway.' : 'On the green only.'} ${c.check === 'none' ? '' : 'The pro can check it.'}</p>`;
+}
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('button'); if (!b || !S) return;
+  if (b.dataset.enter) return openEntry(b.dataset.enter);
+  if (!ctx) return;
+  if (b.dataset.ctp) { ctx.p = b.dataset.ctp; return drawEntry(); }
+  if (b.dataset.ctm) { ctx.mode = b.dataset.ctm; return drawEntry(); }
+  if (b.id === 'ctcancel') { ctx = null; $('ctsheet').hidden = true; return; }
+  if (b.id === 'ctsave') {
+    const { c } = ctx, t = team(), body = { code, team: t.id, contest: c.id, player: ctx.p };
+    if (c.kind === 'ld') {
+      const fx = position();
+      if (fx && fx.at) body.at = fx.at; // the server measures from the tee too, so the pro sees it next to a typed drive
+      if (ctx.mode === 'type') { body.dist = Number($('ctyds').value); if (!(body.dist >= 50 && body.dist <= 450)) return toast('Type the yards (50 to 450).'); }
+      else if (!body.at) return toast('Waiting for GPS.');
+    } else {
+      body.dist = Number($('ctft').value) + Number($('ctinch').value) / 12;
+      if (!(body.dist > 0)) return toast('Pick the feet and inches.');
+    }
+    b.disabled = true;
+    try {
+      const r = await post('enter', body);
+      ctx = null; $('ctsheet').hidden = true;
+      toast(r.entry.ok ? 'Saved. It’s on the board.' : 'Saved. It shows once the pro checks it.');
+    } catch (err) { b.disabled = false; toast(err.message); }
+  }
+});
+document.addEventListener('change', (e) => { if (!ctx) return; if (e.target.id === 'ctft') ctx.ft = Number(e.target.value); if (e.target.id === 'ctinch') ctx.inch = Number(e.target.value); });
 
 async function send() {
   if (sending || !pending.length) return syncLabel();
@@ -321,7 +395,7 @@ function render() {
     <div id="gpsSlot"></div>
     ${sponsor ? spHtml(sponsor, 'Presented by') : ''}
     ${turn ? `<div class="note"><b>At the turn</b><br>${spHtml(turn, '')}</div>` : ''}
-    ${contests.map((c) => { const top = contestLeader(c)[0]; return `<div class="note"><b>${c.kind === 'ld' ? 'Long drive' : 'Closest to the pin'}</b>${c.sponsor ? ` · ${esc(c.sponsor)}` : ''}<br>${top ? `Leader: ${esc(top.name)}, ${fmtDist(c, top.dist)}.` : 'No one on the board yet.'} A marshal measures at the green.</div>`; }).join('')}
+    ${contests.map((c) => contestCard(c, t)).join('')}
     ${S.cams && S.cams[hole] ? `<a class="btn cam" href="/g/${eventId()}#hole-${hole}">Watch the hole ${hole} camera</a>` : ''}
     <div class="players">${ps.map((p) => {
       const v = (mine[p.id] || [])[hole - 1];

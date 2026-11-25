@@ -208,11 +208,31 @@ export function skins(ev, scores, carry = true) {
   return res;
 }
 
-// contest standings: closest to the pin (shortest distance wins) and long drive (longest wins)
-export function contestLeader(c) {
-  const list = (c.entries || []).filter((e) => e && e.name && Number(e.dist) > 0);
+// contest standings: closest to the pin (shortest distance wins) and long drive (longest wins).
+// checked: only the entries that count (not a golfer's entry still waiting for a pro's OK), for the TVs
+export function contestLeader(c, checked = false) {
+  const list = (c.entries || []).filter((e) => e && e.name && Number(e.dist) > 0 && (!checked || e.ok !== false));
   list.sort((a, b) => (c.kind === 'ld' ? b.dist - a.dist : a.dist - b.dist));
   return list;
+}
+
+// does a golfer's entry wait for a pro's OK? check 'all': always. 'none': never. 'top' (the default): when it would make the top 3
+export function contestNeedsOk(c, others, e) {
+  if (c.check === 'none') return false;
+  if (c.check === 'all') return true;
+  const better = (others || []).filter((x) => x && Number(x.dist) > 0 && (c.kind === 'ld' ? x.dist >= e.dist : x.dist <= e.dist)).length;
+  return better < 3;
+}
+
+// a word for the pro next to a golfer's entry that looks wrong ('' when it looks fine)
+export function contestFlag(c, e) {
+  if (!e || e.by !== 'golfer') return '';
+  if (c.kind === 'ld') {
+    if (e.gps && Math.abs(e.gps - e.dist) > 25) return `GPS from the tee said ${Math.round(e.gps)} yds`;
+    const rest = (c.entries || []).filter((x) => x !== e && x.name !== e.name && Number(x.dist) > 0).map((x) => x.dist);
+    if (rest.length >= 2 && e.dist > Math.max(...rest) + 30) return `${Math.round(e.dist - Math.max(...rest))} yds past everyone else`;
+  } else if (e.dist < 0.5) return 'Under 6 inches';
+  return '';
 }
 
 export function fmtDist(c, d) {
