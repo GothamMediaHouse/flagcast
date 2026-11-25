@@ -93,7 +93,7 @@ struct TourHeader<Trailing: View, Below: View>: View {
                     } else {
                         Text(state?.title ?? title).font(.headline).lineLimit(1)
                     }
-                    if !subtitle.isEmpty { Text(subtitle).font(.caption).foregroundStyle(Color.fcOnGreenMuted).lineLimit(1) }
+                    if !subtitle.isEmpty { Text(subtitle).font(.caption).foregroundStyle(Color.fcOnGreenMuted).lineLimit(1).minimumScaleFactor(0.8) }
                 }
                 Spacer(minLength: 0)
                 trailing.frame(minWidth: 40, alignment: .trailing)

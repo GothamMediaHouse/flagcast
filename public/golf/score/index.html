@@ -17,6 +17,8 @@ body { min-height: 100vh; padding-bottom: env(safe-area-inset-bottom, 0px); }
 .has-club .topbar { border-bottom: 3px solid var(--club, transparent); }
 #sync { font-family: var(--f-mono); font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
 #sync.wait { color: var(--flag); }
+.teamline { margin-top: 4px; font-size: .9rem; color: var(--on-green-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.teamline b { color: var(--on-green); font-weight: 700; }
 .teamtabs { display: flex; gap: 6px; margin-top: 10px; overflow-x: auto; }
 .teamtabs button { border: 1px solid var(--on-green-muted); background: transparent; color: var(--on-green); border-radius: 999px; padding: 4px 12px; font-size: .85rem; white-space: nowrap; }
 .teamtabs button[aria-pressed="true"] { background: var(--flag); color: var(--on-flag); border-color: var(--flag); }
@@ -117,6 +119,7 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
 <body>
 <header class="topbar">
   <div class="top-row"><img data-brand="club" class="scorelogo" hidden alt=""><h1 id="evname">Scorecard</h1><button id="textsize" class="aa" aria-label="Text size">Aa</button><span id="sync">Connecting…</span></div>
+  <div class="teamline" id="teamline" hidden></div>
   <div class="teamtabs" id="tabs" hidden></div>
 </header>
 <div class="offline" id="offline" role="status" hidden><b>No signal.</b> <span id="offmsg">Your scores are saved on this phone and send by themselves when you’re back in range.</span> <button id="trynow">Try now</button></div>
@@ -288,6 +291,10 @@ function render() {
   $('locked').hidden = !S.locked;
   const t = team();
   if (!t) { $('main').innerHTML = `<div class="center"><h2>Not found</h2><p>This scorecard isn’t part of the tournament any more. Ask the tournament desk for your cart card.</p></div>`; $('bar').hidden = true; return; }
+  // the team name and who's in the cart, under the tournament name (the tabs show it when there are two teams)
+  const tl = $('teamline');
+  tl.hidden = teams.length > 1;
+  tl.innerHTML = (t.name ? `<b>${esc(t.name)}</b> · ` : '') + esc(t.players.map((p) => p.name.split(' ')[0]).join(' & '));
   const tabs = $('tabs');
   tabs.hidden = teams.length < 2;
   tabs.innerHTML = teams.map((id) => { const x = S.teams.find((y) => y.id === id); return x ? `<button data-team="${id}" aria-pressed="${id === teamId}">${esc(x.name || x.players.map((p) => p.name).join(' / '))}</button>` : ''; }).join('');

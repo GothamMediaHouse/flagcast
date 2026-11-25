@@ -82,7 +82,7 @@ struct ScorecardScreen: View {
         let h = model.currentHole()
         let H = s.course.holes[h - 1]
         return VStack(spacing: 0) {
-            TourHeader(state: s, title: s.title, subtitle: s.scorers(t).map { Fmt.firstName($0.name) }.joined(separator: " & ")) {
+            TourHeader(state: s, title: s.title, subtitle: teamLine(s, t)) {
                 syncPill
             } below: {
                 VStack(spacing: 10) {
@@ -347,6 +347,12 @@ struct ScorecardScreen: View {
         }
     }
 
+    /// "Team name · Drew & Riley" under the tournament name, so the cart always sees its team.
+    private func teamLine(_ s: EventState, _ t: Team) -> String {
+        let names = t.players.map { Fmt.firstName($0.name) }.joined(separator: " & ")
+        return t.name.isEmpty ? names : "\(t.name) · \(names)"
+    }
+
     private func playerRow(_ s: EventState, _ p: Player, _ H: Hole, tight: Bool = false) -> some View {
         let v = model.value(p.id, H.n)
         let st = Core.strokesOn(Core.playing(p.hcp, s.format.allowance), H.hcp)
@@ -356,10 +362,18 @@ struct ScorecardScreen: View {
         let under = m == .birdie || m == .eagle
         return HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(p.name).font(.title3.weight(.bold)).lineLimit(1).minimumScaleFactor(0.7)
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(p.name).font(.title3.weight(.bold)).lineLimit(1).minimumScaleFactor(0.7)
+                    // strokes on this hole sit beside the name, where they can't be cut off
+                    if st > 0 {
+                        Text("\(String(repeating: "●", count: st)) \(st)").font(.footnote.weight(.bold)).foregroundStyle(Color.fcRed).fixedSize()
+                            .accessibilityLabel("Gets \(st) stroke\(st > 1 ? "s" : "") here")
+                    } else if st < 0 {
+                        Text("+\(-st)").font(.footnote.weight(.bold)).foregroundStyle(Color.fcMuted).fixedSize()
+                            .accessibilityLabel("Gives \(-st) stroke\(st < -1 ? "s" : "") back here")
+                    }
+                }
                 HStack(spacing: 12) {
-                    if st > 0 { Text(String(repeating: "●", count: st)).foregroundStyle(Color.fcRed) + Text(" \(st) stroke\(st > 1 ? "s" : "")") }
-                    else if st < 0 { Text("gives a stroke back") }
                     Group {
                         Button("Picked up") { withAnimation { model.pickedUp(p.id) } }
                         if set { Button("Clear") { withAnimation { model.clear(p.id) } } }
@@ -410,9 +424,15 @@ struct ScorecardScreen: View {
     private func bottomBar(_ t: Team, _ h: Int) -> some View {
         let ord = model.order(t), i = ord.firstIndex(of: h) ?? 0, last = ord.count - 1
         return HStack(spacing: 10) {
-            Button { model.hole = ord[max(0, i - 1)] } label: { Label(i == 0 ? "Back" : "\(ord[max(0, i - 1)])", systemImage: "chevron.left").labelStyle(LeadingIcon()) }
-                .buttonStyle(.fcPlain).disabled(i == 0)
-                .frame(width: 76)
+            // on your first hole there's nothing to go back to, so it's just the arrow (greyed out)
+            Button { model.hole = ord[max(0, i - 1)] } label: {
+                Group {
+                    if i == 0 { Image(systemName: "chevron.left").font(.body.weight(.bold)) }
+                    else { Label("\(ord[max(0, i - 1)])", systemImage: "chevron.left").labelStyle(LeadingIcon()) }
+                }
+                .lineLimit(1).fixedSize().frame(minWidth: 40)
+            }
+                .buttonStyle(FCButton(kind: .plain, full: false)).disabled(i == 0)
                 .accessibilityLabel(i == 0 ? "Back" : "Back to hole \(ord[max(0, i - 1)])")
             Button {
                 if i == last { page = .round; return }
