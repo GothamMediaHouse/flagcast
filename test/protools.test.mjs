@@ -14,9 +14,9 @@ const state = async (id) => (await fetch(`${BASE}/golf/api/${id}/state`)).json()
 const { id, key } = await post('/golf/api/new', { name: 'Pro tools test', pass: 'local' });
 const desk = (op, b = {}) => post(`/golf/api/${id}/desk`, { key, op, ...b });
 const cur = await desk('get');
-await desk('save', { setup: { ...cur, format: { type: 'stroke' }, pins: [{ name: 'Pro', role: 'pro', pin: '4321' }, { name: 'Marshal', role: 'marshal', pin: '8765' }],
+await desk('save', { setup: { ...cur, format: { type: 'stroke' }, pins: [{ name: 'Pro', role: 'pro', pin: '654321' }, { name: 'Marshal', role: 'marshal', pin: '876543' }],
   teams: [{ name: 'Smith', players: [{ name: 'Al Smith', hcp: 10, ghin: '1234567' }, { name: 'Bo Smith', hcp: 12 }] }, { name: 'Jones', players: [{ name: 'Cy Jones', hcp: 5 }] }] } });
-const pro = (op, b = {}) => post(`/golf/api/${id}/pro`, { pin: '4321', op, ...b });
+const pro = (op, b = {}) => post(`/golf/api/${id}/pro`, { pin: '654321', op, ...b });
 let s = await state(id);
 const [A, B] = s.teams;
 
@@ -25,7 +25,7 @@ await pro('nudge', { team: A.id, player: A.players[1].id, text: 'Bo, your car li
 s = await state(id);
 assert.deepEqual(s.nudges.map(({ at, ...x }) => x), [{ team: '*', text: 'Lunch is ready' }, { team: A.id, player: A.players[1].id, text: 'Bo, your car lights are on' }]);
 ok('a pro messages everyone, and one golfer');
-assert.equal((await call(`/golf/api/${id}/pro`, { pin: '4321', op: 'nudge', team: A.id, player: 'nope', text: 'x' })).status, 404); ok('an unknown golfer is refused');
+assert.equal((await call(`/golf/api/${id}/pro`, { pin: '654321', op: 'nudge', team: A.id, player: 'nope', text: 'x' })).status, 404); ok('an unknown golfer is refused');
 
 await call(`/golf/api/${id}/score`, { team: A.id, code: (await desk('get')).teams[0].code, list: [{ p: A.players[1].id, h: 1, v: 5 }] });
 await pro('team', { team: A.id, name: 'Smith & Co', players: [{ id: A.players[0].id, name: 'Al Smith', hcp: 10 }, { id: A.players[1].id, name: 'Bob Smith', hcp: 12 }, { name: 'Di Late', hcp: 20 }] });
@@ -54,6 +54,6 @@ assert.equal(r.results[0][0], 'Flight'); assert.ok(r.results.length > 1);
 assert.equal(r.ghin[0][1], 'GHIN number'); assert.ok(r.ghin.some((row) => row[0] === 'Bob Smith'));
 ok('a pro gets the results and GHIN files');
 
-assert.equal((await call(`/golf/api/${id}/pro`, { pin: '8765', op: 'team', team: A.id, players: [{ name: 'X' }] })).status, 403);
-assert.equal((await call(`/golf/api/${id}/pro`, { pin: '8765', op: 'nudge', team: '*', text: 'x' })).status, 403);
+assert.equal((await call(`/golf/api/${id}/pro`, { pin: '876543', op: 'team', team: A.id, players: [{ name: 'X' }] })).status, 403);
+assert.equal((await call(`/golf/api/${id}/pro`, { pin: '876543', op: 'nudge', team: '*', text: 'x' })).status, 403);
 ok('marshals can’t fix teams or message golfers');

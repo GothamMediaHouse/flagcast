@@ -124,7 +124,13 @@ export class FlagcastClubs extends DurableObject {
   staffEmail(email) { return adminEmail(this.env, email) || (!!email && !!this.one('SELECT email FROM staff WHERE email = ?', String(email).toLowerCase())); }
   // Admin: the passcode, or a sign-in whose email is staff
   isStaff(b) {
-    if (isAdmin(this.env, b.pass)) return true;
+    // the passcode: 5 wrong from one network and 20 in all in 15 minutes, then a wait (saved in the fails table)
+    if (b.pass !== undefined && b.pass !== '' && this.env.GOLF_CREATE_PASS) {
+      const keys = [[`pass:${this.ip}`, 5], ['pass:*', 20]], now = Date.now();
+      for (const [k, max] of keys) { const f = this.one('SELECT * FROM fails WHERE k = ?', k); if (f && now - f.since < 15 * 60000 && f.n >= max) this.fail('Too many wrong passcodes. Wait 15 minutes, or sign in with your staff email.', 429); }
+      if (isAdmin(this.env, b.pass)) return true;
+      this.failed(keys);
+    }
     if (!b.token) return false;
     try { return this.staffEmail(this.who(b.token).email); } catch { return false; }
   }

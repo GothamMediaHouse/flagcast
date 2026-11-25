@@ -19,6 +19,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { defaultHoles, courseHcp } from './public/golf/core.js';
 import { trackingOn, cleanPin } from './public/golf/gps.js';
 import { demoGroups } from './demogroups.js';
+import { same, pinProblem, mergeTeams, stamp, PIN_WAIT, PIN_TRIES_IP, PIN_TRIES_ALL } from './setup.js';
 import { clubs } from './clubs.js';
 import { resultsRows, ghinRows } from './report.js';
 import { camPlaylist } from './stream.js';
@@ -252,35 +253,6 @@ function cleanSetup(s, old) {
   };
 }
 
-// Every Manager saves the whole setup, team list included, so a desk opened a while ago could undo what happened since
-// (a late group a pro added, a player moved, another device's Save) and drop those teams' scores. Each team carries
-// sv, the setup version it last changed in; the desk sends the version it loaded (setup.v). Teams changed after that
-// keep the server's copy, and teams added after it stay even though the old copy doesn't list them. An app too old
-// to send v can't take off a team that has scores. Teams the desk did change get the new version.
-const teamSame = (a, b) => JSON.stringify({ ...a, sv: 0 }) === JSON.stringify({ ...b, sv: 0 });
-export function mergeTeams(old, sent, base, v, scores = {}) {
-  const known = Number.isFinite(Number(base)) && base !== null && base !== '' ? Number(base) : null;
-  const was = new Map(old.map((t) => [t.id, t])), seen = new Set();
-  const out = sent.map((t) => {
-    seen.add(t.id);
-    const o = was.get(t.id);
-    if (o && known !== null && (o.sv || 0) > known) return o; // changed on the server since this desk loaded
-    if (!o) return { ...t, sv: v };
-    return teamSame(o, t) ? { ...t, sv: o.sv || 0 } : { ...t, sv: v };
-  });
-  for (const o of old) {
-    if (seen.has(o.id)) continue;
-    const newer = known !== null && (o.sv || 0) > known, scored = known === null && Object.values(scores[o.id] || {}).some((a) => (a || []).some((x) => x));
-    if ((newer || scored) && out.length < 200) out.push(o);
-  }
-  return out;
-}
-// cleanSetup drops sv: put each team's back, and the new version on the one that changed
-function stamp(teams, old, changed, v) {
-  const sv = new Map(old.map((t) => [t.id, t.sv || 0]));
-  return teams.map((t) => ({ ...t, sv: t.id === changed ? v : sv.get(t.id) || 0 }));
-}
-
 export class GolfEvent extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
@@ -372,7 +344,7 @@ export class GolfEvent extends DurableObject {
     }
     if (op === 'score') return this.score(b);
     if (op === 'desk') {
-      if (!b.key || b.key !== ev.key) return json({ error: 'This desk link is not right. Open the link you were given when the tournament was made.' }, 403);
+      if (!b.key || !same(b.key, ev.key)) return json({ error: 'This desk link is not right. Open the link you were given when the tournament was made.' }, 403);
       return this.desk(b);
     }
     // the par 3 camera links: only from Flagcast Admin (clubs.js admin op 'cams'). Never routed from the web
@@ -398,7 +370,7 @@ export class GolfEvent extends DurableObject {
       await this.broadcast();
       return json({ ok: true, cams: ev.cams });
     }
-    if (op === 'pro') return this.pro(b);
+    if (op === 'pro') return this.pro(b, request.headers.get('CF-Connecting-IP') || '');
     if (op === 'hit') return this.hit(b);
     if (op === 'where') return this.where(b);
     return json({ error: 'Not found' }, 404);
@@ -465,6 +437,7 @@ export class GolfEvent extends DurableObject {
       let logo = ev.logo || '';
       if (b.setup?.logo !== undefined) { try { logo = cleanLogo(b.setup.logo); } catch (e) { return json({ error: e.message }, e.status || 400); } }
       const s = cleanSetup(b.setup || {}, ev);
+      const pp = pinProblem(s.pins, ev.pins || []); if (pp) return json({ error: pp }, 400);
       s.cams = ev.cams || {};
       s.logo = logo; // camera links are Flagcast staff's (op 'cams' from Admin): a desk key can't change them
       const v = (ev.v || 0) + 1, sc = await this.scores();
@@ -501,12 +474,13 @@ export class GolfEvent extends DurableObject {
   }
 
   // a golf pro or marshal signs in with the PIN the Manager gave them. Pros run the day; marshals post contest results.
-  async pro(b) {
+  async pro(b, ip = '') {
     const ev = this.ev, now = Date.now();
-    this.fails = (this.fails || []).filter((t) => now - t < 10 * 60000);
-    if (this.fails.length >= 20) return json({ error: 'Too many wrong PINs. Try again in a few minutes.' }, 429);
-    const who = (ev.pins || []).find((x) => x.pin && x.pin === String(b.pin || ''));
-    if (!who) { this.fails.push(now); return json({ error: 'That PIN is not right.' }, 403); }
+    // wrong PINs: 8 from one network and 40 in all in 15 minutes, then a wait. Saved, so it holds when the tournament sleeps
+    const pf = ((await this.ctx.storage.get('pinfails')) || []).filter((f) => now - f.t < PIN_WAIT);
+    if (pf.filter((f) => f.ip === ip).length >= PIN_TRIES_IP || pf.length >= PIN_TRIES_ALL) return json({ error: 'Too many wrong PINs. Wait 15 minutes, or ask the tournament desk.' }, 429);
+    const who = (ev.pins || []).find((x) => x.pin && same(x.pin, String(b.pin || '')));
+    if (!who) { await this.ctx.storage.put('pinfails', [...pf, { t: now, ip }].slice(-200)); return json({ error: 'That PIN is not right.' }, 403); }
     if (b.op === 'hello') return json({ name: who.name, role: who.role });
     if (!(who.role === 'pro' ? DAY_OPS : MARSHAL_OPS).has(b.op)) return json({ error: 'Your PIN can’t make that change. Ask the golf pro.' }, 403);
     if (who.role !== 'pro') { delete b.screens; delete b.remove; } // marshals save replays; the pro puts them on the screens or removes them

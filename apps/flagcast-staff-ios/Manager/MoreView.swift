@@ -253,7 +253,7 @@ struct StaffView: View {
         }
     }
     private func add(_ role: String) {
-        doc.ev.pins.append(StaffPin(name: role == "pro" ? "Golf pro" : "Marshal \(doc.ev.pins.filter { $0.role == "marshal" }.count + 1)", role: role, pin: String(format: "%04d", Int.random(in: 1000...9999))))
+        doc.ev.pins.append(StaffPin(name: role == "pro" ? "Golf pro" : "Marshal \(doc.ev.pins.filter { $0.role == "marshal" }.count + 1)", role: role, pin: StaffPin.newPin(doc.ev.pins)))
     }
 }
 

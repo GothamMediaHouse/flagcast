@@ -37,10 +37,10 @@ const bad = await call(`/golf/api/${id}/desk`, { key: 'wrong', op: 'pinsheet', h
 assert.notEqual(bad.status, 200); ok('a wrong desk key can’t change pins');
 
 const cur2 = await desk('get');
-await desk('save', { setup: { ...cur2, pins: [{ name: 'Pro', role: 'pro', pin: '4321' }, { name: 'Marshal', role: 'marshal', pin: '8765' }] } });
-await post(`/golf/api/${id}/pro`, { pin: '4321', op: 'pinsheet', hole: 7, spot: { d: 'B', s: 'L', on: 22, off: 5 } });
+await desk('save', { setup: { ...cur2, pins: [{ name: 'Pro', role: 'pro', pin: '654321' }, { name: 'Marshal', role: 'marshal', pin: '876543' }] } });
+await post(`/golf/api/${id}/pro`, { pin: '654321', op: 'pinsheet', hole: 7, spot: { d: 'B', s: 'L', on: 22, off: 5 } });
 s = await state(id); assert.deepEqual(s.pinsheet[7], { d: 'B', s: 'L', on: 22, off: 5 }); ok('a golf pro sets a pin with their PIN');
-await post(`/golf/api/${id}/pro`, { pin: '4321', op: 'pinsheet', hole: 7, spot: null });
+await post(`/golf/api/${id}/pro`, { pin: '654321', op: 'pinsheet', hole: 7, spot: null });
 s = await state(id); assert.equal(s.pinsheet[7], undefined); ok('a golf pro takes a pin off');
-const m = await call(`/golf/api/${id}/pro`, { pin: '8765', op: 'pinsheet', hole: 7, spot: { d: 'F' } });
+const m = await call(`/golf/api/${id}/pro`, { pin: '876543', op: 'pinsheet', hole: 7, spot: { d: 'F' } });
 assert.equal(m.status, 403); ok('a marshal can’t change pins');

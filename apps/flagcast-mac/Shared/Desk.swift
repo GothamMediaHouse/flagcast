@@ -58,6 +58,12 @@ struct StaffPin: Codable, Hashable, Identifiable {
         let c = try d.container(keyedBy: CodingKeys.self)
         id = c.str(.id); name = c.str(.name); role = c.str(.role, "pro"); pin = c.str(.pin)
     }
+    /// A new 6-digit PIN no one else in the tournament has (golf.js pinProblem refuses shorter new ones and repeats).
+    static func newPin(_ taken: [StaffPin]) -> String {
+        var p: String
+        repeat { p = String(Int.random(in: 100000...999999)) } while taken.contains { $0.pin == p }
+        return p
+    }
 }
 
 /// A saved routing of the screens (what each one shows), put back with one click.

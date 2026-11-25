@@ -667,7 +667,7 @@ $('raisedGo').onclick = async () => { try { await desk('fund', { raised: Number(
 
 // ---- staff, screens and schedule (changed straight in EV) ----
 const PAGE_NAMES = { lb: 'Leaderboard', p3: 'Par 3 camera', contests: 'Contests', skins: 'Skins', fund: 'Fundraising', sponsors: 'All sponsors', sponsor: 'One sponsor', schedule: 'Schedule' };
-const pinGen = () => String(1000 + Math.floor(Math.random() * 9000));
+const pinGen = () => { let p; do p = String(100000 + crypto.getRandomValues(new Uint32Array(1))[0] % 900000); while ((EV.pins || []).some((x) => x.pin === p)); return p; };
 function drawStaff() {
   EV.pins = EV.pins || []; EV.displays = EV.displays || []; EV.schedule = EV.schedule || [];
   $('evcode').textContent = eventId().toUpperCase();
