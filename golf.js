@@ -89,8 +89,12 @@ export async function golf(request, env) {
   }
   if (url.pathname === '/golf/api/club/google-app' && request.method === 'POST') {
     const f = await request.formData().catch(() => null);
-    const cookie = (request.headers.get('Cookie') || '').match(/(?:^|;\s*)g_csrf_token=([^;]+)/)?.[1];
-    const back = (q) => Response.redirect(`flagcastmanager://signin?${q}`, 302);
+    const cookies = request.headers.get('Cookie') || '';
+    const cookie = cookies.match(/(?:^|;\s*)g_csrf_token=([^;]+)/)?.[1];
+    // where the sign-in page said to send the session: the apps (the default), the website or Admin
+    const mode = cookies.match(/(?:^|;\s*)fc_google_mode=(app|web|admin)(?:;|$)/)?.[1] || 'app';
+    const back = (q) => mode === 'app' ? Response.redirect(`flagcastmanager://signin?${q}`, 302)
+      : new Response(null, { status: 302, headers: { Location: `/golf/${mode === 'admin' ? 'admin/' : ''}#${q.replace(/^token=/, 'signin=')}`, 'Set-Cookie': 'fc_google_mode=; Path=/golf/; Max-Age=0; Secure; SameSite=None' } });
     if (!f || !cookie || f.get('g_csrf_token') !== cookie) return back('error=' + encodeURIComponent('That Google sign-in didn’t work. Try again.'));
     const r = await clubs(new Request(request.url, { method: 'POST', body: JSON.stringify({ idToken: f.get('credential') }) }), env, 'google');
     const j = await r.json().catch(() => ({}));
