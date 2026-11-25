@@ -19,6 +19,8 @@ struct HomeView: View {
     @State private var settings = false
     @State private var typing = false
     @State private var proOpen = false
+    @State private var demoError: String?
+    @State private var opening = false
     @FocusState private var focus: Field?
     enum Field { case event, cart, proEvent, pin }
 
@@ -28,6 +30,7 @@ struct HomeView: View {
                 hero
                 VStack(spacing: 14) {
                     playCard
+                    demoCard
                     if let r = recents.first(where: { !$0.code.isEmpty }) { resumeCard(r) }
                     if !others.isEmpty || !pros.isEmpty { recentCard }
                     proCard
@@ -118,6 +121,40 @@ struct HomeView: View {
             }
         }
         .fcCard(padding: 18)
+    }
+
+    /// No cart card (or Apple's reviewer): open the live Demo tournament on its sample cart, no code or sign-in
+    private var demoCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 14) {
+                Image(systemName: "play.fill").font(.system(size: 22, weight: .semibold))
+                    .frame(width: 54, height: 54).background(Color.fcGreen, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .foregroundStyle(Color.fcFlag)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("No code? Try a demo").font(.title3.weight(.bold))
+                    Text("A live sample tournament. No sign-in.").font(.subheadline).foregroundStyle(Color.fcMuted)
+                }
+            }
+            Button { Task { await openDemo() } } label: { if opening { ProgressView() } else { Text("Try a demo") } }
+                .buttonStyle(.fcPlain).disabled(opening)
+                .accessibilityHint("Opens a sample tournament on a sample cart")
+            if let demoError { Text(demoError).font(.subheadline).foregroundStyle(Color.fcRed) }
+        }
+        .fcCard(padding: 18)
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.fcFlag, lineWidth: 2))
+    }
+
+    private func openDemo() async {
+        demoError = nil
+        opening = true; defer { opening = false }
+        do {
+            let d = try await API.demo()
+            let s = try await API.state(d.id)
+            Recents.remember(id: d.id, name: s.name, code: d.code)
+            router.go(.score(id: d.id, code: d.code))
+        } catch {
+            demoError = (error as? APIError)?.message ?? "That didn’t work. Try again."
+        }
     }
 
     private func resumeCard(_ r: Recent) -> some View {

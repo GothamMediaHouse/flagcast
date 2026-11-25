@@ -14,6 +14,7 @@
 //   POST /golf/api/<id>/live               { code, team, token, env, player? } | { code, team, token, end: true }   the lock screen live view (liveact.js)
 //   GET  /golf/api/<id>/photo/<slot>       a photo the club added: cover, h<n> (a hole), s-<sponsor id> (a banner)
 //   POST /golf/api/<id>/hit                { list: [{ s: sponsorId, k: 'view'|'tap'|'secs', n }] }   sponsor counts for the report
+//   GET  /golf/api/demo                    → { id, name, code, team }   "Try a demo": the newest Demo tournament and its sample cart
 //
 // Pages: /g/<id> live page · /g/<id>/board screens · /g/<id>/desk#<key> desk · /g/<id>/map#<key> course map · /g/<id>/s/<code> cart · /g/<id>/cards QR cards
 import { DurableObject } from 'cloudflare:workers';
@@ -62,6 +63,16 @@ export async function golf(request, env) {
   const url = new URL(request.url);
   let m;
   if (request.method === 'OPTIONS' && url.pathname.startsWith('/golf/api/')) return preflight(request);
+  // "Try a demo" in the player and TV apps: the live Demo tournament and its sample cart, no code or sign-in
+  if (url.pathname === '/golf/api/demo' && (request.method === 'GET' || request.method === 'HEAD')) {
+    const none = () => cors(request, json({ error: 'The demo isn’t available right now. Try again later.' }, 404));
+    const r = await env.CLUBS.get(env.CLUBS.idFromName('directory')).fetch(new Request('https://clubs/demo-find', { method: 'POST', body: '{}' }));
+    const { id } = await r.json().catch(() => ({}));
+    if (!id) return none();
+    const t = await env.GOLF.get(env.GOLF.idFromName(id)).fetch(new Request(`https://golf/golf/api/${id}/try`, { method: 'POST', body: '{}' }));
+    if (!t.ok) return none();
+    return cors(request, json(await t.json()));
+  }
   // making a tournament and the club accounts go through the club directory (clubs.js)
   if (url.pathname === '/golf/api/new') return cors(request, await clubs(request, env, 'new'));
   if ((m = url.pathname.match(/^\/golf\/api\/club\/(start|verify|login|apple|google|config|setpass|me|request|invite|uninvite|hide|signout|admin|brand)$/))) return cors(request, await clubs(request, env, m[1]));
@@ -127,6 +138,10 @@ export async function golf(request, env) {
 }
 
 const clip = (s, n) => String(s ?? '').slice(0, n);
+// "Try a demo": a Demo tournament's last cart is the one the button opens (see score() and op 'try')
+const TRY_RESET = 3 * 3600000;
+const tryTeam = (ev) => [...(ev.teams || [])].reverse().find((t) => t.code) || null;
+const isTryTeam = (ev, team) => !!ev.demo && tryTeam(ev)?.id === team.id;
 // sponsor spots: title (everywhere), leaderboard, hole (scorecard + the hole's page), cam (bug on a par 3 camera),
 // contest (closest to the pin / long drive on its holes), turn (card after the 9th), ace (hole-in-one take-over), slide (big-screen slide)
 export const SPOTS = ['title', 'leaderboard', 'hole', 'cam', 'contest', 'turn', 'ace', 'slide'];
@@ -429,6 +444,13 @@ export class GolfEvent extends DurableObject {
       await this.broadcast();
       return json({ ok: true, cams: ev.cams });
     }
+    // "Try a demo" (GET /golf/api/demo, through the club directory's demo-find): this Demo tournament and its sample
+    // cart's code. Only for a tournament marked Demo; never routed from the web.
+    if (op === 'try') {
+      const t = tryTeam(ev);
+      if (!ev.demo || !t) return json({ error: 'The demo isn’t available right now.' }, 404);
+      return json({ id: ev.id, name: ev.name, code: t.code, team: t.id });
+    }
     if (op === 'pro') return this.pro(b, request.headers.get('CF-Connecting-IP') || '');
     if (op === 'hit') return this.hit(b, request.headers.get('CF-Connecting-IP') || '');
     if (op === 'where') return this.where(b);
@@ -444,7 +466,11 @@ export class GolfEvent extends DurableObject {
     if (!team) return json({ error: 'This scorecard can’t enter scores for that team.' }, 403);
     if (ev.locked && b.desk !== ev.key) return json({ error: 'Scoring is closed. The results are final.' }, 423);
     const sc = await this.scores();
-    const mine = sc[team.id] || {};
+    // "Try a demo" scores on one sample cart of a Demo tournament (tryCart): they clear after 3 hours with no scoring,
+    // and a 1 there is no hole-in-one take-over, so the demo a club is shown stays tidy
+    const trial = isTryTeam(ev, team);
+    const last = Math.max(0, ...Object.values(sc[team.id] || {}).flatMap((arr) => arr.map((x) => (x ? x.at || 0 : 0))));
+    const mine = trial && last && Date.now() - last > TRY_RESET ? {} : (sc[team.id] || {});
     const ids = new Set(ev.format.type === 'scramble' ? ['T'] : team.players.map((p) => p.id));
     const now = Date.now(); let changed = false; const aces = [];
     for (const e of (Array.isArray(b.list) ? b.list : []).slice(0, 200)) {
@@ -458,12 +484,12 @@ export class GolfEvent extends DurableObject {
       if (old && old.at > at) continue; // a newer change is already here
       arr[h - 1] = v === null ? null : { v, at };
       mine[e.p] = arr; changed = true;
-      if (v === 1 && (!old || old.v !== 1)) {
+      if (v === 1 && (!old || old.v !== 1) && !trial) {
         const p = team.players.find((x) => x.id === e.p);
         aces.push({ hole: h, name: p ? p.name : team.name, team: team.name, at: now });
       }
     }
-    if (changed) {
+    if (changed || (trial && mine !== sc[team.id] && sc[team.id])) {
       sc[team.id] = mine;
       await this.ctx.storage.put(`s:${team.id}`, mine);
       if (aces.length) { ev.aces = [...(ev.aces || []), ...aces].slice(-20); await this.ctx.storage.put('event', ev); }

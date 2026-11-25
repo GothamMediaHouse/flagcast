@@ -7,9 +7,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const SERVER = ['groupnotes', 'pinsheet', 'protools', 'screens', 'stalesave', 'where', 'live'];
-const ADMIN = 'clubs';
+const ADMIN = ['clubs', 'trydemo'];
 const all = readdirSync('test').filter((f) => f.endsWith('.test.mjs')).map((f) => f.replace('.test.mjs', ''));
-const offline = all.filter((t) => !SERVER.includes(t) && t !== ADMIN);
+const offline = all.filter((t) => !SERVER.includes(t) && !ADMIN.includes(t));
 let failed = 0;
 const run = (args) => { const r = spawnSync(process.execPath, args, { stdio: 'inherit' }); if (r.status) failed++; return r.status === 0; };
 
@@ -29,7 +29,7 @@ async function server(port, vars) {
 let s = await server(8791, '');
 try { for (const t of SERVER) { console.log(`\n== ${t} (local server)`); run([`test/${t}.test.mjs`, s.base]); } } finally { s.stop(); }
 s = await server(8792, 'GOLF_CREATE_PASS="local-test-pass"\nADMIN_EMAIL="staff@example.com"\n');
-try { console.log(`\n== ${ADMIN} (local server with a test passcode)`); run([`test/${ADMIN}.test.mjs`, s.base, 'local-test-pass', 'staff@example.com']); } finally { s.stop(); }
+try { for (const t of ADMIN) { console.log(`\n== ${t} (local server with a test passcode)`); run([`test/${t}.test.mjs`, s.base, 'local-test-pass', 'staff@example.com']); } } finally { s.stop(); }
 
 console.log(failed ? `\n${failed} test file(s) failed` : '\nEverything passed');
 process.exit(failed ? 1 : 0);

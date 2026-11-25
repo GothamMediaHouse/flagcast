@@ -50,6 +50,14 @@ struct TournamentScreen: View {
             }
         }
         .tint(Color.fcPrimary)
+        // a Demo tournament (Admin marked it, "Try a demo" opens it): say so, so nobody takes it for a real round
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if s?.brand.marked == true {
+                Text("Demo · a sample tournament").font(.caption.weight(.bold)).tracking(1.2).textCase(.uppercase)
+                    .foregroundStyle(Color.fcOnFlag).frame(maxWidth: .infinity).padding(.vertical, 5).background(Color.fcFlag)
+                    .accessibilityAddTraits(.isHeader)
+            }
+        }
         .environment(nav)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {

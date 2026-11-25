@@ -113,7 +113,7 @@ export class FlagcastClubs extends DurableObject {
     // columns added after the first release
     for (const q of ['ALTER TABLE accounts ADD COLUMN google TEXT', 'ALTER TABLE clubs ADD COLUMN notes TEXT', 'ALTER TABLE events ADD COLUMN archived INTEGER DEFAULT 0', 'ALTER TABLE clubs ADD COLUMN course TEXT',
       'ALTER TABLE clubs ADD COLUMN logo TEXT', 'ALTER TABLE clubs ADD COLUMN accent TEXT', 'ALTER TABLE clubs ADD COLUMN powered INTEGER DEFAULT 0',
-      'ALTER TABLE clubs ADD COLUMN deleted INTEGER', 'ALTER TABLE clubs ADD COLUMN was TEXT']) { try { this.sql.exec(q); } catch {} }
+      'ALTER TABLE clubs ADD COLUMN deleted INTEGER', 'ALTER TABLE clubs ADD COLUMN was TEXT', 'ALTER TABLE events ADD COLUMN demo INTEGER DEFAULT 0']) { try { this.sql.exec(q); } catch {} }
     // the Flagcast course library (courselib.js): courses any club can pick in Find the course
     this.sql.exec('CREATE TABLE IF NOT EXISTS library (id TEXT PRIMARY KEY, name TEXT, city TEXT, state TEXT, data TEXT, club TEXT, updated INTEGER)');
     for (const c of SEED) if (!this.one('SELECT id FROM library WHERE id = ?', c.id)) this.libPut(c, '', 0);
@@ -230,6 +230,18 @@ export class FlagcastClubs extends DurableObject {
     // is this live input one of Flagcast's cameras? (golf.js, before serving its playlists; never from the web)
     // limits for the other parts of the worker (courses.js, contact.js): { k, max, mins } → { ok }. Never from the web
     if (op === 'limit') return json({ ok: this.limit(`lim:${clip(b.k, 120)}`, num(b.max, 1, 10000, 10), num(b.mins, 1, 1440, 60) * 60000) });
+    // "Try a demo" in the player and TV apps (golf.js GET /golf/api/demo): the newest tournament Admin marked Demo that
+    // isn't archived → { id } (Apple's reviewers have no tournament code). Demo marks made before the events.demo column
+    // existed are found once by asking each tournament.
+    if (op === 'demo-find') {
+      if (!(await this.ctx.storage.get('demoScanned'))) {
+        const rows = this.all('SELECT id FROM events WHERE COALESCE(archived, 0) = 0 ORDER BY created DESC LIMIT 300');
+        await Promise.all(rows.map(async (e) => { try { const s = await this.golf(e.id, 'state'); if (s.brand?.marked) this.sql.exec('UPDATE events SET demo = 1 WHERE id = ?', e.id); } catch {} }));
+        await this.ctx.storage.put('demoScanned', Date.now());
+      }
+      const row = this.one("SELECT e.id FROM events e LEFT JOIN clubs c ON c.id = e.club WHERE e.demo = 1 AND COALESCE(e.archived, 0) = 0 AND COALESCE(c.status, '') NOT IN ('deleted', 'purged') ORDER BY e.created DESC LIMIT 1");
+      return json({ id: row?.id || '' });
+    }
     if (op === 'streamok') return json({ ok: !!this.one('SELECT hole FROM streams WHERE uid = ?', clip(b.uid, 40)) });
     if (op === 'lib-search') {
       const words = clip(b.q, 80).toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 1).slice(0, 5);
@@ -560,6 +572,7 @@ export class FlagcastClubs extends DurableObject {
       if (b.op === 'lock') await this.golf(evRow.id, 'desk', { key: evRow.key, op: 'lock', locked: !!b.locked });
       // Demo: the tournament shows the Flagcast logo whatever its club has (for showing Flagcast to a club)
       if (b.op === 'demo') await this.golf(evRow.id, 'brand', { demo: !!b.on });
+      if (b.op === 'demo') this.sql.exec('UPDATE events SET demo = ? WHERE id = ?', b.on ? 1 : 0, evRow.id);
       if (b.op === 'archive') {
         this.sql.exec('UPDATE events SET archived = ? WHERE id = ?', b.on ? 1 : 0, evRow.id);
         if (b.on) await this.golf(evRow.id, 'desk', { key: evRow.key, op: 'lock', locked: true }).catch(() => {});
