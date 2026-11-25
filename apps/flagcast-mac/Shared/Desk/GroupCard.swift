@@ -29,7 +29,7 @@ struct GroupCard: View {
     ]
 
     private var info: Core.GroupInfo? { doc.live.flatMap { Core.groupInfo($0, $0.scores, group.id) } }
-    private var team: Team? { (doc.live ?? doc.ev).teams.first { $0.id == group.id } }
+    private var team: DeskTeam? { doc.ev.teams.first { $0.id == group.id } }
     private var mins: Int? { group.since > 0 ? max(0, Int((Date().timeIntervalSince1970 * 1000 - group.since) / 60_000)) : nil }
     private var toName: String? { to.flatMap { id in info?.players.first { $0.id == id }?.name } }
 
