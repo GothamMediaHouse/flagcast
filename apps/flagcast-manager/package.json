@@ -1,7 +1,7 @@
 {
   "name": "flagcast-manager",
   "productName": "Flagcast Manager",
-  "version": "2.9.1",
+  "version": "2.9.2",
   "description": "Set up and run Flagcast golf tournaments: teams, sponsors, screens, staff and reports.",
   "main": "main.js",
   "author": "Flagcast",
