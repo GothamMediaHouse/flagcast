@@ -59,33 +59,69 @@ struct Tee: Codable, Hashable, Identifiable {
 
 struct Team: Codable, Hashable, Identifiable {
     var id: String, name: String, flight: String, start: Int, hcp: Double, cart: String, players: [Player]
-    init(id: String, name: String = "", flight: String = "", start: Int = 1, hcp: Double = 0, cart: String = "", players: [Player] = []) {
-        self.id = id; self.name = name; self.flight = flight; self.start = start; self.hcp = hcp; self.cart = cart; self.players = players
+    /// match play team cup: the side the team plays for, "A", "B" or ""
+    var side: String = ""
+    init(id: String, name: String = "", flight: String = "", start: Int = 1, hcp: Double = 0, cart: String = "", players: [Player] = [], side: String = "") {
+        self.id = id; self.name = name; self.flight = flight; self.start = start; self.hcp = hcp; self.cart = cart; self.players = players; self.side = side
     }
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         id = c.str(.id); name = c.str(.name); flight = c.str(.flight); start = c.int(.start, 1); hcp = c.dbl(.hcp, 0)
-        cart = c.str(.cart); players = c.list(.players)
+        cart = c.str(.cart); players = c.list(.players); side = c.str(.side)
     }
     /// The team's name, or its players' names when it has none.
     var displayName: String { name.isEmpty ? players.map(\.name).joined(separator: " / ") : name }
+}
+
+/// Match play's team cup: two sides playing for points (1 a win, ½ a halve).
+struct Cup: Codable, Hashable {
+    var on = false, a = "Reds", b = "Blues"
+    init(on: Bool = false, a: String = "Reds", b: String = "Blues") { self.on = on; self.a = a; self.b = b }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        on = c.bool(.on, false); a = c.str(.a, "Reds"); b = c.str(.b, "Blues")
+        if a.isEmpty { a = "Reds" }; if b.isEmpty { b = "Blues" }
+    }
+}
+/// One match: team a against team b.
+struct MatchPair: Codable, Hashable, Identifiable {
+    var id: String, a: String, b: String
+    init(id: String = Self.newId(), a: String = "", b: String = "") { self.id = id; self.a = a; self.b = b }
+    init(from d: Decoder) throws { let c = try d.container(keyedBy: CodingKeys.self); id = c.str(.id); a = c.str(.a); b = c.str(.b) }
+    static func newId() -> String { String((0..<6).map { _ in "abcdefghijkmnpqrstuvwxyz23456789".randomElement()! }) }
 }
 
 struct Format: Codable, Hashable {
     var type: String, count: Int, allowance: Double, show: String
     /// "" = all 18 holes, "front" = holes 1–9, "back" = holes 10–18
     var nine: String = ""
-    init(type: String = "bestball", count: Int = 1, allowance: Double = 100, show: String = "net", nine: String = "") {
-        self.type = type; self.count = count; self.allowance = allowance; self.show = show; self.nine = nine
+    /// match play: "singles", "fourball" (best ball a side) or "scramble" (one ball a side)
+    var match: String = "fourball"
+    var cup = Cup()
+    /// the Individuals leaderboard (every player on their own, net and gross) next to the team board
+    var indiv = false
+    init(type: String = "bestball", count: Int = 1, allowance: Double = 100, show: String = "net", nine: String = "", match: String = "fourball", cup: Cup = Cup(), indiv: Bool = false) {
+        self.type = type; self.count = count; self.allowance = allowance; self.show = show; self.nine = nine; self.match = match; self.cup = cup; self.indiv = indiv
     }
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         type = c.str(.type, "bestball"); count = c.int(.count, 1); allowance = c.dbl(.allowance, 100); show = c.str(.show, "net")
         nine = ["front", "back"].contains(c.str(.nine, "")) ? c.str(.nine, "") : ""
+        match = ["singles", "fourball", "scramble"].contains(c.str(.match, "")) ? c.str(.match, "") : "fourball"
+        cup = (try? c.decodeIfPresent(Cup.self, forKey: .cup)) ?? Cup()
+        indiv = c.bool(.indiv, false)
     }
-    var isScramble: Bool { type == "scramble" }
+    /// one score for the whole team (a scramble, or a scramble match), entered as "T" with the team handicap
+    var isScramble: Bool { type == "scramble" || (type == "match" && match == "scramble") }
     var isStableford: Bool { type == "stableford" }
-    var name: String { ["bestball": "Best ball", "stroke": "Stroke play", "scramble": "Scramble", "stableford": "Stableford"][type] ?? "Best ball" }
+    var isMatch: Bool { type == "match" }
+    /// the Individuals leaderboard can show (not when a team plays one ball, and stroke play already is one)
+    var hasIndividuals: Bool { !isScramble && type != "stroke" }
+    static let matchNames = ["singles": "Singles", "fourball": "Four-ball", "scramble": "Scramble"]
+    var name: String {
+        if isMatch { return "\(Self.matchNames[match] ?? "Four-ball") match play" }
+        return ["bestball": "Best ball", "shamble": "Shamble", "stroke": "Stroke play", "scramble": "Scramble", "stableford": "Stableford"][type] ?? "Best ball"
+    }
 }
 
 struct Course: Codable, Hashable {
@@ -360,6 +396,8 @@ struct EventState: Codable, Hashable {
     var sideGames = true
     var flights: [String] = []
     var teams: [Team] = []
+    /// match play pairings
+    var matches: [MatchPair] = []
     var screens = Screens()
     var cams: [Int: String] = [:]
     var sponsors: [Sponsor] = []
@@ -387,7 +425,7 @@ struct EventState: Codable, Hashable {
     var golive: [Int: String] = [:]
 
     enum CodingKeys: String, CodingKey {
-        case id, name, club, date, course, format, sideGames, flights, teams, screens, cams, sponsors, schedule, displays, fund, contests
+        case id, name, club, date, course, format, sideGames, flights, teams, matches, screens, cams, sponsors, schedule, displays, fund, contests
         case locked, aces, flash, news, nudges, live, replays, map, pinsheet, scores, online, brand, lastAt, photos, notesOff, golive
     }
     init() {}
@@ -398,7 +436,7 @@ struct EventState: Codable, Hashable {
         format = (try? c.decodeIfPresent(Format.self, forKey: .format)) ?? Format()
         sideGames = c.bool(.sideGames, true)
         flights = (try? c.decodeIfPresent([String].self, forKey: .flights)) ?? []
-        teams = c.list(.teams)
+        teams = c.list(.teams); matches = c.list(.matches)
         screens = (try? c.decodeIfPresent(Screens.self, forKey: .screens)) ?? Screens()
         let rawCams = (try? c.decodeIfPresent([String: String].self, forKey: .cams)) ?? [:]
         cams = Dictionary(uniqueKeysWithValues: rawCams.compactMap { k, v in Int(k).map { ($0, v) } })
@@ -427,7 +465,7 @@ struct EventState: Codable, Hashable {
         var c = e.container(keyedBy: CodingKeys.self)
         try c.encode(id, forKey: .id); try c.encode(name, forKey: .name); try c.encode(club, forKey: .club); try c.encode(date, forKey: .date)
         try c.encode(course, forKey: .course); try c.encode(format, forKey: .format); try c.encode(sideGames, forKey: .sideGames)
-        try c.encode(flights, forKey: .flights); try c.encode(teams, forKey: .teams); try c.encode(screens, forKey: .screens)
+        try c.encode(flights, forKey: .flights); try c.encode(teams, forKey: .teams); try c.encode(matches, forKey: .matches); try c.encode(screens, forKey: .screens)
         try c.encode(Dictionary(uniqueKeysWithValues: cams.map { (String($0.key), $0.value) }), forKey: .cams)
         try c.encode(sponsors, forKey: .sponsors); try c.encode(schedule, forKey: .schedule); try c.encode(displays, forKey: .displays)
         try c.encode(fund, forKey: .fund); try c.encode(contests, forKey: .contests); try c.encode(locked, forKey: .locked)

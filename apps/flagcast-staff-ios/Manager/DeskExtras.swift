@@ -72,6 +72,7 @@ private struct ReportPage: View {
     }
     private func results() -> [[String]] {
         guard let live = doc.live else { return [] }
+        if live.format.isMatch { return Core.matchRows(live) }
         let flights: [String?] = live.flights.isEmpty ? [nil] : live.flights
         var rows = [["Flight", "Pos", "Team", "Players", "Thru", "Score"] + live.course.holes.map { "H\($0.n)" }]
         for fl in flights {

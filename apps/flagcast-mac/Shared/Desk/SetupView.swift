@@ -40,12 +40,30 @@ struct SetupView: View {
             field("Date") { DayPicker(text: $doc.ev.date, label: false) }
             field("Format") {
                 Picker("", selection: $doc.ev.format.type) {
-                    Text("Best ball (teams)").tag("bestball"); Text("Scramble (one team score)").tag("scramble")
+                    Text("Best ball (teams)").tag("bestball"); Text("Shamble (best drive, then own ball)").tag("shamble")
+                    Text("Scramble (one team score)").tag("scramble")
                     Text("Stroke play (each player)").tag("stroke"); Text("Stableford points").tag("stableford")
+                    Text("Match play (head to head)").tag("match")
                 }.labelsHidden()
             }
-            if doc.ev.format.type == "bestball" || doc.ev.format.type == "stableford" {
+            if ["bestball", "shamble", "stableford"].contains(doc.ev.format.type) {
                 field("Best balls that count on each hole") { Picker("", selection: $doc.ev.format.count) { ForEach(1...3, id: \.self) { Text("\($0)").tag($0) } }.pickerStyle(.segmented).labelsHidden() }
+            }
+            if doc.ev.format.isMatch {
+                field("Match type") {
+                    Picker("", selection: $doc.ev.format.match) { Text("Singles").tag("singles"); Text("Four-ball").tag("fourball"); Text("Scramble").tag("scramble") }
+                        .pickerStyle(.segmented).labelsHidden()
+                }
+                Toggle("Team cup (two sides, 1 point a win, ½ a halve)", isOn: $doc.ev.format.cup.on).font(.system(size: 12))
+                if doc.ev.format.cup.on {
+                    field("Side names") {
+                        HStack { TextField("Reds", text: $doc.ev.format.cup.a).textFieldStyle(.roundedBorder); TextField("Blues", text: $doc.ev.format.cup.b).textFieldStyle(.roundedBorder) }
+                    }
+                }
+                Help("Strokes come off the lowest player in each match (90% is usual for four-ball). Pair the teams with Matches on the Teams page.")
+            }
+            if doc.ev.format.hasIndividuals {
+                Toggle("Individuals leaderboard (every player’s net and gross, for a club championship)", isOn: $doc.ev.format.indiv).font(.system(size: 12))
             }
             field("Holes") {
                 Picker("", selection: $doc.ev.format.nine) { Text("All 18").tag(""); Text("Front 9").tag("front"); Text("Back 9").tag("back") }.pickerStyle(.segmented).labelsHidden()

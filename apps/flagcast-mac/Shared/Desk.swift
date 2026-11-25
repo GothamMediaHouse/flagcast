@@ -26,14 +26,18 @@ struct DeskPlayer: Codable, Hashable, Identifiable {
 
 struct DeskTeam: Codable, Hashable, Identifiable {
     var id: String, code: String = "", name: String, flight: String, start: Int, hcp: Double, cart: String, players: [DeskPlayer]
+    /// match play team cup: "A", "B" or ""
+    var side: String = ""
     init(id: String = Ids.make(6), name: String = "", flight: String = "", start: Int = 1, players: [DeskPlayer] = []) {
         self.id = id; self.name = name; self.flight = flight; self.start = start; self.hcp = 0; self.cart = ""; self.players = players
     }
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         id = c.str(.id); code = c.str(.code); name = c.str(.name); flight = c.str(.flight); start = c.int(.start, 1); hcp = c.dbl(.hcp, 0)
-        cart = c.str(.cart); players = c.list(.players)
+        cart = c.str(.cart); players = c.list(.players); side = c.str(.side)
     }
+    /// "Fox / Lee": the name, or the players' last names
+    var shortName: String { name.isEmpty ? players.map { $0.name.split(separator: " ").last.map(String.init) ?? $0.name }.filter { !$0.isEmpty }.joined(separator: " / ") : name }
     var displayName: String { name.isEmpty ? players.map(\.name).filter { !$0.isEmpty }.joined(separator: " / ") : name }
 }
 
@@ -93,6 +97,8 @@ struct DeskEvent: Codable, Hashable {
     var sideGames = true
     var flights: [String] = []
     var teams: [DeskTeam] = []
+    /// match play pairings (team a v team b)
+    var matches: [MatchPair] = []
     var screens = Screens()
     var cams: [Int: String] = [:]
     var sponsors: [Sponsor] = []
@@ -118,7 +124,7 @@ struct DeskEvent: Codable, Hashable {
     var photos = Photos()   // the photos golfers see (op "photo", saved at once, never with Save)
 
     enum CodingKeys: String, CodingKey {
-        case name, club, date, course, format, sideGames, flights, teams, screens, cams, sponsors, schedule, pins, displays, fund, contests, logo
+        case name, club, date, course, format, sideGames, flights, teams, matches, screens, cams, sponsors, schedule, pins, displays, fund, contests, logo
         case id, key, locked, aces, map, live, scenes, replays, news, stats, log, photos, v
     }
     init() {}
@@ -129,7 +135,7 @@ struct DeskEvent: Codable, Hashable {
         format = (try? c.decodeIfPresent(Format.self, forKey: .format)) ?? Format()
         sideGames = c.bool(.sideGames, true)
         flights = (try? c.decodeIfPresent([String].self, forKey: .flights)) ?? []
-        teams = c.list(.teams)
+        teams = c.list(.teams); matches = c.list(.matches)
         screens = (try? c.decodeIfPresent(Screens.self, forKey: .screens)) ?? Screens()
         let rawCams = (try? c.decodeIfPresent([String: String].self, forKey: .cams)) ?? [:]
         cams = Dictionary(uniqueKeysWithValues: rawCams.compactMap { k, v in Int(k).map { ($0, v) } })
@@ -149,7 +155,7 @@ struct DeskEvent: Codable, Hashable {
         var c = e.container(keyedBy: CodingKeys.self)
         try c.encode(name, forKey: .name); try c.encode(club, forKey: .club); try c.encode(date, forKey: .date)
         try c.encode(course, forKey: .course); try c.encode(format, forKey: .format); try c.encode(sideGames, forKey: .sideGames)
-        try c.encode(flights, forKey: .flights); try c.encode(teams, forKey: .teams); try c.encode(screens, forKey: .screens)
+        try c.encode(flights, forKey: .flights); try c.encode(teams, forKey: .teams); try c.encode(matches, forKey: .matches); try c.encode(screens, forKey: .screens)
         try c.encode(Dictionary(uniqueKeysWithValues: cams.map { (String($0.key), $0.value) }), forKey: .cams)
         try c.encode(sponsors, forKey: .sponsors); try c.encode(schedule, forKey: .schedule); try c.encode(pins, forKey: .pins)
         try c.encode(displays, forKey: .displays); try c.encode(fund, forKey: .fund); try c.encode(contests, forKey: .contests)
@@ -158,6 +164,24 @@ struct DeskEvent: Codable, Hashable {
     /// The setup as JSON, for comparing (unsaved changes) and for Save.
     var setupData: Data { (try? Self.encoder.encode(self)) ?? Data() }
     static let encoder: JSONEncoder = { let e = JSONEncoder(); e.outputFormatting = .sortedKeys; return e }()
+
+    /// Match play: pair the teams up, 1 v 2, 3 v 4… (shuffled first for a draw). With a team cup, each match is a
+    /// team from one side against a team from the other.
+    mutating func pairUp(random: Bool) {
+        var list = teams
+        if random { list.shuffle() }
+        var out: [MatchPair] = []
+        if format.cup.on && list.contains(where: { !$0.side.isEmpty }) {
+            let a = list.filter { $0.side != "B" }, b = list.filter { $0.side == "B" }
+            for i in 0..<min(a.count, b.count) { out.append(MatchPair(a: a[i].id, b: b[i].id)) }
+        } else {
+            var i = 0
+            while i + 1 < list.count { out.append(MatchPair(a: list[i].id, b: list[i + 1].id)); i += 2 }
+        }
+        matches = out
+    }
+    /// teams not in any match yet
+    var unpaired: [DeskTeam] { let used = Set(matches.flatMap { [$0.a, $0.b] }); return teams.filter { !used.contains($0.id) } }
 
     /// Holes this round plays (front or back 9, or all 18).
     var playHoles: [Int] { switch format.nine { case "front": return Array(1...9); case "back": return Array(10...18); default: return Array(1...18) } }

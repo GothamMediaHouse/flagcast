@@ -99,6 +99,7 @@ const variants = [
   ['bestball', { count: 2, allowance: 90, nine: 'back', shotgun: true, twins: true }],
   ['stroke', { teams: 4, size: 2, allowance: 100, nine: 'front', twins: true }],
   ['stableford', { count: 1, allowance: 100, nine: 'back', allDone: true }],
+  ['shamble', { count: 2, allowance: 80, shotgun: true, twins: true }],
 ];
 for (const [type, opts] of variants) {
   const ev = makeEvent(type, opts);

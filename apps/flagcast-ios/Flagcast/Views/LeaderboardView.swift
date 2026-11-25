@@ -19,7 +19,9 @@ struct LeaderboardScreen: View {
     @State private var allPar3s = false
     @Environment(Router.self) private var router
     @Environment(TourNav.self) private var nav
-    enum Tab: String, CaseIterable { case board = "Teams", par3 = "Par 3s", contests = "Contests", skins = "Skins" }
+    enum Tab: String, CaseIterable { case board = "Teams", indiv = "Individuals", par3 = "Par 3s", contests = "Contests", skins = "Skins" }
+    /// Individuals: ranked by net or gross ("" = the event's own)
+    @State private var imode = ""
 
     init(id: String, mode: Mode = .leaders, mine: Set<String> = []) {
         self.id = id; self.mode = mode; self.mine = mine
@@ -49,7 +51,7 @@ struct LeaderboardScreen: View {
                             }
                         }
                         if tabs(s).count > 1 {
-                            HeaderSwitch(options: tabs(s).map { ($0, $0.rawValue) }, selection: $tab)
+                            HeaderSwitch(options: tabs(s).map { ($0, $0 == .board && s.format.isMatch ? "Matches" : $0.rawValue) }, selection: $tab)
                                 .padding(.horizontal, 16).padding(.vertical, 10)
                                 .background(Color.fcGreen)
                         }
@@ -66,7 +68,8 @@ struct LeaderboardScreen: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 12) {
                             switch tab {
-                            case .board: board(s)
+                            case .board: if s.format.isMatch { matchBoard(s) } else { board(s) }
+                            case .indiv: individuals(s)
                             case .par3: par3s(s)
                             case .contests: contests(s)
                             case .skins: skins(s)
@@ -130,14 +133,16 @@ struct LeaderboardScreen: View {
         case "cam", "p3": tab = .par3; scrollTo = "p3-\(r.hole)"
         case "contests": tab = s.contests.isEmpty ? .board : .contests
         case "skins": tab = tabs(s).contains(.skins) ? .skins : .board
-        case "lb": tab = .board; flight = s.flights.contains(r.fl) ? r.fl : ""
+        case "lb", "matches": tab = .board; flight = s.flights.contains(r.fl) ? r.fl : ""
+        case "indiv": tab = tabs(s).contains(.indiv) ? .indiv : .board; flight = s.flights.contains(r.fl) ? r.fl : ""
         default: tab = .board
         }
     }
 
     private func tabs(_ s: EventState) -> [Tab] {
         if mode == .cameras { return [.par3] }
-        return [Tab.board, .contests, .skins].filter { ($0 != .skins || (s.screens.skins && !s.format.isScramble)) && ($0 != .contests || !s.contests.isEmpty) }
+        return [Tab.board, .indiv, .contests, .skins].filter { ($0 != .skins || (s.screens.skins && !s.format.isScramble)) && ($0 != .contests || !s.contests.isEmpty)
+            && ($0 != .indiv || (s.format.indiv && s.format.hasIndividuals)) }
     }
 
     // ---- leaderboard ----
@@ -176,6 +181,127 @@ struct LeaderboardScreen: View {
                 .fcLabel()
         }
         sponsorStrip(s)
+    }
+
+    // ---- match play: every match as it stands, the team cup on top ----
+    private static let cupRed = Color(red: 0.79, green: 0.29, blue: 0.26), cupBlue = Color(red: 0.23, green: 0.45, blue: 0.82)
+    private func teamName(_ s: EventState, _ id: String) -> String {
+        guard let t = s.teams.first(where: { $0.id == id }) else { return "" }
+        return t.name.isEmpty ? t.players.map { $0.name.split(separator: " ").last.map(String.init) ?? $0.name }.joined(separator: " / ") : t.name
+    }
+    @ViewBuilder private func matchBoard(_ s: EventState) -> some View {
+        let list = Core.matches(s, s.scores), c = Core.cup(s, s.scores, list)
+        if c.on && !list.isEmpty {
+            HStack {
+                VStack(alignment: .leading, spacing: 0) { Text(c.a.uppercased()).font(.caption.weight(.bold)).foregroundStyle(Self.cupRed); Text(Core.fmtPts(c.A)).font(FCType.display(36)) }
+                Spacer()
+                VStack(spacing: 2) {
+                    Text(c.left > 0 ? "If it finished now" : "Final").fcLabel()
+                    if c.left > 0 { Text("\(Core.fmtPts(c.nowA)) – \(Core.fmtPts(c.nowB))").font(.subheadline.monospaced()) }
+                    Text("\(Core.fmtPts(c.toWin)) to win").fcLabel()
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 0) { Text(c.b.uppercased()).font(.caption.weight(.bold)).foregroundStyle(Self.cupBlue); Text(Core.fmtPts(c.B)).font(FCType.display(36)) }
+            }
+            .padding(14).background(Color.fcCard, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        if list.isEmpty {
+            ContentUnavailableView("No matches yet", systemImage: "person.2", description: Text("The matches show here once the desk pairs the teams."))
+        } else {
+            VStack(spacing: 6) {
+                ForEach(Array(list.enumerated()), id: \.element.id) { i, r in matchRow(s, r, i + 1, c.on) }
+            }
+            Text("\(s.format.name) · \(s.format.show == "gross" ? "gross" : "net")\(s.locked ? " · final results" : "")").fcLabel()
+        }
+        sponsorStrip(s)
+    }
+    private func matchRow(_ s: EventState, _ r: Core.MatchResult, _ n: Int, _ cupOn: Bool) -> some View {
+        let w = r.winner ?? r.leader
+        let wid = w == "A" ? r.a : w == "B" ? r.b : nil
+        let side = wid.flatMap { id in s.teams.first { $0.id == id }?.side } ?? ""
+        let fill: Color = wid == nil ? Color.fcMuted.opacity(0.18) : !cupOn ? Color.fcFlag : (side == "B" || (side.isEmpty && w == "B")) ? Self.cupBlue : Self.cupRed
+        let ink: Color = wid == nil ? Color.fcInk : !cupOn ? Color.fcOnFlag : .white
+        let mineA = mine.contains(r.a), mineB = mine.contains(r.b)
+        return HStack(spacing: 0) {
+            Text(String(n)).font(.caption.monospaced()).foregroundStyle(Color.fcMuted).frame(width: 24)
+            Text(teamName(s, r.a)).font(.subheadline.weight(w == "B" ? .regular : .semibold)).foregroundStyle(w == "B" ? Color.fcMuted : Color.fcInk)
+                .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 6)
+            VStack(spacing: 1) {
+                Text(r.done ? (r.halved ? "Halved" : r.text) : r.started ? r.text : "—").font(FCType.display(20))
+                Text(r.done ? "final" : r.started ? "thru \(r.thru)" : r.thru == "—" ? "not started" : r.thru.lowercased()).font(.caption2.monospaced())
+            }
+            .foregroundStyle(ink).frame(width: 84).frame(maxHeight: .infinity).background(fill)
+            .overlay { if r.done { Rectangle().strokeBorder(Color.fcInk, lineWidth: 2.5) } }
+            Text(teamName(s, r.b)).font(.subheadline.weight(w == "A" ? .regular : .semibold)).foregroundStyle(w == "A" ? Color.fcMuted : Color.fcInk)
+                .lineLimit(2).multilineTextAlignment(.trailing).frame(maxWidth: .infinity, alignment: .trailing).padding(.horizontal, 8)
+        }
+        .frame(minHeight: 52)
+        .background(Color.fcCard)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay { if mineA || mineB { RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Color.fcFlag, lineWidth: 2) } }
+        .accessibilityElement(children: .combine)
+    }
+
+    // ---- Individuals (club championships): every player on their own, net or gross, by flight ----
+    @ViewBuilder private func individuals(_ s: EventState) -> some View {
+        let stab = s.format.isStableford, mode = imode.isEmpty ? (s.format.show.isEmpty ? "net" : s.format.show) : imode
+        let fl = flight.isEmpty ? nil : flight
+        let lb = Core.individuals(s, s.scores, flight: fl, mode: mode)
+        let other = stab ? [] : Core.individuals(s, s.scores, flight: fl, mode: mode == "gross" ? "net" : "gross")
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                if !stab { ForEach(["net", "gross"], id: \.self) { m in Chip(title: m == "net" ? "Net" : "Gross", on: m == mode) { imode = m } } }
+                if s.flights.count > 1 {
+                    Divider().frame(height: 20)
+                    ForEach([""] + s.flights, id: \.self) { f in Chip(title: f.isEmpty ? "All" : "Flight \(f)", on: f == flight) { flight = f } }
+                }
+            }
+        }
+        if lb.isEmpty {
+            ContentUnavailableView("No players yet", systemImage: "person")
+        } else {
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Pos").frame(width: 36, alignment: .leading)
+                    Text("Player")
+                    Spacer()
+                    Text(stab ? "Pts" : mode == "gross" ? "Gross" : "Net").frame(width: 56, alignment: .trailing)
+                    if !stab { Text(mode == "gross" ? "Net" : "Gross").frame(width: 52, alignment: .trailing) }
+                    Text("Thru").frame(width: 44, alignment: .trailing)
+                }
+                .fcLabel().padding(.horizontal, 12).padding(.vertical, 8)
+                ForEach(lb) { l in
+                    Divider()
+                    HStack(spacing: 8) {
+                        Text(l.pos).font(.subheadline.weight(.bold)).foregroundStyle(Color.fcMuted).frame(width: 36, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 1) {
+                            HStack(spacing: 6) {
+                                Text(l.name).font(.body.weight(mine.contains(l.teamId) ? .bold : .semibold)).lineLimit(1)
+                                if mine.contains(l.teamId) { YouTag() }
+                            }
+                            let sub = [l.sub, s.flights.count > 1 && flight.isEmpty && !l.flight.isEmpty ? "Flight \(l.flight)" : ""].filter { !$0.isEmpty }.joined(separator: " · ")
+                            if !sub.isEmpty { Text(sub).font(.caption).foregroundStyle(Color.fcMuted).lineLimit(1) }
+                        }
+                        Spacer(minLength: 4)
+                        Text(l.played > 0 ? Core.fmtPar(l.score, stab).replacingOccurrences(of: " pts", with: "") : "—")
+                            .font(FCType.display(26)).foregroundStyle(!stab && l.played > 0 && l.score < 0 ? Color.fcRed : Color.fcInk)
+                            .frame(width: 56, alignment: .trailing)
+                        if !stab {
+                            let o = other.first { $0.key == l.key }
+                            Text(o.map { $0.played > 0 ? Core.fmtPar($0.score) : "—" } ?? "—").font(.subheadline.monospaced()).foregroundStyle(Color.fcMuted).frame(width: 52, alignment: .trailing)
+                        }
+                        Text(l.thru).font(.subheadline.monospaced()).frame(width: 44, alignment: .trailing).lineLimit(1).minimumScaleFactor(0.7)
+                    }
+                    .padding(.horizontal, 12).frame(minHeight: 52)
+                    .background(mine.contains(l.teamId) ? Color.fcFlag.opacity(0.22) : .clear)
+                    .accessibilityElement(children: .combine)
+                }
+            }
+            .background(Color.fcCard)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .shadow(color: Color.fcScrim.opacity(0.10), radius: 10, y: 4)
+            Text("Every player on their own · \(stab ? "points" : "ranked by \(mode)")\(s.locked ? " · final results" : "")").fcLabel()
+        }
     }
 
     private func row(_ s: EventState, _ l: Line, _ stab: Bool) -> some View {

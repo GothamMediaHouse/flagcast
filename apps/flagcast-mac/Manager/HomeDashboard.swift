@@ -363,5 +363,5 @@ struct ClubRequestSheet: View {
 extension String { var nilIfEmpty: String? { isEmpty ? nil : self } }
 
 func formatName(_ f: Format) -> String? {
-    ["bestball": "Best ball", "scramble": "Scramble", "stableford": "Stableford", "stroke": "Stroke play", "match": "Match play"][f.type] ?? (f.type.isEmpty ? nil : f.type.capitalized)
+    f.type.isEmpty ? nil : f.name
 }

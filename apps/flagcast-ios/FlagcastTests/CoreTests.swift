@@ -239,4 +239,41 @@ final class CoreTests: XCTestCase {
         let old = try JSONDecoder().decode(SideConfig.self, from: Data(#"{"skins":{"on":true,"amt":5}}"#.utf8))
         XCTAssertTrue(old.skins.on); XCTAssertFalse(old.wolf.on); XCTAssertEqual(old.closest.amt, 2)
     }
+
+    // Shamble, match play and Individuals: the same hand-worked answers as test/matchplay.test.mjs
+    func testMatchPlay() throws {
+        let ev = try JSONDecoder().decode(EventState.self, from: Data(#"{"format":{"type":"match","match":"fourball","allowance":90,"cup":{"on":true,"a":"Reds","b":"Blues"}},"teams":[{"id":"ta","name":"Fox / Lee","start":1,"side":"A","players":[{"id":"a1","name":"A1","hcp":10},{"id":"a2","name":"A2","hcp":4}]},{"id":"tb","name":"Park / Ortiz","start":1,"side":"B","players":[{"id":"b1","name":"B1","hcp":6},{"id":"b2","name":"B2","hcp":8}]},{"id":"tc","name":"Byrne / Shah","start":10,"side":"A","players":[{"id":"c1","name":"C1","hcp":0},{"id":"c2","name":"C2","hcp":0}]},{"id":"td","name":"Kowal / Diaz","start":10,"side":"B","players":[{"id":"d1","name":"D1","hcp":0},{"id":"d2","name":"D2","hcp":0}]},{"id":"te","name":"Quinn / Ford","start":1,"side":"B","players":[{"id":"e1","name":"E1","hcp":0}]},{"id":"tf","name":"Reyes / Hall","start":1,"side":"A","players":[{"id":"f1","name":"F1","hcp":0}]}],"matches":[{"id":"m1","a":"ta","b":"tb"},{"id":"m2","a":"tc","b":"td"},{"id":"m3","a":"te","b":"tf"}],"scores":{"ta":{"a1":[5,6,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"a2":[4,5,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null]},"tb":{"b1":[4,5,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"b2":[5,5,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null]},"tc":{"c1":[null,null,null,null,null,null,null,null,null,3,null,null,null,null,null,null,null,null],"c2":[null,null,null,null,null,null,null,null,null,4,null,null,null,null,null,null,null,null]},"td":{"d1":[null,null,null,null,null,null,null,null,null,4,null,null,null,null,null,null,null,null],"d2":[null,null,null,null,null,null,null,null,null,4,null,null,null,null,null,null,null,null]},"te":{"e1":[3,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4]},"tf":{"f1":[4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4]}}}"#.utf8))
+        XCTAssertTrue(ev.format.isMatch); XCTAssertEqual(ev.format.name, "Four-ball match play"); XCTAssertEqual(ev.teams[1].side, "B")
+        let all = Core.matches(ev, ev.scores)
+        // handicaps 10/4 v 6/8 at 90% → 9/4 v 5/7 → strokes off 4: 5, 0 v 1, 3
+        XCTAssertEqual(all[0].strokes, ["ta:a1": 5, "ta:a2": 0, "tb:b1": 1, "tb:b2": 3])
+        XCTAssertEqual(all[0].holes.prefix(2).map(\.r), ["H", "B"])
+        XCTAssertEqual(all[0].text, "1 UP"); XCTAssertEqual(all[0].leader, "B")
+        XCTAssertEqual(Core.matchFor(all[0], "ta").text, "1 DOWN"); XCTAssertEqual(Core.matchFor(all[0], "tb").state, "up")
+        XCTAssertEqual(all[1].holes.first?.hole, 10); XCTAssertEqual(all[1].thru, "1")
+        XCTAssertEqual(all[2].winner, "A"); XCTAssertEqual(all[2].text, "1 UP"); XCTAssertTrue(all[2].done)
+        XCTAssertEqual(Core.matchFor(all[2], "te").text, "WON 1 UP")
+        let c = Core.cup(ev, ev.scores, all)
+        XCTAssertEqual([c.A, c.B, c.nowA, c.nowB], [0, 1, 1, 2]); XCTAssertEqual(c.left, 2); XCTAssertEqual(c.toWin, 2)
+        XCTAssertEqual(Core.fmtPts(6.5), "6½"); XCTAssertEqual(Core.fmtPts(0.5), "½"); XCTAssertEqual(Core.fmtPts(0), "0")
+
+        // closed out 5&4, and the holes after it don't count
+        let singles = #"{"format":{"type":"match","match":"singles","allowance":100},"teams":[{"id":"ta","start":1,"players":[{"id":"p1","name":"Ann","hcp":0}]},{"id":"tb","start":1,"players":[{"id":"p3","name":"Cy","hcp":2}]}],"matches":[{"id":"m1","a":"ta","b":"tb"}],"scores":{"ta":{"p1":[4,4,4,4,4,4,4,4,4,4,4,4,4,4,4]},"tb":{"p3":[6,6,6,6,6,4,4,4,4,4,4,5,4,4,3]}}}"#
+        let sg = try JSONDecoder().decode(EventState.self, from: Data(singles.utf8))
+        let r = Core.matches(sg, sg.scores)[0]
+        XCTAssertTrue(r.done); XCTAssertEqual(r.text, "5&4"); XCTAssertEqual(r.played, 14); XCTAssertTrue(r.holes[14].after); XCTAssertNil(r.holes[14].r)
+        XCTAssertEqual(r.holes[4].sb["p3"], 1)
+
+        // shamble counts like best ball; Individuals ranks every player
+        let sh = #"{"format":{"type":"shamble","count":2,"allowance":100,"show":"net"},"teams":[{"id":"ta","name":"A","flight":"A","start":1,"players":[{"id":"p1","name":"Ann Fox","hcp":0},{"id":"p2","name":"Bob Lee","hcp":18},{"id":"p3","name":"Cal Ng","hcp":0}]},{"id":"tb","name":"B","flight":"B","start":1,"players":[{"id":"p4","name":"Dee Roe","hcp":9}]}],"scores":{"ta":{"p1":[4],"p2":[5],"p3":[6]},"tb":{"p4":[3]}}}"#
+        let shev = try JSONDecoder().decode(EventState.self, from: Data(sh.utf8))
+        let card = Core.teamCard(shev, shev.teams[0], shev.scores["ta"])
+        XCTAssertEqual([card[0].gross, card[0].net], [9, 8]); XCTAssertEqual(shev.format.name, "Shamble")
+        let ind = Core.individuals(shev, shev.scores)
+        XCTAssertEqual(ind.map(\.name), ["Dee Roe", "Ann Fox", "Bob Lee", "Cal Ng"]); XCTAssertEqual(ind.map(\.score), [-2, 0, 0, 2])
+        XCTAssertEqual(ind.map(\.pos), ["1", "T2", "T2", "4"])
+        XCTAssertEqual(Core.individuals(shev, shev.scores, mode: "gross").map(\.score), [-1, 0, 1, 2])
+        XCTAssertEqual(Core.individuals(shev, shev.scores, flight: "A").count, 3)
+        XCTAssertEqual(Core.leaderboard(shev, shev.scores).count, 2)
+    }
 }

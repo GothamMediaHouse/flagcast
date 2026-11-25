@@ -174,6 +174,7 @@ struct ScorecardScreen: View {
             let ord = model.order(t), i = ord.firstIndex(of: model.currentHole()) ?? 0
             model.hole = ord[max(0, min(ord.count - 1, i + d))]
         }, scorer: model, camera: s.cams[h].flatMap(URL.init(string:)).map { u in { camera = CameraLink(hole: h, url: u) } })
+        if let r = myMatch(s, t) { matchPill(s, t, r) }
         VStack(spacing: 0) {
             let ps = s.scorers(t), tight = ps.count > 2
             HStack {
@@ -184,7 +185,7 @@ struct ScorecardScreen: View {
             .font(.caption2.weight(.semibold)).tracking(0.8).textCase(.uppercase).foregroundStyle(Color.fcMuted)
             .padding(.top, 10)
             ForEach(Array(ps.enumerated()), id: \.element.id) { i, p in
-                playerRow(s, p, H, tight: tight)
+                playerRow(s, p, H, tight: tight, team: t)
                 if i < ps.count - 1 { Divider().overlay(Color.fcLine) }
             }
         }
@@ -272,10 +273,82 @@ struct ScorecardScreen: View {
         .accessibilityHint("A marshal measures at the green.")
     }
 
+    // ---- match play ----
+    /// this team's match, with what this phone has entered
+    private func myMatch(_ s: EventState, _ t: Team) -> Core.MatchResult? {
+        guard s.format.isMatch, let m = s.matches.first(where: { $0.a == t.id || $0.b == t.id }) else { return nil }
+        return Core.matchPlay(s, model.myScores(), m)
+    }
+    private func opponent(_ s: EventState, _ t: Team, _ r: Core.MatchResult) -> String {
+        guard let o = s.team(r.a == t.id ? r.b : r.a) else { return "" }
+        return o.name.isEmpty ? o.players.map { $0.name.split(separator: " ").last.map(String.init) ?? $0.name }.joined(separator: " / ") : o.name
+    }
+    private func stateColor(_ state: String) -> Color { ["up", "won"].contains(state) ? Color(red: 0.18, green: 0.62, blue: 0.38) : ["down", "lost"].contains(state) ? Color.fcRed : Color.fcInk }
+    /// one line on the hole page: "2 UP · thru 7 · v Park / Ortiz"
+    private func matchPill(_ s: EventState, _ t: Team, _ r: Core.MatchResult) -> some View {
+        let f = Core.matchFor(r, t.id)
+        return HStack(spacing: 8) {
+            Text(f.text).font(FCType.display(22)).foregroundStyle(stateColor(f.state))
+            Text(r.done ? "final" : r.started ? "thru \(r.thru)\(r.dormie ? " · dormie" : "")" : "").font(.caption.monospaced()).foregroundStyle(Color.fcMuted)
+            Spacer(minLength: 4)
+            Text("v \(opponent(s, t, r))").font(.subheadline.weight(.semibold)).lineLimit(1).minimumScaleFactor(0.7)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 8)
+        .background(Color.fcCard, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.fcFlag, lineWidth: 1.5))
+        .accessibilityElement(children: .combine)
+    }
+    /// the round page's match card: the state, a square a hole (won, lost, halved, a dot for a stroke) and the cup
+    private func matchCard(_ s: EventState, _ t: Team, _ r: Core.MatchResult) -> some View {
+        let f = Core.matchFor(r, t.id), me = r.a == t.id ? "A" : "B"
+        let c = s.format.cup.on ? Core.cup(s, model.myScores()) : nil
+        let green = Color(red: 0.18, green: 0.62, blue: 0.38)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("You v \(opponent(s, t, r))").fcLabel().lineLimit(1)
+                    Text(f.text).font(FCType.display(44)).foregroundStyle(stateColor(f.state)).contentTransition(.numericText())
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(r.done ? (r.toPlay > 0 ? "after \(r.played)" : "final") : r.started ? "thru \(r.thru)" : "").fcLabel()
+                    Text(r.done ? (r.toPlay > 0 ? "Match over" : "") : r.started ? "\(r.toPlay) to play\(r.dormie ? " · dormie" : "")" : "Not started").font(.subheadline)
+                }
+            }
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 9), spacing: 4) {
+                ForEach(r.holes, id: \.hole) { h in
+                    let res = h.r == me ? "w" : h.r == "H" ? "h" : h.r == nil ? "" : "l"
+                    let stroke = (me == "A" ? h.sa : h.sb).values.contains { $0 > 0 }
+                    Text(String(h.hole)).font(.caption2.monospaced())
+                        .frame(maxWidth: .infinity, minHeight: 24)
+                        .foregroundStyle(res == "w" || res == "l" ? .white : Color.fcInk)
+                        .background(res == "w" ? green : res == "l" ? Color.fcRed : res == "h" ? Color.fcMuted.opacity(0.4) : Color.fcMuted.opacity(0.14), in: RoundedRectangle(cornerRadius: 5))
+                        .overlay(alignment: .topTrailing) { if stroke { Circle().fill(Color.fcFlag).frame(width: 5, height: 5).padding(3) } }
+                        .opacity(h.after ? 0.35 : 1)
+                }
+            }
+            Text(r.done && r.toPlay > 0 ? "Holes after the match is over don’t count for it." : "Gold dot: you get a stroke there. Strokes are off the lowest handicap in your match.").font(.caption).foregroundStyle(Color.fcMuted)
+            if let c {
+                HStack {
+                    Text("\(c.a) \(Core.fmtPts(c.A))").font(FCType.display(22)).foregroundStyle(Color(red: 0.79, green: 0.29, blue: 0.26))
+                    Spacer()
+                    Text(c.left > 0 ? "\(c.left) still playing" : "Final").fcLabel()
+                    Spacer()
+                    Text("\(c.b) \(Core.fmtPts(c.B))").font(FCType.display(22)).foregroundStyle(Color(red: 0.23, green: 0.45, blue: 0.82))
+                }
+            }
+            Button("Every match") { nav.tab = .leaders }.font(.subheadline.weight(.semibold)).tint(Color.fcPrimary)
+        }
+        .fcCard(padding: 14)
+    }
+
     // ---- your round ----
     @ViewBuilder private func roundPage(_ s: EventState, _ t: Team) -> some View {
         let l = model.line(), stab = s.format.isStableford
         let lb = Core.leaderboard(s, model.myScores())
+        if let r = myMatch(s, t) {
+            matchCard(s, t, r)
+        } else {
         HStack(alignment: .top, spacing: 0) {
             summary(stab ? "Points" : s.format.show == "gross" ? "Gross to par" : "Net to par",
                     l.map { $0.played > 0 ? Core.fmtPar($0.score, stab).replacingOccurrences(of: " pts", with: "") : "—" } ?? "—",
@@ -313,6 +386,7 @@ struct ScorecardScreen: View {
                 }
             }
             .fcCard(padding: 14)
+        }
         }
 
         VStack(alignment: .leading, spacing: 8) {
@@ -395,9 +469,11 @@ struct ScorecardScreen: View {
         return t.name.isEmpty ? names : "\(t.name) · \(names)"
     }
 
-    private func playerRow(_ s: EventState, _ p: Player, _ H: Hole, tight: Bool = false) -> some View {
+    private func playerRow(_ s: EventState, _ p: Player, _ H: Hole, tight: Bool = false, team: Team? = nil) -> some View {
         let v = model.value(p.id, H.n)
-        let st = Core.strokesOn(Core.playing(p.hcp, s.format.allowance), H.hcp)
+        // match play: strokes off the lowest player in the match, not the player's full handicap
+        let rel = team.flatMap { t in myMatch(s, t)?.strokes["\(t.id):\(p.id)"] }
+        let st = Core.strokesOn(rel ?? Core.playing(p.hcp, s.format.allowance), H.hcp)
         let set = v != nil
         let shown = !set ? "\(H.par)" : v == 0 ? "PU" : "\(v!)"
         let m = Core.mark(v, H.par)

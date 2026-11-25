@@ -3,7 +3,7 @@ import SwiftUI
 // What the TVs can show and how they're switched: shared by the Mac and the iPhone and iPad Manager
 // (the simple TV cards, Show something else, and Engineering).
 
-let PAGE_NAMES: [(String, String)] = [("lb", "Leaderboard"), ("p3", "Par 3 camera"), ("cam", "One hole’s camera"), ("contests", "Contests"), ("skins", "Skins"),
+let PAGE_NAMES: [(String, String)] = [("lb", "Leaderboard"), ("matches", "Matches (match play)"), ("indiv", "Individuals"), ("p3", "Par 3 camera"), ("cam", "One hole’s camera"), ("contests", "Contests"), ("skins", "Skins"),
                                       ("fund", "Fundraising"), ("sponsors", "All sponsors"), ("sponsor", "One sponsor"), ("schedule", "Schedule")]
 
 /// What a screen can be sent to for one tournament.
@@ -16,7 +16,7 @@ struct PageChoices {
     func label(_ p: PageRef) -> String {
         let n = PAGE_NAMES.first { $0.0 == p.k }?.1 ?? p.k
         switch p.k {
-        case "lb": return p.fl.isEmpty ? n : "\(n) · Flight \(p.fl)"
+        case "lb", "indiv": return p.fl.isEmpty ? n : "\(n) · Flight \(p.fl)"
         case "p3": return p.hole > 0 ? "Par 3 camera · Hole \(p.hole)" : "Par 3 cameras, each in turn"
         case "cam": return p.hole > 0 ? "Camera · Hole \(p.hole)" : "Cameras, each in turn"
         case "sponsor": return sponsors.first { $0.id == p.sponsor }.map { "Sponsor · \($0.name)" } ?? "One sponsor"
@@ -25,7 +25,7 @@ struct PageChoices {
     }
     static func icon(_ k: String) -> String {
         switch k {
-        case "lb": "list.number"; case "p3", "cam": "video"; case "contests": "flag.2.crossed"; case "skins": "dollarsign.circle"
+        case "lb", "indiv": "list.number"; case "matches": "person.2"; case "p3", "cam": "video"; case "contests": "flag.2.crossed"; case "skins": "dollarsign.circle"
         case "fund": "heart"; case "sponsors", "sponsor": "star"; case "schedule": "clock"; default: "rectangle"
         }
     }

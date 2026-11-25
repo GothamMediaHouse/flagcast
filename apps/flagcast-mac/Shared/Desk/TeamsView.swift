@@ -9,6 +9,7 @@ struct TeamsView: View {
     @State private var flight = ""
     @State private var pasting = false
     @State private var printing = false
+    @State private var pairing = false
 
     private var shown: [DeskTeam] {
         let q = nav.search.trimmingCharacters(in: .whitespaces).lowercased()
@@ -28,6 +29,9 @@ struct TeamsView: View {
             if !doc.ev.flights.isEmpty {
                 FlightPicker(flights: doc.ev.flights, flight: $flight)
             }
+            if doc.ev.format.isMatch {
+                Button { pairing = true } label: { Label("Matches (\(doc.ev.matches.count))", systemImage: "person.2.badge.gearshape") }.buttonStyle(GlassButton())
+            }
             Button("Import from a spreadsheet") { pasting = true }.buttonStyle(GlassButton())
             Button { printing = true } label: { Label("Cart cards", systemImage: "printer") }.buttonStyle(GlassButton())
             Button { add() } label: { Label("Add team", systemImage: "plus") }.buttonStyle(GlassButton()).keyboardShortcut("t", modifiers: [.command, .shift])
@@ -44,6 +48,7 @@ struct TeamsView: View {
         }
         .sheet(isPresented: $pasting) { PasteTeamsSheet(doc: doc) }
         .sheet(isPresented: $printing) { CartCardsSheet(doc: doc) }
+        .sheet(isPresented: $pairing) { MatchesSheet(doc: doc) }
         .onAppear { if selection == nil { selection = shown.first?.id } }
     }
 
@@ -144,7 +149,8 @@ struct TeamsView: View {
                     .padding(.horizontal, 18).padding(.bottom, 12)
                 }
                 .frame(height: 150).clipped()
-                TeamEditor(team: $doc.ev.teams[i], tees: doc.ev.course.tees, par: doc.ev.course.par, scramble: scramble, flights: doc.ev.flights)
+                TeamEditor(team: $doc.ev.teams[i], tees: doc.ev.course.tees, par: doc.ev.course.par, scramble: scramble, flights: doc.ev.flights,
+                           cup: doc.ev.format.isMatch && doc.ev.format.cup.on ? doc.ev.format.cup : nil)
                     .scrollContentBackground(.hidden)
                 HStack {
                     Button(role: .destructive) { remove(t.id) } label: { Label("Remove", systemImage: "trash") }.buttonStyle(PlainCardButton())
@@ -177,6 +183,8 @@ struct TeamsView: View {
 struct TeamEditor: View {
     @Binding var team: DeskTeam
     var tees: [Tee], par: Int, scramble: Bool, flights: [String]
+    /// match play's team cup, when it's on: the team picks a side
+    var cup: Cup? = nil
 
     var body: some View {
         Form {
@@ -185,6 +193,7 @@ struct TeamEditor: View {
                 if flights.isEmpty { TextField("Flight", text: $team.flight) }
                 else { Picker("Flight", selection: $team.flight) { Text("None").tag(""); ForEach(flights, id: \.self) { Text($0).tag($0) } } }
                 Stepper("Starts on hole \(team.start)", value: $team.start, in: 1...18)
+                if let cup { Picker("Side", selection: $team.side) { Text("None").tag(""); Text(cup.a).tag("A"); Text(cup.b).tag("B") } }
                 if scramble { LabeledContent("Team handicap") { TextField("", value: $team.hcp, format: .number).frame(width: 70).multilineTextAlignment(.trailing) } }
                 TextField("Cart", text: $team.cart, prompt: Text("Cart number (optional)"))
                 if !team.code.isEmpty { LabeledContent("Cart code") { Text(team.code).font(.body.monospaced()).textSelection(.enabled) } }
@@ -252,6 +261,57 @@ struct PasteTeamsSheet: View {
             }
         }
         .padding(20).frame(width: 620)
+    }
+}
+
+/// Match play pairings: who plays who. Pair in order, draw at random, or set each match by hand.
+struct MatchesSheet: View {
+    @Bindable var doc: DeskDoc
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Matches").font(.title2.bold())
+            Text("Who plays who. Put both sides of a match on the same cart code, or the same start hole, so they play together. Strokes come off the lowest player in each match.")
+                .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            HStack {
+                Button("Pair in Order") { doc.ev.pairUp(random: false) }
+                Button("Draw at Random") { doc.ev.pairUp(random: true) }
+                Button { doc.ev.matches.append(MatchPair()) } label: { Label("Add Match", systemImage: "plus") }
+            }
+            ScrollView {
+                VStack(spacing: 6) {
+                    ForEach($doc.ev.matches) { $m in
+                        HStack(spacing: 8) {
+                            Text("\((doc.ev.matches.firstIndex { $0.id == m.id } ?? 0) + 1)").font(.callout.monospacedDigit()).foregroundStyle(.secondary).frame(width: 22)
+                            picker($m.a)
+                            Text("v").foregroundStyle(.secondary)
+                            picker($m.b)
+                            Text(doc.ev.teams.first { $0.id == m.a }.map { "Hole \($0.start)" } ?? "").font(.callout).foregroundStyle(.secondary).frame(width: 60)
+                            Button(role: .destructive) { doc.ev.matches.removeAll { $0.id == m.id } } label: { Image(systemName: "minus.circle") }.buttonStyle(.borderless)
+                        }
+                    }
+                    if doc.ev.matches.isEmpty { Text("No matches yet. Pair in Order makes them from the teams list.").foregroundStyle(.secondary).padding(.vertical, 20) }
+                }
+            }
+            .frame(minHeight: 260)
+            HStack {
+                let left = doc.ev.unpaired
+                Text(left.isEmpty ? "Every team is in a match." : "Not in a match yet: \(left.prefix(6).map(\.shortName).joined(separator: ", "))\(left.count > 6 ? "…" : "")")
+                    .foregroundStyle(.secondary).lineLimit(2)
+                Spacer()
+                Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20).frame(width: 640, height: 520)
+    }
+    private func picker(_ id: Binding<String>) -> some View {
+        Picker("", selection: id) {
+            Text("Pick a team").tag("")
+            ForEach(doc.ev.teams) { t in
+                Text((doc.ev.format.cup.on && !t.side.isEmpty ? (t.side == "A" ? "● " : "○ ") : "") + (t.shortName.isEmpty ? "New team" : t.shortName)).tag(t.id)
+            }
+        }
+        .labelsHidden().frame(maxWidth: .infinity)
     }
 }
 

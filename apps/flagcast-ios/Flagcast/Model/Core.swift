@@ -187,8 +187,9 @@ enum Core {
     /// One team's card, hole by hole: what counts on each hole for this format.
     static func teamCard(_ ev: EventState, _ team: Team, _ sc: [String: [Int?]]?) -> [CardRow] {
         let f = ev.format, holes = ev.course.holes, allow = f.allowance
-        let type = f.type
-        let count = type == "stroke" ? 1 : max(1, min(4, f.count == 0 ? 1 : f.count))
+        // a shamble counts like best ball; a match's own card is its best ball (or one team ball in a scramble match)
+        let type = f.isScramble ? "scramble" : (f.type == "shamble" || f.type == "match" || f.type.isEmpty) ? "bestball" : f.type
+        let count = type == "stroke" || f.type == "match" ? 1 : max(1, min(4, f.count == 0 ? 1 : f.count))
         let s = sc ?? [:]
         var rows: [CardRow] = []
         let inPlay = Set(playHoles(ev))
@@ -238,8 +239,8 @@ enum Core {
     }
 
     /// Every line on the leaderboard (a stroke play event lists players, the rest list teams).
-    static func entries(_ ev: EventState) -> [Entry] {
-        if ev.format.type == "stroke" {
+    static func entries(_ ev: EventState, individual: Bool = false) -> [Entry] {
+        if ev.format.type == "stroke" || individual {
             return ev.teams.flatMap { t in
                 t.players.map { p in
                     var one = t; one.players = [p]
@@ -254,13 +255,13 @@ enum Core {
     }
 
     /// The leaderboard: sorted, with positions (ties shown as T2) and holes played.
-    static func leaderboard(_ ev: EventState, _ scores: Scores, flight: String? = nil, mode: String? = nil) -> [Line] {
+    static func leaderboard(_ ev: EventState, _ scores: Scores, flight: String? = nil, mode: String? = nil, individual: Bool = false) -> [Line] {
         let f = ev.format, stab = f.type == "stableford"
         let mode = mode ?? (f.show.isEmpty ? "net" : f.show)
-        let lines: [Line] = entries(ev).map { e in
+        let lines: [Line] = entries(ev, individual: individual).map { e in
             let sc = scores[e.teamId] ?? [:]
             let card: [CardRow]
-            if f.type == "stroke" { let pid = e.team.players[0].id; card = teamCard(ev, e.team, [pid: sc[pid] ?? []]) }
+            if f.type == "stroke" || individual { let pid = e.team.players[0].id; card = teamCard(ev, e.team, [pid: sc[pid] ?? []]) }
             else { card = teamCard(ev, e.team, sc) }
             var l = Line(entry: e, card: card)
             for r in card where r.done {
@@ -317,11 +318,125 @@ enum Core {
             // otherwise their own gross score to par over the holes they've finished
             var d = 0, n = 0
             for (i, v) in (scores[teamId]?[p.id] ?? []).enumerated() { if let v, v > 0 { d += v - (i < ev.course.holes.count ? ev.course.holes[i].par : 4); n += 1 } }
-            return (p.id, p.name, p.hcp, n > 0 && ev.format.type != "scramble" ? "\(fmtPar(d)) gross" : "")
+            return (p.id, p.name, p.hcp, n > 0 && !ev.format.isScramble ? "\(fmtPar(d)) gross" : "")
         }
         return GroupInfo(name: best.map { per ? (team.name.isEmpty ? $0.entry.sub : team.name) : $0.name } ?? team.name,
                          thru: best?.thru ?? "—", score: best.map { $0.played > 0 ? fmtPar($0.score, stab) : "—" } ?? "—",
                          pos: best.map { $0.pos.isEmpty ? "—" : $0.pos } ?? "—", players: players)
+    }
+
+    /// Every player on their own line, whatever the team format (a club championship's gross and net medal), with flights.
+    /// Stableford events rank each player's own points; the rest rank each player's own score to par.
+    static func individuals(_ ev: EventState, _ scores: Scores, flight: String? = nil, mode: String? = nil) -> [Line] {
+        guard ev.format.hasIndividuals else { return [] }
+        var one = ev
+        one.format.type = ev.format.type == "stableford" ? "stableford" : "stroke"; one.format.count = 1
+        return leaderboard(one, scores, flight: flight, mode: mode, individual: true)
+    }
+
+    // ---- match play (public/golf/core.js matchPlay): two teams head to head, hole by hole ----
+    struct MatchHole: Hashable { var hole: Int, r: String?, after: Bool, sa: [String: Int], sb: [String: Int] }
+    struct MatchResult: Hashable, Identifiable {
+        var id: String, a: String, b: String
+        var holes: [MatchHole] = []
+        var played = 0, diff = 0, toPlay = 0
+        var done = false, started = false, halved = false, dormie = false
+        var winner: String? = nil, leader: String? = nil
+        var text = "", thru = ""
+        var strokes: [String: Int] = [:]
+    }
+    /// Singles: one player a side. Four-ball: each side's best ball. Scramble: one ball a side ("T", team handicap).
+    /// Strokes come off the lowest player in the match. A picked-up ball loses the hole to any score. The match ends
+    /// when a side is more holes up than there are holes left ("3&2"); holes after that don't count.
+    static func matchPlay(_ ev: EventState, _ scores: Scores, _ m: MatchPair) -> MatchResult {
+        let f = ev.format, holes = ev.course.holes, allow = f.allowance, gross = f.show == "gross"
+        var out = MatchResult(id: m.id, a: m.a, b: m.b)
+        guard let A = ev.teams.first(where: { $0.id == m.a }), let B = ev.teams.first(where: { $0.id == m.b }) else { out.text = "Not paired"; return out }
+        struct P { var team: String, id: String, hcp: Int, rel = 0 }
+        func side(_ t: Team) -> [P] {
+            if f.isScramble { return [P(team: t.id, id: "T", hcp: playing(t.hcp, allow))] }
+            return (f.match == "singles" ? Array(t.players.prefix(1)) : t.players).map { P(team: t.id, id: $0.id, hcp: playing($0.hcp, allow)) }
+        }
+        var sa = side(A), sb = side(B)
+        guard !sa.isEmpty, !sb.isEmpty else { out.text = "Not paired"; return out }
+        let low = (sa + sb).map(\.hcp).min() ?? 0
+        for k in sa.indices { sa[k].rel = sa[k].hcp - low; out.strokes["\(sa[k].team):\(sa[k].id)"] = sa[k].rel }
+        for k in sb.indices { sb[k].rel = sb[k].hcp - low; out.strokes["\(sb[k].team):\(sb[k].id)"] = sb[k].rel }
+        let all = sa + sb
+        func raw(_ p: P, _ i: Int) -> Int? { at(scores[p.team]?[p.id], i) }
+        func val(_ p: P, _ i: Int) -> Int { guard let v = raw(p, i), v > 0 else { return Int.max }; return gross ? v : v - strokesOn(p.rel, holes[i].hcp) }
+        let ph = playHoles(ev).map { $0 - 1 }, start = A.start == 0 ? 1 : A.start, k0 = max(0, ph.firstIndex(of: start - 1) ?? 0)
+        let order = Array(ph[k0...] + ph[..<k0])
+        var diff = 0, played = 0
+        for (k, i) in order.enumerated() {
+            var row = MatchHole(hole: i + 1, r: nil, after: out.done,
+                                sa: Dictionary(uniqueKeysWithValues: sa.map { ($0.id, strokesOn($0.rel, holes[i].hcp)) }),
+                                sb: Dictionary(uniqueKeysWithValues: sb.map { ($0.id, strokesOn($0.rel, holes[i].hcp)) }))
+            if out.done || !all.allSatisfy({ raw($0, i) != nil }) { out.holes.append(row); continue }
+            let x = sa.map { val($0, i) }.min()!, y = sb.map { val($0, i) }.min()!
+            row.r = x < y ? "A" : y < x ? "B" : "H"
+            diff += row.r == "A" ? 1 : row.r == "B" ? -1 : 0
+            played += 1
+            out.holes.append(row)
+            let left = order.count - (k + 1)
+            if abs(diff) > left || left == 0 { out.done = true; out.toPlay = left }
+        }
+        out.played = played; out.diff = diff; out.started = played > 0
+        if !out.done { out.toPlay = order.count - played }
+        let up = abs(diff)
+        if out.done {
+            if diff == 0 { out.halved = true; out.text = "Halved" }
+            else { out.winner = diff > 0 ? "A" : "B"; out.text = out.toPlay > 0 ? "\(up)&\(out.toPlay)" : "\(up) UP" }
+            out.thru = "F"
+        } else {
+            out.text = played == 0 ? "" : diff != 0 ? "\(up) UP" : "AS"
+            out.thru = played > 0 ? String(played) : (start != 1 ? "Starts \(start)" : "—")
+            out.dormie = played > 0 && up > 0 && up == out.toPlay
+        }
+        out.leader = diff > 0 ? "A" : diff < 0 ? "B" : nil
+        return out
+    }
+    static func matches(_ ev: EventState, _ scores: Scores) -> [MatchResult] { ev.matches.map { matchPlay(ev, scores, $0) } }
+
+    /// The match as one side sees it: "2 UP", "1 DOWN", "AS", "WON 3&2", "LOST 1 UP", "HALVED". state: open, up, down, level, won, lost, halved
+    static func matchFor(_ r: MatchResult, _ teamId: String) -> (text: String, state: String) {
+        let me = r.a == teamId ? "A" : r.b == teamId ? "B" : nil
+        guard let me, r.started else { return (!r.thru.isEmpty && r.thru != "—" ? r.thru : "Not started", "open") }
+        if r.done { return r.halved ? ("HALVED", "halved") : ("\(r.winner == me ? "WON" : "LOST") \(r.text)", r.winner == me ? "won" : "lost") }
+        guard let lead = r.leader else { return ("AS", "level") }
+        let up = abs(r.diff)
+        return lead == me ? ("\(up) UP", "up") : ("\(up) DOWN", "down")
+    }
+
+    struct CupScore: Hashable { var on: Bool, a: String, b: String, A: Double, B: Double, nowA: Double, nowB: Double, left: Int, total: Int, toWin: Double }
+    /// The team cup: 1 point a win, ½ a halve. "now" also counts matches on the course as they stand; not started ones aren't counted.
+    static func cup(_ ev: EventState, _ scores: Scores, _ list: [MatchResult]? = nil) -> CupScore {
+        let rs = list ?? matches(ev, scores), c = ev.format.cup
+        func side(_ id: String) -> String { ev.teams.first { $0.id == id }?.side ?? "" }
+        var pts = ["A": 0.0, "B": 0.0], now = ["A": 0.0, "B": 0.0], left = 0
+        for r in rs {
+            let sa = side(r.a) == "B" ? "B" : side(r.b) == "A" ? "B" : "A", sb = sa == "A" ? "B" : "A"
+            func give(_ o: inout [String: Double], _ w: String?) { if w == "A" { o[sa]! += 1 } else if w == "B" { o[sb]! += 1 } else { o[sa]! += 0.5; o[sb]! += 0.5 } }
+            if r.done { give(&pts, r.winner); give(&now, r.winner) } else { left += 1; if r.started { give(&now, r.leader) } }
+        }
+        return CupScore(on: c.on, a: c.a, b: c.b, A: pts["A"]!, B: pts["B"]!, nowA: now["A"]!, nowB: now["B"]!, left: left, total: rs.count, toWin: Double(rs.count) / 2 + 0.5)
+    }
+    /// The results file for match play (report.js resultsRows): a row a match, then the cup.
+    static func matchRows(_ ev: EventState) -> [[String]] {
+        func nm(_ id: String) -> String { ev.teams.first { $0.id == id }.map { $0.name.isEmpty ? $0.players.map(\.name).joined(separator: " / ") : $0.name } ?? "" }
+        let list = matches(ev, ev.scores)
+        var rows = [["Match", "Side A", "Side B", "Result", "Winner", "Holes played"]]
+        for (i, r) in list.enumerated() {
+            rows.append([String(i + 1), nm(r.a), nm(r.b), r.done ? r.text : r.started ? "\(r.text) thru \(r.thru)" : "Not started",
+                         r.winner.map { nm($0 == "A" ? r.a : r.b) } ?? (r.halved ? "Halved" : ""), String(r.played)])
+        }
+        if ev.format.cup.on { let c = cup(ev, ev.scores, list); rows += [[], ["Cup", c.a, c.b], ["Points", fmtPts(c.A), fmtPts(c.B)]] }
+        return rows
+    }
+    /// 6.5 → "6½"
+    static func fmtPts(_ n: Double) -> String {
+        let w = Int(n.rounded(.down)), half = n - Double(w) >= 0.25
+        return half ? (w == 0 ? "½" : "\(w)½") : String(w)
     }
 
     static func fmtPar(_ n: Int, _ stab: Bool = false) -> String {

@@ -29,7 +29,7 @@ func stepsLeft(_ ev: DeskEvent) -> [String] {
     return out
 }
 func formatName(_ f: Format) -> String? {
-    ["bestball": "Best ball", "scramble": "Scramble", "stableford": "Stableford", "stroke": "Stroke play", "match": "Match play"][f.type] ?? (f.type.isEmpty ? nil : f.type.capitalized)
+    f.type.isEmpty ? nil : f.name
 }
 
 private struct HomePage: View {
@@ -144,8 +144,43 @@ private struct HomePage: View {
         ]
     }
 
-    // ---- leaderboard (top 5) ----
-    private func leaderboard(_ doc: DeskDoc) -> some View {
+    // ---- leaderboard (top 5); match play: the matches as they stand ----
+    @ViewBuilder private func leaderboard(_ doc: DeskDoc) -> some View {
+        if let live = doc.live, live.format.isMatch { matchList(doc, live) } else { strokeBoard(doc) }
+    }
+    private func matchList(_ doc: DeskDoc, _ live: EventState) -> some View {
+        let all = Core.matches(live, live.scores), c = Core.cup(live, live.scores, all)
+        let list = Array((all.filter { $0.started && !$0.done } + all.filter(\.done) + all.filter { !$0.started }).prefix(5))
+        func nm(_ id: String) -> String { doc.ev.teams.first { $0.id == id }?.shortName ?? "" }
+        return VStack(spacing: 0) {
+            HStack {
+                Text("Matches" + (c.on ? " · \(c.a) \(Core.fmtPts(c.A)), \(c.b) \(Core.fmtPts(c.B))" : "")).font(.system(size: 14, weight: .bold)).lineLimit(1)
+                Spacer()
+                Button("All scores ›") { tabs.tab = .scores }.font(.system(size: 13, weight: .semibold)).foregroundStyle(FC.link)
+            }
+            .padding(.horizontal, 14).padding(.vertical, 11)
+            if list.isEmpty {
+                Text("Pair the teams on the Teams tab, then Save.").font(.callout).foregroundStyle(FC.muted).frame(maxWidth: .infinity).padding(.vertical, 26)
+            }
+            ForEach(list) { r in
+                let w = r.winner ?? r.leader
+                Rectangle().fill(FC.hairline).frame(height: 1)
+                HStack(spacing: 6) {
+                    Text(nm(r.a)).fontWeight(w == "A" ? .bold : .regular).lineLimit(1)
+                    Text("v").foregroundStyle(FC.muted)
+                    Text(nm(r.b)).fontWeight(w == "B" ? .bold : .regular).lineLimit(1)
+                    Spacer()
+                    Text(r.done ? "Final" : r.started ? "Thru \(r.thru)" : r.thru).font(.system(size: 12)).foregroundStyle(FC.muted)
+                    Text(r.started ? r.text : "–").font(FC.display(22)).frame(minWidth: 44, alignment: .trailing)
+                }
+                .font(.system(size: 14))
+                .padding(.horizontal, 14).padding(.vertical, 7)
+            }
+        }
+        .background(FC.card, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(FC.line))
+    }
+    private func strokeBoard(_ doc: DeskDoc) -> some View {
         let ev = doc.ev, top = Array(board(doc).filter { $0.played > 0 }.prefix(5))
         return VStack(spacing: 0) {
             HStack {

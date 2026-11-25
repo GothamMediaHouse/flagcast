@@ -175,8 +175,20 @@ struct DetailsView: View {
                 }
                 .padding(14)
             }
-            CardBox(title: "Format", footer: "The course, tees, format and course map are set in Flagcast Manager on the Mac.") {
+            CardBox(title: "Format", footer: "The course, tees and course map are set in Flagcast Manager on the Mac.") {
                 VStack(alignment: .leading, spacing: 12) {
+                    Picker("Format", selection: $doc.ev.format.type) {
+                        Text("Best ball").tag("bestball"); Text("Shamble").tag("shamble"); Text("Scramble").tag("scramble")
+                        Text("Stroke play").tag("stroke"); Text("Stableford").tag("stableford"); Text("Match play").tag("match")
+                    }
+                    if doc.ev.format.isMatch {
+                        Picker("Match type", selection: $doc.ev.format.match) { Text("Singles").tag("singles"); Text("Four-ball").tag("fourball"); Text("Scramble").tag("scramble") }.pickerStyle(.segmented)
+                        Toggle("Team cup (1 point a win, ½ a halve)", isOn: $doc.ev.format.cup.on)
+                        if doc.ev.format.cup.on {
+                            HStack { BoxField(placeholder: "Reds", text: $doc.ev.format.cup.a); BoxField(placeholder: "Blues", text: $doc.ev.format.cup.b) }
+                        }
+                    }
+                    if doc.ev.format.hasIndividuals { Toggle("Individuals leaderboard (net and gross)", isOn: $doc.ev.format.indiv) }
                     Picker("Holes", selection: $doc.ev.format.nine) { Text("18 holes").tag(""); Text("Front 9").tag("front"); Text("Back 9").tag("back") }.pickerStyle(.segmented)
                     if !doc.ev.format.isStableford {
                         Picker("Leaderboard shows", selection: $doc.ev.format.show) { Text("Net").tag("net"); Text("Gross").tag("gross") }.pickerStyle(.segmented)

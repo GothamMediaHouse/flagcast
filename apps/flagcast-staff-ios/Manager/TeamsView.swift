@@ -50,6 +50,7 @@ private struct TeamsPage: View {
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(FC.line))
                 Help("Tap a team for its players, GHIN, handicaps, starting hole, scorer and PIN.")
             }
+            if doc.ev.format.isMatch { MatchesCard(doc: doc) }
         }
         .sheet(item: Binding(get: { editing.map { EditID(id: $0) } }, set: { editing = $0?.id })) { e in
             if let i = doc.ev.teams.firstIndex(where: { $0.id == e.id }) {
@@ -72,6 +73,51 @@ private struct TeamsPage: View {
 }
 
 struct EditID: Identifiable { var id: String }
+
+/// Match play pairings: who plays who (Pair in order, Draw at random, or each match by hand). Saved with Save.
+private struct MatchesCard: View {
+    @Bindable var doc: DeskDoc
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Matches").font(.system(size: 15, weight: .bold))
+                Spacer()
+                Menu {
+                    Button("Pair in Order") { doc.ev.pairUp(random: false) }
+                    Button("Draw at Random") { doc.ev.pairUp(random: true) }
+                    Button { doc.ev.matches.append(MatchPair()) } label: { Label("Add a Match", systemImage: "plus") }
+                } label: { Label("Pair", systemImage: "person.2") }
+            }
+            if doc.ev.matches.isEmpty {
+                Text("No matches yet. Pair in Order makes them from the teams list.").font(.callout).foregroundStyle(FC.muted)
+            }
+            ForEach($doc.ev.matches) { $m in
+                HStack(spacing: 6) {
+                    Text("\((doc.ev.matches.firstIndex { $0.id == m.id } ?? 0) + 1)").font(.footnote.monospacedDigit()).foregroundStyle(FC.muted).frame(width: 20)
+                    pick($m.a)
+                    Text("v").foregroundStyle(FC.muted)
+                    pick($m.b)
+                    Button(role: .destructive) { doc.ev.matches.removeAll { $0.id == m.id } } label: { Image(systemName: "minus.circle") }.buttonStyle(.borderless)
+                }
+            }
+            let left = doc.ev.unpaired
+            if !left.isEmpty && !doc.ev.matches.isEmpty {
+                Text("Not in a match yet: \(left.prefix(6).map(\.shortName).joined(separator: ", "))\(left.count > 6 ? "…" : "")").font(.footnote).foregroundStyle(FC.muted)
+            }
+            Help("Put both sides of a match on the same cart code, or the same start hole. Strokes come off the lowest player in each match.")
+        }
+        .padding(14)
+        .background(FC.card, in: RoundedRectangle(cornerRadius: 12))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(FC.line))
+    }
+    private func pick(_ id: Binding<String>) -> some View {
+        Picker("", selection: id) {
+            Text("Pick a team").tag("")
+            ForEach(doc.ev.teams) { t in Text(t.shortName.isEmpty ? "New team" : t.shortName).tag(t.id) }
+        }
+        .labelsHidden().frame(maxWidth: .infinity)
+    }
+}
 
 /// A row of the Teams table: the starting hole in a tile, the team and its players, the flight.
 struct TeamRow: View {
@@ -135,6 +181,10 @@ struct TeamEditor: View {
                     Picker("Flight", selection: $team.flight) { Text("None").tag(""); ForEach(doc.ev.flights, id: \.self) { Text("Flight \($0)").tag($0) } }
                 }
                 Stepper("Starts on hole \(team.start)", value: $team.start, in: 1...18)
+                if doc.ev.format.isMatch && doc.ev.format.cup.on {
+                    Picker("Side", selection: $team.side) { Text("None").tag(""); Text(doc.ev.format.cup.a).tag("A"); Text(doc.ev.format.cup.b).tag("B") }
+                }
+                if doc.ev.format.isScramble { LabeledContent("Team handicap") { TextField("", value: $team.hcp, format: .number).keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 70) } }
                 TextField("Cart number", text: $team.cart)
             }
             SwiftUI.Section {
