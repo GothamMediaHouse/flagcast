@@ -140,6 +140,42 @@ button{font:inherit;color:inherit}
   .stuck{padding-block:28px}
   .stuck .btn{width:100%;justify-content:center}
 }
+
+/* Phone: app-style drill-down (home > list > steps) */
+.phhome,.backbar,.phlisthead{display:none}
+@media (max-width:860px){
+  body.v-home .roles,body.v-home .guide{display:none}
+  body.v-home .phhome{display:block}
+  body.v-list .hhero,body.v-list .roles,body.v-list #art,body.v-art .hhero,body.v-art .roles,body.v-art .toc{display:none}
+  body.v-list .backbar,body.v-art .backbar{display:block}
+  body.v-list .guide,body.v-art .guide{padding-top:0}
+  body.v-list .toc{position:static;margin:0;border:0;background:none}
+  body.v-list .tocbar{display:none}
+  body.v-list .toclist{display:block;max-height:none;overflow:visible;padding:0;border:0}
+  body.v-list .toc h2{font:800 2.2rem var(--f-display);color:var(--ink);letter-spacing:.01em;margin:18px 0 14px}
+  body.v-list .toc ol{gap:0;border-top:1px solid var(--line)}
+  body.v-list .toc li button{padding:15px 4px;border-radius:0;border-bottom:1px solid var(--line);font-size:1.05rem;grid-template-columns:1.8em 1fr auto auto}
+  body.v-list .toc li button::after{content:"›";color:var(--muted);font-size:1.3rem;line-height:1}
+  body.v-list .toc li button[aria-current="true"]{background:none;box-shadow:none;font-weight:500}
+  body.v-list .toc .tools{margin-top:22px}
+  .phhome{background:var(--paper);padding-block:22px 40px}
+  .phcards{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .phcards button{display:flex;flex-direction:column;align-items:flex-start;gap:6px;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 14px;min-height:150px;cursor:pointer}
+  .phcards svg{width:30px;height:30px;stroke:var(--green-2);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;margin-bottom:auto}
+  .phcards b{font:800 1.45rem var(--f-display);text-transform:uppercase;line-height:1}
+  .phcards small{color:var(--muted);font-size:.84rem;line-height:1.35}
+  .phlabel{font:600 .72rem var(--f-mono);letter-spacing:.14em;color:var(--muted);margin:28px 0 6px}
+  .phrows{border-top:1px solid var(--line)}
+  .phrows button{display:flex;width:100%;justify-content:space-between;align-items:center;background:none;border:0;border-bottom:1px solid var(--line);padding:15px 4px;font-size:1.05rem;text-align:left;cursor:pointer}
+  .phrows button::after{content:"›";color:var(--muted);font-size:1.3rem}
+  .backbar{position:sticky;top:58px;z-index:6;background:var(--paper);border-bottom:1px solid var(--line)}
+  .backbar .wrap{display:flex;align-items:center;justify-content:space-between;height:50px}
+  .back{background:none;border:0;padding:8px 8px 8px 0;font-weight:600;font-size:1rem;color:var(--green-2);cursor:pointer}
+  #backCount{font:600 .7rem var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+  body.v-art article{padding-top:18px;scroll-margin-top:108px}
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .phcards svg,:root:not([data-theme="light"]) .back{stroke:var(--flag);color:var(--flag)}}
+:root[data-theme="dark"] .phcards svg,:root[data-theme="dark"] .back{stroke:var(--flag);color:var(--flag)}
 /* mini screens */
 .shot{width:230px;max-width:100%;background:var(--deep);color:#e9eee6;border-radius:26px;padding:16px 14px 18px;box-shadow:0 0 0 6px #22302a,0 18px 40px rgba(0,0,0,.25);font-size:.82rem}
 .shot.tv{width:330px;border-radius:10px;padding:18px;box-shadow:0 0 0 8px #1c1f1d,0 18px 40px rgba(0,0,0,.25)}
@@ -226,6 +262,14 @@ button{font:inherit;color:inherit}
   </div>
 </div></header>
 
+<section class="phhome" id="phHome" aria-label="Help topics">
+  <div class="wrap">
+    <div class="phcards" id="phCards"></div>
+    <h2 class="phlabel">Popular</h2>
+    <div class="phrows" id="phPop"></div>
+  </div>
+</section>
+<div class="backbar" id="backBar"><div class="wrap"><button class="back" id="backBtn"></button><span id="backCount"></span></div></div>
 <div class="roles" role="tablist" aria-label="Who is this for"><div class="wrap" id="roles"></div></div>
 
 <main class="guide"><div class="wrap">
@@ -444,18 +488,42 @@ function meter(){
   const all = document.querySelectorAll('.check input'), n = [...all].filter(x=>x.checked).length;
   $('bar').style.width = (100*n/all.length)+'%'; $('cnt').textContent = `${n} of ${all.length}`;
 }
+const PH = matchMedia('(max-width:860px)');
+const RH = {golfers:'golfer', pros:'pro', running:'desk', tvs:'tv'};
+const RK = Object.fromEntries(Object.entries(RH).map(([k,v])=>[v,k]));
+const ICON = {golfer:'<path d="M7 21V3l10 4-10 4"/><ellipse cx="7" cy="21" rx="4" ry="1"/>', pro:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/><path d="m9 15 3 3 3-3"/>', desk:'<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M7 9h6M7 12h10"/>', tv:'<rect x="2" y="5" width="20" height="13" rx="2"/><path d="m8 2 4 3 4-3M8 21h8"/>'};
+const BLURB = {golfer:'Join, keep score, yards and games', pro:'PIN sign-in, fixes, pins, go live', desk:'Set up a tournament from start to finish', tv:'Pair a TV or use a screen link'};
+let view = 'art';
+function setView(v){ view = v; document.body.classList.remove('v-home','v-list','v-art'); document.body.classList.add('v-'+v); }
+function renderHome(){
+  $('phCards').innerHTML = ROLES.map(r=>`<button data-list="${r.id}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICON[r.id]}</svg><b>${r.name}</b><small>${BLURB[r.id]}</small></button>`).join('');
+  $('phPop').innerHTML = ['join','make','codes','pair','scores','teams'].map(id=>`<button data-go="${id}">${A.find(a=>a.id===id).title}</button>`).join('');
+}
+function showList(r, push=true){
+  role = r; renderRoles(); renderToc(); setView('list');
+  $('backBtn').textContent = '‹ Help'; $('backBtn').dataset.to = '';
+  $('backCount').textContent = A.filter(a=>a.role===r).length + ' topics';
+  if (push) history.pushState(null,'','#'+RK[r]);
+  scrollTo(0,0);
+}
+function showHome(push=true){ setView('home'); if (push) history.pushState(null,'',location.pathname); scrollTo(0,0); }
 function go(id, push=true){
   const a = A.find(x=>x.id===id);
   if (a) { role = a.role; cur = id; $('art').innerHTML = article(a); seen.add(id); store.set('fc.help.seen',[...seen]); }
   else if (id==='finder' || id==='checklist') { role = 'desk'; cur = id; $('art').innerHTML = id==='finder'?finder():checklist(); if (id==='finder') pickFormat(); else meter(); }
   else return go('join', false);
-  renderRoles(); renderToc(); setToc(false);
-  if (push && location.hash !== '#'+id) history.replaceState(null,'','#'+id);
+  renderRoles(); renderToc(); setToc(false); setView('art');
+  const list = A.filter(x=>x.role===role), i = list.findIndex(x=>x.id===cur);
+  $('backBtn').textContent = '‹ ' + ROLES.find(r=>r.id===role).name; $('backBtn').dataset.to = RK[role];
+  $('backCount').textContent = i>=0 ? `${i+1} of ${list.length}` : 'Tool';
+  if (push && location.hash !== '#'+id) { if (PH.matches) history.pushState(null,'','#'+id); else history.replaceState(null,'','#'+id); }
 }
 function setToc(o){ $('aside').classList.toggle('open',o); $('tocBtn').setAttribute('aria-expanded',o); }
 document.addEventListener('click', e=>{
+  const L = e.target.closest('[data-list]'); if (L) { showList(L.dataset.list); return; }
+  if (e.target.closest('#backBtn')) { const t = $('backBtn').dataset.to; if (t) showList(RH[t]); else showHome(); return; }
   if (e.target.closest('#tocBtn')) { setToc(!$('aside').classList.contains('open')); return; }
-  const g = e.target.closest('[data-go]'); if (g) { e.preventDefault(); hideResults(); go(g.dataset.go); if (window.innerWidth<860 || g.closest('.results,.quick')) $('art').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth',block:'start'}); return; }
+  const g = e.target.closest('[data-go]'); if (g) { e.preventDefault(); hideResults(); go(g.dataset.go); if (PH.matches) scrollTo(0,0); else if (g.closest('.results,.quick')) $('art').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth',block:'start'}); return; }
   const r = e.target.closest('[data-role]'); if (r) { const first = A.find(a=>a.role===r.dataset.role); go(first.id); return; }
   const h = e.target.closest('[data-help]'); if (h) { $('helped').textContent = h.dataset.help==='yes' ? 'Thanks. Glad it helped.' : 'Thanks. Email hello@flagcast.app and tell us what was missing.'; return; }
   if (e.target.id==='reset') { store.set('fc.help.check',{}); document.querySelectorAll('.check input').forEach(x=>x.checked=false); meter(); }
@@ -483,10 +551,11 @@ $('q').addEventListener('keydown', e=>{
   if (e.key==='Escape') return hideResults();
   if (!hits.length || $('results').hidden) return;
   if (e.key==='ArrowDown'||e.key==='ArrowUp') { e.preventDefault(); sel = (sel + (e.key==='ArrowDown'?1:-1) + hits.length) % hits.length; [...$('results').children].forEach((b,i)=>b.classList.toggle('sel',i===sel)); }
-  if (e.key==='Enter') { e.preventDefault(); go(hits[sel].id); hideResults(); $('q').blur(); $('art').scrollIntoView({block:'start'}); }
+  if (e.key==='Enter') { e.preventDefault(); go(hits[sel].id); hideResults(); $('q').blur(); if (PH.matches) scrollTo(0,0); else $('art').scrollIntoView({block:'start'}); }
 });
-window.addEventListener('hashchange', ()=>go(location.hash.slice(1), false));
-go(location.hash.slice(1) || 'join', false);
+function route(){ const h = location.hash.slice(1); if (RH[h]) return showList(RH[h], false); if (!h && PH.matches) { go('join', false); return showHome(false); } go(h || 'join', false); }
+window.addEventListener('popstate', route);
+renderHome(); route();
 </script>
 <script>
 const m=document.querySelector('.menu'),ul=document.getElementById('navlinks');
