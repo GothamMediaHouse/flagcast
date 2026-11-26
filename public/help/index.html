@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Help · Flagcast</title>
+<meta name="description" content="Step-by-step help for Flagcast: joining a tournament, scoring, pro tools, running a tournament in Manager and setting up club TVs.">
+<meta property="og:title" content="Help · Flagcast">
+<meta property="og:description" content="Step-by-step help for Flagcast: joining a tournament, scoring, pro tools, running a tournament in Manager and setting up club TVs.">
+<meta property="og:image" content="https://flagcast.app/img/course-wide.jpg">
+<meta property="og:url" content="https://flagcast.app/help/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="apple-touch-icon" href="/golf/brand/app-icon-180.png">
+<link rel="icon" href="/brand/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="/site.css">
+<style>
+:root{--ok:#2f7a4f}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--ok:#5fbf86}}
+:root[data-theme="dark"]{--ok:#5fbf86}
+.hhero{background:var(--green);color:var(--on-green);padding-block:48px 34px}
+.hhero .eyebrow{color:var(--on-green-muted)}
+.hhero h1{font-size:clamp(2.6rem,7vw,4.4rem);font-weight:800}
+.hhero p{color:var(--on-green-muted);margin-top:12px;max-width:56ch;font-size:1.08rem}
+.search{margin-top:24px;position:relative;max-width:640px}
+.search input{width:100%;padding:15px 16px 15px 46px;border-radius:8px;border:0;background:var(--on-green);color:#14201a;font:500 1.05rem var(--f-body)}
+.search svg{position:absolute;left:15px;top:50%;translate:0 -50%;width:20px;height:20px;stroke:#56625a;fill:none;stroke-width:2}
+.results{position:absolute;left:0;right:0;top:calc(100% + 6px);background:var(--card);color:var(--ink);border-radius:8px;box-shadow:0 14px 40px rgba(0,0,0,.28);overflow:hidden;z-index:5}
+.results button{display:flex;flex-direction:column;align-items:flex-start;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:11px 16px;cursor:pointer}
+.results button:hover,.results button.sel{background:var(--paper-2)}
+.results small{font:600 .68rem var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.results .none{padding:14px 16px;color:var(--muted)}
+.quick{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;font-size:.88rem}
+.quick span{color:var(--on-green-muted)}
+.quick button{background:rgba(244,241,230,.1);border:1px solid rgba(244,241,230,.22);color:var(--on-green);border-radius:99px;padding:3px 12px;cursor:pointer}
+.quick button:hover{background:rgba(244,241,230,.2)}
+
+.roles{background:var(--green-2);color:var(--on-green)}
+.roles .wrap{display:grid;grid-template-columns:repeat(4,1fr);gap:0}
+.roles button{background:none;border:0;border-bottom:4px solid transparent;padding:16px 10px 13px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:2px}
+.roles button small{font:600 .66rem var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--on-green-muted)}
+.roles button b{font:700 1.25rem var(--f-display);text-transform:uppercase;letter-spacing:.02em}
+.roles button[aria-selected="true"]{border-bottom-color:var(--flag)}
+.roles button[aria-selected="true"] small{color:var(--flag)}
+@media (max-width:700px){.roles .wrap{grid-template-columns:repeat(2,1fr)}.roles button b{font-size:1.08rem}}
+
+.guide{padding-block:34px 70px}
+.guide .wrap{display:grid;grid-template-columns:280px minmax(0,1fr);gap:40px;align-items:start}
+@media (max-width:860px){.guide .wrap{grid-template-columns:minmax(0,1fr)}}
+.toc{position:sticky;top:84px}
+@media (max-width:860px){.toc{position:static}}
+.toc h2{font-size:1.05rem;font-weight:700;color:var(--muted);margin-bottom:10px;letter-spacing:.06em}
+.toc ol{list-style:none;margin:0;padding:0;display:grid;gap:2px;counter-reset:t}
+.toc li button{width:100%;text-align:left;background:none;border:0;padding:8px 10px;border-radius:6px;cursor:pointer;display:grid;grid-template-columns:1.6em 1fr auto;gap:6px;align-items:baseline;font-size:.95rem}
+.toc li button::before{counter-increment:t;content:counter(t);font:600 .74rem var(--f-mono);color:var(--muted)}
+.toc li button:hover{background:var(--paper-2)}
+.toc li button[aria-current="true"]{background:var(--card);box-shadow:inset 0 0 0 1px var(--line);font-weight:600}
+.toc .done{color:var(--ok);font-size:.8rem}
+.toc .tools{margin-top:18px;display:grid;gap:8px}
+.toolbtn{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px 14px;text-align:left;cursor:pointer}
+.toolbtn small{display:block;font:600 .66rem var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.toolbtn b{font:700 1.1rem var(--f-display);text-transform:uppercase}
+.toolbtn[aria-current="true"]{box-shadow:inset 0 0 0 2px var(--flag)}
+
+article{min-width:0}
+.crumbs{font:600 .7rem var(--f-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+article h2{font-size:clamp(2rem,4.4vw,3rem);font-weight:800;margin-top:8px}
+.intro{font-size:1.1rem;color:var(--muted);margin-top:12px;max-width:62ch}
+.works{display:flex;flex-wrap:wrap;gap:6px;margin-top:16px}
+.works span{font:600 .72rem var(--f-mono);letter-spacing:.06em;border:1px solid var(--line);border-radius:4px;padding:2px 8px;color:var(--muted)}
+.body{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:34px;margin-top:28px;align-items:start}
+@media (max-width:1000px){.body{grid-template-columns:minmax(0,1fr)}}
+.hsteps{list-style:none;margin:0;padding:0;display:grid;gap:0;counter-reset:s}
+.hsteps li{display:grid;grid-template-columns:40px minmax(0,1fr);gap:14px;padding:14px 0;border-top:1px solid var(--line)}
+.hsteps li:last-child{border-bottom:1px solid var(--line)}
+.hsteps li::before{counter-increment:s;content:counter(s);width:32px;height:32px;border-radius:50%;background:var(--green);color:var(--on-green);display:grid;place-items:center;font:700 1.05rem var(--f-display)}
+.hsteps b{font-weight:600}
+.ui{font:600 .86em var(--f-body);background:var(--paper-2);border:1px solid var(--line);border-radius:4px;padding:0 6px;white-space:nowrap}
+.tip{margin-top:20px;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--flag);border-radius:6px;padding:14px 16px;max-width:62ch}
+.tip b{font:700 .95rem var(--f-display);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:2px}
+.foot{display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between;margin-top:30px}
+.pager{display:flex;gap:10px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:6px;font:700 1rem var(--f-display);text-transform:uppercase;letter-spacing:.06em;padding:10px 18px;border-radius:6px;border:0;cursor:pointer;text-decoration:none}
+.btn.primary{background:var(--flag);color:#1a1a10}
+.btn.ghost{background:transparent;box-shadow:inset 0 0 0 1.5px var(--line)}
+.helped{font-size:.9rem;color:var(--muted);display:flex;align-items:center;gap:8px}
+.helped button{background:var(--card);border:1px solid var(--line);border-radius:99px;padding:3px 12px;cursor:pointer}
+
+/* mini screens */
+.shot{width:230px;max-width:100%;background:var(--deep);color:#e9eee6;border-radius:26px;padding:16px 14px 18px;box-shadow:0 0 0 6px #22302a,0 18px 40px rgba(0,0,0,.25);font-size:.82rem}
+.shot.tv{width:330px;border-radius:10px;padding:18px;box-shadow:0 0 0 8px #1c1f1d,0 18px 40px rgba(0,0,0,.25)}
+.shot .t{font:800 1.25rem var(--f-display);text-transform:uppercase;line-height:1}
+.shot .s{color:#9fb0a5;margin:4px 0 12px}
+.shot .f{background:#17231d;border:1px solid #2a3830;border-radius:7px;padding:8px 10px;margin-top:8px}
+.shot .f small{display:block;color:#9fb0a5;font:600 .6rem var(--f-mono);letter-spacing:.1em;text-transform:uppercase}
+.shot .f code{font:600 1rem var(--f-mono);letter-spacing:.12em}
+.shot .b{background:#e8c547;color:#1a1a10;text-align:center;border-radius:7px;padding:8px;margin-top:12px;font:700 .95rem var(--f-display);text-transform:uppercase}
+.shot .o{border:1px solid #2a3830;text-align:center;border-radius:7px;padding:7px;margin-top:8px;color:#c9d6cc}
+.shot .big{font:700 2.4rem var(--f-mono);letter-spacing:.18em;color:#e8c547;text-align:center;margin:8px 0}
+.shot .row{display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid #2a3830}
+.shot .hole{display:flex;justify-content:space-between;align-items:baseline}
+.shot .pl{display:grid;grid-template-columns:1fr auto auto auto;gap:8px;align-items:center;padding:7px 0;border-top:1px solid #2a3830}
+.shot .pl i{font-style:normal;width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:#22302a}
+.shot .pl em{font:700 1.1rem var(--f-mono);font-style:normal}
+.cap{font:600 .66rem var(--f-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:center;margin-top:16px}
+
+/* tools */
+.hq{margin-top:22px;display:grid;gap:18px;max-width:680px}
+.hq fieldset{border:1px solid var(--line);border-radius:8px;padding:14px 16px;margin:0;background:var(--card)}
+.hq legend{font-weight:600;padding:0 6px}
+.opts{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+.opts label{border:1px solid var(--line);border-radius:6px;padding:7px 12px;cursor:pointer;background:var(--paper)}
+.opts input{position:absolute;opacity:0;pointer-events:none}
+.opts label:has(input:checked){background:var(--green);color:var(--on-green);border-color:var(--green)}
+.opts label:has(input:focus-visible){outline:3px solid var(--flag);outline-offset:2px}
+.pick{background:var(--green);color:var(--on-green);border-radius:10px;padding:20px 22px;max-width:680px}
+.pick small{font:600 .68rem var(--f-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--flag)}
+.pick h3{font-size:2rem;margin:4px 0 8px}
+.pick p{color:var(--on-green-muted)}
+.check{list-style:none;margin:22px 0 0;padding:0;display:grid;gap:16px;max-width:720px}
+.check h3{font-size:1.15rem;color:var(--muted);letter-spacing:.06em}
+.check ul{list-style:none;margin:8px 0 0;padding:0;border-top:1px solid var(--line)}
+.check li label{display:grid;grid-template-columns:26px 1fr auto;gap:10px;align-items:start;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.check input{width:20px;height:20px;accent-color:var(--ok);margin-top:2px}
+.check label:has(input:checked) span{color:var(--muted);text-decoration:line-through}
+.check a.how{font-size:.85rem;color:var(--muted);white-space:nowrap}
+.meter{display:flex;align-items:center;gap:12px;margin-top:18px;max-width:720px}
+.meter div{flex:1;height:8px;background:var(--paper-2);border-radius:99px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--ok);width:0;transition:width .3s}
+.meter b{font:600 .85rem var(--f-mono);font-variant-numeric:tabular-nums}
+@media (prefers-reduced-motion:reduce){.meter i{transition:none}}
+
+.stuck{background:var(--paper-2);padding-block:40px}
+.stuck .wrap{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between}
+.stuck h2{font-size:2rem}
+.stuck p{color:var(--muted);margin-top:4px}
+.mono{font-family:var(--f-mono)}
+</style>
+</head>
+<body class="sub">
+
+<nav class="nav" aria-label="Main">
+  <div class="wrap">
+    <a class="logo" href="/" aria-label="Flagcast home"><img src="/brand/wide-on-dark.svg" alt="Flagcast"></a>
+    <button class="menu" aria-expanded="false" aria-controls="navlinks">Menu</button>
+    <ul id="navlinks">
+      <li><a href="/#how">How it works</a></li>
+      <li><a href="/app/">The app</a></li>
+      <li><a href="/pros/">Golf pros</a></li>
+      <li><a href="/manager/">Manager</a></li>
+      <li><a href="/screens/">Screens</a></li>
+      <li><a href="/#packages">Packages</a></li>
+      <li><a href="/#faq">FAQ</a></li>
+      <li><a href="/help/" aria-current="page">Help</a></li>
+    </ul>
+    <a class="login" href="/golf/">Club login</a>
+    <a class="btn primary" href="/#contact">Contact</a>
+  </div>
+</nav>
+
+<header class="hhero"><div class="wrap">
+  <span class="eyebrow">Flagcast Help</span>
+  <h1>How can we help?</h1>
+  <p>Step-by-step help for golfers, golf pros and whoever runs the tournament from the pro shop.</p>
+  <div class="search">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+    <input id="q" type="search" placeholder="Try “cart code”, “pin sheet” or “pair a TV”" autocomplete="off" aria-label="Search help" aria-controls="results">
+    <div class="results" id="results" hidden></div>
+  </div>
+  <div class="quick"><span>Popular:</span>
+    <button data-go="join">Join a tournament</button><button data-go="make">Make a tournament</button><button data-go="codes">Codes and PINs</button><button data-go="pair">Pair a club TV</button>
+  </div>
+</div></header>
+
+<div class="roles" role="tablist" aria-label="Who is this for"><div class="wrap" id="roles"></div></div>
+
+<main class="guide"><div class="wrap">
+  <aside class="toc"><h2 id="tocTitle">Topics</h2><ol id="toc"></ol><div class="tools" id="tools"></div></aside>
+  <article id="art" aria-live="polite"></article>
+</div></main>
+
+<section class="stuck" aria-label="Contact"><div class="wrap">
+  <div><h2>Still stuck?</h2><p>Email us and a real person will get back to you, usually the same day.</p></div>
+  <a class="btn primary" href="mailto:hello@flagcast.app">Email hello@flagcast.app</a>
+</div></section>
+
+<footer>
+  <div class="wrap">
+    <div><img src="/brand/wide-on-dark.svg" alt="Flagcast"><p style="margin-top:14px;max-width:34ch">Live cameras, live scoring and big-screen leaderboards for golf tournaments.</p></div>
+    <div><h4>Flagcast</h4><ul><li><a href="/#how">How it works</a></li><li><a href="/#packages">Packages</a></li><li><a href="/#sponsors">Sponsors</a></li><li><a href="/#faq">FAQ</a></li></ul></div>
+    <div><h4>Features</h4><ul><li><a href="/app/">The app</a></li><li><a href="/pros/">Golf pros</a></li><li><a href="/manager/">Manager</a></li><li><a href="/screens/">Screens</a></li><li><a href="/features/">All features</a></li></ul></div>
+    <div><h4>For clubs</h4><ul><li><a href="/golf/">Club login</a></li><li><a href="/download/">Download Manager</a></li><li><a href="/help/">Help</a></li></ul></div>
+    <div><h4>Contact</h4><ul><li><a href="mailto:hello@flagcast.app">hello@flagcast.app</a></li><li>Anywhere in the US</li></ul></div>
+  </div>
+  <div class="wrap legal">© 2026 Flagcast · <a href="/privacy/" style="color:inherit">Privacy</a> · <a href="/terms/" style="color:inherit">Terms</a> · <a href="/licenses/" style="color:inherit">Credits</a></div>
+</footer>
+
+<script>
+const ROLES = [
+  {id:'golfer', small:'Playing today', name:'Golfers'},
+  {id:'pro', small:'On the course', name:'Golf pros'},
+  {id:'desk', small:'In the pro shop', name:'Running it'},
+  {id:'tv', small:'Around the club', name:'Club TVs'},
+];
+const U = s => `<span class="ui">${s}</span>`;
+const SHOTS = {
+  join:`<div class="shot"><div class="t">Playing today?</div><div class="s">Scan the QR code on the card in your cart.</div><div class="b">Scan the cart card</div><div class="f"><small>Tournament code</small><code>RARFXWFV</code></div><div class="f"><small>Cart code</small><code>5WH22M</code></div><div class="o">Golf pro or marshal</div><div class="o">No code? Try a demo</div></div><div class="cap">The Flagcast app</div>`,
+  score:`<div class="shot"><div class="hole"><div class="t">Hole 7</div><span style="color:#9fb0a5">Par 3 · 168 yds</span></div><div class="s">Pin: back left · 172 to the flag</div><div class="pl"><span>Dana R.</span><i>−</i><em>3</em><i>+</i></div><div class="pl"><span>Sam K.</span><i>−</i><em>4</em><i>+</i></div><div class="pl"><span>Lee P. •</span><i>−</i><em>3</em><i>+</i></div><div class="pl"><span>Chris M.</span><i>−</i><em>5</em><i>+</i></div><div class="b">Next hole ›</div></div><div class="cap">• gets a stroke here</div>`,
+  codes:`<div class="shot" style="width:260px;border-radius:12px"><div class="t" style="font-size:1rem">Codes</div><div class="row"><span>Tournament code</span><b class="mono">RARFXWFV</b></div><div class="row"><span>Pro PIN · Alex</span><b class="mono">418 205</b></div><div class="row"><span>Marshal PIN · Jo</span><b class="mono">770 391</b></div><div class="row"><span>Cart codes</span><b style="color:#e8c547">40 carts ›</b></div></div><div class="cap">Overview in Manager</div>`,
+  pair:`<div class="shot tv"><div style="display:flex;gap:16px;align-items:center"><div style="flex:1"><div class="t">Connect this TV to your club</div><div class="s" style="margin-top:8px">1 Open Flagcast Manager<br>2 Screens &amp; sponsors, then Add a TV<br>3 Type the code on this TV</div></div><div style="text-align:center"><small style="color:#9fb0a5;font:600 .6rem var(--f-mono);letter-spacing:.1em">TV CODE</small><div class="big" style="font-size:1.7rem">K7M 4QX</div><div class="o" style="font-size:.7rem">▶ Watch a demo</div></div></div></div><div class="cap">What a new club TV shows</div>`,
+};
+const A = [
+ // golfers
+ {id:'join', role:'golfer', title:'Join your tournament', works:['iPhone app','Any phone browser'], keys:'scan qr cart card code start sign in login',
+  intro:'One player in each cart keeps score. There is nothing to sign up for.', shot:'join',
+  steps:[`Find the card in your cart. It has a QR code and your cart’s name on it.`,`Point your phone’s camera at the QR code and tap the link. Your scorecard opens.`,`No camera? Open the Flagcast app, or go to <b>flagcast.app/golf/app</b>, and type the ${U('Tournament code')} and your ${U('Cart code')}. Both are printed on the card.`,`Check the names on the first screen match your group, then tap the first hole.`],
+  tip:'Only one phone per cart needs to keep score. Everyone else can open the same card to follow along.'},
+ {id:'scores', role:'golfer', title:'Enter your scores', works:['iPhone app','Any phone browser'], keys:'score enter strokes pick up wrong mistake signal offline',
+  intro:'Each hole has one screen. Tap in everyone’s score and move on.', shot:'score',
+  steps:[`On the hole, tap ${U('+')} or ${U('−')} beside each player until it shows their score.`,`Picked up? Tap the player’s score and mark them ${U('Picked up')}.`,`Tap ${U('Next hole')}. A dot beside a name means that player gets a stroke on this hole.`,`Made a mistake? Go back to the hole and change it. If the hole is already locked, ask the golf pro to fix it.`],
+  tip:'No signal on the back nine? Keep going. Scores are saved on the phone and sent as soon as it finds signal.'},
+ {id:'yards', role:'golfer', title:'See yards to today’s pin', works:['iPhone app','Any phone browser'], keys:'gps yards distance pin flag green front back',
+  intro:'GPS yards to the front, the back and the flag, drawn on the green.',
+  steps:[`Open the ${U('Course')} tab, or look at the yards on the ${U('Score')} screen.`,`Allow location when your phone asks. Yards update as you walk.`,`The flag on the green is today’s pin, set by the golf pro that morning.`]},
+ {id:'fly', role:'golfer', title:'Fly the hole', works:['iPhone app','Any phone browser'], keys:'flyover fly hole preview map drone',
+  intro:'A drone-style flight from the tee to the green, with yards along the way.',
+  steps:[`Open the ${U('Course')} tab and pick a hole.`,`Tap ${U('Fly the hole')}. Tap again to stop.`]},
+ {id:'board', role:'golfer', title:'Check the leaderboard', works:['iPhone app','Any phone browser'], keys:'leaderboard standings flight net gross individuals matches results',
+  intro:'The leaderboard updates seconds after a score goes in.',
+  steps:[`Open the ${U('Leaders')} tab.`,`Switch between flights, and between net and gross, at the top.`,`In match play, the ${U('Matches')} tab shows each match and the team cup score.`,`If the club turned on ${U('Individuals')}, you can see every player’s own gross and net too.`]},
+ {id:'games', role:'golfer', title:'Play side games', works:['iPhone app','Any phone browser'], keys:'side games skins nassau wolf vegas stableford points bet',
+  intro:'Skins, Nassau, Wolf, Vegas and more, scored for your group as you play. Side games are in points, for bragging rights.',
+  steps:[`Side games show up on the scorecard when the club turns them on.`,`Open the ${U('Games')} tab and pick the games your group wants.`,`Points add up hole by hole. Nothing to work out at the turn.`]},
+ {id:'contest', role:'golfer', title:'Enter long drive or closest to the pin', works:['iPhone app','Any phone browser'], keys:'long drive closest pin ctp contest distance enter',
+  intro:'On a contest hole, the app asks for your distance.',
+  steps:[`On the contest hole, the ${U('Score')} screen shows the contest. Tap it.`,`Type the distance, or use the GPS to measure where the ball stopped.`,`The golf pro checks each entry before it goes on the board.`]},
+ {id:'cams', role:'golfer', title:'Watch the par 3 cams', works:['iPhone app','Any phone browser'], keys:'camera cams video replay par 3 watch live',
+  intro:'Watch the par 3 cameras live, rewind a couple of minutes, or replay a shot.',
+  steps:[`Open the ${U('Cameras')} tab (called ${U('Par 3s')} when the club has no cameras).`,`Pick a hole. Drag back on the timeline to rewind.`,`Tap a saved shot to watch the replay.`]},
+ {id:'lock', role:'golfer', title:'Keep your score on the lock screen', works:['iPhone app'], keys:'lock screen live activity dynamic island',
+  intro:'On iPhone, your score and place stay on the lock screen and in the Dynamic Island.',
+  steps:[`Open your scorecard in the Flagcast app on iPhone.`,`Allow Live Activities when the app asks.`,`Lock your phone. Your score and place update by themselves.`]},
+ {id:'demo', role:'golfer', title:'Try a demo', works:['iPhone app','Any phone browser'], keys:'demo sample try test practice',
+  intro:'A live sample tournament on a sample cart, so you can try everything before the day.',
+  steps:[`Open the Flagcast app, or go to flagcast.app/golf/app.`,`Tap ${U('No code? Try a demo')}.`,`Enter some scores, fly a hole and watch the leaderboard move. Nothing you do counts.`]},
+ // pros
+ {id:'pin', role:'pro', title:'Sign in as a golf pro or marshal', works:['iPhone app','Any phone browser'], keys:'pro marshal pin sign in staff',
+  intro:'The same app, with your PIN, turns into the pro’s toolkit.',
+  steps:[`Open the Flagcast app and tap ${U('Golf pro or marshal')}.`,`Type the ${U('Tournament code')} and your 6-digit PIN. Whoever set up the tournament can find both on the ${U('Codes')} card.`,`You now see every cart, the pin sheet, contest entries and announcements.`],
+  tip:'Too many wrong PINs locks sign-in for a while. Ask the pro shop for the right one rather than guessing.'},
+ {id:'fix', role:'pro', title:'Fix a score', works:['iPhone app','Any phone browser','Manager'], keys:'fix correct change score wrong edit card',
+  intro:'Correct any card from the course. The boards update straight away.',
+  steps:[`Open ${U('Carts')} and tap the team.`,`Tap the hole, then change the score.`,`Tap ${U('Save')}. The change is logged under ${U('Score changes by staff')}.`]},
+ {id:'pins', role:'pro', title:'Set today’s pins', works:['iPhone app','Manager'], keys:'pin sheet pins positions green flag morning',
+  intro:'Put each pin where it is today, so the yards in every cart are right.',
+  steps:[`Open ${U('Pin sheet')}.`,`For each hole, tap the green where the pin is, or pick front, middle or back.`,`Same pins as yesterday? Copy yesterday’s sheet in one tap.`,`Want a paper copy for the carts? ${U('Print pin sheet')}.`]},
+ {id:'entries', role:'pro', title:'Check contest entries', works:['iPhone app','Manager'], keys:'contest entries check approve long drive closest pin',
+  intro:'Entries wait for your OK, so only checked numbers reach the screens.',
+  steps:[`Open ${U('Check golfers’ entries')}.`,`For each entry, tap OK, change the distance, or ${U('Remove (entered by mistake)')}.`,`The contest board on the TVs updates as soon as you OK one.`]},
+ {id:'news', role:'pro', title:'Post news to the screens', works:['iPhone app','Manager'], keys:'announcement news message screens tv shotgun lunch',
+  intro:'A short message on every screen at the club: the shotgun start, lunch, the awards.',
+  steps:[`Open ${U('Announcement')}.`,`Type the message.`,`Tap ${U('Show on every screen now')}. Tap ${U('Remove banner')} when it’s done.`]},
+ {id:'live', role:'pro', title:'Go live from your iPhone', works:['iPhone app'], keys:'go live camera stream phone video broadcast',
+  intro:'Stand at any hole and send your iPhone’s camera to the TVs and the players’ Cameras tab.',
+  steps:[`Sign in with your pro PIN in the Flagcast app on iPhone.`,`Tap ${U('Go live')} and pick the hole.`,`Hold the phone sideways. Tap stop when you’re done.`],
+  tip:'Use Wi-Fi or a strong signal. A phone mount on a tripod gives a steadier picture.'},
+ // desk
+ {id:'club', role:'desk', title:'Set up your club', works:['Mac','Windows','iPhone and iPad','Web'], keys:'club account sign up logo colour color register',
+  intro:'Do this once. Your club’s logo and colour then appear on every screen golfers see.',
+  steps:[`Go to <b>flagcast.app/golf</b>, or open Flagcast Manager, and sign in with your club email.`,`Tap ${U('Set up my club')}. Add the ${U('Club name')}, ${U('Town and state')}, ${U('Club logo')} and a ${U('Colour')}.`,`Tap ${U('Send to Flagcast')}. We approve it and email you, usually within a day.`]},
+ {id:'make', role:'desk', title:'Make a tournament', works:['Mac','Windows','iPhone and iPad','Web'], keys:'new tournament create event make',
+  intro:'From a blank tournament to ready to print, in this order.',
+  steps:[`In Manager, click ${U('New tournament')}, type the ${U('Tournament name')} and click ${U('Make tournament')}.`,`Set up the course (next topic).`,`Pick the format and handicap allowance under ${U('Setup')}.`,`Add the teams under ${U('Teams')}.`,`Print the cart cards and hand out the codes.`],
+  tip:'Use the Tournament-day checklist on the left to keep track as you go.'},
+ {id:'course', role:'desk', title:'Set up the course', works:['Mac','Windows','iPhone and iPad','Web'], keys:'course tees slope rating holes map gps scorecard',
+  intro:'Find your course once and every hole gets its par, yards, stroke index and GPS map.',
+  steps:[`Under ${U('Setup')}, click ${U('Find the course')} and type the club’s name or town.`,`Pick the course. This fills in par, yardage, stroke index and every set of tees with its rating and slope.`,`Choose which tees the field plays.`,`Open ${U('Course map')} and click ${U('Fill In the Holes')}. Check each hole lands on the right course.`],
+  tip:'Course not found? Type the numbers from the club’s scorecard. Stroke index 1 is the hardest hole.'},
+ {id:'format', role:'desk', title:'Pick a format', works:['Mac','Windows','iPhone and iPad','Web'], keys:'format best ball scramble stroke stableford shamble match play individuals club championship',
+  intro:'Not sure which one? Use the format finder on the left. Here is what each one means.',
+  steps:[`<b>Best ball.</b> Everyone plays their own ball. The best score (or best two) on each hole counts for the team.`,`<b>Scramble.</b> Everyone hits, the team picks the best shot, and all play from there. One team score.`,`<b>Shamble.</b> Pick the best drive, then everyone plays their own ball into the hole.`,`<b>Stroke play.</b> Every player counts every shot.`,`<b>Stableford.</b> Points for each hole against par, so a bad hole doesn’t ruin the day.`,`<b>Match play.</b> Head to head, hole by hole: singles, four-ball or scramble. Turn on the team cup for 1 point a win and ½ a halve.`,`<b>Individuals leaderboard.</b> Turn this on for a club championship to show every player’s own gross and net.`]},
+ {id:'teams', role:'desk', title:'Add teams and handicaps', works:['Mac','Windows','iPhone and iPad','Web'], keys:'teams players handicap ghin index flights paste spreadsheet',
+  intro:'Type them in, or paste a whole field from a spreadsheet.',
+  steps:[`Open ${U('Teams')}. Click ${U('Paste from a spreadsheet')} and paste names and handicaps, one player a row.`,`Have Handicap Index numbers? Add the GHIN number or index and Flagcast works out each course handicap from the tees.`,`Type your ${U('Flights')} with a comma between them, then put each team in one.`,`Click ${U('Add these teams')}.`,`Match play? Under ${U('Matches')}, click ${U('Pair in order')} or ${U('Draw at random')}.`]},
+ {id:'codes', role:'desk', title:'Find the codes and PINs', works:['Mac','Windows','iPhone and iPad','Web'], keys:'codes pin tournament code cart codes marshal pro',
+  intro:'Every code you need is on one card on the tournament’s Overview.', shot:'codes',
+  steps:[`Open the tournament. The ${U('Codes')} card is on the Overview.`,`Golfers type the tournament code and their cart code.`,`Pros and marshals type the tournament code and their PIN. Add them under ${U('Staff and playlists')}.`,`Click ${U('Cart codes')} to see every cart’s code.`]},
+ {id:'cards', role:'desk', title:'Print cart cards and signs', works:['Mac','Windows','iPhone and iPad','Web'], keys:'print cart cards signs qr paper',
+  intro:'One card per team with its QR code, in your club’s look.',
+  steps:[`Open ${U('Links and cards')}.`,`Click ${U('Print cart cards')}. Each card has the team, its QR code and its cart code.`,`For the tee box and the clubhouse, print the cart signs (8 × 5 inch, landscape).`,`Put one card in each cart before the shotgun.`]},
+ {id:'contests', role:'desk', title:'Set up contests', works:['Mac','Windows','iPhone and iPad','Web'], keys:'contest long drive closest pin hole prize',
+  intro:'Long drive and closest to the pin, your way.',
+  steps:[`Open ${U('Contests')} and click ${U('Add long drive')} or ${U('Add closest to the pin')}.`,`Pick the hole and a name, then click ${U('Save')}.`,`Choose ${U('Golfers enter their own')} or ${U('No, staff enter results')}.`,`If golfers enter, choose who checks them: ${U('Every entry')}, ${U('Only the top 3')} or ${U('Trust golfers')}.`]},
+ {id:'sidegames', role:'desk', title:'Turn on side games', works:['Mac','Windows','iPhone and iPad','Web'], keys:'side games skins nassau wolf points',
+  intro:'Let each cart play skins, Nassau, Wolf and more on the scorecard, for points.',
+  steps:[`Under ${U('Setup')}, find ${U('Side games on the scorecard')}.`,`Switch it on. Golfers pick their games on the course.`]},
+ {id:'screens', role:'desk', title:'Choose what each screen shows', works:['Mac','Windows','iPhone and iPad','Web'], keys:'screens tv playlist sponsors leaderboard ticker',
+  intro:'Each TV or LED wall plays its own list: the leaderboard, a par 3 cam, the contests or your sponsors.',
+  steps:[`Open ${U('Screens and sponsors')}.`,`Add a screen and give it a name, like “Bar” or “Halfway house”.`,`Add what it plays, in order. An empty list shows everything.`,`Add sponsors with ${U('Add sponsor')}. They show between leaderboard pages and on the hole camera.`]},
+ {id:'dayof', role:'desk', title:'Run the day', works:['Mac','iPhone and iPad'], keys:'day of event day nudge quiet carts checks morning',
+  intro:'The Day of screen shows what needs you before the first group tees off.',
+  steps:[`Open ${U('Day of')}. Check the TVs are on and the cameras are sending.`,`A cart gone quiet? Click ${U('Nudge')} to remind it to enter scores.`,`Fix any card under ${U('Scores')}.`]},
+ {id:'results', role:'desk', title:'Lock the results', works:['Mac','Windows','iPhone and iPad','Web'], keys:'results lock final csv ghin posting awards report',
+  intro:'Finish the day and keep the record.',
+  steps:[`When the last card is in, open ${U('Report')} and click ${U('Lock results')}.`,`Click ${U('Download results (CSV)')} for the awards and the club.`,`For handicaps, click ${U('Scores for GHIN posting (CSV)')}.`]},
+ // tv
+ {id:'install', role:'tv', title:'Get the Flagcast TV app (coming soon)', works:['Apple TV','Google TV','Fire TV','Roku'], keys:'tv app install apple google fire roku download',
+  intro:'Flagcast apps for Apple TV, Google TV, Fire TV and Roku are coming soon. Until then, any TV with a browser works: see Use any TV with a browser.',
+  steps:[`On the TV, open its app store.`,`Search for Flagcast and install it.`,`Open it. The TV shows a code.`]},
+ {id:'pair', role:'tv', title:'Pair a club TV', works:['Apple TV','Google TV','Fire TV','Roku'], keys:'pair tv code connect screen add a tv',
+  intro:'You do this once. After that, the TV shows your club’s tournament on the day, all by itself.', shot:'pair',
+  steps:[`Open the Flagcast app on the TV. It shows a ${U('TV code')}.`,`In Manager, open ${U('Screens and sponsors')}, then ${U('Add a TV')}.`,`Type the code. The TV joins your club straight away.`,`To take a TV off, remove it under ${U('Club TVs')}.`]},
+ {id:'browser', role:'tv', title:'Use any TV with a browser', works:['Any smart TV','LED wall','Laptop'], keys:'browser link full screen led wall laptop hdmi',
+  intro:'No app for your TV? Every screen also has its own link.',
+  steps:[`In ${U('Screens and sponsors')}, click the screen and copy its ${U('Link for this screen')}.`,`Open the link on the TV’s browser, or on a laptop plugged into the TV.`,`Go full screen.`]},
+ {id:'tvdemo', role:'tv', title:'Watch a demo on a TV', works:['Apple TV','Google TV','Fire TV','Roku'], keys:'demo tv watch sample',
+  intro:'See what your TVs will show before your first tournament.',
+  steps:[`Open the Flagcast app on the TV.`,`Choose ${U('Watch a demo')}.`]},
+];
+const TOOLS = {
+  golfer:[], pro:[],
+  desk:[{id:'finder', small:'Tool', name:'Format finder'},{id:'checklist', small:'Tool', name:'Tournament-day checklist'}],
+  tv:[],
+};
+const CHECK = [
+  {h:'The week before', items:[['Club set up with logo and colour','club'],['Tournament made','make'],['Course found and holes mapped','course'],['Format and allowance picked','format'],['Teams, handicaps and flights added','teams'],['Contests set up','contests'],['Pros and marshals added, PINs sent','codes']]},
+  {h:'The day before', items:[['Cart cards and signs printed','cards'],['Each screen’s list chosen, sponsors added','screens'],['Club TVs paired and showing','pair'],['Tried a demo cart','demo']]},
+  {h:'On the day', items:[['Today’s pins set','pins'],['Cards in every cart','cards'],['Day of: TVs on, cameras sending','dayof'],['Results locked and downloaded','results']]},
+];
+const store = {get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
+const $ = id => document.getElementById(id);
+let role = 'golfer', cur = 'join';
+const seen = new Set(store.get('fc.help.seen',[]));
+
+function renderRoles(){
+  $('roles').innerHTML = ROLES.map(r=>`<button role="tab" aria-selected="${r.id===role}" data-role="${r.id}"><small>${r.small}</small><b>${r.name}</b></button>`).join('');
+}
+function renderToc(){
+  const list = A.filter(a=>a.role===role);
+  $('tocTitle').textContent = ROLES.find(r=>r.id===role).name;
+  $('toc').innerHTML = list.map(a=>`<li><button data-go="${a.id}" aria-current="${a.id===cur}">${a.title}<span class="done">${seen.has(a.id)?'✓':''}</span></button></li>`).join('');
+  $('tools').innerHTML = TOOLS[role].map(t=>`<button class="toolbtn" data-go="${t.id}" aria-current="${t.id===cur}"><small>${t.small}</small><b>${t.name}</b></button>`).join('');
+}
+function article(a){
+  const list = A.filter(x=>x.role===a.role), i = list.indexOf(a);
+  const prev = list[i-1], next = list[i+1];
+  return `<div class="crumbs">${ROLES.find(r=>r.id===a.role).name} · ${i+1} of ${list.length}</div>
+  <h2>${a.title}</h2><p class="intro">${a.intro}</p>
+  <div class="works">${a.works.map(w=>`<span>${w}</span>`).join('')}</div>
+  <div class="body"><div><ol class="hsteps">${a.steps.map(s=>`<li><p>${s}</p></li>`).join('')}</ol>
+  ${a.tip?`<div class="tip"><b>Tip</b>${a.tip}</div>`:''}</div>
+  ${a.shot?`<div>${SHOTS[a.shot]}</div>`:''}</div>
+  <div class="foot"><div class="pager">${prev?`<button class="btn ghost" data-go="${prev.id}">‹ ${prev.title}</button>`:''}${next?`<button class="btn primary" data-go="${next.id}">Next: ${next.title} ›</button>`:''}</div>
+  <div class="helped" id="helped">Did this help? <button data-help="yes">Yes</button><button data-help="no">No</button></div></div>`;
+}
+function finder(){
+  return `<div class="crumbs">Running it · Tool</div><h2>Format finder</h2><p class="intro">Answer three questions and we’ll suggest a format. You can change it any time before scores go in.</p>
+  <form class="hq" id="ff">
+   <fieldset><legend>Who is playing?</legend><div class="opts">
+    <label><input type="radio" name="who" value="teams" checked>Teams of 2 to 4</label><label><input type="radio" name="who" value="solo">Each player on their own</label><label><input type="radio" name="who" value="h2h">Head to head</label></div></fieldset>
+   <fieldset><legend>What kind of day is it?</legend><div class="opts">
+    <label><input type="radio" name="day" value="fun" checked>Fun, mixed abilities</label><label><input type="radio" name="day" value="serious">Serious, every shot counts</label></div></fieldset>
+   <fieldset><legend>How fast should it play?</legend><div class="opts">
+    <label><input type="radio" name="pace" value="quick" checked>As quick as possible</label><label><input type="radio" name="pace" value="normal">Normal pace is fine</label></div></fieldset>
+  </form><div id="pick" style="margin-top:18px"></div>`;
+}
+function pickFormat(){
+  const f = Object.fromEntries(new FormData($('ff')));
+  let n, w;
+  if (f.who==='h2h') { n = f.pace==='quick' ? 'Scramble match play' : 'Four-ball match play'; w = 'Pairs play each other hole by hole. Turn on the team cup for 1 point a win and ½ a halve.'; if (f.day==='serious') { n = 'Singles match play'; w = 'One against one, hole by hole. The classic for a club match or a Ryder Cup-style day.'; } }
+  else if (f.who==='solo') { if (f.day==='serious') { n = 'Stroke play'; w = 'Every player counts every shot. Turn on the Individuals leaderboard for a club championship with gross and net.'; } else { n = 'Stableford'; w = 'Points against par on each hole, so one bad hole doesn’t ruin the day.'; } }
+  else { if (f.pace==='quick' && f.day==='fun') { n = 'Scramble'; w = 'Everyone hits, the team picks the best shot. The fastest format and the friendliest for mixed abilities.'; } else if (f.pace==='quick') { n = 'Shamble'; w = 'The team picks the best drive, then everyone plays their own ball. Quick, but every player still counts.'; } else if (f.day==='fun') { n = 'Best ball'; w = 'Everyone plays their own ball and the best score on each hole counts. Good for a member-guest.'; } else { n = 'Best ball, two scores count'; w = 'The best two scores on each hole count, so the whole team has to play.'; } }
+  $('pick').innerHTML = `<div class="pick"><small>We suggest</small><h3>${n}</h3><p>${w}</p><p style="margin-top:12px"><button class="btn primary" data-go="format">How to set it up ›</button></p></div>`;
+}
+function checklist(){
+  const done = store.get('fc.help.check',{});
+  return `<div class="crumbs">Running it · Tool</div><h2>Tournament-day checklist</h2><p class="intro">Tick things off as you go. Your ticks are kept on this device.</p>
+  <div class="meter"><div><i id="bar"></i></div><b id="cnt"></b></div>
+  <ol class="check">${CHECK.map((g,gi)=>`<li><h3>${g.h}</h3><ul>${g.items.map(([t,go],ii)=>{const k=gi+'.'+ii;return `<li><label><input type="checkbox" id="c${gi}_${ii}" data-k="${k}" ${done[k]?'checked':''}><span>${t}</span><a class="how" href="#${go}" data-go="${go}">How ›</a></label></li>`}).join('')}</ul></li>`).join('')}</ol>
+  <p style="margin-top:16px"><button class="btn ghost" id="reset">Clear ticks</button></p>`;
+}
+function meter(){
+  const all = document.querySelectorAll('.check input'), n = [...all].filter(x=>x.checked).length;
+  $('bar').style.width = (100*n/all.length)+'%'; $('cnt').textContent = `${n} of ${all.length}`;
+}
+function go(id, push=true){
+  const a = A.find(x=>x.id===id);
+  if (a) { role = a.role; cur = id; $('art').innerHTML = article(a); seen.add(id); store.set('fc.help.seen',[...seen]); }
+  else if (id==='finder' || id==='checklist') { role = 'desk'; cur = id; $('art').innerHTML = id==='finder'?finder():checklist(); if (id==='finder') pickFormat(); else meter(); }
+  else return go('join', false);
+  renderRoles(); renderToc();
+  if (push && location.hash !== '#'+id) history.replaceState(null,'','#'+id);
+}
+document.addEventListener('click', e=>{
+  const g = e.target.closest('[data-go]'); if (g) { e.preventDefault(); hideResults(); go(g.dataset.go); if (window.innerWidth<860 || g.closest('.results,.quick')) $('art').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth',block:'start'}); return; }
+  const r = e.target.closest('[data-role]'); if (r) { const first = A.find(a=>a.role===r.dataset.role); go(first.id); return; }
+  const h = e.target.closest('[data-help]'); if (h) { $('helped').textContent = h.dataset.help==='yes' ? 'Thanks. Glad it helped.' : 'Thanks. Email hello@flagcast.app and tell us what was missing.'; return; }
+  if (e.target.id==='reset') { store.set('fc.help.check',{}); document.querySelectorAll('.check input').forEach(x=>x.checked=false); meter(); }
+  if (!e.target.closest('.search')) hideResults();
+});
+document.addEventListener('change', e=>{
+  if (e.target.closest('#ff')) pickFormat();
+  if (e.target.dataset.k) { const d = store.get('fc.help.check',{}); d[e.target.dataset.k] = e.target.checked; store.set('fc.help.check',d); meter(); }
+});
+// search
+let sel = 0, hits = [];
+function hideResults(){ $('results').hidden = true; }
+function search(){
+  const q = $('q').value.trim().toLowerCase();
+  if (!q) return hideResults();
+  const words = q.split(/\s+/);
+  hits = A.map(a=>{ const hay = (a.title+' '+a.keys+' '+a.intro+' '+a.steps.join(' ')).toLowerCase(); let s = 0; for (const w of words) { if (a.title.toLowerCase().includes(w)) s += 3; if (a.keys.includes(w)) s += 2; else if (hay.includes(w)) s += 1; else return [a,0]; } return [a,s]; })
+    .filter(x=>x[1]>0).sort((x,y)=>y[1]-x[1]).slice(0,6).map(x=>x[0]);
+  sel = 0;
+  $('results').innerHTML = hits.length ? hits.map((a,i)=>`<button data-go="${a.id}" class="${i===0?'sel':''}"><small>${ROLES.find(r=>r.id===a.role).name}</small>${a.title}</button>`).join('') : `<div class="none">Nothing for “${q.replace(/</g,'&lt;')}”. Try fewer words, or email hello@flagcast.app.</div>`;
+  $('results').hidden = false;
+}
+$('q').addEventListener('input', search);
+$('q').addEventListener('keydown', e=>{
+  if (e.key==='Escape') return hideResults();
+  if (!hits.length || $('results').hidden) return;
+  if (e.key==='ArrowDown'||e.key==='ArrowUp') { e.preventDefault(); sel = (sel + (e.key==='ArrowDown'?1:-1) + hits.length) % hits.length; [...$('results').children].forEach((b,i)=>b.classList.toggle('sel',i===sel)); }
+  if (e.key==='Enter') { e.preventDefault(); go(hits[sel].id); hideResults(); $('q').blur(); $('art').scrollIntoView({block:'start'}); }
+});
+window.addEventListener('hashchange', ()=>go(location.hash.slice(1), false));
+go(location.hash.slice(1) || 'join', false);
+</script>
+<script>
+const m=document.querySelector('.menu'),ul=document.getElementById('navlinks');
+m.onclick=()=>{const o=ul.classList.toggle('open');m.setAttribute('aria-expanded',o)};
+</script>
+<script src="/site.js" defer></script>
+</body>
+</html>
