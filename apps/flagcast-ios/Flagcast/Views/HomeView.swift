@@ -21,6 +21,7 @@ struct HomeView: View {
     @State private var proOpen = false
     @State private var demoError: String?
     @State private var opening = false
+    @State private var help: URL?
     @FocusState private var focus: Field?
     enum Field { case event, cart, proEvent, pin }
 
@@ -57,6 +58,7 @@ struct HomeView: View {
             }
         }
         .sheet(isPresented: $serverSheet) { ServerSheet() }
+        .sheet(item: $help) { SafariView(url: $0).ignoresSafeArea() }
         .sheet(isPresented: $settings, onDismiss: { recents = Recents.all() }) { PlayerSettingsView() }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -104,6 +106,11 @@ struct HomeView: View {
                     Text("Playing today?").font(.title3.weight(.bold))
                     Text("Scan the QR code on your cart card.").font(.subheadline).foregroundStyle(Color.fcMuted)
                 }
+                Spacer(minLength: 0)
+                Button { help = URL(string: "https://flagcast.app/help/#join") } label: {
+                    Image(systemName: "questionmark.circle").font(.system(size: 22)).foregroundStyle(Color.fcMuted)
+                }
+                .accessibilityLabel("Help joining a tournament")
             }
             Button { scanning = true } label: { Text("Scan cart card").font(.title3.weight(.semibold)) }
                 .buttonStyle(.fcDark)

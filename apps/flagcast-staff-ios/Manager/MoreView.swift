@@ -55,10 +55,12 @@ struct AccountMenu: View {
     var onGreen = false
     @State private var asking = false
     @State private var settings = false
+    @State private var help = false
     var body: some View {
         Menu {
             if let e = model.me?.email { Text(e) } else if model.isAdmin { Text("Flagcast admin (passcode)") }
             Button { settings = true } label: { Label("Settings", systemImage: "gearshape") }
+            Button { help = true } label: { Label("Help", systemImage: "questionmark.circle") }
             if model.canSignOut { Button(role: .destructive) { asking = true } label: { Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right") } }
         } label: {
             Image(systemName: "person.crop.circle").font(.system(size: 24, weight: .regular))
@@ -67,6 +69,7 @@ struct AccountMenu: View {
         }
         .accessibilityLabel("Account")
         .signOutDialog($asking)
+        .sheet(isPresented: $help) { HelpSheet(url: HelpTopic.url("running")) }
         .sheet(isPresented: $settings) { NavigationStack { SettingsView().toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { settings = false } } } } }
     }
 }

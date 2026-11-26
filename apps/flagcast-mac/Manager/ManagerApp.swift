@@ -82,7 +82,7 @@ struct ManagerCommands: Commands {
             Button("Home") { model.adminMode = false; model.selection = nil }.keyboardShortcut("h", modifiers: [.command, .shift])
         }
         CommandGroup(replacing: .help) {
-            Button("Flagcast Help") { NSWorkspace.shared.open(URL(string: "https://flagcast.app")!) }
+            Button("Flagcast Help") { NSWorkspace.shared.open(HelpTopic.url("running")) }.keyboardShortcut("?", modifiers: .command)
             Divider()
             SettingsLink { Text("Flagcast Admin Passcode…") }
         }

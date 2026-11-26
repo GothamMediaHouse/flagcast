@@ -23,7 +23,7 @@ struct ScreensView: View {
             PhotoSegments(options: [("TVs", "screens"), ("Sponsors & more", "settings")], selection: Binding(get: { tab == "settings" ? "settings" : "screens" }, set: { tab = $0 }))
             Button("Open the board") { NSWorkspace.shared.open(doc.boardURL) }.buttonStyle(GlassButton())
         } title: {
-            HeroTitle(title: "Screens & sponsors", size: 52, sub: tab == "settings" ? "Sponsors, cameras, announcements" : "The TVs at the club and what they show", subBeside: true)
+            HeroTitle(title: "Screens & sponsors", size: 52, sub: tab == "settings" ? "Sponsors, cameras, announcements" : "The TVs at the club and what they show", subBeside: true, help: "screens")
         } content: {
             if tab == "settings" { settings } else { ScreenWall(doc: doc) }
         }

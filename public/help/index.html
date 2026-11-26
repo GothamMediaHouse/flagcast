@@ -500,6 +500,7 @@ function renderHome(){
   $('phPop').innerHTML = ['join','make','codes','pair','scores','teams'].map(id=>`<button data-go="${id}">${A.find(a=>a.id===id).title}</button>`).join('');
 }
 function showList(r, push=true){
+  if (!PH.matches) { const f = A.find(a=>a.role===r); return go(f.id, push); }
   role = r; renderRoles(); renderToc(); setView('list');
   $('backBtn').textContent = '‹ Help'; $('backBtn').dataset.to = '';
   $('backCount').textContent = A.filter(a=>a.role===r).length + ' topics';

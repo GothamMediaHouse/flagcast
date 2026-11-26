@@ -19,7 +19,7 @@ struct LinksView: View {
         DeskPage(doc: doc, section: .links) {
             Button { printing = true } label: { Label("Print cart cards", systemImage: "printer") }.buttonStyle(GlassButton())
         } title: {
-            HeroTitle(title: "Links & cart cards", size: 52, sub: "Pages to share and cards to print", subBeside: true)
+            HeroTitle(title: "Links & cart cards", size: 52, sub: "Pages to share and cards to print", subBeside: true, help: "cards")
         } content: {
             CardForm {
             SwiftUI.Section("Links") {

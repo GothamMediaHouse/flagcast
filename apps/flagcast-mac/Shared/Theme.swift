@@ -160,6 +160,8 @@ struct HeroTitle: View {
     var size: CGFloat = 56
     var sub: String? = nil
     var subBeside = false
+    /// a topic on flagcast.app/help: shows a small ? beside the title
+    var help: String? = nil
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if live || kicker != nil {
@@ -172,9 +174,13 @@ struct HeroTitle: View {
                 HStack(alignment: .lastTextBaseline, spacing: 14) {
                     Text(title).font(FC.display(size)).lineLimit(1).minimumScaleFactor(0.6)
                     Text(sub).font(.system(size: 14)).padding(.bottom, 4)
+                    if let help { HelpButton(topic: help, size: 17).padding(.bottom, 5) }
                 }
             } else {
-                Text(title).font(FC.display(size)).lineLimit(1).minimumScaleFactor(0.5)
+                HStack(alignment: .lastTextBaseline, spacing: 12) {
+                    Text(title).font(FC.display(size)).lineLimit(1).minimumScaleFactor(0.5)
+                    if let help { HelpButton(topic: help, size: 17).padding(.bottom, 5) }
+                }
                 if let sub { Text(sub).font(.system(size: 16)).lineLimit(2) }
             }
         }

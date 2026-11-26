@@ -189,6 +189,7 @@ struct OverviewView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("Codes").font(.system(size: 14, weight: .bold))
+                HelpButton(topic: "codes", size: 14)
                 Spacer()
                 Button("Cart codes ›") { nav.section = .links }.buttonStyle(.plain).font(.system(size: 13, weight: .semibold)).foregroundStyle(FC.link)
             }

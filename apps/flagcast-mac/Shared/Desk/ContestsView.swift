@@ -10,7 +10,7 @@ struct ContestsView: View {
             Button { add("ctp") } label: { Label("Closest to the pin", systemImage: "flag") }.buttonStyle(GlassButton())
             Button { add("ld") } label: { Label("Long drive", systemImage: "arrow.up.right") }.buttonStyle(GlassButton())
         } title: {
-            HeroTitle(title: "Contests", size: 52, sub: "Closest to the pin and long drive", subBeside: true)
+            HeroTitle(title: "Contests", size: 52, sub: "Closest to the pin and long drive", subBeside: true, help: "contests")
         } content: {
             CardForm {
             if (doc.live?.contests ?? []).contains(where: { !$0.waiting.isEmpty }) {

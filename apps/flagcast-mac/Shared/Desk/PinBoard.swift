@@ -213,7 +213,7 @@ struct PinsView: View {
         DeskPage(doc: doc, section: .pins, save: false) {
             EmptyView()
         } title: {
-            HeroTitle(title: "Pin sheet", size: 52, sub: "Where the pin is on each green today. Golfers see it as soon as you set it.", subBeside: false)
+            HeroTitle(title: "Pin sheet", size: 52, sub: "Where the pin is on each green today. Golfers see it as soon as you set it.", subBeside: false, help: "pins")
         } content: {
             ScrollView {
                 PinBoard(doc: doc, columns: 6)

@@ -50,6 +50,8 @@ section[hidden] { display: none; }
 @media print { body.pinprint .side, body.pinprint #hero, body.pinprint .pined, body.pinprint .pinbar { display: none !important; } body.pinprint main > section { box-shadow: none; margin: 0; } }
 
 h2 { font-size: 1.8rem; margin: 6px 0 14px; }
+.qhelp { display: inline-grid; place-items: center; width: 1.05em; height: 1.05em; margin-left: .25em; vertical-align: .12em; border-radius: 50%; border: 1.5px solid currentColor; font: 700 .55em system-ui, sans-serif; color: inherit; text-decoration: none; opacity: .55; }
+.qhelp:hover, .qhelp:focus-visible { opacity: 1; }
 h3 { font-size: 1.2rem; margin: 22px 0 10px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
 label.f { display: grid; gap: 4px; font-size: .85rem; color: var(--muted); font-weight: 500; }
@@ -127,7 +129,7 @@ table.t .n { width: 64px; }
 <header class="hero" id="hero"><div class="photo" id="photo"></div>
   <div class="bar"><span id="menuSlot"></span><span class="where" id="where">Tournament desk</span>
     <span class="acts"><span class="sstate" id="sstate"><i></i><span id="sstateT">Saved</span></span><span id="dirty" hidden></span>
-    <a class="gbtn" id="boardBtn" target="_blank" rel="noopener" hidden>Open the board</a><button class="gbtn" id="lock">Lock results</button><button class="wbtn" id="save" disabled title="Save changes">Save</button></span></div>
+    <a class="gbtn" href="/help/#running" target="_blank" rel="noopener">Help</a><a class="gbtn" id="boardBtn" target="_blank" rel="noopener" hidden>Open the board</a><button class="gbtn" id="lock">Lock results</button><button class="wbtn" id="save" disabled title="Save changes">Save</button></span></div>
   <div class="ttl"><img class="clublogo" id="clublogo" alt="" hidden><div class="kick" id="kick"></div><h1 id="evname">Loading…</h1><div class="sub" id="evsub"></div></div>
 </header>
 <main id="main">
@@ -140,7 +142,7 @@ table.t .n { width: 64px; }
 </section>
 
 <section id="s-setup" hidden>
-  <h2>Setup</h2>
+  <h2>Setup <a class="qhelp" href="/help/#course" target="_blank" rel="noopener" aria-label="Help: Setup" title="Help">?</a></h2>
   <div class="grid">
     <label class="f">Tournament name<input id="f-name"></label>
     <label class="f">Club<input id="f-club"></label>
@@ -179,7 +181,7 @@ table.t .n { width: 64px; }
 </section>
 
 <section id="s-teams" hidden>
-  <h2>Teams</h2>
+  <h2>Teams <a class="qhelp" href="/help/#teams" target="_blank" rel="noopener" aria-label="Help: Teams" title="Help">?</a></h2>
   <p class="help">Each team gets its own scorecard code and QR card. Start hole is for a shotgun start. For a scramble, set the team handicap. Type a player’s Handicap Index (use + for plus handicaps, like +1.2) and pick their tees to have the course handicap worked out; or leave Index empty and type the course handicap yourself.</p>
   <div class="scroll" style="margin-top:12px"><table class="t" id="teams"></table></div>
   <div class="row"><button class="btn" id="addTeam">Add team</button><button class="btn" id="pasteBtn">Paste from a spreadsheet</button></div>
@@ -198,13 +200,13 @@ table.t .n { width: 64px; }
 </section>
 
 <section id="s-scores" hidden>
-  <h2>Scores</h2>
+  <h2>Scores <a class="qhelp" href="/help/#fix" target="_blank" rel="noopener" aria-label="Help: Scores" title="Help">?</a></h2>
   <p class="help">Fix any score here. Changes save as you leave each box and show on every screen. Type 0 for a picked-up ball, clear the box to remove a score.</p>
   <div class="scroll" style="margin-top:12px"><table class="t scores" id="scores"></table></div>
 </section>
 
 <section id="s-contests" hidden>
-  <h2>Contests</h2>
+  <h2>Contests <a class="qhelp" href="/help/#contests" target="_blank" rel="noopener" aria-label="Help: Contests" title="Help">?</a></h2>
   <p class="help">Closest to the pin is measured in feet (4.5 = 4 ft 6 in). Long drive in yards. Golfers can enter their own on the contest hole in the Flagcast app; the ones that need a check wait here, and the TVs only show checked results. Points only, no money.</p>
   <div class="contest ctcheck" id="ctcheck" hidden></div><datalist id="ctnames"></datalist>
   <div id="contests" style="margin-top:12px"></div>
@@ -212,14 +214,14 @@ table.t .n { width: 64px; }
 </section>
 
 <section id="s-pins" hidden>
-  <h2>Pin sheet</h2>
+  <h2>Pin sheet <a class="qhelp" href="/help/#pins" target="_blank" rel="noopener" aria-label="Help: Pin sheet" title="Help">?</a></h2>
   <p class="help">Where the pin is on each green today. Golfers see a flag on the green and the yards to the pin, and it changes on their phones as soon as you set it. Tap a hole, then tap the green where the pin is.</p>
   <div class="row pinbar"><button class="btn" id="pinPrint">Print pin sheet</button><button class="btn danger" id="pinClear">Clear all pins</button><span class="help" id="pinCount"></span></div>
   <div class="pinwrap"><div class="pingrid" id="pinGrid"></div><div class="pined" id="pinEd"></div></div>
 </section>
 
 <section id="s-screens" hidden>
-  <h2>Screens and sponsors</h2>
+  <h2>Screens and sponsors <a class="qhelp" href="/help/#screens" target="_blank" rel="noopener" aria-label="Help: Screens and sponsors" title="Help">?</a></h2>
   <div class="grid">
     <label class="f">Title on the screens<input id="f-title" placeholder="Uses the tournament name"></label>
     <label class="f">Seconds on each page<input id="f-secs" type="number" min="5" max="60"></label>
@@ -251,7 +253,7 @@ table.t .n { width: 64px; }
 </section>
 
 <section id="s-staff" hidden>
-  <h2>Staff and playlists</h2>
+  <h2>Staff and playlists <a class="qhelp" href="/help/#codes" target="_blank" rel="noopener" aria-label="Help: Staff and playlists" title="Help">?</a></h2>
   <h3>Golf pros and marshals</h3>
   <p class="help">They sign in to the Flagcast app with the tournament code and their PIN. A golf pro can fix scores, switch screens, take over the screens and nudge a cart. A marshal can only post contest results.</p>
   <div class="card2"><span class="label">Tournament code</span><div class="big-code" id="evcode"></div></div>
@@ -273,7 +275,7 @@ table.t .n { width: 64px; }
 </section>
 
 <section id="s-report" hidden>
-  <h2>Report</h2>
+  <h2>Report <a class="qhelp" href="/help/#results" target="_blank" rel="noopener" aria-label="Help: Report" title="Help">?</a></h2>
   <div class="row" style="margin-top:0"><button class="btn primary" id="csvResults">Download results (CSV)</button><button class="btn" id="csvSponsors">Download sponsor report (CSV)</button><button class="btn" id="csvGhin">Scores for GHIN posting (CSV)</button><button class="btn" id="reportRefresh">Refresh</button></div>
   <p class="help">The GHIN file has each player’s GHIN number, tees, rating and slope, hole-by-hole scores and the adjusted gross score (each hole capped at net double bogey, picked-up holes counted as net double bogey), ready for the club’s handicap chair to post. Scramble scores can’t be posted for handicaps.</p>
   <h3>Sponsors</h3>
@@ -284,7 +286,7 @@ table.t .n { width: 64px; }
 </section>
 
 <section id="s-links" hidden>
-  <h2>Links and cards</h2>
+  <h2>Links and cards <a class="qhelp" href="/help/#cards" target="_blank" rel="noopener" aria-label="Help: Links and cards" title="Help">?</a></h2>
   <div class="links" id="links"></div>
   <div class="row"><a class="btn primary" id="cardsLink" target="_blank" rel="noopener">Print cart cards</a><span class="help">One card per team with its QR code. Players scan it to open their scorecard. No app to download.</span></div>
   <h3>Hole in one log</h3>

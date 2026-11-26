@@ -5,7 +5,7 @@ import SwiftUI
 struct TeamsView: View {
     var body: some View {
         WithTournament { doc in TeamsPage(doc: doc) }
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { TournamentMenu() } }
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { HelpButton(topic: "teams", size: 20) }; ToolbarItem(placement: .topBarTrailing) { TournamentMenu() } }
     }
 }
 

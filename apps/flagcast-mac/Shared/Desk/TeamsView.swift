@@ -36,7 +36,7 @@ struct TeamsView: View {
             Button { printing = true } label: { Label("Cart cards", systemImage: "printer") }.buttonStyle(GlassButton())
             Button { add() } label: { Label("Add team", systemImage: "plus") }.buttonStyle(GlassButton()).keyboardShortcut("t", modifiers: [.command, .shift])
         } title: {
-            HeroTitle(title: "Teams", size: 52, sub: counts, subBeside: true)
+            HeroTitle(title: "Teams", size: 52, sub: counts, subBeside: true, help: "teams")
         } content: {
             HStack(alignment: .top, spacing: 16) {
                 table

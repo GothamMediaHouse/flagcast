@@ -69,7 +69,7 @@ function menu() {
     { label: 'View', submenu: [{ role: 'reload' }, { role: 'togglefullscreen' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'toggleDevTools' }] },
     { label: 'Screens', submenu: [{ label: 'Close all screens on this computer', accelerator: 'CmdOrCtrl+Shift+W', click: () => { for (const w of screenWins.values()) w.close(); } }] },
     { role: 'windowMenu' },
-    { role: 'help', submenu: [{ label: 'Check for Updates…', click: () => updates.check(false) }, { type: 'separator' }, { label: 'flagcast.app', click: () => shell.openExternal('https://flagcast.app') }] },
+    { role: 'help', submenu: [{ label: 'Flagcast Help', accelerator: 'F1', click: () => shell.openExternal('https://flagcast.app/help/#running') }, { type: 'separator' }, { label: 'Check for Updates…', click: () => updates.check(false) }, { type: 'separator' }, { label: 'flagcast.app', click: () => shell.openExternal('https://flagcast.app') }] },
   ]));
 }
 

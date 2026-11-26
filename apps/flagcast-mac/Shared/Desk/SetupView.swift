@@ -12,7 +12,7 @@ struct SetupView: View {
             Button("Find the course…") { finding = true }.buttonStyle(GlassButton())
             Button("Map the holes") { nav.section = .map }.buttonStyle(GlassButton())
         } title: {
-            HeroTitle(kicker: "COURSE" + (doc.ev.club.isEmpty ? "" : " · \(doc.ev.club)"), title: doc.ev.course.name.isEmpty ? "Pick the course" : doc.ev.course.name, size: 56)
+            HeroTitle(kicker: "COURSE" + (doc.ev.club.isEmpty ? "" : " · \(doc.ev.club)"), title: doc.ev.course.name.isEmpty ? "Pick the course" : doc.ev.course.name, size: 56, help: "course")
         } content: {
             HStack(alignment: .top, spacing: 16) {
                 ScrollView {

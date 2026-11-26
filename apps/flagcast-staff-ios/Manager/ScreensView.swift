@@ -7,7 +7,7 @@ import SwiftUI
 struct ScreensView: View {
     var body: some View {
         WithTournament { doc in ScreensPage(doc: doc) }
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { TournamentMenu() } }
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { HelpButton(topic: "screens", size: 20) }; ToolbarItem(placement: .topBarTrailing) { TournamentMenu() } }
     }
 }
 

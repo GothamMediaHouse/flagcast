@@ -10,7 +10,7 @@ struct StaffView: View {
         DeskPage(doc: doc, section: .staff) {
             EmptyView()
         } title: {
-            HeroTitle(title: "Staff", size: 52, sub: "Golf pros, marshals, screens and the schedule", subBeside: true)
+            HeroTitle(title: "Staff", size: 52, sub: "Golf pros, marshals, screens and the schedule", subBeside: true, help: "codes")
         } content: {
             CardForm {
             SwiftUI.Section {
@@ -71,7 +71,7 @@ struct ReportView: View {
             Button { Task { await doc.refreshDay() } } label: { Label("Refresh", systemImage: "arrow.clockwise") }.buttonStyle(GlassButton())
             Button("Results (CSV)…") { export("results", results()) }.buttonStyle(WhiteButton())
         } title: {
-            HeroTitle(title: "Report", size: 52, sub: "Results, sponsors and GHIN posting", subBeside: true)
+            HeroTitle(title: "Report", size: 52, sub: "Results, sponsors and GHIN posting", subBeside: true, help: "results")
         } content: {
             CardForm {
             SwiftUI.Section {

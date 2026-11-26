@@ -17,6 +17,7 @@ struct PlayerSettingsView: View {
     @State private var notif: UNAuthorizationStatus = .notDetermined
     @State private var recents: [Recent] = []
     @State private var liveView = LiveView.enabled
+    @State private var help: URL?
 
     var body: some View {
         NavigationStack {
@@ -69,12 +70,14 @@ struct PlayerSettingsView: View {
                 } header: { Text("Your carts and tournaments") } footer: { Text(recents.isEmpty ? "" : "Swipe left to forget one on this phone. Your scores stay with the tournament.") }
 
                 Section("About") {
+                    Button("Help") { help = URL(string: "https://flagcast.app/help/#golfers") }
                     LabeledContent("Version", value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
                     Link("Privacy", destination: Server.production.appendingPathComponent("privacy/"))
                     Link("Terms", destination: Server.production.appendingPathComponent("terms/"))
                     Link("Contact Flagcast", destination: URL(string: "mailto:hello@flagcast.app")!)
                 }
             }
+            .sheet(item: $help) { SafariView(url: $0).ignoresSafeArea() }
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .tint(Color.fcPrimary)
