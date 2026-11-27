@@ -85,6 +85,22 @@ final class DeskDoc {
         ev.photos = ph
     }
     var photoBusy: Set<String> = []
+
+    // ---- email invites (golf.js invite()): optional; each player with an email gets one email with their group and scorecard link ----
+    var inviteBusy = false
+    /// "new" (everyone with an email who hasn't had one) or player ids (Resend)
+    func sendInvites(_ who: Any) async {
+        inviteBusy = true; defer { inviteBusy = false }
+        guard let r = await day("invite", ["send": who]) else { return }
+        if let inv = r["invites"], let d = try? JSONSerialization.data(withJSONObject: inv),
+           let m = try? JSONDecoder().decode([String: Lenient<InviteMark>].self, from: d) { ev.invites = m.compactMapValues(\.value) }
+        let sent = (r["sent"] as? NSNumber)?.intValue ?? 0
+        flash((r["error"] as? String) ?? (sent > 0 ? "Sent \(sent) invite\(sent == 1 ? "" : "s")." : "Nobody new to send to."))
+    }
+    func sendTestInvite(to: String) async { await day("invite", ["test": to], done: "Test sent to \(to).") }
+    /// the email as players get it (the first player with an email), as HTML
+    func invitePreview() async -> String? { await day("invite", ["preview": true])?["html"] as? String }
+
     func flash(_ s: String) { notice = s; Task { try? await Task.sleep(for: .seconds(4)); if notice == s { notice = nil } } }
 
     // ---- links ----

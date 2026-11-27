@@ -212,6 +212,8 @@ struct TeamEditor: View {
                         LabeledContent("Course handicap") { TextField("", value: $p.hcp, format: .number).frame(width: 70).multilineTextAlignment(.trailing) }
                     }
                     Toggle("Guest", isOn: $p.guest)
+                    TextField("Email", text: $p.email, prompt: Text("For the email invite (optional)"))
+                        .foregroundStyle(p.email.isEmpty || Invites.ok(p.email) ? FC.ink : Color.red)
                 } header: {
                     HStack { Text("Player \((team.players.firstIndex { $0.id == p.id } ?? 0) + 1)"); Spacer()
                         Button(role: .destructive) { team.players.removeAll { $0.id == p.id } } label: { Image(systemName: "minus.circle") }.buttonStyle(.borderless).help("Remove this player") }
@@ -220,7 +222,7 @@ struct TeamEditor: View {
             if team.players.count < 4 {
                 Button { team.players.append(DeskPlayer()) } label: { Label("Add Player", systemImage: "plus") }
             }
-            Help("Type a player’s Handicap Index (use + for plus handicaps, like +1.2) and pick their tees to have the course handicap worked out. Or leave Index empty and type the course handicap yourself.")
+            Help("Type a player’s Handicap Index (use + for plus handicaps, like +1.2) and pick their tees to have the course handicap worked out. Or leave Index empty and type the course handicap yourself. A player’s email is optional: it’s for the email invite on Overview, and golfers never see it.")
         }
         .formStyle(.grouped)
     }
@@ -241,8 +243,10 @@ struct PasteTeamsSheet: View {
             var players: [DeskPlayer] = []
             var k = 3
             while k < f.count, players.count < 4 {
-                if !f[k].isEmpty { players.append(DeskPlayer(name: f[k], hcp: k + 1 < f.count ? Double(f[k + 1]) ?? 0 : 0)) }
-                k += 2
+                // an email can follow a player's handicap (a cell with an @)
+                let email = k + 2 < f.count && f[k + 2].contains("@") ? f[k + 2] : ""
+                if !f[k].isEmpty { var p = DeskPlayer(name: f[k], hcp: k + 1 < f.count ? Double(f[k + 1]) ?? 0 : 0); p.email = email; players.append(p) }
+                k += email.isEmpty ? 2 : 3
             }
             return players.isEmpty ? nil : DeskTeam(name: f[0], flight: f[1], start: min(18, max(1, Int(f[2]) ?? 1)), players: players)
         }
@@ -250,7 +254,7 @@ struct PasteTeamsSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Paste teams").font(.title2.bold())
-            Text("One team per line, columns split by tabs or commas: Team name, Flight, Start hole, Player 1, Handicap 1, Player 2, Handicap 2, and so on (up to 4 players). Copy the rows straight out of Excel or Google Sheets.")
+            Text("One team per line, columns split by tabs or commas: Team name, Flight, Start hole, Player 1, Handicap 1, Player 2, Handicap 2, and so on (up to 4 players). A player’s email can go after their handicap. Copy the rows straight out of Excel or Google Sheets.")
                 .foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             TextEditor(text: $text).font(.body.monospaced()).frame(minHeight: 200).overlay(RoundedRectangle(cornerRadius: 6).stroke(.quaternary))
             HStack {

@@ -189,14 +189,20 @@ struct TeamEditor: View {
             }
             SwiftUI.Section {
                 ForEach($team.players) { $p in
-                    HStack {
-                        TextField("Player name", text: $p.name).textContentType(.name)
-                        TextField("Hcp", value: $p.hcp, format: .number.precision(.fractionLength(0...1))).keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 60)
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            TextField("Player name", text: $p.name).textContentType(.name)
+                            TextField("Hcp", value: $p.hcp, format: .number.precision(.fractionLength(0...1))).keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 60)
+                        }
+                        // for the email invite (Today → Email invites); golfers never see it
+                        TextField("Email for the invite (optional)", text: $p.email)
+                            .textContentType(.emailAddress).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
+                            .font(.subheadline).foregroundStyle(p.email.isEmpty || Invites.ok(p.email) ? FC.ink : Color.red)
                     }
                 }
                 .onDelete { team.players.remove(atOffsets: $0) }
                 Button { team.players.append(DeskPlayer()) } label: { Label("Add a Player", systemImage: "plus") }.disabled(team.players.count >= 6)
-            } header: { Text("Players and handicaps") }
+            } header: { Text("Players and handicaps") } footer: { Text("A player’s email is optional. It’s only for the email invite on Today.") }
             if !team.code.isEmpty {
                 SwiftUI.Section {
                     ShareLink(item: doc.cartURL(team.code)) { Label("Send this team its scorecard link", systemImage: "square.and.arrow.up") }

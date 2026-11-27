@@ -40,7 +40,8 @@ struct OverviewView: View {
                     }
                 }
                 .padding(.horizontal, 24)
-                codesTile.padding(.horizontal, 24).padding(.bottom, 22)
+                codesTile.padding(.horizontal, 24)
+                InvitesTile(doc: doc).padding(.horizontal, 24).padding(.bottom, 22)
             }
         }
     }
@@ -226,5 +227,105 @@ struct OverviewView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .raisedCard()
+    }
+}
+
+/// Email invites (golf.js invite()): optional. Each player with an email (Teams) gets one email from the club with their
+/// group, start and a link to their scorecard. The cart cards still work on the day.
+struct InvitesTile: View {
+    @Bindable var doc: DeskDoc
+    @Environment(DeskNav.self) private var nav
+    @State private var sure = false
+    @State private var testing = false
+    @AppStorage("inviteTestTo") private var testTo = ""
+    @State private var showAll = false
+
+    var body: some View {
+        let rows = Invites.rows(doc.ev), withEmail = rows.filter { Invites.ok($0.email) }, fresh = rows.filter(\.fresh), sent = rows.filter { $0.sent != nil }
+        let first = sent.isEmpty, n = fresh.count, club = doc.ev.club.isEmpty ? "the club" : doc.ev.club
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Email invites").font(.system(size: 14, weight: .bold))
+                Spacer()
+                Button("Add emails on Teams ›") { nav.section = .teams }.buttonStyle(.plain).font(.system(size: 13, weight: .semibold)).foregroundStyle(FC.link)
+            }
+            .padding(.leading, 16).padding(.trailing, 20).padding(.vertical, 12)
+            Divider().overlay(FC.hairline)
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Optional. Each player with an email gets one email from \(club) with their group, start and a link to their scorecard. The cart cards still work on the day.")
+                    .font(.system(size: 13)).foregroundStyle(FC.muted).fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 10) {
+                    number(withEmail.count, "players have an email"); number(rows.count - withEmail.count, "have no email"); number(sent.count, "invited so far")
+                }
+                HStack(spacing: 8) {
+                    if doc.dirty { Text("Save your changes first.").font(.system(size: 13)).foregroundStyle(FC.muted) }
+                    else {
+                        Button(n == 0 ? (first ? "Add emails on Teams to send invites" : "Everyone with an email has one") : first ? "Send Invites to \(n) Player\(n == 1 ? "" : "s")" : "Send to \(n) New Player\(n == 1 ? "" : "s")") { sure = true }
+                            .buttonStyle(GreenButton()).disabled(n == 0 || doc.inviteBusy)
+                    }
+                    Button("Preview the Email") { Task { await preview() } }.buttonStyle(PlainCardButton()).disabled(rows.isEmpty)
+                    Button("Send Me a Test") { testing = true }.buttonStyle(PlainCardButton()).disabled(rows.isEmpty)
+                    if doc.inviteBusy { ProgressView().controlSize(.small) }
+                }
+                Text(first ? "Best sent a day or two before. After the first send, this button only sends to players added since." : "Best sent a day or two before.")
+                    .font(.system(size: 12)).foregroundStyle(FC.muted)
+                if !rows.isEmpty {
+                    DisclosureGroup(isExpanded: Binding(get: { showAll || !sent.isEmpty }, set: { showAll = $0 })) {
+                        VStack(spacing: 0) { ForEach(rows) { r in line(r, first: first) } }.padding(.top, 6)
+                    } label: { Text("Who gets one (\(rows.count) players)").font(.system(size: 13, weight: .semibold)) }
+                }
+            }
+            .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 14)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .raisedCard()
+        .confirmationDialog("Send \(n) invite\(n == 1 ? "" : "s") now?", isPresented: $sure, titleVisibility: .visible) {
+            Button("Send \(n) Email\(n == 1 ? "" : "s")") { Task { await doc.sendInvites("new") } }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("\(n) player\(n == 1 ? " gets" : "s get") one email each from \(club), through Flagcast. You can’t unsend them.") }
+        .alert("Send a test invite", isPresented: $testing) {
+            TextField("Your email", text: $testTo)
+            Button("Send") { let to = testTo.trimmingCharacters(in: .whitespaces); Task { await doc.sendTestInvite(to: to) } }.disabled(!Invites.ok(testTo))
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("It’s the first player’s email, marked Test.") }
+    }
+
+    private func number(_ v: Int, _ label: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("\(v)").font(.system(size: 24, weight: .bold)).foregroundStyle(FC.ink)
+            Text(label).font(.system(size: 12)).foregroundStyle(FC.muted)
+        }
+        .padding(.horizontal, 12).padding(.vertical, 8).frame(maxWidth: .infinity, alignment: .leading)
+        .background(FC.paper2, in: RoundedRectangle(cornerRadius: 10))
+    }
+    private func line(_ r: InviteRow, first: Bool) -> some View {
+        HStack(spacing: 12) {
+            Text(r.player.name).font(.system(size: 13, weight: .semibold)).frame(width: 160, alignment: .leading).lineLimit(1)
+            Text(r.group).font(.system(size: 13)).foregroundStyle(FC.muted).frame(width: 110, alignment: .leading).lineLimit(1)
+            Text(r.email.isEmpty ? "No email" : r.email).font(.system(size: 13)).foregroundStyle(r.email.isEmpty ? FC.muted : FC.ink).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+            tag(r, first: first)
+            Group {
+                if let m = r.sent {
+                    if m.n >= Invites.max { Text("Sent \(m.n) times").font(.system(size: 12)).foregroundStyle(FC.muted) }
+                    else { Button("Resend") { Task { await doc.sendInvites([r.player.id]) } }.buttonStyle(PlainCardButton()) }
+                } else if r.fresh { Button("Send") { Task { await doc.sendInvites([r.player.id]) } }.buttonStyle(PlainCardButton()) }
+            }
+            .frame(width: 90, alignment: .trailing).disabled(doc.inviteBusy || doc.dirty)
+        }
+        .padding(.vertical, 6)
+        .overlay(alignment: .top) { Rectangle().fill(FC.hairline).frame(height: 1) }
+    }
+    private func tag(_ r: InviteRow, first: Bool) -> some View {
+        var t = "Not sent", fg: Color = FC.muted, bg: Color = FC.paper2
+        if let m = r.sent { t = "Sent \(Invites.when(m.at))"; fg = Color(red: 0.18, green: 0.42, blue: 0.28); bg = Color(red: 0.89, green: 0.94, blue: 0.90) }
+        else if r.fresh { t = first ? "Not sent yet" : "Added since, not sent"; fg = Color(red: 0.48, green: 0.36, blue: 0); bg = Color(red: 0.98, green: 0.95, blue: 0.80) }
+        return Text(t).font(.system(size: 11, weight: .semibold)).foregroundStyle(fg).padding(.horizontal, 8).padding(.vertical, 2).background(bg, in: Capsule())
+            .frame(width: 150, alignment: .leading)
+    }
+    /// the email as players get it, opened in the browser
+    private func preview() async {
+        guard let html = await doc.invitePreview() else { return }
+        let f = FileManager.default.temporaryDirectory.appendingPathComponent("flagcast-invite-preview.html")
+        do { try html.write(to: f, atomically: true, encoding: .utf8); NSWorkspace.shared.open(f) } catch { doc.flash("The preview didn’t open.") }
     }
 }

@@ -10,17 +10,20 @@ struct LatLng: Codable, Hashable { var lat: Double, lng: Double }
 struct DeskPlayer: Codable, Hashable, Identifiable {
     var id: String, name: String, hcp: Double, guest: Bool
     var ghin: String = "", index: Double? = nil, tee: String = ""
-    enum CodingKeys: String, CodingKey { case id, name, hcp, guest, ghin, index, tee }
+    /// for the email invite (Overview → Email invites); never in the public state
+    var email: String = ""
+    enum CodingKeys: String, CodingKey { case id, name, hcp, guest, ghin, index, tee, email }
     init(id: String = Ids.make(), name: String = "", hcp: Double = 0, guest: Bool = false) { self.id = id; self.name = name; self.hcp = hcp; self.guest = guest }
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         id = c.str(.id); name = c.str(.name); hcp = c.dbl(.hcp, 0); guest = c.bool(.guest, false)
-        ghin = c.str(.ghin); index = c.num(.index); tee = c.str(.tee)
+        ghin = c.str(.ghin); index = c.num(.index); tee = c.str(.tee); email = c.str(.email)
     }
     func encode(to e: Encoder) throws {
         var c = e.container(keyedBy: CodingKeys.self)
         try c.encode(id, forKey: .id); try c.encode(name, forKey: .name); try c.encode(hcp, forKey: .hcp); try c.encode(guest, forKey: .guest)
         try c.encode(ghin, forKey: .ghin); try c.encode(index, forKey: .index); try c.encode(tee, forKey: .tee)
+        try c.encode(email.trimmingCharacters(in: .whitespaces), forKey: .email)
     }
 }
 
@@ -89,6 +92,37 @@ struct FixLog: Codable, Hashable { var at: Double, by: String, team: String, pla
     }
 }
 
+/// A player's email invite: the address it went to, when, and how many times (golf.js invite())
+struct InviteMark: Codable, Hashable { var to: String, at: Double, n: Int
+    init(from d: Decoder) throws { let c = try d.container(keyedBy: CodingKeys.self); to = c.str(.to); at = c.dbl(.at, 0); n = c.int(.n, 1) }
+}
+
+/// Email invites: one player's line (Overview → Email invites)
+struct InviteRow: Identifiable, Hashable {
+    let team: DeskTeam, player: DeskPlayer, email: String, sent: InviteMark?
+    var id: String { player.id }
+    /// has a good email that hasn't had this invite yet (new, or the email changed since)
+    var fresh: Bool { Invites.ok(email) && sent == nil }
+    var group: String { team.cart.isEmpty ? team.shortName : "Cart \(team.cart)" }
+}
+enum Invites {
+    /// most emails one player can get (golf.js INVITE_MAX)
+    static let max = 4
+    static func ok(_ e: String) -> Bool {
+        e.trimmingCharacters(in: .whitespaces).range(of: #"^[^\s@<>,;"'()]+@[^\s@<>,;"'()]+\.[A-Za-z]{2,}$"#, options: .regularExpression) != nil
+    }
+    static func rows(_ ev: DeskEvent) -> [InviteRow] {
+        ev.teams.flatMap { t in t.players.filter { !$0.name.isEmpty }.map { p in
+            let e = p.email.trimmingCharacters(in: .whitespaces).lowercased(), m = ev.invites[p.id]
+            return InviteRow(team: t, player: p, email: e, sent: m.flatMap { $0.to == e ? $0 : nil })
+        } }
+    }
+    static func when(_ at: Double) -> String {
+        let f = DateFormatter(); f.dateFormat = "EEE h:mm a"
+        return f.string(from: Date(timeIntervalSince1970: at / 1000))
+    }
+}
+
 struct DeskEvent: Codable, Hashable {
     // the setup (what Save sends)
     var name = "", club = "", date = ""
@@ -122,10 +156,11 @@ struct DeskEvent: Codable, Hashable {
     var stats: [String: SponsorStat] = [:]
     var log: [FixLog] = []
     var photos = Photos()   // the photos golfers see (op "photo", saved at once, never with Save)
+    var invites: [String: InviteMark] = [:]   // players' email invites by player id (op "invite", never with Save)
 
     enum CodingKeys: String, CodingKey {
         case name, club, date, course, format, sideGames, flights, teams, matches, screens, cams, sponsors, schedule, pins, displays, fund, contests, logo
-        case id, key, locked, aces, map, live, scenes, replays, news, stats, log, photos, v
+        case id, key, locked, aces, map, live, scenes, replays, news, stats, log, photos, v, invites
     }
     init() {}
     init(from d: Decoder) throws {
@@ -149,6 +184,7 @@ struct DeskEvent: Codable, Hashable {
         stats = (try? c.decodeIfPresent([String: Lenient<SponsorStat>].self, forKey: .stats))?.compactMapValues(\.value) ?? [:]
         log = c.list(.log)
         photos = (try? c.decodeIfPresent(Photos.self, forKey: .photos)) ?? Photos()
+        invites = (try? c.decodeIfPresent([String: Lenient<InviteMark>].self, forKey: .invites))?.compactMapValues(\.value) ?? [:]
     }
     /// Only the setup goes back on Save; cleanSetup ignores anything else.
     func encode(to e: Encoder) throws {

@@ -1,4 +1,5 @@
 import SwiftUI
+import WebKit
 
 /// Home (design MacHome, on a phone): a greeting over the course photo, the live (or next) tournament as one big
 /// card with the ways in, three status tiles, Coming up, then the announcement and locking the results.
@@ -89,6 +90,7 @@ private struct HomePage: View {
             }
             PinSheetCard(doc: doc)
             CodesCard(doc: doc)
+            InvitesCard(doc: doc)
             // on the day: the checks with their fixes (they cover what the status card shows on other days)
             if DayOfChecks.isEventDay(doc) { DayOfChecks(doc: doc) { tabs.tab = .screens }.card(padding: 16) } else { tiles(doc) }
             if !coming.isEmpty {
@@ -393,4 +395,82 @@ struct CodesCard: View {
         }
         .buttonStyle(.plain)
     }
+}
+
+/// Email invites (golf.js invite()): optional. Each player with an email (Teams) gets one email from the club with their
+/// group, start and a link to their scorecard. The cart cards still work on the day.
+struct InvitesCard: View {
+    @Bindable var doc: DeskDoc
+    @State private var sure = false
+    @State private var testing = false
+    @AppStorage("inviteTestTo") private var testTo = ""
+    @State private var previewHTML: String?
+    @State private var showAll = false
+
+    var body: some View {
+        let rows = Invites.rows(doc.ev), withEmail = rows.filter { Invites.ok($0.email) }.count, fresh = rows.filter(\.fresh).count
+        let sent = rows.filter { $0.sent != nil }.count, first = sent == 0, club = doc.ev.club.isEmpty ? "the club" : doc.ev.club
+        CardBox(title: "Email invites", footer: "Optional. Each player with an email gets one email from \(club) with their group, start and a link to their scorecard. Best sent a day or two before. The cart cards still work on the day.") {
+            ListRow(icon: "envelope.fill", iconColor: FC.primary, title: "\(sent) of \(withEmail) invited",
+                    sub: "\(withEmail) player\(withEmail == 1 ? " has" : "s have") an email · \(rows.count - withEmail) without") { EmptyView() }
+            if doc.dirty { ListRow(icon: "exclamationmark.circle.fill", iconColor: FC.muted, title: "Save your changes first") { EmptyView() } }
+            else if fresh > 0 {
+                Button { sure = true } label: {
+                    ListRow(icon: "paperplane.fill", iconColor: FC.green, title: first ? "Send invites to \(fresh) player\(fresh == 1 ? "" : "s")" : "Send to \(fresh) new player\(fresh == 1 ? "" : "s")",
+                            sub: first ? "After this, it only sends to players added since" : nil) { if doc.inviteBusy { ProgressView() } else { Chevron() } }
+                }
+                .disabled(doc.inviteBusy)
+            } else if withEmail == 0 {
+                ListRow(icon: "person.crop.circle.badge.plus", iconColor: FC.blue, title: "Add emails on Teams", sub: "Tap a team, then type each player’s email") { EmptyView() }
+            }
+            Button { Task { previewHTML = await doc.invitePreview() } } label: { ListRow(icon: "eye.fill", iconColor: FC.blue, title: "Preview the email") { Chevron() } }
+                .disabled(rows.isEmpty)
+            Button { testing = true } label: { ListRow(icon: "envelope.badge.fill", iconColor: FC.blue, title: "Send me a test", last: rows.isEmpty) { Chevron() } }
+                .disabled(rows.isEmpty)
+            if !rows.isEmpty {
+                DisclosureGroup(isExpanded: Binding(get: { showAll || sent > 0 }, set: { showAll = $0 })) {
+                    ForEach(rows) { r in line(r, first: first) }
+                } label: { Text("Who gets one (\(rows.count))").font(.system(size: 15, weight: .semibold)).foregroundStyle(FC.ink) }
+                .padding(.horizontal, 14).padding(.vertical, 12)
+            }
+        }
+        .buttonStyle(.plain)
+        .confirmationDialog("Send \(fresh) invite\(fresh == 1 ? "" : "s") now?", isPresented: $sure, titleVisibility: .visible) {
+            Button("Send \(fresh) Email\(fresh == 1 ? "" : "s")") { Task { await doc.sendInvites("new") } }
+        } message: { Text("\(fresh) player\(fresh == 1 ? " gets" : "s get") one email each from \(club), through Flagcast. You can’t unsend them.") }
+        .alert("Send a test invite", isPresented: $testing) {
+            TextField("Your email", text: $testTo).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
+            Button("Send") { let to = testTo.trimmingCharacters(in: .whitespaces); Task { await doc.sendTestInvite(to: to) } }
+            Button("Cancel", role: .cancel) {}
+        } message: { Text("It’s the first player’s email, marked Test.") }
+        .sheet(isPresented: Binding(get: { previewHTML != nil }, set: { if !$0 { previewHTML = nil } })) {
+            NavigationStack {
+                HTMLPreview(html: previewHTML ?? "").ignoresSafeArea(edges: .bottom)
+                    .navigationTitle("The email").navigationBarTitleDisplayMode(.inline)
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { previewHTML = nil } } }
+            }
+        }
+    }
+    private func line(_ r: InviteRow, first: Bool) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(r.player.name).font(.system(size: 15, weight: .semibold)).foregroundStyle(FC.ink)
+                Text("\(r.group) · \(r.email.isEmpty ? "No email" : r.email)").font(.footnote).foregroundStyle(FC.muted).lineLimit(1)
+                Text(r.sent.map { "Sent \(Invites.when($0.at))" } ?? (r.fresh ? (first ? "Not sent yet" : "Added since, not sent") : "Not sent"))
+                    .font(.caption.weight(.semibold)).foregroundStyle(r.sent != nil ? FC.green : FC.muted)
+            }
+            Spacer(minLength: 8)
+            if let m = r.sent, m.n < Invites.max { Button("Resend") { Task { await doc.sendInvites([r.player.id]) } }.buttonStyle(.bordered).controlSize(.small) }
+            else if r.sent == nil && r.fresh { Button("Send") { Task { await doc.sendInvites([r.player.id]) } }.buttonStyle(.bordered).controlSize(.small) }
+        }
+        .padding(.vertical, 6)
+        .disabled(doc.inviteBusy || doc.dirty)
+    }
+}
+
+/// The invite email as players see it (a web view of the HTML)
+private struct HTMLPreview: UIViewRepresentable {
+    let html: String
+    func makeUIView(context: Context) -> WKWebView { let w = WKWebView(); w.loadHTMLString(html, baseURL: URL(string: "https://flagcast.app")); return w }
+    func updateUIView(_ w: WKWebView, context: Context) {}
 }
