@@ -140,8 +140,8 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
 .sg .wnow .top i { font-style: normal; color: #fff; background: rgba(255,255,255,.15); border-radius: 6px; padding: 2px 8px; letter-spacing: 0; text-transform: none; font-size: .78rem; }
 .sg .wnow .top i.won { background: #2f8a57; } .sg .wnow .top i.lost { background: #c8312b; }
 .sg .wnow h4 { font: 700 2rem/1 var(--f-display); text-transform: uppercase; margin: 0; }
-.sg .wnow .tee { display: flex; flex-wrap: wrap; gap: 6px; } .sg .wnow .tee span { font-size: .78rem; background: rgba(255,255,255,.1); border-radius: 99px; padding: 3px 9px; }
-.sg .wnow .tee span.w { background: var(--flag); color: var(--on-flag); font-weight: 700; }
+.sg .wnow .tee { display: flex; flex-wrap: wrap; gap: 6px; } .sg .wnow .tee > span { font-size: .78rem; background: rgba(255,255,255,.1); border-radius: 99px; padding: 3px 9px; }
+.sg .wnow .tee > span.w { background: var(--flag); color: var(--on-flag); font-weight: 700; }
 .sg .wnow p { margin: 0; font-size: .92rem; } .sg .wnow p.m { color: var(--on-green-muted); font-size: .82rem; text-align: center; }
 .sg .wnow .chips { display: flex; flex-wrap: wrap; gap: 7px; }
 .sg .wnow .chips button { border: 1.5px solid rgba(255,255,255,.3); background: transparent; color: var(--on-green); border-radius: 99px; padding: 8px 14px; font: 600 .92rem var(--f-body); }
@@ -151,6 +151,7 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
 .sg .wnow .pts { display: grid; grid-template-columns: repeat(auto-fit, minmax(60px, 1fr)); gap: 6px; text-align: center; }
 .sg .wnow .pts div { background: rgba(255,255,255,.08); border-radius: 10px; padding: 6px 2px; font-size: .78rem; color: var(--on-green-muted); }
 .sg .wnow .pts b { display: block; font: 700 1.35rem var(--f-display); color: var(--on-green); } .sg .wnow .pts b.up { color: #7fe0a8; } .sg .wnow .pts b.dn { color: #ffa196; }
+.sg .wdot { color: #ff8a80; letter-spacing: .08em; font-size: .85em; } .sg .wnow .tee span.w .wdot, .sg .wnow .chips button[aria-pressed="true"] .wdot { color: #b3261e; } .sg .wtiles .wdot { color: var(--red); }
 .sg .wtiles { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .sg .wtiles button { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 9px; padding: 4px 8px; font: 600 .78rem/1.25 var(--f-body); text-align: left; }
 .sg .wtiles button small { display: block; font-size: .68rem; color: var(--muted); font-weight: 700; }
@@ -583,11 +584,13 @@ function renderSide() {
     const w = r.wolf, h = w.holes.find((x) => x.hole === (wolfHole ?? w.current)) || w.holes[w.holes.length - 1];
     const alone = h.partner === 'lone' || h.partner === 'blind', par = S.course.holes[h.hole - 1]?.par;
     const res = h.result === 'wolf' ? `<i class="won">${alone ? 'Lone Wolf won' : 'Wolf won'}</i>` : h.result === 'others' ? `<i class="lost">${alone ? 'Lone Wolf lost' : 'Wolf lost'}</i>` : h.result === 'tie' ? '<i>Halved</i>' : h.partner ? '' : (w.blind ? 'Before the tee shots' : 'After the tee shots');
+    // stroke dots, as on the scorecard: a dot for each stroke a player gets on the hole (net), −1 for a plus handicap
+    const dot = (x, k) => { const st = (x.strokes || {})[k] || 0; return st > 0 ? ` <span class="wdot" title="${st} stroke${st > 1 ? 's' : ''} here">${'●'.repeat(st)}</span>` : st < 0 ? ` <span class="wdot" title="Gives a stroke back here">−${-st}</span>` : ''; };
     const btn = (v, t) => `<button data-wolf="${h.hole}:${v}" aria-pressed="${h.partner === v}">${t}</button>`;
     let c = `<div class="top"><span>Hole ${h.hole}${par ? ` · Par ${par}` : ''}</span><span>${res}</span></div><h4>${nm(h.wolf)} is the wolf</h4>
-      <div class="tee">${h.tee.map((k, i) => `<span class="${k === h.wolf ? 'w' : ''}">${i + 1} ${nm(k)}${k === h.wolf ? ' 🐾' : ''}</span>`).join('')}</div>`;
+      <div class="tee">${h.tee.map((k, i) => `<span class="${k === h.wolf ? 'w' : ''}">${i + 1} ${nm(k)}${dot(h, k)}${k === h.wolf ? ' 🐾' : ''}</span>`).join('')}</div>${Object.keys(h.strokes || {}).length ? '<p class="m" style="text-align:left;margin-top:-4px"><span class="wdot">●</span> a stroke on this hole</p>' : ''}`;
     if (w.blind && !h.result && (!h.partner || h.partner === 'blind')) c += `<button class="blind" data-wolf="${h.hole}:blind">Blind Wolf · triple${h.partner === 'blind' ? ' ✓' : ''}</button>${h.partner ? '' : '<p class="m">Or watch the drives, then pick below</p>'}`;
-    if (h.partner !== 'blind') c += `<p>${nm(h.wolf)} takes a partner or goes alone</p><div class="chips">${h.tee.filter((k) => k !== h.wolf).map((k) => btn(k, `+ ${nm(k)}`)).join('')}${btn('lone', `Lone Wolf ×${w.lone}`)}</div>`;
+    if (h.partner !== 'blind') c += `<p>${nm(h.wolf)} takes a partner or goes alone</p><div class="chips">${h.tee.filter((k) => k !== h.wolf).map((k) => btn(k, `+ ${nm(k)}${dot(h, k)}`)).join('')}${btn('lone', `Lone Wolf ×${w.lone}`)}</div>`;
     if (h.partner) {
       const others = h.tee.filter((k) => k !== h.wolf && k !== h.partner).map(nm);
       c += `<p>${alone ? `${nm(h.wolf)} alone against ${others.join(', ')}, for ${h.partner === 'blind' || w.lone === 3 ? 'triple' : 'double'}` : `${nm(h.wolf)} &amp; ${nm(h.partner)} against ${others.join(' &amp; ')}`}</p>`;
@@ -597,9 +600,9 @@ function renderSide() {
     if (w.current && w.current !== h.hole) c += `<button class="back" data-wolfhole="">Back to hole ${w.current}</button>`;
     b += `<div class="wnow">${c}</div>`;
     b += `<div class="label" style="margin-top:12px">Every hole</div><div class="wtiles">${w.holes.map((x) => {
-      const call = x.partner === 'lone' ? 'Alone' : x.partner === 'blind' ? 'Blind' : x.partner ? `+ ${nm(x.partner)}` : '…';
+      const call = x.partner === 'lone' ? 'Alone' : x.partner === 'blind' ? 'Blind' : x.partner ? `+ ${nm(x.partner)}${dot(x, x.partner)}` : '…';
       const mark = x.result === 'wolf' ? ' ✓' : x.result === 'others' ? ' ✗' : x.result === 'tie' ? ' =' : '';
-      return `<button data-wolfhole="${x.hole}" class="${x.result === 'wolf' ? 'won' : x.result === 'others' ? 'lost' : ''} ${x.partner === 'lone' || x.partner === 'blind' ? 'alone' : ''}" aria-current="${x.hole === h.hole}"><small>${x.hole} · ${nm(x.wolf)}</small>${call}${mark}</button>`;
+      return `<button data-wolfhole="${x.hole}" class="${x.result === 'wolf' ? 'won' : x.result === 'others' ? 'lost' : ''} ${x.partner === 'lone' || x.partner === 'blind' ? 'alone' : ''}" aria-current="${x.hole === h.hole}"><small>${x.hole} · ${nm(x.wolf)}${dot(x, x.wolf)}</small>${call}${mark}</button>`;
     }).join('')}</div><p class="help">Tap a hole to see it or change the call.</p>`;
     const t = r.tally.wolf || {};
     b += `<table><tr><th>Wolf points</th><th class="r"></th></tr>${[...r.players].sort((x, y) => (t[y.key] || 0) - (t[x.key] || 0)).map((p) => { const v = Math.round((t[p.key] || 0) * 100) / 100; return `<tr><td>${esc(p.short)}</td><td class="r ${v > 0 ? 'up' : v < 0 ? 'down' : ''}">${v ? `${v > 0 ? '+' : '−'}${pts(v)}` : 'Even'}</td></tr>`; }).join('')}</table>`;

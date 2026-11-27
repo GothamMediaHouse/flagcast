@@ -91,7 +91,7 @@ final class CoreTests: XCTestCase {
         if let v = r.vegas { o["vegas"] = ["sides": v.sides, "holes": v.holes.map { ["hole": $0.hole, "a": $0.a, "b": $0.b] }, "total": v.total] as [String: Any] }
         if r.vegasNeedsFour { o["vegasNeedsFour"] = true }
         if let w = r.wolf {
-            o["wolf"] = ["holes": w.holes.map { ["hole": $0.hole, "wolf": $0.wolf, "partner": $0.partner, "result": $0.result, "tee": $0.tee, "pts": $0.pts] as [String: Any?] },
+            o["wolf"] = ["holes": w.holes.map { ["hole": $0.hole, "wolf": $0.wolf, "partner": $0.partner, "result": $0.result, "tee": $0.tee, "pts": $0.pts, "strokes": $0.strokes] as [String: Any?] },
                          "order": w.order, "lone": w.lone, "blind": w.blind, "current": w.current] as [String: Any?]
         }
         if let c = r.closest { o["closest"] = c.map { ["hole": $0.hole, "winner": $0.winner] as [String: Any?] } }

@@ -564,7 +564,9 @@ export function sideGames(ev, scores, teamIds, cfg = {}) {
         const give = (L, W) => { for (const l of L) for (const w of W) { const v = st / mine.length; pay(l.key, w.key, v); pts[l.key] = (pts[l.key] || 0) - v; pts[w.key] = (pts[w.key] || 0) + v; } };
         if (x < y) { result = 'wolf'; give(rest, mine); } else if (y < x) { result = 'others'; give(mine, rest); } else result = 'tie';
       }
-      return { hole: i + 1, wolf, partner, result, tee, pts };
+      // strokes each player gets on the hole (net only; a plus handicap gives one back), for the dots on the card
+      const strokes = net ? Object.fromEntries(players.map((p) => [p.key, strokesOn(p.hcp, holes[i].hcp)]).filter(([, v]) => v)) : {};
+      return { hole: i + 1, wolf, partner, result, tee, pts, strokes };
     });
     out.wolf = { holes: holesOut, order: tee1, lone, blind, current: holesOut.find((h) => !h.result)?.hole ?? null };
   }

@@ -51,3 +51,11 @@ assert.deepEqual(mine.holes.slice(0, 3).map((h) => h.wolf), ['ta:p2', 'tb:p4', '
 assert.equal(mine.holes[0].result, 'tie'); assert.deepEqual(mine.holes[0].pts, {});
 assert.deepEqual(mine.holes[2].pts, { 'ta:p1': 1, 'tb:p4': 1, 'ta:p2': -1, 'tb:p3': -1 });
 assert.equal(mine.current, 2); ok('the cart sets its own tee order; each hole shows its points and the hole they are on');
+const hev = { ...ev, teams: [{ ...ev.teams[0], players: [{ id: 'p1', name: 'Ann', hcp: 20 }, ev.teams[0].players[1]] }, { ...ev.teams[1], players: [ev.teams[1].players[0], { id: 'p4', name: 'Dee', hcp: -2 }] }] };
+const hw = (net) => sideGames(hev, scores, ['ta', 'tb'], { wolf: { on: true, net } }).wolf;
+const si = (h) => defaultHoles()[h - 1].hcp;
+assert.equal(hw(true).holes.find((h) => si(h.hole) === 1).strokes['ta:p1'], 2);
+assert.equal(hw(true).holes.find((h) => si(h.hole) === 18).strokes['ta:p1'], 1);
+assert.equal(hw(true).holes.find((h) => si(h.hole) === 18).strokes['tb:p4'], -1);
+assert.equal(hw(true).holes[0].strokes['ta:p2'], undefined);
+assert.deepEqual(hw(false).holes[0].strokes, {}); ok('each hole shows the strokes (net only), for the dots on the Wolf card');

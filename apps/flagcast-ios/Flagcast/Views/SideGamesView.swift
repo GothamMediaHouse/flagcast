@@ -529,11 +529,14 @@ private struct SideGamePage: View {
             Text("\(nm(h.wolf)) is the wolf").font(FCType.display(34)).textCase(.uppercase).foregroundStyle(Color.fcOnGreen)
             FlowLayout(spacing: 6) {
                 ForEach(Array(h.tee.enumerated()), id: \.offset) { i, k in
-                    Text("\(i + 1) \(nm(k))" + (k == h.wolf ? " 🐾" : "")).font(.caption.weight(k == h.wolf ? .bold : .regular))
+                    (Text("\(i + 1) \(nm(k))") + wolfDots(h, k, on: k == h.wolf) + Text(k == h.wolf ? " 🐾" : "")).font(.caption.weight(k == h.wolf ? .bold : .regular))
                         .padding(.horizontal, 9).padding(.vertical, 4)
                         .background(k == h.wolf ? Color.fcFlag : Color.white.opacity(0.1), in: Capsule())
                         .foregroundStyle(k == h.wolf ? Color.fcOnFlag : Color.fcOnGreen)
                 }
+            }
+            if h.strokes.values.contains(where: { $0 > 0 }) {
+                (Text("●").foregroundColor(Color(red: 1, green: 0.54, blue: 0.5)) + Text(" a stroke on this hole")).font(.footnote).foregroundStyle(Color.fcOnGreenMuted)
             }
             if w.blind && (h.partner == nil || h.partner == "blind") && h.result == nil {
                 Button { pick(\.wolf, h.hole, "blind", current: h.partner) } label: {
@@ -547,9 +550,9 @@ private struct SideGamePage: View {
                 Text("\(nm(h.wolf)) takes a partner or goes alone").font(.subheadline).foregroundStyle(Color.fcOnGreen)
                 FlowLayout(spacing: 7) {
                     ForEach(h.tee.filter { $0 != h.wolf }, id: \.self) { k in
-                        WolfChip(title: "+ \(nm(k))", on: h.partner == k) { pick(\.wolf, h.hole, k, current: h.partner) }
+                        WolfChip(title: "+ \(nm(k))", dots: dotString(h.strokes[k]), on: h.partner == k) { pick(\.wolf, h.hole, k, current: h.partner) }
                     }
-                    WolfChip(title: "Lone Wolf ×\(w.lone)", on: h.partner == "lone") { pick(\.wolf, h.hole, "lone", current: h.partner) }
+                    WolfChip(title: "Lone Wolf ×\(w.lone)", dots: "", on: h.partner == "lone") { pick(\.wolf, h.hole, "lone", current: h.partner) }
                 }
             }
             if let p = h.partner {
@@ -584,6 +587,12 @@ private struct SideGamePage: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .background(Color.fcGreen, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    /// stroke dots, as on the scorecard: a dot for each stroke a player gets on the hole (net), −1 for a plus handicap
+    private func wolfDots(_ h: WolfHole, _ k: String, on: Bool) -> Text {
+        let d = dotString(h.strokes[k])
+        return d.isEmpty ? Text("") : Text(d).foregroundColor(on ? Color(red: 0.7, green: 0.15, blue: 0.12) : Color(red: 1, green: 0.54, blue: 0.5))
     }
 
     /// Wolf: the tee order on the first hole. Tap the arrow to move a player up one place.
@@ -667,12 +676,18 @@ private struct SideGamePage: View {
     }
 }
 
+/// " ●●" for two strokes on a hole, " −1" for one given back, "" for none
+func dotString(_ st: Int?) -> String {
+    guard let st, st != 0 else { return "" }
+    return st > 0 ? " " + String(repeating: "●", count: st) : " −\(-st)"
+}
+
 /// a chip on the green Wolf card
 private struct WolfChip: View {
-    let title: String, on: Bool, action: () -> Void
+    let title: String, dots: String, on: Bool, action: () -> Void
     var body: some View {
         Button(action: action) {
-            Text(title).font(.subheadline.weight(.semibold))
+            (Text(title) + Text(dots).foregroundColor(on ? Color(red: 0.7, green: 0.15, blue: 0.12) : Color(red: 1, green: 0.54, blue: 0.5))).font(.subheadline.weight(.semibold))
                 .padding(.horizontal, 14).frame(minHeight: 38)
                 .background(on ? Color.fcFlag : Color.clear, in: Capsule())
                 .overlay(Capsule().stroke(on ? Color.fcFlag : Color.white.opacity(0.3), lineWidth: 1.5))
@@ -690,8 +705,8 @@ private struct WolfTile: View {
         let alone = h.partner == "lone" || h.partner == "blind"
         let tint: Color = h.result == "wolf" ? .fcOK : h.result == "others" ? .fcRed : .fcInk
         VStack(alignment: .leading, spacing: 1) {
-            Text("\(h.hole) · \(name)").font(.caption2.weight(.bold)).foregroundStyle(Color.fcMuted)
-            Text((partner ?? "…") + (h.result == "wolf" ? " ✓" : h.result == "others" ? " ✗" : h.result == "tie" ? " =" : ""))
+            (Text("\(h.hole) · \(name)").foregroundColor(Color.fcMuted) + Text(dotString(h.strokes[h.wolf])).foregroundColor(Color.fcRed)).font(.caption2.weight(.bold))
+            (Text(partner ?? "…") + Text(h.partner.map { dotString(h.strokes[$0]) } ?? "").foregroundColor(Color.fcRed) + Text(h.result == "wolf" ? " ✓" : h.result == "others" ? " ✗" : h.result == "tie" ? " =" : ""))
                 .font(.caption.weight(.semibold)).foregroundStyle(tint)
         }
         .padding(.horizontal, 8).padding(.vertical, 5)

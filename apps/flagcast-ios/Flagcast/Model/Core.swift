@@ -136,6 +136,8 @@ struct SideVegas: Hashable { var sides: [String: [String]]; var holes: [VegasHol
 struct WolfHole: Hashable {
     var hole: Int, wolf: String, partner: String?, result: String?  // result: "wolf", "others", "tie"
     var tee: [String] = [], pts: [String: Double] = [:]
+    /// strokes each player gets on the hole (net only; negative gives one back), for the dots on the card
+    var strokes: [String: Int] = [:]
 }
 struct SideWolf: Hashable { var holes: [WolfHole]; var order: [String] = []; var lone = 2; var blind = false; var current: Int? }
 struct PickHole: Hashable { var hole: Int, winner: String? }
@@ -710,7 +712,9 @@ enum Core {
                     else if y < x { result = "others"; give(mine, rest) }
                     else { result = "tie" }
                 }
-                rows.append(WolfHole(hole: i + 1, wolf: wolf, partner: partner, result: result, tee: tee, pts: pts))
+                var strokes: [String: Int] = [:]
+                if wf.net { for p in players { let st = strokesOn(p.hcp, holes[i].hcp); if st != 0 { strokes[p.key] = st } } }
+                rows.append(WolfHole(hole: i + 1, wolf: wolf, partner: partner, result: result, tee: tee, pts: pts, strokes: strokes))
             }
             out.wolf = SideWolf(holes: rows, order: tee1, lone: Int(lone), blind: wf.blind, current: rows.first { $0.result == nil }?.hole)
         }
