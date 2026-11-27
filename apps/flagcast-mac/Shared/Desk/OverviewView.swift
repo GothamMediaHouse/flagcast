@@ -25,6 +25,8 @@ struct OverviewView: View {
                 HeroTitle(kicker: dayLine(ev.date) ?? "NO DATE SET", live: isToday && !ev.locked, title: ev.name.isEmpty ? "Tournament" : ev.name, size: 76, sub: subtitle)
             }
         } content: {
+            // scrolls: in a short window the cards below (Codes, Email invites) need room
+            ScrollView(.vertical) {
             VStack(spacing: 18) {
                 stats.padding(.horizontal, 24)
                 // the leaderboard takes the room; the contest card keeps a fixed share (its photo never sets the width)
@@ -43,6 +45,8 @@ struct OverviewView: View {
                 codesTile.padding(.horizontal, 24)
                 InvitesTile(doc: doc).padding(.horizontal, 24).padding(.bottom, 22)
             }
+            }
+            .scrollIndicators(.automatic)
         }
     }
 
