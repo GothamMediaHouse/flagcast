@@ -134,6 +134,11 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
 .sg .owe { font-size: 1.05rem; padding: 10px 0; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 10px; }
 .sg .owe b { font-family: var(--f-mono); }
 .sg .fine { font-size: .8rem; color: var(--muted); margin-top: 12px; }
+.openapp { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--card, #fff); border-bottom: 1px solid var(--hairline, #e3e6df); font-size: .92rem; }
+.openapp[hidden] { display: none; }
+.openapp span { flex: 1; }
+.openapp .btn { padding: 6px 12px; min-height: 0; font-size: .9rem; text-decoration: none; }
+.openapp button { background: none; border: 0; font-size: 1.3rem; color: var(--muted); padding: 0 4px; }
 </style>
 </head>
 <body>
@@ -142,6 +147,7 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
   <div class="teamline" id="teamline" hidden></div>
   <div class="teamtabs" id="tabs" hidden></div>
 </header>
+<div class="openapp" id="openapp" hidden><span>Have the Flagcast app?</span><a id="openappGo" class="btn primary">Open in the app</a><button id="openappX" aria-label="Close">×</button></div>
 <div class="offline" id="offline" role="status" hidden><b>No signal.</b> <span id="offmsg">Your scores are saved on this phone and send by themselves when you’re back in range.</span> <button id="trynow">Try now</button></div>
 <div class="locked" id="locked" hidden>Scoring is closed. The results are final.</div>
 <nav class="strip" id="strip" aria-label="Holes"></nav>
@@ -167,6 +173,17 @@ import { appBar, remember } from '/golf/appbar.js';
 appBar('score');
 
 const code = (location.pathname.match(/\/s\/([A-Z0-9]{6})/) || [])[1] || '';
+// on an iPhone's browser: a way into the Flagcast app with this scorecard (a link from Gmail or another app's browser
+// doesn't hand off to the app by itself). Not in the app, and not once closed.
+(() => {
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  let closed = false; try { closed = localStorage.getItem('fc.openappX') === '1'; } catch {}
+  const id = (location.pathname.match(/\/g\/([a-z0-9]{8})/) || [])[1];
+  if (!ios || closed || !id || !code || /FlagcastApp/.test(navigator.userAgent) || matchMedia('(display-mode: standalone)').matches) return;
+  document.getElementById('openappGo').href = `flagcast://g/${id}/s/${code}`;
+  document.getElementById('openapp').hidden = false;
+  document.getElementById('openappX').onclick = () => { document.getElementById('openapp').hidden = true; try { localStorage.setItem('fc.openappX', '1'); } catch {} };
+})();
 const KEY = `golf:${eventId()}:${code}`;
 const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(`${KEY}:${k}`)) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(`${KEY}:${k}`, JSON.stringify(v)); } catch {} } };
 let S = null, teams = store.get('teams', []), teamId = store.get('team', null), hole = store.get('hole', null);
