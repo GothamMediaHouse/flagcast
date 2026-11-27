@@ -8,6 +8,7 @@ import UIKit
 struct ScorecardScreen: View {
     @Bindable var model: ScorecardModel
     @State private var camera: CameraLink?
+    @State private var savingShot = false
     @State private var dismissed = 0.0
     @State private var replay: Replay?
     @State private var replaySeen = 0.0
@@ -173,7 +174,7 @@ struct ScorecardScreen: View {
         HoleCard(state: s, hole: H, onHole: { d in
             let ord = model.order(t), i = ord.firstIndex(of: model.currentHole()) ?? 0
             model.hole = ord[max(0, min(ord.count - 1, i + d))]
-        }, scorer: model, camera: s.cams[h].flatMap(URL.init(string:)).map { u in { camera = CameraLink(hole: h, url: u) } })
+        }, scorer: model, camera: s.camShown(h).map { u in { camera = CameraLink(hole: h, url: u) } })
         if let r = myMatch(s, t) { matchPill(s, t, r) }
         VStack(spacing: 0) {
             let ps = s.scorers(t), tight = ps.count > 2
@@ -202,6 +203,7 @@ struct ScorecardScreen: View {
         let mine = s.contests.filter { $0.hole == h && $0.golfersEnter && !s.locked }
         let cs = s.contests.filter { $0.hole == h && !($0.golfersEnter && !s.locked) }
         let tiles = (sp == nil ? 0 : 1) + (turn == nil ? 0 : 1) + cs.count
+        if s.canSaveShot(h) && !s.locked { saveShotCard(h) }
         ForEach(mine) { c in contestCard(c) }
         if tiles > 0 {
             // one tile gets the whole width, so a sponsor's name fits on one line
@@ -217,6 +219,38 @@ struct ScorecardScreen: View {
                 ForEach(cs) { c in contestTile(c) }
             }
         }
+    }
+
+    /// "Save your shot" on a camera hole: a 15-second replay from the club's camera (golfers never send video).
+    /// It shows in Latest replays on the Cameras tab for everyone.
+    private func saveShotCard(_ h: Int) -> some View {
+        Button {
+            guard !savingShot else { return }
+            savingShot = true
+            Task {
+                do {
+                    _ = try await API.post(model.id, "clip", ["code": model.code, "team": model.teamId, "hole": h])
+                    model.toast = "Saved. Your shot is in the replays on the Cameras tab."
+                } catch { model.toast = error.localizedDescription }
+                try? await Task.sleep(for: .seconds(20))
+                savingShot = false
+            }
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: savingShot ? "checkmark" : "play.fill").font(.headline).foregroundStyle(Color.fcOnFlag)
+                    .frame(width: 40, height: 40).background(Color.fcFlag, in: RoundedRectangle(cornerRadius: 10))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(savingShot ? "Shot saved" : "Just hit? Save your shot").font(.subheadline.weight(.bold)).foregroundStyle(Color.fcOnGreen)
+                    Text("The hole \(h) camera keeps the last 15 seconds for your group.").font(.caption).foregroundStyle(Color.fcOnGreenMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .background(Color.fcGreen, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Keeps a 15-second replay of your shot from the club’s camera")
     }
 
     /// A contest golfers enter themselves: the leader, this cart's entries (✓ on the board, ◷ waiting for the pro), and the button.

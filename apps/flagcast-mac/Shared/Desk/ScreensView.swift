@@ -48,17 +48,13 @@ struct ScreensView: View {
                 }
             } header: { Text("Announcement") }
             SwiftUI.Section {
-                if par3s.isEmpty { Text("This course has no par 3s.").foregroundStyle(.secondary) }
-                ForEach(par3s, id: \.n) { h in
-                    let on = !(doc.live?.cams[h.n] ?? doc.ev.cams[h.n] ?? "").isEmpty
-                    LabeledContent("Hole \(h.n)") { Label(on ? "Camera set up" : "No camera", systemImage: on ? "video.fill" : "video.slash").foregroundStyle(on ? FC.ok : FC.muted) }
-                }
-            } header: { Text("Par 3 cameras") } footer: {
-                Help("Cameras are set up by Flagcast. Pick “Par 3 camera” for a TV to show them; a hole without a camera shows a drawing of the hole.")
+                PlayerCameraSwitches(doc: doc)
+            } header: { Text("Cameras for players") } footer: {
+                Help("Choose which cameras golfers see on the Cameras tab of the app and the live leaderboard. Cameras are set up by Flagcast, and a golf pro can go live from an iPhone. Pick “Par 3 camera” for a TV to show a hole’s camera; a hole without one shows a drawing of the hole.")
             }
             SwiftUI.Section {
                 HStack {
-                    Picker("Hole", selection: $replay.hole) { Text("Hole").tag(0); ForEach(par3s, id: \.n) { Text("Hole \($0.n)").tag($0.n) } }.frame(width: 120)
+                    Picker("Hole", selection: $replay.hole) { Text("Hole").tag(0); ForEach(doc.ev.course.holes.filter { $0.par == 3 || doc.live?.cams[$0.n] != nil }, id: \.n) { Text("Hole \($0.n)").tag($0.n) } }.frame(width: 120)
                     TextField("Who and what", text: $replay.label, prompt: Text("Dana Ruiz, 3 feet!"))
                     TextField("Clip link", text: $replay.url, prompt: Text("Optional"))
                     Button("Save Replay") { saveReplay(screens: false) }.disabled(replay.hole == 0)
@@ -74,8 +70,8 @@ struct ScreensView: View {
                         Button(role: .destructive) { Task { await doc.day("replay", ["remove": r.id], done: "Removed.") } } label: { Image(systemName: "trash") }.buttonStyle(.borderless)
                     }
                 }
-            } header: { Text("Par 3 replays") } footer: {
-                Help("Save Replay plays the hole’s camera back from 25 seconds before you press it (the camera’s HLS link must keep a recording window). Or paste a clip link (.mp4 or .m3u8). Players see replays on their phones.")
+            } header: { Text("Replays") } footer: {
+                Help("Save Replay plays the hole’s camera back from 25 seconds before you press it (the camera’s HLS link must keep a recording window). Or paste a clip link (.mp4 or .m3u8). Players see replays on their phones, and groups can save their own shot on camera holes.")
             }
             SwiftUI.Section {
                 ForEach($doc.ev.sponsors) { $s in SponsorRow(sponsor: $s, holes: doc.ev.course.holes, doc: doc) { doc.ev.sponsors.removeAll { $0.id == s.id } } }

@@ -87,8 +87,16 @@ struct AdminEvent: Decodable, Identifiable, Hashable {
     var teams: Int, scored: Int, screens: Int, online: Int, replays: Int
     var displays: [Disp], p3: [Int], sponsors: [Named], replayList: [Rep], scenes: [Named], scene: String, flights: [String]
     var take: Take?, flash: Flash?, phone: PhoneRoute?
-    /// par 3 camera links by hole (set by Flagcast Admin only)
+    /// camera links by hole, 0 for the clubhouse (set by Flagcast Admin only)
     var cams: [Int: String]
+    /// where Admin offers a camera link: the clubhouse (0), par 3s, contest holes, the 18th green, and holes that have one
+    var camHoles: [Int] = []
+    /// contest holes → "Closest to the pin" / "Long drive"
+    var contestHoles: [Int: String] = [:]
+    /// "Clubhouse", "Hole 7 · Closest to the pin", "Hole 18 · 18th green"
+    func camName(_ h: Int) -> String {
+        h == 0 ? "Clubhouse" : (["Hole \(h)", contestHoles[h] ?? (h == 18 && !p3.contains(18) ? "18th green" : "")].filter { !$0.isEmpty }.joined(separator: " · "))
+    }
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         id = c.str(.id); key = c.str(.key); name = c.str(.name); club = c.str(.club); clubName = c.str(.clubName); date = c.str(.date)
@@ -97,13 +105,15 @@ struct AdminEvent: Decodable, Identifiable, Hashable {
         struct Brand: Decodable { var logo: String? }
         logo = ((try? c.decodeIfPresent(Brand.self, forKey: .brand)) ?? nil)?.logo ?? ""
         teams = c.int(.teams, 0); scored = c.int(.scored, 0); screens = c.int(.screens, 0); online = c.int(.online, 0); replays = c.int(.replays, 0)
-        displays = c.list(.displays); p3 = (try? c.decodeIfPresent([Int].self, forKey: .p3)) ?? []; sponsors = c.list(.sponsors); replayList = c.list(.replayList)
+        displays = c.list(.displays); p3 = (try? c.decodeIfPresent([Int].self, forKey: .p3)) ?? [];
+        camHoles = (try? c.decodeIfPresent([Int].self, forKey: .camHoles)) ?? p3
+        contestHoles = Dictionary(uniqueKeysWithValues: ((try? c.decodeIfPresent([String: String].self, forKey: .contestHoles)) ?? [:]).compactMap { k, v in Int(k).map { ($0, v) } }); sponsors = c.list(.sponsors); replayList = c.list(.replayList)
         scenes = c.list(.scenes); scene = c.str(.scene); flights = (try? c.decodeIfPresent([String].self, forKey: .flights)) ?? []
         take = try? c.decodeIfPresent(Take.self, forKey: .take); flash = try? c.decodeIfPresent(Flash.self, forKey: .flash); phone = try? c.decodeIfPresent(PhoneRoute.self, forKey: .phone)
         let raw = (try? c.decodeIfPresent([String: String].self, forKey: .cams)) ?? [:]
         cams = Dictionary(uniqueKeysWithValues: raw.compactMap { k, v in Int(k).map { ($0, v) } })
     }
-    enum CodingKeys: String, CodingKey { case id, key, name, club, clubName, date, created, hidden, archived, gone, locked, demo, brand, lastScore, scoringNow, teams, scored, screens, online, replays, displays, p3, sponsors, replayList, scenes, scene, flights, take, flash, phone, cams }
+    enum CodingKeys: String, CodingKey { case id, key, name, club, clubName, date, created, hidden, archived, gone, locked, demo, brand, lastScore, scoringNow, teams, scored, screens, online, replays, displays, p3, sponsors, replayList, scenes, scene, flights, take, flash, phone, cams, camHoles, contestHoles }
     var isToday: Bool { date == ISO8601DateFormatter.day.string(from: Date()) }
     var ref: EventRef { EventRef(id: id, key: key, name: name, date: date, club: clubName) }
 }

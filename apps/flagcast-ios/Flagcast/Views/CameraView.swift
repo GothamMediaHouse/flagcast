@@ -231,7 +231,7 @@ struct FullscreenCamera: View {
                     HStack(spacing: 10) {
                         Button { dismiss() } label: { Image(systemName: "xmark").font(.headline).frame(width: 44, height: 44).background(.black.opacity(0.55), in: Circle()) }
                             .accessibilityLabel("Close")
-                        Text("Hole \(hole)").font(FCType.display(26)).textCase(.uppercase)
+                        Text(EventState.camName(hole)).font(FCType.display(26)).textCase(.uppercase)
                         Text(cam.replay != nil ? "REPLAY" : "LIVE").font(.caption2.monospaced().weight(.semibold)).tracking(1)
                             .padding(.horizontal, 6).padding(.vertical, 2)
                             .background(cam.replay != nil ? Color(UIColor(hex: 0xe8c547)) : Color(UIColor(hex: 0xc8312b)))
@@ -280,7 +280,7 @@ struct AllPar3s: View {
     @Environment(\.dismiss) private var dismiss
     @State private var picked: Int?
 
-    var holes: [Hole] { state.course.holes.filter { $0.par == 3 && (state.cams[$0.n].map { $0.lowercased().contains(".m3u8") } ?? false) } }
+    var holes: [Hole] { state.course.holes.filter { $0.par == 3 && (state.camShown($0.n)?.absoluteString.lowercased().contains(".m3u8") ?? false) } }
 
     var body: some View {
         GeometryReader { geo in
@@ -370,7 +370,7 @@ struct CameraSheet: View {
                     CameraBox(hole: link.hole, camURL: link.isHLS ? link.url : nil, replays: replays).padding(16)
                 }
                 .background(Color.fcPaper)
-                .navigationTitle("Hole \(link.hole) camera").navigationBarTitleDisplayMode(.inline)
+                .navigationTitle("\(EventState.camName(link.hole)) camera").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             }
         } else {
@@ -420,7 +420,7 @@ struct ReplayBanner: View {
                 .padding(.horizontal, 7).padding(.vertical, 3)
                 .background(Color(UIColor(hex: 0xe8c547)), in: RoundedRectangle(cornerRadius: 3)).foregroundStyle(Color.fcOnFlag)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Hole \(replay.hole)").font(.subheadline.weight(.bold)).foregroundStyle(Color.fcOnGreen)
+                Text(EventState.camName(replay.hole)).font(.subheadline.weight(.bold)).foregroundStyle(Color.fcOnGreen)
                 if !replay.label.isEmpty { Text(replay.label).font(.caption).foregroundStyle(Color.fcOnGreenMuted).lineLimit(1) }
             }
             Spacer(minLength: 4)

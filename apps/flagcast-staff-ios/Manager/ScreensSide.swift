@@ -341,6 +341,7 @@ private struct CamerasCard: View {
     private var phoneLive: [Int: String] { doc.live?.golive ?? [:] }
     /// par 3s, plus any other hole live from a phone now
     private var camHoles: [Hole] { doc.ev.course.holes.filter { $0.par == 3 || phoneLive[$0.n] != nil } }
+    // (the clubhouse camera, 0, is listed in Cameras for players)
 
     var body: some View {
         CardBox(title: "Cameras", footer: "Go live sends this iPhone’s camera to a hole: the club TVs and the players’ Cameras tab show it. Pick “Par 3 camera” for a TV to show a hole’s camera; a hole without one shows a drawing of the hole.") {
@@ -373,10 +374,13 @@ private struct CamerasCard: View {
                 .overlay(alignment: .bottom) { Rectangle().fill(FC.hairline).frame(height: 1).padding(.leading, 14) }
             }
         }
+        CardBox(title: "Cameras for players", footer: "Choose which cameras golfers see on the Cameras tab of the app and the live leaderboard, and whether groups can save their shot (a 15-second replay from the club’s camera).") {
+            PlayerCameraSwitches(doc: doc, inset: 14).padding(.vertical, 6).tint(FC.ok)
+        }
         if !par3s.isEmpty {
             CardBox(title: "Par 3 replays", footer: "Save Replay keeps the last 25 seconds of the hole’s camera. Or paste a video link. Golfers see replays on their phones too.") {
                 VStack(alignment: .leading, spacing: 10) {
-                    Picker("Hole", selection: $replay.hole) { Text("Pick a hole").tag(0); ForEach(par3s, id: \.n) { Text("Hole \($0.n)").tag($0.n) } }.tint(FC.link)
+                    Picker("Hole", selection: $replay.hole) { Text("Pick a hole").tag(0); ForEach(doc.ev.course.holes.filter { $0.par == 3 || doc.live?.cams[$0.n] != nil }, id: \.n) { Text("Hole \($0.n)").tag($0.n) } }.tint(FC.link)
                     BoxField(placeholder: "Who and what (Dana Ruiz, 3 feet!)", text: $replay.label)
                     BoxField(placeholder: "Video link (optional)", text: $replay.url).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                     HStack(spacing: 8) {

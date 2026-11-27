@@ -17,6 +17,10 @@ struct LeaderboardScreen: View {
     @State private var dismissed = 0.0          // bumped when the phone banner is closed, to redraw
     @State private var scrollTo: String?
     @State private var allPar3s = false
+    /// the Cameras tab's filter (nil: every camera)
+    @State private var camKind: CamItem.Kind?
+    /// a replay from the Latest replays strip, full screen
+    @State private var replayOpen: Replay?
     @Environment(Router.self) private var router
     @Environment(TourNav.self) private var nav
     enum Tab: String, CaseIterable { case board = "Teams", indiv = "Individuals", par3 = "Par 3s", contests = "Contests", skins = "Skins" }
@@ -35,8 +39,9 @@ struct LeaderboardScreen: View {
                 VStack(spacing: 0) {
                 if mode == .cameras {
                     TourHeader(state: s, title: s.title) { LivePill(online: feed.online) } below: {
-                        TourTitle(title: s.cams.isEmpty ? "Par 3s" : "Par 3 cameras",
-                                  sub: s.cams.isEmpty ? "Scoring on the short holes" : "Live on \(s.cams.count) hole\(s.cams.count == 1 ? "" : "s") · tap ⟲ 30s to rewind")
+                        let n = s.camList().count
+                        TourTitle(title: n == 0 ? "Par 3s" : "Cameras",
+                                  sub: n == 0 ? "Scoring on the short holes" : "\(n) camera\(n == 1 ? "" : "s") live · tap ⟲ 30s to rewind")
                     }
                 } else {
                     VStack(spacing: 0) {
@@ -123,6 +128,10 @@ struct LeaderboardScreen: View {
         .onChange(of: feed.state?.name) { _, n in if let n { Recents.remember(id: id, name: n) } }
         .sheet(item: $web) { SafariView(url: $0).ignoresSafeArea() }
         .fullScreenCover(isPresented: $allPar3s) { if let s = feed.state { AllPar3s(state: s) } }
+        .fullScreenCover(item: $replayOpen) { r in
+            ReplayFullscreen(replay: r, camURL: feed.state?.camShown(r.hole).flatMap { CameraLink(hole: r.hole, url: $0).isHLS ? $0 : nil },
+                             replays: feed.state?.replays.filter { $0.hole == r.hole } ?? [])
+        }
     }
 
     /// "See it" / "Watch" on a phone banner: the matching tab (a camera → Par 3s, scrolled to its hole).
@@ -385,57 +394,120 @@ struct LeaderboardScreen: View {
         }
     }
 
-    // ---- par 3s ----
+    // ---- the Cameras tab ----
+    // The newest replays, then every camera staff show golfers: the pro's phone (Go live), contest holes, par 3s,
+    // around the club (clubhouse, 18th green), then the par 3s with no camera. No cameras at all: the Par 3s tab, as before.
     @ViewBuilder private func par3s(_ s: EventState) -> some View {
-        let holes = s.course.holes.filter { $0.par == 3 }
-        if holes.isEmpty { ContentUnavailableView("No par 3s", systemImage: "flag", description: Text("No par 3s are set for this course.")) }
-        if s.course.holes.filter({ $0.par == 3 && (s.cams[$0.n]?.lowercased().contains(".m3u8") ?? false) }).count >= 2 {
+        let cams = s.camList(), shown = Set(cams.map(\.n))
+        let bare = s.course.holes.filter { h in h.par == 3 && !shown.contains(h.n) && !(s.cams[h.n] != nil && s.camsOff.contains(h.n)) }
+        let kinds = CamItem.Kind.allCases.filter { k in cams.contains { $0.kind == k } }
+        let pick = camKind.flatMap { kinds.contains($0) ? $0 : nil }
+        if cams.isEmpty && bare.isEmpty { ContentUnavailableView("No cameras", systemImage: "video.slash", description: Text("No cameras or par 3s for this course.")) }
+        if kinds.count > 1 {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    Chip(title: "All", on: pick == nil) { camKind = nil }
+                    ForEach(kinds, id: \.self) { k in Chip(title: k.chip, on: pick == k) { camKind = k } }
+                }
+            }
+        }
+        let reps = Array(s.replays.filter { shown.contains($0.hole) }.prefix(8))
+        if pick == nil && !reps.isEmpty {
+            Text("Latest replays").fcLabel()
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) { ForEach(reps) { r in replayTile(r) } }
+            }
+        }
+        if s.course.holes.filter({ $0.par == 3 && (s.camShown($0.n)?.absoluteString.lowercased().contains(".m3u8") ?? false) }).count >= 2 && (pick == nil || pick == .par3) {
             Button { allPar3s = true } label: { Label("Watch all par 3s", systemImage: "rectangle.split.2x2.fill") }
                 .buttonStyle(.fcDark)
         }
-        ForEach(holes, id: \.n) { h in
-            let st = Core.holeStats(s, s.scores, h.n)
-            let sp = s.sponsors.first { $0.holes.contains(h.n) }
-            VStack(alignment: .leading, spacing: 0) {
-                camera(s, hole: h.n, sub: ["Par 3", h.yds > 0 ? "\(h.yds) yds" : ""].filter { !$0.isEmpty }.joined(separator: " · "))
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(["SI \(h.hcp)", st.avg.map { String(format: "avg %.2f", $0) } ?? "", sp.map { "presented by \($0.name)" } ?? ""]
-                        .filter { !$0.isEmpty }.joined(separator: " · "))
-                        .font(.footnote.monospaced()).foregroundStyle(Color.fcMuted)
-                    if !st.aces.isEmpty {
-                        Label("Hole in one: \(st.aces.map(\.name).joined(separator: ", "))", systemImage: "star.fill").font(.subheadline.weight(.semibold)).foregroundStyle(Color.fcRed)
-                    }
-                    Divider()
-                    HStack {
-                        stat(st.aces.count, "Aces"); stat(st.birdie + st.eagle - st.aces.count, "Birdies"); stat(st.par0, "Pars"); stat(st.bogey + st.worse, "Over")
-                    }
-                    ForEach(s.contests.filter { $0.hole == h.n }) { c in contestBox(c) }
-                }
-                .padding(14)
-            }
-            .background(Color.fcCard, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-            .shadow(color: Color.fcScrim.opacity(0.10), radius: 10, y: 4)
-            .id("p3-\(h.n)")
+        ForEach(kinds.filter { pick == nil || $0 == pick }, id: \.self) { k in
+            Text(k.heading).fcLabel().padding(.top, 4)
+            ForEach(cams.filter { $0.kind == k }) { c in camCard(s, c) }
+        }
+        if !bare.isEmpty && (pick == nil || pick == .par3) {
+            if !cams.isEmpty { Text(kinds.contains(.par3) ? "More par 3s" : "Par 3s").fcLabel().padding(.top, 4) }
+            ForEach(bare, id: \.n) { h in holeCard(s, h, nil) }
         }
     }
 
-    @ViewBuilder private func camera(_ s: EventState, hole: Int, sub: String) -> some View {
-        let url = s.cams[hole].flatMap(URL.init(string:))
+    /// a replay in the Latest replays strip: plays full screen
+    private func replayTile(_ r: Replay) -> some View {
+        Button { replayOpen = r } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    Text("REPLAY").font(.caption2.monospaced().weight(.bold)).padding(.horizontal, 5).padding(.vertical, 1)
+                        .background(Color.fcFlag, in: RoundedRectangle(cornerRadius: 2)).foregroundStyle(Color.fcOnFlag)
+                    Image(systemName: "play.fill").font(.caption2).foregroundStyle(Color.fcMuted)
+                }
+                Text(r.label.isEmpty ? "Replay" : r.label).font(.footnote.weight(.semibold)).lineLimit(2).multilineTextAlignment(.leading)
+                Text("\(EventState.camName(r.hole)) · \(Fmt.time(r.at))").font(.caption2).foregroundStyle(Color.fcMuted)
+            }
+            .frame(width: 150, alignment: .leading).frame(minHeight: 74, alignment: .topLeading)
+            .padding(10).background(Color.fcCard, in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.fcLine))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Replay, \(EventState.camName(r.hole)). \(r.label)")
+    }
+
+    @ViewBuilder private func camCard(_ s: EventState, _ c: CamItem) -> some View {
+        holeCard(s, c.n > 0 ? s.course.holes[c.n - 1] : nil, c)
+    }
+
+    /// one camera (or a par 3 with no camera): the picture, who's sending, the par 3's numbers and the hole's contests
+    @ViewBuilder private func holeCard(_ s: EventState, _ h: Hole?, _ c: CamItem?) -> some View {
+        let n = c?.n ?? h?.n ?? 0
+        let st: HoleStats? = h.map { Core.holeStats(s, s.scores, $0.n) }
+        let sp = h.flatMap { h in s.sponsors.first { $0.holes.contains(h.n) } }
+        VStack(alignment: .leading, spacing: 0) {
+            camera(s, hole: n, url: c?.link, title: c?.title ?? "Hole \(n)", sub: c?.sub ?? h.map { ["Par \($0.par)", $0.yds > 0 ? "\($0.yds) yds" : ""].filter { !$0.isEmpty }.joined(separator: " · ") } ?? "")
+            VStack(alignment: .leading, spacing: 8) {
+                if let c, c.kind == .pro {
+                    Label("Live from the pro\(c.by.isEmpty ? "" : " · \(c.by)")", systemImage: "dot.radiowaves.left.and.right")
+                        .font(.caption.weight(.bold)).padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(Color.fcFlag, in: Capsule()).foregroundStyle(Color.fcOnFlag)
+                }
+                if let h, let st {
+                    Text(["SI \(h.hcp)", st.avg.map { String(format: "avg %.2f", $0) } ?? "", sp.map { "presented by \($0.name)" } ?? ""]
+                        .filter { !$0.isEmpty }.joined(separator: " · "))
+                        .font(.footnote.monospaced()).foregroundStyle(Color.fcMuted)
+                    if h.par == 3 {
+                        if !st.aces.isEmpty {
+                            Label("Hole in one: \(st.aces.map(\.name).joined(separator: ", "))", systemImage: "star.fill").font(.subheadline.weight(.semibold)).foregroundStyle(Color.fcRed)
+                        }
+                        Divider()
+                        HStack {
+                            stat(st.aces.count, "Aces"); stat(st.birdie + st.eagle - st.aces.count, "Birdies"); stat(st.par0, "Pars"); stat(st.bogey + st.worse, "Over")
+                        }
+                    }
+                    ForEach(s.contests.filter { $0.hole == h.n }) { c in contestBox(c) }
+                }
+            }
+            .padding(14)
+        }
+        .background(Color.fcCard, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: Color.fcScrim.opacity(0.10), radius: 10, y: 4)
+        .id("p3-\(n)")
+    }
+
+    @ViewBuilder private func camera(_ s: EventState, hole: Int, url: URL?, title: String, sub: String) -> some View {
         let replays = s.replays.filter { $0.hole == hole }
         if let url, !CameraLink(hole: hole, url: url).isHLS {
             // a camera page that isn't HLS (YouTube, a camera maker's player): open it in Safari view
             Button { web = url } label: {
                 ZStack {
                     LinearGradient(colors: [Color(UIColor(hex: 0x1d4a35)), Color(UIColor(hex: 0x123628))], startPoint: .top, endPoint: .bottom)
-                    Label("Watch the hole \(hole) camera", systemImage: "play.circle.fill").font(.headline).foregroundStyle(.white)
+                    Label("Watch the \(title.lowercased()) camera", systemImage: "play.circle.fill").font(.headline).foregroundStyle(.white)
                 }
                 .aspectRatio(16 / 9, contentMode: .fit)
             }
             .buttonStyle(.plain)
             if !replays.isEmpty { CameraBox(hole: hole, camURL: nil, replays: replays).padding([.horizontal, .top], 14) }
         } else {
-            CameraBox(hole: hole, camURL: url, replays: replays, title: "Hole \(hole)", sub: sub).padding([.horizontal, .top], 14)
+            CameraBox(hole: hole, camURL: url, replays: replays, title: title, sub: sub).padding([.horizontal, .top], 14)
         }
     }
 

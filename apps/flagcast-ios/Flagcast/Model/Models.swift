@@ -289,10 +289,12 @@ struct ScheduleItem: Codable, Hashable { var time: String; var what: String }
 /// played back from `back` seconds before `at` (ms) using the stream's own clock.
 struct Replay: Codable, Hashable, Identifiable {
     var id: String, hole: Int, label: String, url: String, at: Double, back: Double, by: String
+    /// a golfer's "Save your shot" (by "golfer"): the cart that saved it
+    var team: String = ""
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         id = c.str(.id); hole = c.int(.hole, 1); label = c.str(.label); url = c.str(.url)
-        at = c.dbl(.at, 0); back = c.dbl(.back, 25); by = c.str(.by)
+        at = c.dbl(.at, 0); back = c.dbl(.back, 25); by = c.str(.by); team = c.str(.team)
     }
     var isClip: Bool { !url.isEmpty }
 }
@@ -421,12 +423,16 @@ struct EventState: Codable, Hashable {
     var photos = Photos()
     /// the desk turned off golfers' ready-made notes to other groups (day op "notes")
     var notesOff = false
-    /// holes live from someone's iPhone now (day op "golive"): hole → who
+    /// holes live from someone's iPhone now (day op "golive"): hole → who (0 is the clubhouse)
     var golive: [Int: String] = [:]
+    /// cameras staff hid from golfers (day op "camshow"); the TVs still show what the desk routes to them
+    var camsOff: [Int] = []
+    /// the desk turned off golfers' "Save your shot" (op "clip")
+    var clipsOff = false
 
     enum CodingKeys: String, CodingKey {
         case id, name, club, date, course, format, sideGames, flights, teams, matches, screens, cams, sponsors, schedule, displays, fund, contests
-        case locked, aces, flash, news, nudges, live, replays, map, pinsheet, scores, online, brand, lastAt, photos, notesOff, golive
+        case locked, aces, flash, news, nudges, live, replays, map, pinsheet, scores, online, brand, lastAt, photos, notesOff, golive, camsOff, clipsOff
     }
     init() {}
     init(from d: Decoder) throws {
@@ -460,6 +466,8 @@ struct EventState: Codable, Hashable {
         notesOff = c.bool(.notesOff, false)
         let rawLive = (try? c.decodeIfPresent([String: GoLiveWho].self, forKey: .golive)) ?? [:]
         golive = Dictionary(uniqueKeysWithValues: rawLive.compactMap { k, v in Int(k).map { ($0, v.by) } })
+        camsOff = (try? c.decodeIfPresent([Int].self, forKey: .camsOff)) ?? []
+        clipsOff = c.bool(.clipsOff, false)
     }
     func encode(to e: Encoder) throws {
         var c = e.container(keyedBy: CodingKeys.self)
@@ -474,6 +482,7 @@ struct EventState: Codable, Hashable {
         try c.encode(brand, forKey: .brand); try c.encode(lastAt, forKey: .lastAt); try c.encode(photos, forKey: .photos)
         try c.encode(notesOff, forKey: .notesOff)
         try c.encode(Dictionary(uniqueKeysWithValues: golive.map { (String($0.key), GoLiveWho(by: $0.value)) }), forKey: .golive)
+        try c.encode(camsOff, forKey: .camsOff); try c.encode(clipsOff, forKey: .clipsOff)
     }
 
     /// "Sat, Nov 21" for the tournament's day (it's stored as 2026-11-21, a day where the club is)

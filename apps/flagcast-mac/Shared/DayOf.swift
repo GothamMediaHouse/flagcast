@@ -98,3 +98,64 @@ struct DayOfChecks: View {
         doc.flash("Nudged \(teams.count) cart\(teams.count == 1 ? "" : "s"). They see it on their scorecard.")
     }
 }
+
+/// Which cameras golfers see on the Cameras tab and the live page (day op "camshow"): a switch per camera (the pro's
+/// phone, contest holes, par 3s, the clubhouse and 18th green), and one for golfers' "Save your shot". Shared by the
+/// Mac and iPhone/iPad Manager; each wraps it in its own card. The TVs show whatever the desk routes to them.
+struct PlayerCameraSwitches: View {
+    @Bindable var doc: DeskDoc
+    /// padding for each row (the iPhone's cards draw rows edge to edge)
+    var inset: CGFloat = 0
+    /// changed here and not back from the server yet
+    @State private var offNow: Set<Int>?
+    @State private var clipsNow: Bool?
+
+    private var cams: [CamItem] { doc.live?.camList(all: true) ?? [] }
+    private var off: Set<Int> { offNow ?? Set(doc.live?.camsOff ?? []) }
+    private var clips: Bool { clipsNow ?? !(doc.live?.clipsOff ?? false) }
+    private static let tags: [CamItem.Kind: String] = [.pro: "Pro’s phone", .contest: "Contest", .par3: "Par 3", .club: "Around the club", .hole: "Hole"]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if cams.isEmpty {
+                Text(doc.live == nil ? "Loading the cameras…" : "No cameras yet. Flagcast adds camera links in Admin, or a golf pro can go live from the Flagcast app.")
+                    .font(.subheadline).foregroundStyle(.secondary).padding(inset).padding(.vertical, 6)
+            }
+            ForEach(cams) { c in
+                Toggle(isOn: Binding(get: { !off.contains(c.n) }, set: { on in set(c.n, on) })) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 6) {
+                            Text(c.title).font(.subheadline.weight(.semibold))
+                            Text(Self.tags[c.kind] ?? "").font(.caption2.monospaced().weight(.semibold)).textCase(.uppercase)
+                                .padding(.horizontal, 5).padding(.vertical, 1)
+                                .background(c.kind == .pro ? Color.yellow.opacity(0.35) : Color.secondary.opacity(0.15), in: RoundedRectangle(cornerRadius: 3))
+                        }
+                        let sub = [c.kind == .pro ? "Live from \(c.by.isEmpty ? "an" : "\(c.by)’s") iPhone" : "", c.sub].filter { !$0.isEmpty }.joined(separator: " · ")
+                        if !sub.isEmpty { Text(sub).font(.caption).foregroundStyle(.secondary) }
+                    }
+                }
+                .padding(.horizontal, inset).padding(.vertical, 6)
+                Divider().padding(.leading, inset)
+            }
+            Toggle(isOn: Binding(get: { clips }, set: { on in setClips(on) })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Golfers can save their shot").font(.subheadline.weight(.semibold))
+                    Text("A “Save your shot” button on the scorecard of camera holes: a 15-second replay from the club’s camera").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, inset).padding(.vertical, 6)
+        }
+        .onChange(of: doc.live?.camsOff) { offNow = nil }
+        .onChange(of: doc.live?.clipsOff) { clipsNow = nil }
+    }
+
+    private func set(_ n: Int, _ on: Bool) {
+        var o = off; if on { o.remove(n) } else { o.insert(n) }
+        offNow = o
+        Task { if await doc.day("camshow", ["off": o.sorted()], done: on ? "Golfers see that camera." : "Hidden from golfers.") == nil { offNow = nil } }
+    }
+    private func setClips(_ on: Bool) {
+        clipsNow = on
+        Task { if await doc.day("camshow", ["clips": on], done: on ? "Golfers can save their shot." : "Save your shot is off.") == nil { clipsNow = nil } }
+    }
+}

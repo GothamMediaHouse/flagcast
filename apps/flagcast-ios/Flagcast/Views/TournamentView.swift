@@ -35,9 +35,10 @@ struct TournamentScreen: View {
             }
             LeaderboardScreen(id: id, mode: .leaders, mine: Set(model?.teams ?? []))
                 .tabItem { Label("Leaders", systemImage: "chart.bar.fill") }.tag(TourTab.leaders)
-            if let s, s.course.holes.contains(where: { $0.par == 3 }) || !s.cams.isEmpty {
+            if let s, s.course.holes.contains(where: { $0.par == 3 }) || !s.camList().isEmpty {
+                let none = s.camList().isEmpty
                 LeaderboardScreen(id: id, mode: .cameras, mine: [])
-                    .tabItem { Label(s.cams.isEmpty ? "Par 3s" : "Cameras", systemImage: s.cams.isEmpty ? "flag.fill" : "video.fill") }
+                    .tabItem { Label(none ? "Par 3s" : "Cameras", systemImage: none ? "flag.fill" : "video.fill") }
                     .tag(TourTab.cameras)
             }
             if let model, let s, s.sideGamesAllowed {

@@ -21,7 +21,7 @@
 .camopt:first-child { border-top: 0; }
 .camopt small { color: var(--muted); }
 .camtag { font: 600 .64rem var(--f-mono); letter-spacing: .08em; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; background: var(--paper-2); color: var(--muted); vertical-align: 1px; }
-.camtag.pro { background: #fbe9a8; color: #5a4a08; }
+.camtag.k-pro { background: #fbe9a8; color: #5a4a08; }
 .sw { appearance: none; -webkit-appearance: none; flex: none; width: 42px; height: 24px; border-radius: 999px; background: #c9d0c6; position: relative; margin: 0; cursor: pointer; transition: background .15s; }
 .sw::after { content: ""; position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .15s; }
 .sw:checked { background: var(--ok); }
@@ -258,7 +258,7 @@ table.t .n { width: 64px; }
   <p class="help">Cameras are set up by Flagcast, and a golf pro can go live from an iPhone. Choose which ones golfers see on the Cameras tab of the app and the live leaderboard. Pick “Par 3 camera” for a screen, or route any camera to a TV from the Manager’s Screens.</p>
   <div id="cams" class="camlist" style="margin-top:10px"></div>
   <h3>Replays</h3>
-  <p class="help">Players watch replays on their phones (under each par 3 on the live leaderboard), and you can put one on every screen. Save replay plays the hole’s camera back from 25 seconds before you press it, so the camera’s HLS link must keep a recording window (DVR). Or paste a clip link (.mp4 or .m3u8), for example from a replay system. Golf pros and marshals can save replays from the Flagcast app too.</p>
+  <p class="help">Players watch replays on their phones (Latest replays on the Cameras tab, and under each camera), and you can put one on every screen. Groups can also save their own shot on camera holes. Save replay plays the hole’s camera back from 25 seconds before you press it, so the camera’s HLS link must keep a recording window (DVR). Or paste a clip link (.mp4 or .m3u8), for example from a replay system. Golf pros and marshals can save replays from the Flagcast app too.</p>
   <div class="row" style="margin-top:0;flex-wrap:wrap"><select id="rHole"></select><input id="rLabel" maxlength="80" placeholder="Who and what (Dana Ruiz, 3 feet!)" style="max-width:300px"><input id="rUrl" placeholder="Clip link, optional" style="max-width:260px"><button class="btn dark" id="rSave">Save replay</button><button class="btn" id="rSaveShow">Save and show on screens</button></div>
   <div id="replays" class="help" style="margin-top:8px"></div>
   <h3>Sponsors</h3>
@@ -839,7 +839,7 @@ const CAM_TAGS = { pro: 'Pro’s phone', contest: 'Contest', par3: 'Par 3', club
 function drawCams() {
   const S = { ...EV, ...(LIVE ? { cams: LIVE.cams, golive: LIVE.golive, camsOff: LIVE.camsOff, clipsOff: LIVE.clipsOff, contests: LIVE.contests } : {}) };
   const list = camList(S, { all: true });
-  $('cams').innerHTML = (list.length ? list.map((c) => `<label class="camopt"><span><b>${esc(c.title)}</b> <span class="camtag ${c.kind}">${CAM_TAGS[c.kind]}</span><br><small>${esc([c.by != null && c.kind === 'pro' ? `Live from ${c.by ? `${c.by}’s` : 'an'} iPhone` : '', c.sub].filter(Boolean).join(' · '))}</small></span>
+  $('cams').innerHTML = (list.length ? list.map((c) => `<label class="camopt"><span><b>${esc(c.title)}</b> <span class="camtag k-${c.kind}">${CAM_TAGS[c.kind]}</span><br><small>${esc([c.by != null && c.kind === 'pro' ? `Live from ${c.by ? `${c.by}’s` : 'an'} iPhone` : '', c.sub].filter(Boolean).join(' · '))}</small></span>
       <input type="checkbox" class="sw" data-camshow="${c.n}" ${c.off ? '' : 'checked'} aria-label="Show ${esc(c.title)} to golfers"></label>`).join('')
     : '<p class="help" style="margin:0">No cameras yet. Flagcast adds camera links in Admin, or a golf pro can go live from the Flagcast app.</p>')
     + `<label class="camopt"><span><b>Golfers can save their shot</b><br><small>A “Save your shot” button on the scorecard of camera holes: a 15-second replay from the club’s camera</small></span>

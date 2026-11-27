@@ -291,15 +291,15 @@ struct CamerasView: View {
     @State private var search = ""
     private var shown: [AdminEvent] {
         let q = search.lowercased()
-        return admin.events.filter { !$0.gone && !$0.archived && !$0.hidden && !$0.p3.isEmpty && (q.isEmpty || $0.name.lowercased().contains(q) || $0.clubName.lowercased().contains(q)) }
+        return admin.events.filter { !$0.gone && !$0.archived && !$0.hidden && !$0.camHoles.isEmpty && (q.isEmpty || $0.name.lowercased().contains(q) || $0.clubName.lowercased().contains(q)) }
             .sorted { ($0.isToday ? 0 : 1, $1.created) < ($1.isToday ? 0 : 1, $0.created) }
     }
     var body: some View {
-        AdminScaffold(title: "Cameras", sub: "Par 3 camera links for every club’s tournament") {
+        AdminScaffold(title: "Cameras", sub: "Camera links for every club’s tournament: the clubhouse, par 3s, contest holes and the 18th green") {
             TextField("Find a tournament or club", text: $search).textFieldStyle(.roundedBorder).frame(width: 240)
         } content: {
-            Help("Paste each par 3’s https link: an HLS stream (.m3u8) or a web player link such as a VDO.Ninja view link. Replays from the live feed need an HLS link that keeps a recording window (DVR); a web player link plays live only. Clubs see “Cameras are set up by Flagcast”.")
-            if shown.isEmpty { Text(admin.events.isEmpty ? "Loading tournaments…" : "No open tournaments with par 3s.").foregroundStyle(FC.muted).frame(maxWidth: .infinity, minHeight: 160).raisedCard() }
+            Help("Paste each camera’s https link: an HLS stream (.m3u8) or a web player link such as a VDO.Ninja view link. Replays from the live feed need an HLS link that keeps a recording window (DVR); a web player link plays live only. Clubs see “Cameras are set up by Flagcast”.")
+            if shown.isEmpty { Text(admin.events.isEmpty ? "Loading tournaments…" : "No open tournaments with a course.").foregroundStyle(FC.muted).frame(maxWidth: .infinity, minHeight: 160).raisedCard() }
             ForEach(shown) { e in CameraCard(event: e).id(e.id + e.cams.description) }
         }
     }
@@ -329,8 +329,8 @@ private struct CameraCard: View {
                 Button { Task { saving = true; if await admin.saveCams(event.id, links) { await check() }; saving = false } } label: { saving ? AnyView(ProgressView().controlSize(.small)) : AnyView(Text("Save Links")) }
                     .buttonStyle(GreenButton()).disabled(!changed || saving)
             }
-            ForEach(event.p3, id: \.self) { h in holeRow(h) }
-            if event.p3.contains(where: { useNDI[$0] == true }) {
+            ForEach(event.camHoles, id: \.self) { h in holeRow(h) }
+            if event.camHoles.contains(where: { useNDI[$0] == true }) {
                 VStack(alignment: .leading, spacing: 4) {
                     if let tv = Bridges.tvURL(event.id) {
                         HStack {
@@ -348,7 +348,7 @@ private struct CameraCard: View {
         .padding(18).raisedCard()
         .task(id: event.id) {
             links = event.cams
-            for h in event.p3 { if let src = UserDefaults.standard.string(forKey: "ndi.\(event.id)-\(h)") { useNDI[h] = true; picked[h] = src } }
+            for h in event.camHoles { if let src = UserDefaults.standard.string(forKey: "ndi.\(event.id)-\(h)") { useNDI[h] = true; picked[h] = src } }
             await check()
             while !Task.isCancelled { cloud = await admin.streamHealth(event.id); try? await Task.sleep(for: .seconds(10)) }
         }
@@ -358,7 +358,7 @@ private struct CameraCard: View {
         let ndi = useNDI[h] ?? false, b = bridges.bridge(event.id, h)
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
-                Text("Hole \(h)").font(.system(size: 14, weight: .semibold)).frame(width: 64, alignment: .leading)
+                Text(event.camName(h)).font(.system(size: 14, weight: .semibold)).lineLimit(2).frame(width: 150, alignment: .leading)
                 Picker("", selection: Binding(get: { ndi }, set: { useNDI[h] = $0; if $0 { sources.watch() } })) { Text("Link").tag(false); Text("NDI® source").tag(true) }
                     .pickerStyle(.segmented).labelsHidden().frame(width: 190)
                 if !ndi {
@@ -393,7 +393,7 @@ private struct CameraCard: View {
                         Label("TVs only (no Cloudflare Stream)", systemImage: "icloud.slash").foregroundStyle(FC.muted)
                     }
                 }
-                .font(.system(size: 12, weight: .semibold)).padding(.leading, 74)
+                .font(.system(size: 12, weight: .semibold)).padding(.leading, 160)
             }
         }
     }

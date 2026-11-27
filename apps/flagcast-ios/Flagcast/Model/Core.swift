@@ -725,3 +725,58 @@ enum Core {
         return out
     }
 }
+
+// MARK: cameras golfers can watch (matches core.js camList)
+
+/// One camera on the Cameras tab: a hole's (1–18) or the clubhouse's (0).
+struct CamItem: Hashable, Identifiable {
+    enum Kind: String, CaseIterable { case pro, contest, par3, club, hole
+        /// the section heading on the Cameras tab
+        var heading: String { switch self { case .pro: "Live from the pro"; case .contest: "Contest holes"; case .par3: "Par 3s"; case .club: "Around the club"; case .hole: "More cameras" } }
+        /// the filter chip
+        var chip: String { switch self { case .pro: "Live from the pro"; case .contest: "Contests"; case .par3: "Par 3s"; case .club: "Clubhouse"; case .hole: "More" } }
+    }
+    var n: Int, url: String, kind: Kind, title: String, sub: String
+    /// who's sending from an iPhone (Go live), when it's the pro's phone
+    var by: String
+    var contests: [Contest]
+    /// staff hid it from golfers (only in the desk's list)
+    var off: Bool
+    var id: Int { n }
+    var isHLS: Bool { url.lowercased().contains(".m3u8") }
+    var link: URL? { URL(string: url) }
+}
+
+extension EventState {
+    static let clipBack: Double = 15
+    static func contestName(_ c: Contest) -> String { !c.label.isEmpty ? c.label : c.kind == "ld" ? "Long drive" : "Closest to the pin" }
+    /// "Hole 7", "Clubhouse"
+    static func camName(_ n: Int) -> String { n == 0 ? "Clubhouse" : "Hole \(n)" }
+
+    /// Every camera, each once, in the order the Cameras tab shows them: the pro's phone, contest holes, par 3s,
+    /// around the club (clubhouse, then the 18th green), any other hole. `all` keeps the ones staff hid.
+    func camList(all: Bool = false) -> [CamItem] {
+        let off = Set(camsOff), holes = course.holes
+        let out: [CamItem] = cams.compactMap { n, url in
+            guard !url.isEmpty, (0...18).contains(n), n == 0 || holes.indices.contains(n - 1) else { return nil }
+            if !all && off.contains(n) { return nil }
+            let h: Hole? = n > 0 ? holes[n - 1] : nil
+            let cs = n > 0 ? contests.filter { $0.hole == n } : []
+            let by = golive[n]
+            let kind: CamItem.Kind = by != nil ? .pro : !cs.isEmpty ? .contest : n == 0 ? .club : h?.par == 3 ? .par3 : n == 18 ? .club : .hole
+            let title = n == 0 ? "Clubhouse" : kind == .club ? "18th green" : "Hole \(n)"
+            let facts = h.map { ["Par \($0.par)", $0.yds > 0 ? "\($0.yds) yds" : ""] } ?? []
+            let sub = (cs.map(Self.contestName) + facts).filter { !$0.isEmpty }.joined(separator: " · ")
+            return CamItem(n: n, url: url, kind: kind, title: title, sub: sub, by: by ?? "", contests: cs, off: off.contains(n))
+        }
+        let order = CamItem.Kind.allCases
+        return out.sorted { a, b in
+            let x = order.firstIndex(of: a.kind)!, y = order.firstIndex(of: b.kind)!
+            return x != y ? x < y : a.n < b.n
+        }
+    }
+    /// a camera golfers can see on this hole (staff can hide one)
+    func camShown(_ n: Int) -> URL? { camsOff.contains(n) ? nil : cams[n].flatMap(URL.init(string:)) }
+    /// "Save your shot" works on this hole: an HLS camera golfers can see, and the desk hasn't turned it off
+    func canSaveShot(_ n: Int) -> Bool { !clipsOff && (camShown(n)?.path.lowercased().hasSuffix(".m3u8") ?? false) }
+}

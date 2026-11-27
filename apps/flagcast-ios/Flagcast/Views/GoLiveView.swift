@@ -371,8 +371,16 @@ struct GoLiveView: View {
                             .accessibilityLabel("Hole \(h.n), par \(h.par)\(taken ? ", already live" : "")")
                         }
                     }
+                    // or the clubhouse (camera 0): the patio, the putting green or the first tee
+                    Button { model.hole = 0 } label: {
+                        Label("Clubhouse", systemImage: "house.fill").font(.subheadline.weight(.bold)).frame(maxWidth: .infinity, minHeight: 34)
+                            .background(model.hole == 0 ? Color(red: 0.07, green: 0.21, blue: 0.16) : Color.secondary.opacity(0.15), in: RoundedRectangle(cornerRadius: 8))
+                            .foregroundStyle(model.hole == 0 ? .white : liveNow[0] != nil ? .secondary : .primary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clubhouse\(liveNow[0] != nil ? ", already live" : "")")
                     if let h = model.hole, let who = liveNow[h] {
-                        Label("Hole \(h) is live from \(who)’s phone now.", systemImage: "video.fill").font(.footnote).foregroundStyle(.orange)
+                        Label("\(h == 0 ? "The clubhouse" : "Hole \(h)") is live from \(who)’s phone now.", systemImage: "video.fill").font(.footnote).foregroundStyle(.orange)
                     }
                     VStack(spacing: 0) {
                         row("Battery", model.battery < 0 ? "—" : "\(Int(model.battery * 100))%" + (model.charging ? " · charging" : " · plug in a power pack"),
@@ -413,7 +421,7 @@ struct GoLiveView: View {
         VStack {
             HStack(spacing: 8) {
                 pill("LIVE \(model.elapsed)", systemImage: "circle.fill", bg: Self.red, fg: .white)
-                if let h = model.hole { pill("Hole \(h)", systemImage: nil, bg: .black.opacity(0.55), fg: .white) }
+                if let h = model.hole { pill(h == 0 ? "Clubhouse" : "Hole \(h)", systemImage: nil, bg: .black.opacity(0.55), fg: .white) }
                 Spacer()
                 if model.upright { pill("Turn sideways", systemImage: "rotate.right", bg: Self.gold, fg: .black) }
             }
