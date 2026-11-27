@@ -1,11 +1,12 @@
 // "Fly the hole" on the web: the same flight as the players' app and the Mac Manager (a straight port of
 // apps/flagcast-ios/Flagcast/Model/FlyPath.swift, so all three fly the same line). Points are [lat, lng].
-// The camera glides on one continuous path: on the tee box nearly level with the golfer, an even push down the middle
+// The camera glides on one continuous path: it opens 60 yds behind the tee box, low, with the tee box in the bottom of the
+// frame and the hole stretching away, sweeps over the tee, an even push down the middle
 // of the hole, round its doglegs (the course map's line), easing to a stop short of the green, looking at it.
 
 export const C = {
-  startPitch: 73, startLook: 85, cruisePitch: 72, cruiseLook: 150, endPitch: 68, endLook: 90,
-  nearest: 88, behindTee: 10, speed: 24, holdSecs: 1, arriveSecs: 1.6,
+  startPitch: 73, startLook: 35, cruisePitch: 72, cruiseLook: 150, endPitch: 68, endLook: 90,
+  nearest: 88, behindTee: 60, speed: 24, holdSecs: 1.5, arriveSecs: 1.6,
 };
 const YD = 1.0936133, R = 6371008.8, T = Math.PI / 180;
 

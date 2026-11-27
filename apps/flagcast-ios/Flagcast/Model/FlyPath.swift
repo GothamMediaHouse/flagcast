@@ -10,19 +10,21 @@ struct FlyPath: Equatable {
     var travelSecs = 8.0       // the glide from the tee to the green
 
     // ---- the look, from Golf Digest's "Every Hole at Pinehurst No. 2" drone flyovers ----
-    // The drone sits on the tee box nearly level with the golfer, then pushes off down the middle of the hole at an
+    // The drone opens behind the tee box, the tee box in the bottom of the frame and the hole stretching away, sweeps
+    // over the tee, then pushes off down the middle of the hole at an
     // even speed, rising a little and tilted just below the horizon. It eases off as the green fills the frame and
     // ends low, short of the green, looking straight at it. One continuous move, no cuts, no swoops.
     // Apple's 3D map won't go lower than that: it stops tilting at 74° and won't come closer than about 81 m to
     // what it looks at (checked on the Mac, Torrey Pines South), so the camera keeps just inside those limits,
     // where it's still smooth, which puts it some 25 to 45 m up.
-    static let startPitch = 73.0, startLook = 85.0      // on the tee: degrees from straight down; yards ahead it looks
+    static let startPitch = 73.0, startLook = 35.0      // at the start: degrees from straight down; yards past the tee it looks
     static let cruisePitch = 72.0, cruiseLook = 150.0   // down the fairway: ~45 m up, looking 150 yds ahead
     static let endPitch = 68.0, endLook = 90.0          // at the green: ~33 m up, 90 yds short of the middle
     static let nearest = 88.0                            // metres: never asks Apple's map to come closer than this
-    static let behindTee = 10.0                          // the camera starts this far behind the tee marker
+    static let behindTee = 60.0                          // the camera starts this far behind the tee marker, so the tee box
+                                                         // sits in the bottom of the opening shot (closer, it's under the camera)
     static let speed = 24.0                              // yds a second, cruising (the video flies at ~13)
-    static let holdSecs = 1.0, arriveSecs = 1.6          // still on the tee before it moves; still on the green at the end
+    static let holdSecs = 1.5, arriveSecs = 1.6          // still on the tee before it moves; still on the green at the end
     var totalSecs: Double { Self.holdSecs + travelSecs + Self.arriveSecs }
 
         // distances on the course (the same sums as Geo, kept here so the Mac Manager can share this file)

@@ -35,17 +35,20 @@ final class FlyTests: XCTestCase {
             // tee, every bend, green
             XCTAssertEqual(p.points.count, h.line.count + 2, "hole \(n): its bends are all on the path")
             XCTAssertGreaterThanOrEqual(p.travelSecs, 7); XCTAssertLessThanOrEqual(p.travelSecs, 22)
-            // it opens low on the tee box, looking down the hole
-            let c0 = p.camera(at: 0)
-            XCTAssertLessThan(Geo.yds(eye(c0), tee) ?? 999, 15, "hole \(n): opens on the tee box")
+            // it opens low behind the tee box, the tee box in the bottom of the shot, looking down the hole
+            let c0 = p.camera(at: 0), behind = Geo.yds(eye(c0), tee) ?? 0
+            let toTee = atan2(behind / Geo.YD, p.height(at: 0)) * 180 / .pi     // degrees from straight down
+            XCTAssertGreaterThan(behind, 50, "hole \(n): opens behind the tee box"); XCTAssertLessThan(behind, 70, "hole \(n): not too far back")
+            XCTAssertGreaterThan(toTee, c0.pitch - 15, "hole \(n): the tee box is in the bottom of the opening shot"); XCTAssertLessThan(toTee, c0.pitch, "hole \(n): below the middle of it")
             XCTAssertLessThan(p.height(at: 0), 30, "hole \(n): opens low (under 30 m up)")
+            let back = [Geo.offset(tee, yards: 80, bearing: Geo.bearing(p.path[1], tee)), tee]   // the hole's line carried on behind the tee
             var t = 0.0, last = c0, heights: [Double] = [], headings: [Double] = []
             while t <= p.totalSecs {
                 let c = p.camera(at: t), e = eye(c)
                 // what it looks at stays on the hole and never past the green; the camera flies over the hole
                 XCTAssertLessThan(off(c.at, osm), 30, "hole \(n) at \(t) s: looks along the hole")
                 XCTAssertLessThanOrEqual(Geo.yds(tee, c.at) ?? 0, (Geo.yds(tee, g) ?? 0) + 40, "hole \(n): never looks past the green")
-                XCTAssertLessThan(min(off(e, osm), Geo.yds(e, tee) ?? 999), 35, "hole \(n) at \(t) s: the camera is over the hole")
+                XCTAssertLessThan(min(off(e, osm), off(e, back)), 35, "hole \(n) at \(t) s: the camera is over the hole")
                 // smooth: no jumps, no snapping round
                 XCTAssertLessThan(Geo.yds(eye(last), e) ?? 999, 4.5, "hole \(n) at \(t) s: the camera glides")
                 XCTAssertLessThan(turn(last.heading, c.heading), 3, "hole \(n) at \(t) s: the camera turns gently")
