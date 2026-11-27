@@ -175,7 +175,7 @@ struct DetailsView: View {
                 }
                 .padding(14)
             }
-            CardBox(title: "Format", footer: "The course, tees and course map are set in Flagcast Manager on the Mac.") {
+            CardBox(title: "Format", footer: "The course and its course map are set in Flagcast Manager on the Mac.") {
                 VStack(alignment: .leading, spacing: 12) {
                     Picker("Format", selection: $doc.ev.format.type) {
                         Text("Best ball").tag("bestball"); Text("Shamble").tag("shamble"); Text("Scramble").tag("scramble")
@@ -198,6 +198,7 @@ struct DetailsView: View {
                 }
                 .padding(14)
             }
+            TeesCard(doc: doc)
             CardBox(title: "Photos golfers see", footer: "The cover shows when golfers open the tournament. A hole photo shows on that hole’s page. Photos save as soon as you add them.") {
                 VStack(alignment: .leading, spacing: 8) {
                     PhotoSpot(doc: doc, slot: "cover", label: "Cover photo", url: doc.ev.photos.coverURL, height: 170)

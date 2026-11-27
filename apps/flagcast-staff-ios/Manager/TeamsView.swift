@@ -189,11 +189,29 @@ struct TeamEditor: View {
             }
             SwiftUI.Section {
                 ForEach($team.players) { $p in
-                    VStack(alignment: .leading, spacing: 6) {
+                    VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             TextField("Player name", text: $p.name).textContentType(.name)
-                            TextField("Hcp", value: $p.hcp, format: .number.precision(.fractionLength(0...1))).keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 60)
+                            // worked out from Index and tees when there's an Index, else typed (as on the Mac)
+                            if let ch = Hcp.course(p.index, tee(p), par: doc.ev.course.par) {
+                                Text("\(ch)").monospacedDigit().fontWeight(.semibold)
+                            } else {
+                                TextField("Hcp", value: $p.hcp, format: .number.precision(.fractionLength(0...1))).keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 60)
+                            }
                         }
+                        HStack(spacing: 8) {
+                            Text("Index").foregroundStyle(FC.muted)
+                            TextField("e.g. 8.4", text: Binding(get: { Core.fmtIndex(p.index) }, set: { p.index = Hcp.parseIndex($0); recalc(&p) }))
+                                .keyboardType(.numbersAndPunctuation).frame(width: 70)
+                            Spacer()
+                            if !tees.isEmpty {
+                                Picker("Tees", selection: Binding(get: { tee(p)?.id ?? "" }, set: { p.tee = $0; recalc(&p) })) {
+                                    ForEach(tees) { Text("\($0.name) tees").tag($0.id) }
+                                }
+                                .pickerStyle(.menu).labelsHidden().fixedSize()
+                            }
+                        }
+                        .font(.subheadline)
                         // for the email invite (Today → Email invites); golfers never see it
                         TextField("Email for the invite (optional)", text: $p.email)
                             .textContentType(.emailAddress).keyboardType(.emailAddress).textInputAutocapitalization(.never).autocorrectionDisabled()
@@ -202,7 +220,10 @@ struct TeamEditor: View {
                 }
                 .onDelete { team.players.remove(atOffsets: $0) }
                 Button { team.players.append(DeskPlayer()) } label: { Label("Add a Player", systemImage: "plus") }.disabled(team.players.count >= 6)
-            } header: { Text("Players and handicaps") } footer: { Text("A player’s email is optional. It’s only for the email invite on Today.") }
+            } header: { Text("Players and handicaps") } footer: {
+                Text(tees.isEmpty ? "Type each player’s course handicap. A player’s email is optional. It’s only for the email invite on Today."
+                     : "Type a player’s Handicap Index (use + for plus handicaps, like +1.2) and pick their tees, and the course handicap on the right is worked out. Or leave Index empty and type the course handicap yourself. A player’s email is optional. It’s only for the email invite on Today.")
+            }
             if !team.code.isEmpty {
                 SwiftUI.Section {
                     ShareLink(item: doc.cartURL(team.code)) { Label("Send this team its scorecard link", systemImage: "square.and.arrow.up") }
@@ -218,5 +239,68 @@ struct TeamEditor: View {
         .confirmationDialog("Remove this team and its scores?", isPresented: $confirm, titleVisibility: .visible) {
             Button("Remove Team", role: .destructive) { remove(); dismiss() }
         } message: { Text("It goes when you Save.") }
+    }
+    private var tees: [Tee] { doc.ev.course.tees }
+    private func tee(_ p: DeskPlayer) -> Tee? { tees.first { $0.id == p.tee } ?? tees.first }
+    private func recalc(_ p: inout DeskPlayer) {
+        if let ch = Hcp.course(p.index, tee(p), par: doc.ev.course.par) { p.hcp = Double(ch); if p.tee.isEmpty { p.tee = tees.first?.id ?? "" } }
+    }
+}
+
+/// Setup's Tees card: each set of tees with its rating and slope (as on the Mac), and one tap to put every player on the same tees.
+struct TeesCard: View {
+    @Bindable var doc: DeskDoc
+    var body: some View {
+        CardBox(title: "Tees", footer: doc.ev.course.tees.isEmpty ? "Add the tees to work out course handicaps from each player’s Handicap Index."
+                : "Players start on the top tees. Change one player’s tees on Teams. Course handicap = Index × Slope ÷ 113 + (Rating − Par).") {
+            VStack(alignment: .leading, spacing: 0) {
+                if !doc.ev.course.tees.isEmpty {
+                    HStack { Text("Tees"); Spacer(); Text("Rating").frame(width: 60, alignment: .trailing); Text("Slope").frame(width: 50, alignment: .trailing); Color.clear.frame(width: 22) }
+                        .font(.caption.weight(.bold)).foregroundStyle(FC.muted).padding(.bottom, 6)
+                }
+                ForEach($doc.ev.course.tees) { $t in
+                    HStack(spacing: 8) {
+                        Circle().fill(swatch(t.name)).frame(width: 14, height: 14).overlay(Circle().stroke(.black.opacity(0.25)))
+                        TextField("Name", text: $t.name)
+                        TextField("", value: $t.rating, format: .number.precision(.fractionLength(1))).keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 60)
+                        TextField("", value: $t.slope, format: .number).keyboardType(.numberPad).multilineTextAlignment(.trailing).frame(width: 50)
+                        Button { doc.ev.course.tees.removeAll { $0.id == t.id } } label: { Image(systemName: "minus.circle.fill").foregroundStyle(FC.muted.opacity(0.6)) }
+                            .buttonStyle(.plain).frame(width: 22)
+                    }
+                    .padding(.vertical, 9)
+                    Divider().overlay(FC.hairline)
+                }
+                HStack {
+                    Button { doc.ev.course.tees.append(Tee(name: ["Blue", "White", "Gold", "Red"][min(doc.ev.course.tees.count, 3)], slope: 113, rating: 72)) } label: { Label("Add Tees", systemImage: "plus") }
+                    Spacer()
+                    if !doc.ev.course.tees.isEmpty && doc.ev.teams.contains(where: { !$0.players.isEmpty }) {
+                        Menu {
+                            ForEach(doc.ev.course.tees) { t in Button("\(t.name) tees") { everyone(on: t) } }
+                        } label: { Label("Put everyone on…", systemImage: "person.3") }
+                    }
+                }
+                .font(.subheadline.weight(.semibold)).foregroundStyle(FC.link).padding(.top, 10)
+            }
+            .padding(14)
+        }
+        // a changed rating or slope changes the course handicap of everyone with an Index
+        .onChange(of: doc.ev.course.tees) { recalcAll() }
+    }
+    private func everyone(on t: Tee) {
+        for i in doc.ev.teams.indices { for j in doc.ev.teams[i].players.indices { doc.ev.teams[i].players[j].tee = t.id } }
+        recalcAll()
+    }
+    private func recalcAll() {
+        let T = doc.ev.course.tees, par = doc.ev.course.par
+        for i in doc.ev.teams.indices { for j in doc.ev.teams[i].players.indices {
+            let p = doc.ev.teams[i].players[j]
+            if let ch = Hcp.course(p.index, T.first { $0.id == p.tee } ?? T.first, par: par), Double(ch) != p.hcp { doc.ev.teams[i].players[j].hcp = Double(ch) }
+        } }
+    }
+    private func swatch(_ name: String) -> Color {
+        let n = name.lowercased()
+        for (k, c) in [("black", Color.black), ("blue", Color(hex: 0x1f5aa6)), ("white", Color.white), ("gold", Color(hex: 0xd4a72c)), ("yellow", Color(hex: 0xe8c547)),
+                       ("green", Color(hex: 0x2f8a57)), ("red", Color(hex: 0xc8312b)), ("orange", Color(hex: 0xe07b28)), ("silver", Color.gray), ("copper", Color(hex: 0xb06a3b))] where n.hasPrefix(k) { return c }
+        return FC.paper2
     }
 }
