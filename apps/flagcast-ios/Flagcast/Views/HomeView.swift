@@ -21,6 +21,8 @@ struct HomeView: View {
     @State private var proOpen = false
     @State private var demoError: String?
     @State private var opening = false
+    @State private var editing = false
+    @State private var confirmAll = false
     @FocusState private var focus: Field?
     enum Field { case event, cart, proEvent, pin }
 
@@ -31,7 +33,7 @@ struct HomeView: View {
                 VStack(spacing: 14) {
                     playCard
                     demoCard
-                    if let r = recents.first(where: { !$0.code.isEmpty }) { resumeCard(r) }
+                    if let r = current { resumeCard(r) }
                     if !others.isEmpty || !pros.isEmpty { recentCard }
                     proCard
                     footer
@@ -74,10 +76,21 @@ struct HomeView: View {
         }
     }
 
-    /// the tournament this phone last scored in goes in its own card; the rest are listed below it
+    /// the round this phone last scored in, if it's still on, goes in its own card; the rest are listed below it
+    private var current: Recent? {
+        guard let r = recents.first(where: { !$0.code.isEmpty }), Recents.isCurrent(Cache.load(r.id)) else { return nil }
+        return r
+    }
     private var others: [Recent] {
-        let first = recents.first { !$0.code.isEmpty }?.id
+        let first = current?.id
         return recents.filter { $0.id != first }
+    }
+
+    private func forget(_ id: String) {
+        withAnimation(.snappy) {
+            Recents.forget(id); recents = Recents.all()
+            if others.isEmpty && pros.isEmpty { editing = false }
+        }
     }
 
     private var hero: some View {
@@ -160,7 +173,14 @@ struct HomeView: View {
     private func resumeCard(_ r: Recent) -> some View {
         let s = Cache.load(r.id)
         return VStack(alignment: .leading, spacing: 8) {
-            Text("Back to your round").fcLabel().padding(.horizontal, 4)
+            HStack {
+                Text("Back to your round").fcLabel()
+                Spacer()
+                Button("Remove") { forget(r.id) }
+                    .font(.subheadline.weight(.semibold)).tint(Color.fcPrimary)
+                    .accessibilityLabel("Remove \(r.name) from this phone")
+            }
+            .padding(.horizontal, 4)
             Button { router.go(.score(id: r.id, code: r.code)) } label: {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
@@ -178,7 +198,7 @@ struct HomeView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             .buttonStyle(.plain)
-            .contextMenu { Button("Remove", systemImage: "trash", role: .destructive) { Recents.forget(r.id); recents = Recents.all() } }
+            .contextMenu { Button("Remove", systemImage: "trash", role: .destructive) { forget(r.id) } }
         }
     }
 
@@ -214,36 +234,78 @@ struct HomeView: View {
 
     private var recentCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Your tournaments").fcLabel()
-            ForEach(pros) { p in
-                recentRow(title: recents.first { $0.id == p.event }?.name ?? Cache.load(p.event)?.name ?? p.name,
-                          detail: p.role == "pro" ? "Golf pro" : "Marshal", icon: "person.badge.key") { router.go(.pro(id: p.event)) }
-                    .contextMenu { Button("Sign out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) { ProSignIns.remove(p.id); pros = ProSignIns.all() } }
+            HStack {
+                Text("Your tournaments").fcLabel()
+                Spacer()
+                Button(editing ? "Done" : "Edit") { withAnimation(.snappy) { editing.toggle() } }
+                    .font(.subheadline.weight(.semibold)).tint(Color.fcPrimary)
+                    .accessibilityHint(editing ? "" : "Remove old tournaments from this phone")
             }
-            ForEach(others.prefix(6)) { r in
-                recentRow(title: r.name, detail: r.code.isEmpty ? "Leaderboard" : "Cart \(r.code)", icon: r.code.isEmpty ? "list.number" : "flag") {
+            ForEach(pros) { p in
+                let title = recents.first { $0.id == p.event }?.name ?? Cache.load(p.event)?.name ?? p.name
+                recentRow(title: title, detail: p.role == "pro" ? "Golf pro" : "Marshal", icon: "person.badge.key",
+                          removeLabel: "Sign out", onRemove: { withAnimation(.snappy) { ProSignIns.remove(p.id); pros = ProSignIns.all(); if others.isEmpty && pros.isEmpty { editing = false } } }) {
+                    router.go(.pro(id: p.event))
+                }
+                .contextMenu { Button("Sign out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive) { ProSignIns.remove(p.id); pros = ProSignIns.all() } }
+            }
+            ForEach(others.prefix(editing ? 10 : 6)) { r in
+                recentRow(title: r.name, detail: r.code.isEmpty ? "Leaderboard" : "Cart \(r.code)", icon: r.code.isEmpty ? "list.number" : "flag",
+                          removeLabel: "Remove", onRemove: { forget(r.id) }) {
                     router.go(r.code.isEmpty ? .live(id: r.id) : .score(id: r.id, code: r.code))
                 }
-                .contextMenu { Button("Remove", systemImage: "trash", role: .destructive) { Recents.forget(r.id); recents = Recents.all() } }
+                .contextMenu { Button("Remove", systemImage: "trash", role: .destructive) { forget(r.id) } }
+            }
+            if editing {
+                if others.count > 1 {
+                    Button("Remove all", role: .destructive) { confirmAll = true }
+                        .font(.body.weight(.semibold)).frame(maxWidth: .infinity).padding(.top, 4)
+                }
+                Text("This only forgets them on this phone. Scores stay with the tournament, and your cart card brings it back. Tournaments you haven’t opened in 30 days clear by themselves.")
+                    .font(.footnote).foregroundStyle(Color.fcMuted)
             }
         }
         .fcCard(padding: 18)
+        .confirmationDialog("Remove all your tournaments from this phone?", isPresented: $confirmAll, titleVisibility: .visible) {
+            Button("Remove all", role: .destructive) {
+                withAnimation(.snappy) {
+                    let keep = current
+                    Recents.forgetAll()
+                    if let keep { Recents.remember(id: keep.id, name: keep.name, code: keep.code) }
+                    recents = Recents.all()
+                    if others.isEmpty && pros.isEmpty { editing = false }
+                }
+            }
+        } message: { Text("Scores stay with each tournament.") }
     }
 
-    private func recentRow(title: String, detail: String, icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: icon).foregroundStyle(Color.fcGreen2).frame(width: 24)
-                Text(title).font(.body.weight(.semibold)).foregroundStyle(Color.fcInk).lineLimit(1)
-                Spacer()
-                Text(detail).fcLabel()
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color.fcMuted)
+    private func recentRow(title: String, detail: String, icon: String, removeLabel: String, onRemove: @escaping () -> Void,
+                           action: @escaping () -> Void) -> some View {
+        HStack(spacing: 10) {
+            if editing {
+                Button(action: onRemove) {
+                    Image(systemName: "minus.circle.fill").font(.title2).symbolRenderingMode(.palette)
+                        .foregroundStyle(.white, Color.fcRed)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(removeLabel) \(title)")
+                .transition(.move(edge: .leading).combined(with: .opacity))
             }
-            .padding(.horizontal, 12).frame(minHeight: 52)
-            .background(Color.fcPaper, in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.fcLine))
+            Button(action: action) {
+                HStack(spacing: 12) {
+                    Image(systemName: icon).foregroundStyle(Color.fcGreen2).frame(width: 24)
+                    Text(title).font(.body.weight(.semibold)).foregroundStyle(Color.fcInk).lineLimit(1)
+                    Spacer()
+                    Text(detail).fcLabel()
+                    if !editing { Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Color.fcMuted) }
+                }
+                .padding(.horizontal, 12).frame(minHeight: 52)
+                .background(Color.fcPaper, in: RoundedRectangle(cornerRadius: 10))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.fcLine))
+            }
+            .buttonStyle(.plain)
+            .disabled(editing)
         }
-        .buttonStyle(.plain)
     }
 
     private var proCard: some View {

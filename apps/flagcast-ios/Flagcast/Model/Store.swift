@@ -23,7 +23,15 @@ struct Recent: Codable, Hashable, Identifiable {
 
 enum Recents {
     static let key = "flagcast.recent"
-    static func all() -> [Recent] { Store.get(key, [Recent]()) }
+    /// a tournament not opened for this long drops off the home screen by itself
+    static let keepDays: Double = 30
+    static func all(now: Date = Date()) -> [Recent] {
+        let list = Store.get(key, [Recent]())
+        let cutoff = (now.timeIntervalSince1970 - keepDays * 86400) * 1000
+        let kept = list.filter { $0.at == 0 || $0.at >= cutoff }
+        if kept.count != list.count { Store.set(key, kept) }
+        return kept
+    }
     static func remember(id: String, name: String, code: String = "") {
         var list = all()
         let prev = list.first { $0.id == id }
@@ -34,6 +42,18 @@ enum Recents {
     }
     static func forget(_ id: String) {
         Store.set(key, all().filter { $0.id != id })
+    }
+    static func forgetAll() { Store.set(key, [Recent]()) }
+
+    /// "Back to your round" is only for a round that's still on: not finished, and dated today or later
+    /// (a Demo tournament runs any day). Without a saved copy of the tournament we can't tell, so it stays.
+    static func isCurrent(_ s: EventState?, now: Date = Date()) -> Bool {
+        guard let s else { return true }
+        if s.locked { return false }
+        if s.brand.marked { return true }
+        guard s.date.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil else { return true }
+        let f = DateFormatter(); f.calendar = Calendar(identifier: .gregorian); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
+        return s.date >= f.string(from: now)
     }
 }
 
