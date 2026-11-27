@@ -29,6 +29,8 @@ struct Page: Decodable, Identifiable {
     var title: String?; var sub: String?; var page: Int?; var pages: Int?; var rows: [Row]?; var points: Bool?
     // cam
     var hole: Int?; var par: Int?; var yards: Int?; var url: String?
+    /// what the camera is ("Hole 7 · Closest to the pin", "Clubhouse"), who's sending from an iPhone, a contest's leader
+    var label: String?; var pro: String?; var leader: String?
     // sponsor(s), phone, empty
     var sponsor: Sponsor?; var name: String?; var line: String?; var logo: String?; var list: [Sponsor]?; var text: String?
     /// a stable id so a page that's still on screen isn't rebuilt when new scores come in

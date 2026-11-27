@@ -325,6 +325,45 @@ export function contestLeader(c, checked = false) {
   return list;
 }
 
+// ---- cameras golfers can watch (the Cameras tab, the live page, the TVs' labels) ----
+// event.cams = { [hole 1–18, or 0 for the clubhouse]: link } (Flagcast Admin, or a pro's phone with Go live)
+// event.golive = { [hole]: { by } } (a phone sending now), event.camsOff = [holes staff hid from golfers],
+// event.clipsOff = true when golfers can't save their shot (op 'clip').
+export const CLUBHOUSE = 0;
+export const CLIP_BACK = 15; // a golfer's "Save your shot": the camera from this many seconds before they tapped
+export const CAM_KINDS = { pro: 'Live from the pro', contest: 'Contest holes', par3: 'Par 3s', club: 'Around the club', hole: 'More cameras' };
+const ORDER = ['pro', 'contest', 'par3', 'club', 'hole'];
+const contestName = (c) => c.label || (c.kind === 'ld' ? 'Long drive' : 'Closest to the pin');
+/**
+ * Every camera, each once, in the order the Cameras tab shows them: the pro's phone, contest holes, par 3s,
+ * around the club (clubhouse, then the 18th green), any other hole.
+ * → [{ n, url, hls, kind, title, sub, by (who's sending from a phone), contests: [contest], off }]
+ * all: true keeps the cameras staff hid (the desk's list, the TVs); otherwise they're left out.
+ */
+export function camList(ev, { all = false } = {}) {
+  const off = new Set((ev?.camsOff || []).map(Number)), live = ev?.golive || {}, holes = ev?.course?.holes || [];
+  const out = [];
+  for (const [k, url] of Object.entries(ev?.cams || {})) {
+    const n = Number(k);
+    if (!url || !Number.isInteger(n) || n < 0 || n > 18 || (n && !holes[n - 1])) continue;
+    if (!all && off.has(n)) continue;
+    const h = holes[n - 1], contests = n ? (ev.contests || []).filter((c) => c.hole === n) : [];
+    const by = live[n] ? String(live[n].by ?? live[n] ?? '') : null;
+    const kind = by != null ? 'pro' : contests.length ? 'contest' : n === 0 ? 'club' : h.par === 3 ? 'par3' : n === 18 ? 'club' : 'hole';
+    const title = n === 0 ? 'Clubhouse' : kind === 'club' ? '18th green' : `Hole ${n}`;
+    const facts = n ? [`Par ${h.par}`, h.yds ? `${h.yds} yds` : ''] : [];
+    const sub = [...contests.map(contestName), ...facts].filter(Boolean).join(' · ');
+    out.push({ n, url, hls: /\.m3u8(\?|$)/.test(url), kind, title, sub, by: by || '', contests, off: off.has(n) });
+  }
+  return out.sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind) || a.n - b.n);
+}
+/** the label for one camera, wherever it shows ("Hole 7 · Closest to the pin", "Clubhouse", "Live from the pro · Dave") */
+export function camTitle(ev, n) {
+  const c = camList(ev, { all: true }).find((x) => x.n === Number(n));
+  if (!c) return Number(n) === 0 ? 'Clubhouse' : `Hole ${n}`;
+  return [c.title, ...c.contests.map(contestName)].join(' · ');
+}
+
 // does a golfer's entry wait for a pro's OK? check 'all': always. 'none': never. 'top' (the default): when it would make the top 3
 export function contestNeedsOk(c, others, e) {
   if (c.check === 'none') return false;

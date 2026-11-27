@@ -72,8 +72,8 @@ ok('back to its playlist');
   // the admin op (local dev: no GOLF_CREATE_PASS, so the local passcode check lets it in)
   const r = await post('/golf/api/club/admin', { pass: 'local', op: 'cams', id, cams: { [p3]: 'https://cams.example/hole.m3u8', 99: 'https://x', 0: 'https://y', [p3 === 1 ? 2 : 1]: 'http://not-https' } });
   st = await state(id);
-  assert.equal(st.cams[p3], 'https://cams.example/hole.m3u8', JSON.stringify({ p3, r, cams: st.cams })); assert.equal(Object.keys(st.cams).length, 1);
-  ok('Admin sets camera links (https only, real holes)');
+  assert.equal(st.cams[p3], 'https://cams.example/hole.m3u8', JSON.stringify({ p3, r, cams: st.cams })); assert.equal(st.cams[0], 'https://y', 'camera 0 is the clubhouse'); assert.equal(Object.keys(st.cams).length, 2);
+  ok('Admin sets camera links (https only, real holes and the clubhouse)');
   await desk('save', { setup: { ...(await desk('get')), cams: {} } });
   st = await state(id); assert.equal(st.cams[p3], 'https://cams.example/hole.m3u8');
   ok('a later club save keeps Flagcast’s camera links');

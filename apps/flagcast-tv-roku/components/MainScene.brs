@@ -273,9 +273,15 @@ sub drawPage(fresh as Boolean)
         v.control = "play"
         m.video = v
         tag = "LIVE · HOLE " + p.hole.ToStr()
-        if p.par <> invalid then tag = tag + "   PAR " + p.par.ToStr()
-        bg = stage.createChild("Rectangle") : bg.translation = [30, 30] : bg.width = 520 : bg.height = 60 : bg.color = "0xC6362BFF"
-        addLabel(stage, tag, 50, 38, 500, 32, "0xFFFFFFFF", true)
+        if p.label <> invalid and p.label <> "" then tag = "LIVE · " + UCase(p.label)
+        if p.pro <> invalid and p.pro <> "" then tag = "LIVE FROM THE PRO · " + Mid(tag, 8)
+        if p.par <> invalid and p.par > 0 and (p.label = invalid or p.label = "") then tag = tag + "   PAR " + p.par.ToStr()
+        bg = stage.createChild("Rectangle") : bg.translation = [30, 30] : bg.width = 1100 : bg.height = 60 : bg.color = "0xC6362BFF"
+        addLabel(stage, tag, 50, 38, 1080, 32, "0xFFFFFFFF", true)
+        if p.leader <> invalid and p.leader <> ""
+            lb = stage.createChild("Rectangle") : lb.translation = [30, 100] : lb.width = 900 : lb.height = 56 : lb.color = "0xE8C547FF"
+            addLabel(stage, "LEADER · " + p.leader, 50, 108, 880, 30, "0x1A1A10FF", true)
+        end if
     else if p.k = "sponsor"
         addLabel(stage, "THANK YOU TO", 0, 160, 1920, 28, "0x8FA596FF", false, "center")
         addSponsor(stage, p, 560, 260, 800, 360)

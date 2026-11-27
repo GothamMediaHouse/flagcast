@@ -93,9 +93,45 @@ try {
   // marshals can't; a wrong hole is refused; Stop on a hole that isn't live is fine
   assert.equal((await call(`/golf/api/${id}/pro`, { pin: '876543', op: 'golive', hole: 4 })).status, 403);
   assert.equal((await pro('golive', { hole: 30 })).status, 400);
-  assert.equal((await pro('golive', { hole: 0 })).status, 400);
+  assert.equal((await pro('golive', { hole: -1 })).status, 400);
   assert.equal((await pro('golive', { hole: 5, stop: true })).status, 200);
   ok('marshals can’t go live; no hole, no live');
+
+  // the clubhouse is camera 0: a pro's phone on the patio
+  r = await pro('golive', { hole: 0 });
+  assert.equal(r.status, 200, JSON.stringify(r.j));
+  assert.equal(inputs[r.j.playback.match(/cam\/([0-9a-f]{32})/)[1]].meta.name, 'Go live test · clubhouse');
+  s = await state(id); assert.equal(s.cams[0], r.j.playback); assert.equal(s.golive[0].by, 'Pat Pro');
+  ok('a pro can go live from the clubhouse (camera 0)');
+
+  // staff choose which cameras golfers see, and whether golfers can save their shot
+  await desk('camshow', { off: [0, 3, 99, 'x'] });
+  s = await state(id); assert.deepEqual(s.camsOff, [0, 3]); assert.ok(!s.clipsOff);
+  await desk('camshow', { clips: false });
+  s = await state(id); assert.deepEqual(s.camsOff, [0, 3], 'clips alone keeps the hidden cameras'); assert.equal(s.clipsOff, true);
+  assert.equal((await pro('camshow', { off: [] })).status, 200, 'a pro can change it too');
+  assert.equal((await call(`/golf/api/${id}/pro`, { pin: '876543', op: 'camshow', off: [] })).status, 403, 'a marshal can’t');
+  ok('the desk and pros choose which cameras golfers see, and turn Save your shot off');
+
+  // Save your shot: a golfer's cart saves a 15-second replay from the hole's camera
+  const g = await desk('get');
+  const team = { id: 'tclip', name: 'Fox / Reyes', code: 'CLIP22', players: [{ id: 'p1', name: 'Matt Fox' }] };
+  await desk('save', { setup: { ...g, teams: [...g.teams, team] } });
+  const tm = (await desk('get')).teams.find((t) => t.name === 'Fox / Reyes');
+  const clipIt = (b) => call(`/golf/api/${id}/clip`, { code: tm.code, team: tm.id, ...b });
+  await desk('camshow', { off: [3] });
+  r = await clipIt({ hole: 3 }); assert.equal(r.status, 404, 'hole 3 is hidden from golfers');
+  await desk('camshow', { off: [], clips: false });
+  r = await clipIt({ hole: 3 }); assert.equal(r.status, 403, 'saving shots is off');
+  await desk('camshow', { clips: true });
+  r = await clipIt({ hole: 5 }); assert.equal(r.status, 404, 'no camera on hole 5');
+  r = await call(`/golf/api/${id}/clip`, { code: 'WRONG1', team: tm.id, hole: 3 }); assert.equal(r.status, 403, 'not your scorecard');
+  r = await clipIt({ hole: 3 }); assert.equal(r.status, 200, JSON.stringify(r.j));
+  assert.equal(r.j.replay.back, 15); assert.equal(r.j.replay.by, 'golfer'); assert.equal(r.j.replay.team, tm.id); assert.match(r.j.replay.label, /^Fox \/ Reyes · /);
+  const again = await clipIt({ hole: 3 }); assert.equal(again.j.replay.id, r.j.replay.id, 'a double tap is the same replay');
+  s = await state(id); assert.equal(s.replays.filter((x) => x.by === 'golfer').length, 1); assert.equal(s.replays[0].hole, 3);
+  ok('Save your shot: a cart saves a 15-second replay of its hole’s camera, once, unless the desk turned it off or hid the camera');
+
 
   // the directory only answers the tournament itself
   const direct = await fetch(`${BASE}/golf/api/club/golive`, { method: 'POST', body: JSON.stringify({ id, key, hole: 2 }) });

@@ -16,6 +16,16 @@
 <link rel="stylesheet" href="/golf/golf.css">
 <link rel="stylesheet" href="/golf/manager.css">
 <style>
+.camlist { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--card); max-width: 640px; }
+.camopt { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 14px; border-top: 1px solid var(--line); cursor: pointer; }
+.camopt:first-child { border-top: 0; }
+.camopt small { color: var(--muted); }
+.camtag { font: 600 .64rem var(--f-mono); letter-spacing: .08em; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; background: var(--paper-2); color: var(--muted); vertical-align: 1px; }
+.camtag.pro { background: #fbe9a8; color: #5a4a08; }
+.sw { appearance: none; -webkit-appearance: none; flex: none; width: 42px; height: 24px; border-radius: 999px; background: #c9d0c6; position: relative; margin: 0; cursor: pointer; transition: background .15s; }
+.sw::after { content: ""; position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .15s; }
+.sw:checked { background: var(--ok); }
+.sw:checked::after { left: 21px; }
 main { padding: 0 24px 80px; position: relative; z-index: 2; }
 /* each section is a white card raised over the photo's bottom edge (the hero shows its title) */
 main > section:not(.ov):not(.embed) { max-width: 1180px; background: var(--card); border-radius: 12px; box-shadow: 0 8px 30px rgba(var(--scrim), .18); padding: 6px 24px 24px; margin-top: -28px; }
@@ -244,10 +254,10 @@ table.t .n { width: 64px; }
   <label class="f" style="margin-top:14px">Ticker text along the bottom<input id="f-ticker" placeholder="Lunch is served at the turn. Awards at 3 PM in the tent."></label>
   <h3>Announcement</h3>
   <div class="row" style="margin-top:0"><input id="flash" placeholder="Shotgun start in 10 minutes" style="max-width:520px"><button class="btn dark" id="flashGo">Show on every screen now</button></div>
-  <h3>Par 3 cameras</h3>
-  <p class="help">Cameras are set up by Flagcast. Pick “Par 3 camera” for a screen and it shows the hole’s camera (or a drawing of the hole when there isn’t one).</p>
-  <div class="grid" id="cams" style="margin-top:10px"></div>
-  <h3>Par 3 replays</h3>
+  <h3>Cameras for players</h3>
+  <p class="help">Cameras are set up by Flagcast, and a golf pro can go live from an iPhone. Choose which ones golfers see on the Cameras tab of the app and the live leaderboard. Pick “Par 3 camera” for a screen, or route any camera to a TV from the Manager’s Screens.</p>
+  <div id="cams" class="camlist" style="margin-top:10px"></div>
+  <h3>Replays</h3>
   <p class="help">Players watch replays on their phones (under each par 3 on the live leaderboard), and you can put one on every screen. Save replay plays the hole’s camera back from 25 seconds before you press it, so the camera’s HLS link must keep a recording window (DVR). Or paste a clip link (.mp4 or .m3u8), for example from a replay system. Golf pros and marshals can save replays from the Flagcast app too.</p>
   <div class="row" style="margin-top:0;flex-wrap:wrap"><select id="rHole"></select><input id="rLabel" maxlength="80" placeholder="Who and what (Dana Ruiz, 3 feet!)" style="max-width:300px"><input id="rUrl" placeholder="Clip link, optional" style="max-width:260px"><button class="btn dark" id="rSave">Save replay</button><button class="btn" id="rSaveShow">Save and show on screens</button></div>
   <div id="replays" class="help" style="margin-top:8px"></div>
@@ -312,7 +322,7 @@ table.t .n { width: 64px; }
 <script type="module">
 import { defaultHoles, leaderboard, courseHcp, coursePar, parseIndex, fmtIndex, netDoubleBogey } from '/golf/core.js';
 import { eventId, post, live, esc } from '/golf/client.js';
-import { fmtPar, contestLeader, contestFlag, fmtDist, playHoles, teamBall, matches, matchFor, cup, fmtPts } from '/golf/core.js';
+import { fmtPar, contestLeader, contestFlag, fmtDist, playHoles, teamBall, matches, matchFor, cup, fmtPts, camList } from '/golf/core.js';
 import { GREEN_PATH, pinSpot, pinLabel, pinPaces, pinYards, yds, middle } from '/golf/gps.js';
 import { SECTIONS, sectionTitle, mountSidebar, menuButton, paintPhoto, courseView, holeView, dayLine, today, rememberLink, shrinkPhoto } from '/golf/shell.js';
 
@@ -824,10 +834,26 @@ $('addCtp').onclick = () => { readTables(); const p3 = EV.course.holes.find((h) 
 $('addLd').onclick = () => { readTables(); const p5 = EV.course.holes.find((h) => h.par === 5); EV.contests.push({ id: rid(), kind: 'ld', hole: p5 ? p5.n : 1, label: '', sponsor: '', entries: [] }); drawContests(); setDirty(); };
 
 // ---- screens: cameras, sponsors, fund, announcements ----
+// every camera with a switch for whether golfers see it (day op 'camshow', saved straight away), and "Save your shot"
+const CAM_TAGS = { pro: 'Pro’s phone', contest: 'Contest', par3: 'Par 3', club: 'Around the club', hole: 'Hole' };
 function drawCams() {
-  const p3 = EV.course.holes.filter((h) => h.par === 3);
-  $('cams').innerHTML = p3.map((h) => `<div class="f"><b>Hole ${h.n}</b> · ${EV.cams[h.n] ? 'Camera set up' : 'No camera'}</div>`).join('') || '<p class="help">This course has no par 3s set.</p>';
+  const S = { ...EV, ...(LIVE ? { cams: LIVE.cams, golive: LIVE.golive, camsOff: LIVE.camsOff, clipsOff: LIVE.clipsOff, contests: LIVE.contests } : {}) };
+  const list = camList(S, { all: true });
+  $('cams').innerHTML = (list.length ? list.map((c) => `<label class="camopt"><span><b>${esc(c.title)}</b> <span class="camtag ${c.kind}">${CAM_TAGS[c.kind]}</span><br><small>${esc([c.by != null && c.kind === 'pro' ? `Live from ${c.by ? `${c.by}’s` : 'an'} iPhone` : '', c.sub].filter(Boolean).join(' · '))}</small></span>
+      <input type="checkbox" class="sw" data-camshow="${c.n}" ${c.off ? '' : 'checked'} aria-label="Show ${esc(c.title)} to golfers"></label>`).join('')
+    : '<p class="help" style="margin:0">No cameras yet. Flagcast adds camera links in Admin, or a golf pro can go live from the Flagcast app.</p>')
+    + `<label class="camopt"><span><b>Golfers can save their shot</b><br><small>A “Save your shot” button on the scorecard of camera holes: a 15-second replay from the club’s camera</small></span>
+      <input type="checkbox" class="sw" data-clips ${S.clipsOff ? '' : 'checked'}></label>`;
 }
+$('cams').addEventListener('change', async (e) => {
+  const t = e.target;
+  try {
+    if (t.dataset.clips !== undefined) { await desk('camshow', { clips: t.checked }); toast(t.checked ? 'Golfers can save their shot.' : 'Save your shot is off.'); return; }
+    if (t.dataset.camshow === undefined) return;
+    const off = [...$('cams').querySelectorAll('[data-camshow]')].filter((x) => !x.checked).map((x) => Number(x.dataset.camshow));
+    await desk('camshow', { off }); toast(t.checked ? 'Golfers see that camera.' : 'Hidden from golfers.');
+  } catch (err) { t.checked = !t.checked; toast(err.message); }
+});
 const SPOT_NAMES = { title: 'Title sponsor (every screen)', leaderboard: 'Leaderboard sponsor', hole: 'Hole sponsor', cam: 'Par 3 camera sponsor', contest: 'Contest sponsor', turn: 'At the turn', ace: 'Hole in one sponsor', slide: 'Own slide on the screens' };
 function drawSponsors() {
   $('sponsors').innerHTML = EV.sponsors.map((s, i) => `<div class="sponsor" data-s="${i}"><input data-sk="name" value="${esc(s.name)}" placeholder="Sponsor name"><input data-sk="line" value="${esc(s.line)}" placeholder="One line, e.g. their slogan">
@@ -858,7 +884,7 @@ function drawReplays() {
   const sel = $('rHole'), cur = sel.value, hs = [...EV.course.holes.filter((h) => h.par === 3), ...EV.course.holes.filter((h) => h.par !== 3)];
   sel.innerHTML = hs.map((h) => `<option value="${h.n}">Hole ${h.n}${h.par === 3 ? ' · par 3' : ''}</option>`).join(''); if (cur) sel.value = cur;
   const reps = (LIVE && LIVE.replays) || [];
-  $('replays').innerHTML = reps.length ? reps.map((r) => `<div class="row" style="margin-top:6px"><span>Hole ${r.hole}: <b>${esc(r.label || 'Replay')}</b>, ${new Date(r.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${r.url ? ' · clip' : ''}${r.by ? ` · ${esc(r.by)}` : ''}</span><button class="btn" data-rshow="${r.id}">Show on screens</button><button class="btn danger" data-rdel="${r.id}">Remove</button></div>`).join('') : 'No replays yet.';
+  $('replays').innerHTML = reps.length ? reps.map((r) => `<div class="row" style="margin-top:6px"><span>Hole ${r.hole}: <b>${esc(r.label || 'Replay')}</b>, ${new Date(r.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${r.url ? ' · clip' : ''}${r.by === 'golfer' ? ' · saved by the group' : r.by ? ` · ${esc(r.by)}` : ''}</span><button class="btn" data-rshow="${r.id}">Show on screens</button><button class="btn danger" data-rdel="${r.id}">Remove</button></div>`).join('') : 'No replays yet.';
 }
 $('replays').addEventListener('click', async (e) => {
   const b = e.target.closest('button'); if (!b) return;
@@ -1127,7 +1153,7 @@ async function start() {
   mountSidebar($('side'), { current: { id: eventId(), key, name: EV.name, date: EV.date, locked: EV.locked }, section: tab, onSection: showTab })
     .then((side) => { SIDE = side; if (!(side.me?.events || []).some((e) => e.id === eventId())) rememberLink({ id: eventId(), key, name: EV.name }, side.me?.email); });
   live((s) => {
-    LIVE = s; drawReplays(); drawResults(); if (!dirty) { EV.locked = s.locked; drawLock(); setDirty(false); }
+    LIVE = s; drawReplays(); drawResults(); drawCams(); if (!dirty) { EV.locked = s.locked; drawLock(); setDirty(false); }
     drawHero(); if (tab === 'overview') drawOverview(); if (tab === 'scores') drawScores(); if (tab === 'pins' && !pinBusy) drawPins(); if (tab === 'links') drawLinks();
     if (SIDE) SIDE.setCurrent({ name: s.name, date: s.date, locked: s.locked });
   });

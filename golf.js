@@ -20,7 +20,7 @@
 //
 // Pages: /g/<id> live page · /g/<id>/board screens · /g/<id>/desk#<key> desk · /g/<id>/map#<key> course map · /g/<id>/s/<code> cart · /g/<id>/cards QR cards
 import { DurableObject } from 'cloudflare:workers';
-import { defaultHoles, courseHcp, leaderboard, contestNeedsOk, teamBall } from './public/golf/core.js';
+import { defaultHoles, courseHcp, leaderboard, contestNeedsOk, teamBall, CLIP_BACK } from './public/golf/core.js';
 import { trackingOn, cleanPin, yds, holeMap } from './public/golf/gps.js';
 import { demoGroups } from './demogroups.js';
 import { same, pinProblem, mergeTeams, stamp, keepMatch, PIN_WAIT, PIN_TRIES_IP, PIN_TRIES_ALL } from './setup.js';
@@ -158,7 +158,7 @@ export async function golf(request, env) {
   if ((m = url.pathname.match(/^\/golf\/api\/([a-z0-9]{8})\/photo\/([a-z0-9-]{1,14})$/)) && (request.method === 'GET' || request.method === 'HEAD')) {
     return cors(request, await env.GOLF.get(env.GOLF.idFromName(m[1])).fetch(request));
   }
-  if ((m = url.pathname.match(/^\/golf\/api\/([a-z0-9]{8})\/(state|ws|cart|score|desk|pro|hit|where|live|logo|enter)$/))) {
+  if ((m = url.pathname.match(/^\/golf\/api\/([a-z0-9]{8})\/(state|ws|cart|score|desk|pro|hit|where|live|logo|enter|clip)$/))) {
     const stub = env.GOLF.get(env.GOLF.idFromName(m[1]));
     return cors(request, await stub.fetch(request));
   }
@@ -184,7 +184,7 @@ export const SPOTS = ['title', 'leaderboard', 'hole', 'cam', 'contest', 'turn', 
 export const PAGE_KINDS = ['lb', 'matches', 'indiv', 'p3', 'cam', 'contests', 'skins', 'fund', 'sponsors', 'sponsor', 'schedule'];
 // changes made on the day (desk or a pro's PIN); marshals only post contest results
 const INVITE_MAX = 4, INVITE_TOTAL = 1500; // emails per player (the first and 3 resends), and per tournament
-const DAY_OPS = new Set(['fix', 'ctp', 'contest', 'check', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay', 'scene', 'map', 'groups', 'pinsheet', 'report', 'team', 'move', 'notes', 'golive']);
+const DAY_OPS = new Set(['fix', 'ctp', 'contest', 'check', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay', 'scene', 'map', 'groups', 'pinsheet', 'report', 'team', 'move', 'notes', 'golive', 'camshow']);
 // marshals post contest results and replays of shots at their hole
 const MARSHAL_OPS = new Set(['ctp', 'check', 'replay']);
 // a replay with no clip link replays the hole's live camera from this many seconds before it was marked
@@ -302,7 +302,7 @@ function cleanSetup(s, old) {
     teams,
     screens: { title: clip(s.screens?.title, 80), ticker: clip(s.screens?.ticker, 300), seconds: num(s.screens?.seconds, 5, 60, 12),
       skins: !!s.screens?.skins, rows: num(s.screens?.rows, 5, 20, 10) },
-    cams: Object.fromEntries(Object.entries(s.cams || {}).filter(([h, u]) => Number.isInteger(Number(h)) && Number(h) >= 1 && Number(h) <= 18 && /^https:\/\//.test(u || '')).map(([h, u]) => [Number(h), clip(u, 500)])),
+    cams: Object.fromEntries(Object.entries(s.cams || {}).filter(([h, u]) => Number.isInteger(Number(h)) && Number(h) >= 0 && Number(h) <= 18 && /^https:\/\//.test(u || '')).map(([h, u]) => [Number(h), clip(u, 500)])),
     // spot: where the sponsor shows (see SPOTS). holes: which holes, for hole, camera and contest spots
     sponsors: (Array.isArray(s.sponsors) ? s.sponsors : []).slice(0, 60).map((x) => {
       const holes = (Array.isArray(x.holes) ? x.holes : []).map(Number).filter((h) => h >= 1 && h <= 18);
@@ -578,6 +578,7 @@ export class GolfEvent extends DurableObject {
     if (op === 'hit') return this.hit(b, request.headers.get('CF-Connecting-IP') || '');
     if (op === 'where') return this.where(b);
     if (op === 'enter') return this.enter(b);
+    if (op === 'clip') return this.clip(b);
     if (op === 'live') return this.live(b);
     return json({ error: 'Not found' }, 404);
   }
@@ -895,8 +896,9 @@ export class GolfEvent extends DurableObject {
       // hole's camera link points at it, so the TVs, the Cameras tab, the live page and replays play it like any
       // camera. { hole, stop: true } when the phone stops: the camera link comes off again (unless the hole had a
       // camera before), and screens and phones pointed at it go back.
+      // hole 0 is the clubhouse (a phone on the patio or the putting green)
       const hole = Number(b.hole);
-      if (!Number.isInteger(hole) || hole < 1 || !ev.course.holes[hole - 1]) return json({ error: 'Pick a hole' }, 400);
+      if (!Number.isInteger(hole) || hole < 0 || (hole > 0 && !ev.course.holes[hole - 1])) return json({ error: 'Pick a hole' }, 400);
       ev.golive = ev.golive || {}; ev.cams = ev.cams || {};
       const was = ev.golive[hole];
       if (b.stop) {
@@ -911,13 +913,18 @@ export class GolfEvent extends DurableObject {
         const j = await r.json().catch(() => ({}));
         if (!r.ok) return json({ error: j.error || 'Flagcast couldn’t start the live video. Try again.' }, r.status || 502);
         // someone's camera is already sending on this hole: don't cut it off from another phone
-        if (j.state === 'connected' && !b.take) return json({ error: `Hole ${hole}’s camera is already live${was ? ` from ${was.by}’s phone` : ''}. Stop that one first.`, live: true, by: was?.by || '' }, 409);
+        if (j.state === 'connected' && !b.take) return json({ error: `${hole ? `Hole ${hole}` : 'The clubhouse'}’s camera is already live${was ? ` from ${was.by}’s phone` : ''}. Stop that one first.`, live: true, by: was?.by || '' }, 409);
         ev.golive[hole] = { by: clip(by, 40), at: now, had: was ? !!was.had : !!ev.cams[hole] };
         ev.cams[hole] = j.playback;
         await this.ctx.storage.put('event', ev);
         await this.broadcast();
         return json({ ok: true, hole, playback: j.playback, srt: j.srt, rtmps: j.rtmps });
       }
+    } else if (b.op === 'camshow') {
+      // which cameras golfers see (the Cameras tab, the live page): { off: [holes, 0 = clubhouse] } hides those;
+      // { clips: false } takes "Save your shot" off the scorecards. The TVs show whatever the desk routes to them.
+      if (Array.isArray(b.off)) ev.camsOff = [...new Set(b.off.map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n <= 18))].sort((x, y) => x - y);
+      if (b.clips !== undefined) ev.clipsOff = !b.clips;
     } else if (b.op === 'scene') { // saved routings: save what every screen shows now, put one back, or delete one
       ev.scenes = ev.scenes || [];
       if (b.save) {
@@ -1056,6 +1063,29 @@ export class GolfEvent extends DurableObject {
     await this.ctx.storage.put('event', ev);
     await this.broadcast();
     return json({ ok: true, entry: e });
+  }
+
+  // "Save your shot" from a golfer's scorecard on a camera hole: a replay of the club's camera from CLIP_BACK seconds
+  // before they tapped (like a marshal's replay mark). Only the club's cameras: golfers never send video.
+  // One per group per hole (tapping again moves it to now), and not when the desk turned it off or hid the camera.
+  async clip(b) {
+    const ev = this.ev, team = ev.teams.find((t) => t.id === b.team), now = Date.now();
+    if (!team || team.code !== String(b.code || '').toUpperCase()) return json({ error: 'Not your scorecard' }, 403);
+    const hole = num(b.hole, 0, 18, 0), url = (ev.cams || {})[hole];
+    if (!hole || !url || (ev.camsOff || []).includes(hole)) return json({ error: 'There’s no camera on this hole.' }, 404);
+    if (ev.clipsOff) return json({ error: 'Saving shots is off for this tournament.' }, 403);
+    if (!/\.m3u8(\?|$)/.test(url)) return json({ error: 'This hole’s camera can’t save shots.' }, 400);
+    const was = (ev.replays || []).find((r) => r.team === team.id && r.hole === hole && r.by === 'golfer');
+    if (was && now - was.at < 20000) return json({ ok: true, replay: was }); // a double tap
+    const r = { id: rand(6, 'abcdefghijkmnpqrstuvwxyz23456789'), hole, label: `${clip(team.name || team.players.map((p) => p.name.trim().split(/\s+/).pop()).join(' / '), 50)} · ${ev.course.holes[hole - 1]?.par === 3 || (ev.contests || []).some((c) => c.hole === hole) ? 'tee shot' : 'shot'}`,
+      url: '', at: now, back: CLIP_BACK, by: 'golfer', team: team.id };
+    // golfers' clips don't push out the desk's and marshals' replays: at most 40 of them
+    const rest = (ev.replays || []).filter((x) => x !== was);
+    const mine = rest.filter((x) => x.by === 'golfer').slice(0, 39).map((x) => x.id);
+    ev.replays = [r, ...rest.filter((x) => x.by !== 'golfer' || mine.includes(x.id))].slice(0, 100);
+    await this.ctx.storage.put('event', ev);
+    await this.broadcast();
+    return json({ ok: true, replay: r });
   }
 
   // sponsor counts for the report: app views and taps, and seconds on the big screens

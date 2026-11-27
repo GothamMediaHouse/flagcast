@@ -85,6 +85,11 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
 .summary { display: flex; justify-content: space-between; align-items: baseline; margin-top: 18px; gap: 12px; }
 .summary .big { font-family: var(--f-display); font-size: 2rem; font-weight: 800; }
 .cam { margin-top: 12px; display: block; text-align: center; }
+.saveshot { display: flex; gap: 12px; align-items: center; width: 100%; margin-top: 12px; text-align: left; background: var(--green); color: var(--on-green); border: 0; border-radius: 14px; padding: 12px 14px; }
+.saveshot .ic { flex: none; width: 40px; height: 40px; border-radius: 10px; background: var(--flag); color: var(--on-flag); display: grid; place-items: center; font-size: 1.1rem; }
+.saveshot b { display: block; }
+.saveshot small { color: var(--on-green-muted); font-size: .8rem; }
+.saveshot:disabled { opacity: .6; }
 .center { text-align: center; padding: 48px 20px; max-width: 420px; margin: 0 auto; }
 .center h2 { font-size: 2rem; margin-bottom: 10px; }
 .center p { color: var(--muted); }
@@ -207,6 +212,8 @@ function myScores() {
   return sc;
 }
 const team = () => S && S.teams.find((t) => t.id === teamId);
+// a camera golfers can see on this hole (staff can hide one from the desk)
+const camOn = (h) => !!(S && S.cams && S.cams[h] && !(S.camsOff || []).includes(h));
 const who = (t) => (teamBall(S) ? [{ id: 'T', name: t.name || 'Team', hcp: t.hcp }] : t.players);
 // the holes this cart plays, in order from its starting hole (only the front or back 9 on a 9-hole round)
 const inRound = (h) => playHoles(S).includes(h.n);
@@ -256,6 +263,13 @@ function drawEntry() {
 document.addEventListener('click', async (e) => {
   const b = e.target.closest('button'); if (!b || !S) return;
   if (b.dataset.enter) return openEntry(b.dataset.enter);
+  if (b.dataset.saveshot) { // "Save your shot": a 15-second replay from the club's camera (not this phone's)
+    b.disabled = true;
+    try { await post('clip', { code, team: teamId, hole: Number(b.dataset.saveshot) }); toast('Saved. Your shot is in the replays on the Cameras tab.'); }
+    catch (err) { toast(err.message); }
+    setTimeout(() => { b.disabled = false; }, 20000);
+    return;
+  }
   if (!ctx) return;
   if (b.dataset.ctp) { ctx.p = b.dataset.ctp; return drawEntry(); }
   if (b.dataset.ctm) { ctx.mode = b.dataset.ctm; return drawEntry(); }
@@ -426,7 +440,8 @@ function render() {
     ${sponsor ? spHtml(sponsor, 'Presented by') : ''}
     ${turn ? `<div class="note"><b>At the turn</b><br>${spHtml(turn, '')}</div>` : ''}
     ${contests.map((c) => contestCard(c, t)).join('')}
-    ${S.cams && S.cams[hole] ? `<a class="btn cam" href="/g/${eventId()}#hole-${hole}">Watch the hole ${hole} camera</a>` : ''}
+    ${camOn(hole) && !S.clipsOff && /\.m3u8(\?|$)/.test(S.cams[hole]) ? `<button class="saveshot" data-saveshot="${hole}"><span class="ic">▶</span><span><b>Just hit? Save your shot</b><small>The hole ${hole} camera keeps the last 15 seconds for your group.</small></span></button>` : ''}
+    ${camOn(hole) ? `<a class="btn cam" href="/g/${eventId()}#hole-${hole}">Watch the hole ${hole} camera</a>` : ''}
     <div class="players">${ps.map((p) => {
       const v = (mine[p.id] || [])[hole - 1];
       const st = strokesHere(p);

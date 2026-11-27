@@ -323,12 +323,12 @@ export class FlagcastClubs extends DurableObject {
       if (!e) { const d = await this.golf(tid, 'desk', { key: String(b.key), op: 'get' }).catch(() => null); if (d && d.key) e = { id: tid, key: d.key, name: d.name || '', club: '' }; }
       if (!e || !same(String(b.key), e.key)) this.fail('Not found', 404);
       if (!streamReady(this.env)) this.fail('Live video isn’t switched on for Flagcast yet. Ask Flagcast to set up Cloudflare Stream.', 409);
-      const hole = num(b.hole, 1, 18, 0); if (!hole) this.fail('Pick a hole.');
+      const hole = num(b.hole, 0, 18, -1); if (hole < 0) this.fail('Pick a hole.'); // 0: the clubhouse
       const old = this.one('SELECT uid FROM streams WHERE event = ? AND hole = ?', e.id, hole);
-      const input = await liveInput(this.env, fetch, { uid: old?.uid, name: `${clip(b.name || e.name, 80)} · hole ${hole}` }).catch((x) => this.fail(x.message, 502));
+      const input = await liveInput(this.env, fetch, { uid: old?.uid, name: `${clip(b.name || e.name, 80)} · ${hole ? `hole ${hole}` : 'clubhouse'}` }).catch((x) => this.fail(x.message, 502));
       this.sql.exec('INSERT OR REPLACE INTO streams (event, hole, uid, updated) VALUES (?, ?, ?, ?)', e.id, hole, input.uid, Date.now());
       const state = old ? await inputState(this.env, fetch, input.uid) : 'disconnected';
-      if (!old) this.note(clip(b.by, 40) || 'Desk', e.club || '', `Go live: hole ${hole} camera from an iPhone · ${clip(b.name || e.name, 80)}`);
+      if (!old) this.note(clip(b.by, 40) || 'Desk', e.club || '', `Go live: ${hole ? `hole ${hole}` : 'clubhouse'} camera from an iPhone · ${clip(b.name || e.name, 80)}`);
       return json({ ok: true, hole, uid: input.uid, srt: input.srt, rtmps: input.rtmps, playback: input.playback, state });
     }
     if (op === 'course') { // only from a tournament (GolfEvent) after its map or Setup was saved: the club keeps the latest one
@@ -676,27 +676,27 @@ export class FlagcastClubs extends DurableObject {
         const tid = String(b.id || '').toLowerCase(); if (!/^[a-z0-9]{8}$/.test(tid)) this.fail('Pick a tournament.');
         const row = this.one('SELECT * FROM events WHERE id = ?', tid); // Flagcast can also set up a tournament no club owns yet
         const j = await this.golf(tid, 'cams', { cams: b.cams || {} });
-        this.note('Flagcast', row?.club || '', `Admin cameras: ${Object.keys(j.cams || {}).length ? Object.keys(j.cams).map((h) => `hole ${h}`).join(', ') : 'none'} · ${row?.name || tid.toUpperCase()}`);
+        this.note('Flagcast', row?.club || '', `Admin cameras: ${Object.keys(j.cams || {}).length ? Object.keys(j.cams).map((h) => (h === "0" ? "clubhouse" : `hole ${h}`)).join(', ') : 'none'} · ${row?.name || tid.toUpperCase()}`);
         return json({ ok: true, cams: j.cams });
       }
       // NDI cameras sent to Cloudflare Stream by the Mac: the hole's live input (made once, reused) for the Mac to push
       // to, and the hole's camera link set to its playback address so phones, the live page and replays use it
       if (b.op === 'stream') {
         if (!streamReady(env)) this.fail('Cloudflare Stream isn’t set up yet: add CF_ACCOUNT_ID and CF_STREAM_TOKEN to the flagcast worker.', 409);
-        const tid = String(b.id || '').toLowerCase(), hole = num(b.hole, 1, 18, 0);
-        if (!/^[a-z0-9]{8}$/.test(tid) || !hole) this.fail('Pick a tournament and a hole.');
+        const tid = String(b.id || '').toLowerCase(), hole = num(b.hole, 0, 18, -1); // 0: the clubhouse
+        if (!/^[a-z0-9]{8}$/.test(tid) || hole < 0) this.fail('Pick a tournament and a hole.');
         const st = await this.golf(tid, 'state');
         const old = this.one('SELECT uid FROM streams WHERE event = ? AND hole = ?', tid, hole);
-        const input = await liveInput(env, fetch, { uid: old?.uid, name: `${clip(st.name, 80)} · hole ${hole}` }).catch((e) => this.fail(e.message, 502));
+        const input = await liveInput(env, fetch, { uid: old?.uid, name: `${clip(st.name, 80)} · ${hole ? `hole ${hole}` : 'clubhouse'}` }).catch((e) => this.fail(e.message, 502));
         this.sql.exec('INSERT OR REPLACE INTO streams (event, hole, uid, updated) VALUES (?, ?, ?, ?)', tid, hole, input.uid, now);
         if ((st.cams || {})[hole] !== input.playback) await this.golf(tid, 'cams', { cams: { ...(st.cams || {}), [hole]: input.playback } });
-        if (!old) this.note('Flagcast', this.one('SELECT club FROM events WHERE id = ?', tid)?.club || '', `Admin cameras: hole ${hole} streams from NDI · ${clip(st.name, 80)}`);
+        if (!old) this.note('Flagcast', this.one('SELECT club FROM events WHERE id = ?', tid)?.club || '', `Admin cameras: ${hole ? `hole ${hole}` : 'clubhouse'} streams from NDI · ${clip(st.name, 80)}`);
         return json({ ok: true, hole, uid: input.uid, rtmps: input.rtmps, playback: input.playback });
       }
       // stop using Stream for a hole: delete its live input and recordings, and take the camera link off
       if (b.op === 'unstream') {
         if (!streamReady(env)) this.fail('Cloudflare Stream isn’t set up.', 409);
-        const tid = String(b.id || '').toLowerCase(), hole = num(b.hole, 1, 18, 0);
+        const tid = String(b.id || '').toLowerCase(), hole = num(b.hole, 0, 18, -1);
         const row = this.one('SELECT uid FROM streams WHERE event = ? AND hole = ?', tid, hole); if (!row) this.fail('That hole isn’t streaming.', 404);
         const removed = await deleteInput(env, fetch, row.uid).catch((e) => this.fail(e.message, 502));
         this.sql.exec('DELETE FROM streams WHERE event = ? AND hole = ?', tid, hole);
@@ -744,7 +744,10 @@ export class FlagcastClubs extends DurableObject {
               // for screen control
               displays: (s.displays || []).map((d) => ({ id: d.id, name: d.name, where: d.where || '', group: d.group || '', online: (s.online || {})[d.id] || 0, force: s.live?.force?.[d.id] || null,
                 pages: (d.playlist || []).length, list: (d.playlist || []).map((x) => ({ k: x.k, fl: x.fl, hole: x.hole, sponsor: x.sponsor, secs: x.secs })) })),
-              p3: (s.course?.holes || []).filter((h) => h.par === 3).map((h) => h.n), cams: s.cams || {}, sponsors: (s.sponsors || []).map((x) => ({ id: x.id, name: x.name })),
+              p3: (s.course?.holes || []).filter((h) => h.par === 3).map((h) => h.n), cams: s.cams || {},
+              // where Admin offers a camera link: the clubhouse (0), par 3s, contest holes, the 18th green, and any hole that has one
+              camHoles: [...new Set([0, ...(s.course?.holes || []).filter((h) => h.par === 3).map((h) => h.n), ...(s.contests || []).map((c) => c.hole), ...((s.course?.holes || []).length >= 18 ? [18] : []), ...Object.keys(s.cams || {}).map(Number)])].filter((n) => Number.isInteger(n) && n >= 0 && n <= 18).sort((x, y) => x - y),
+              contestHoles: Object.fromEntries((s.contests || []).map((c) => [c.hole, c.label || (c.kind === 'ld' ? 'Long drive' : 'Closest to the pin')])), sponsors: (s.sponsors || []).map((x) => ({ id: x.id, name: x.name })),
               replayList: (s.replays || []).slice(0, 12).map((r) => ({ id: r.id, hole: r.hole, label: r.label, at: r.at })), take: s.live?.take || null, flash: s.flash || null,
               phone: s.live?.phone || null, scenes: (s.scenes || []).map((x) => ({ id: x.id, name: x.name })), scene: s.live?.scene || '', flights: s.flights || [], fund: !!s.fund?.on, skins: !!s.screens?.skins };
           } catch { return { ...e, gone: true }; }

@@ -80,7 +80,7 @@ main { max-width: 1240px; padding: 18px 20px 60px; }
 .erow .t { display: flex; align-items: center; gap: 12px; } .erow .t div { flex: 1; min-width: 0; } .erow .t small { display: block; color: var(--muted); font-size: 12px; }
 .erow .f { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted); } .erow .f .bad { color: #e08a1e; font-weight: 600; }
 .okdot { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 12px; font-weight: 700; background: var(--ok); } .okdot.bad { background: #e08a1e; }
-.camrow { display: grid; grid-template-columns: 64px 1fr 100px; gap: 10px; align-items: center; margin-top: 8px; }
+.camrow { display: grid; grid-template-columns: minmax(64px, 200px) 1fr 100px; gap: 10px; align-items: center; margin-top: 8px; }
 .sig { font-size: 12px; color: var(--muted); } .sig.on { color: var(--ok); font-weight: 600; } .sig.no { color: var(--red); font-weight: 600; }
 .grid { display: grid; grid-template-columns: 1fr 330px; gap: 22px; align-items: start; }
 .cols { display: grid; grid-template-columns: 340px 1fr; gap: 18px; align-items: start; }
@@ -393,16 +393,18 @@ let camQ = '';
 function camerasView() {
   if (!events) return '<div class="box empty">Loading tournaments…</div>';
   const day = todayStr();
-  const list = events.filter((e) => !e.gone && !e.archived && !e.hidden && e.p3.length && (!camQ || `${e.name} ${e.clubName}`.toLowerCase().includes(camQ)))
+  const list = events.filter((e) => !e.gone && !e.archived && !e.hidden && (e.camHoles || e.p3).length && (!camQ || `${e.name} ${e.clubName}`.toLowerCase().includes(camQ)))
     .sort((a, b) => ((a.date === day ? 0 : 1) - (b.date === day ? 0 : 1)) || (b.created - a.created));
-  return `<p class="help">Paste each par 3’s https link: an HLS stream (.m3u8) or a web player link such as a VDO.Ninja view link. Replays from the live feed need an HLS link that keeps a recording window (DVR); a web player link plays live only. NDI cameras are started from the Mac Manager (Admin → Cameras). Clubs see “Cameras are set up by Flagcast”.</p>
+  return `<p class="help">Paste each camera’s https link (the clubhouse, par 3s, contest holes and the 18th green): an HLS stream (.m3u8) or a web player link such as a VDO.Ninja view link. Replays from the live feed need an HLS link that keeps a recording window (DVR); a web player link plays live only. NDI cameras are started from the Mac Manager (Admin → Cameras). Clubs see “Cameras are set up by Flagcast”.</p>
   <div class="row" style="margin-bottom:12px"><input id="camq" type="search" placeholder="Find a tournament or club" value="${esc(camQ)}" style="max-width:320px"></div>
   ${list.map((e) => `<form class="box" data-cams="${e.id}"><div class="row" style="justify-content:space-between">
       <div class="row" style="gap:10px">${tile(logoOfEvent(e), e.clubName || e.name, 32)}${e.date === day && !e.locked ? '<span class="chip-live">LIVE</span>' : ''}<b style="font:700 26px var(--f-display)">${esc(e.name)}</b><span class="help" style="margin:0">${esc(e.clubName || '')}${e.date ? ` · ${esc(e.date)}` : ''}</span></div>
       <button class="gbtn-green">Save links</button></div>
-    ${e.p3.map((h) => `<div class="camrow"><b>Hole ${h}</b><input name="${h}" value="${esc((e.cams || {})[h] || '')}" placeholder="https://… (.m3u8 or a web player link)"><span class="sig" data-sig="${e.id}-${h}">${(e.cams || {})[h] ? ((e.cams[h].toLowerCase().includes('.m3u8')) ? 'Checking…' : 'Web player') : 'No camera'}</span></div>`).join('')}
-  </form>`).join('') || `<div class="box empty">${events.length ? 'No open tournaments with par 3s.' : 'No tournaments yet.'}</div>`}`;
+    ${(e.camHoles || e.p3).map((h) => `<div class="camrow"><b>${camRowName(e, h)}</b><input name="${h}" value="${esc((e.cams || {})[h] || '')}" placeholder="https://… (.m3u8 or a web player link)"><span class="sig" data-sig="${e.id}-${h}">${(e.cams || {})[h] ? ((e.cams[h].toLowerCase().includes('.m3u8')) ? 'Checking…' : 'Web player') : 'No camera'}</span></div>`).join('')}
+  </form>`).join('') || `<div class="box empty">${events.length ? 'No open tournaments with a course.' : 'No tournaments yet.'}</div>`}`;
 }
+// a camera row's name: Clubhouse, Hole 7 · Closest to the pin, Hole 18 · 18th green
+const camRowName = (e, h) => h === 0 ? 'Clubhouse' : [`Hole ${h}`, (e.contestHoles || {})[h] || (h === 18 && !e.p3.includes(18) ? '18th green' : '')].filter(Boolean).map(esc).join(' · ');
 // HLS links: fetch the playlist to see whether the camera is sending
 async function checkCams() {
   for (const el of document.querySelectorAll('[data-sig]')) {
@@ -542,7 +544,9 @@ function sources(e) {
   const out = [{ key: '', label: 'Playlist', page: null }];
   out.push({ key: 'lb', label: 'Leaderboard', page: { k: 'lb' } });
   if (e.flights.length > 1) for (const fl of e.flights) out.push({ key: `lb:${fl}`, label: `Flight ${fl}`, page: { k: 'lb', fl } });
-  for (const n of e.p3) { out.push({ key: `cam:${n}`, label: `Hole ${n} camera`, page: { k: 'cam', hole: n }, cam: true }); out.push({ key: `p3:${n}`, label: `Hole ${n} page`, page: { k: 'p3', hole: n } }); }
+  // every camera (the clubhouse is 0), then each par 3's page
+  for (const n of Object.keys(e.cams || {}).map(Number).sort((x, y) => x - y)) out.push({ key: `cam:${n}`, label: `${n ? `Hole ${n}` : 'Clubhouse'} camera`, page: { k: 'cam', hole: n }, cam: true });
+  for (const n of e.p3) { if (!(e.cams || {})[n]) out.push({ key: `cam:${n}`, label: `Hole ${n} camera`, page: { k: 'cam', hole: n }, cam: true }); out.push({ key: `p3:${n}`, label: `Hole ${n} page`, page: { k: 'p3', hole: n } }); }
   out.push({ key: 'contests', label: 'Contests', page: { k: 'contests' } });
   if (e.skins) out.push({ key: 'skins', label: 'Skins', page: { k: 'skins' } });
   if (e.fund) out.push({ key: 'fund', label: 'Fundraising', page: { k: 'fund' } });

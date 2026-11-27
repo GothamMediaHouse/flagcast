@@ -22,6 +22,13 @@ header .pill { font-size: .9vw; padding: .2vw .7vw; }
 .camfull { position: absolute; inset: 0; }
 .camfull .cam { position: absolute; inset: 0; border-radius: 0; }
 .camfull .tag { font-size: 1.3vw; padding: .3vw 1vw; }
+.camlow { position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; display: flex; align-items: stretch; }
+.camlow .a { background: var(--green, #123628); color: #fff; padding: 1vw 2vw; }
+.camlow .a h3 { font: 800 3vw var(--f-display); text-transform: uppercase; margin: 0; line-height: 1; }
+.camlow .a p { margin: .2vw 0 0; color: #a9bdb0; font-size: 1.2vw; }
+.camlow .b { background: var(--flag, #e8c547); color: #1a1a10; padding: 1vw 2vw; display: flex; flex-direction: column; justify-content: center; }
+.camlow .b small { font: 600 .9vw var(--f-mono); letter-spacing: .1em; }
+.camlow .b b { font-size: 1.9vw; }
 .slide { position: absolute; inset: 0; padding: 1.8vw 2.4vw; opacity: 0; transition: opacity .6s ease; }
 .slide.on { opacity: 1; }
 @media (prefers-reduced-motion: reduce) { .slide { transition: none; } }
@@ -161,7 +168,7 @@ header .tsp b { color: var(--txt); font-weight: 600; }
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
 <script src="/golf/qrcode.js"></script>
 <script type="module">
-import { leaderboard, holeStats, fmtPar, contestLeader, fmtDist, skins, FORMATS, formatName, matches, cup, fmtPts, individuals, hasIndividuals } from '/golf/core.js';
+import { leaderboard, holeStats, fmtPar, contestLeader, fmtDist, skins, FORMATS, formatName, matches, cup, fmtPts, individuals, hasIndividuals, camList, camTitle } from '/golf/core.js';
 import { live, esc, post } from '/golf/client.js';
 import { attach, detach, playReplay } from '/golf/replay.js';
 import { applyBrand } from '/golf/brandmark.js';
@@ -195,7 +202,7 @@ function pageSlides(it) {
     for (let p = 0; p < Math.min(pages, 4); p++) out.push({ k: 'lb', fl: it.fl || null, lb: lb.slice(p * rows, p * rows + rows), p, pages, stab, secs });
     return out;
   }
-  if (it.k === 'cam') { const h = S.course.holes.find((x) => x.n === it.hole); return h ? [{ k: 'cam', h, secs }] : []; }
+  if (it.k === 'cam') { const h = it.hole === 0 ? (S.cams[0] ? { n: 0 } : null) : S.course.holes.find((x) => x.n === it.hole); return h ? [{ k: 'cam', h, secs }] : []; }
   if (it.k === 'p3') { const h = S.course.holes.find((x) => x.n === it.hole) || S.course.holes.find((x) => x.par === 3); return h ? [{ k: 'p3', h, secs }] : []; }
   if (it.k === 'sponsor') { const sp = (S.sponsors || []).find((x) => x.id === it.sponsor); return sp ? [{ k: 'sponsor', sp, secs }] : []; }
   if (it.k === 'fund' && !S.fund?.on) return [];
@@ -332,10 +339,20 @@ function camHtml(url, n) {
   const cs = spot('cam', n)[0], bug = cs ? `<span class="bug">CAM BY ${cs.logo ? `<img src="${esc(cs.logo)}" alt="${esc(cs.name)}">` : esc(cs.name).toUpperCase()}</span>` : '';
   return camInner(url, n) + bug;
 }
+// the tag on a camera: LIVE · HOLE 7, LIVE · CLUBHOUSE, LIVE FROM THE PRO · HOLE 9 (a pro's iPhone, Go live)
+const camTag = (n) => `${S.golive?.[n] ? 'LIVE FROM THE PRO' : 'LIVE'} · ${n ? `HOLE ${n}` : 'CLUBHOUSE'}`;
 function camInner(url, n) {
-  if (!url) return `${holeArt()}<span class="tag">HOLE ${n}</span>`;
-  if (/\.m3u8(\?|$)/.test(url)) return `<video muted playsinline autoplay data-hls="${esc(url)}"></video><span class="tag">LIVE · HOLE ${n}</span>`;
-  return `<iframe src="${esc(url)}" allow="autoplay; fullscreen" title="Hole ${n} camera"></iframe><span class="tag">LIVE · HOLE ${n}</span>`;
+  if (!url) return `${holeArt()}<span class="tag">${n ? `HOLE ${n}` : 'CLUBHOUSE'}</span>`;
+  if (/\.m3u8(\?|$)/.test(url)) return `<video muted playsinline autoplay data-hls="${esc(url)}"></video><span class="tag">${camTag(n)}</span>`;
+  return `<iframe src="${esc(url)}" allow="autoplay; fullscreen" title="${n ? `Hole ${n}` : 'Clubhouse'} camera"></iframe><span class="tag">${camTag(n)}</span>`;
+}
+// a camera full screen: what it is along the bottom (Hole 7 · Closest to the pin, Clubhouse) and a contest's leader
+function camSlide(n) {
+  const c = camList(S, { all: true }).find((x) => x.n === n), h = S.course.holes[n - 1];
+  const ct = (c?.contests || [])[0], lead = ct ? contestLeader(ct, true)[0] : null;
+  const sub = c?.kind === 'pro' ? `From ${c.by ? `${esc(c.by)}’s` : 'the pro’s'} iPhone` : h ? `${h.yds ? `${h.yds} yds · ` : ''}Par ${h.par}` : '';
+  return `<div class="camfull"><div class="cam">${camHtml(S.cams[n], n)}</div>
+    <div class="camlow"><div class="a"><h3>${esc(camTitle(S, n))}</h3>${sub ? `<p>${sub}</p>` : ''}</div>${lead ? `<div class="b"><small>LEADER</small><b>${esc(lead.name)} · ${fmtDist(ct, lead.dist)}</b></div>` : ''}</div></div>`;
 }
 
 function p3Slide(s) {
@@ -389,7 +406,7 @@ function draw(s) {
   if (s.k === 'matches') return matchesSlide(s);
   if (s.k === 'indiv') return indivSlide(s);
   if (s.k === 'p3') return p3Slide(s);
-  if (s.k === 'cam') return `<div class="camfull"><div class="cam">${camHtml(S.cams[s.h.n], s.h.n)}</div></div>`;
+  if (s.k === 'cam') return camSlide(s.h.n);
   if (s.k === 'contests') return contestsSlide();
   if (s.k === 'skins') return skinsSlide();
   if (s.k === 'fund') return fundSlide();
@@ -504,7 +521,7 @@ function showTake(tk) {
   if (tk.kind === 'replay') {
     const r = (S.replays || []).find((x) => x.id === tk.replay); if (!r || (lockHole && lockHole !== r.hole)) return;
     const cs = spot('cam', r.hole)[0];
-    takeover(`<video muted playsinline autoplay></video><div class="rtag">REPLAY · HOLE ${r.hole}</div>${r.label ? `<div class="rlabel">${esc(r.label)}</div>` : ''}${cs ? `<span class="bug">CAM BY ${cs.logo ? `<img src="${esc(cs.logo)}" alt="${esc(cs.name)}">` : esc(cs.name).toUpperCase()}</span>` : ''}`, 'replay', (tk.secs || 30) * 1000);
+    takeover(`<video muted playsinline autoplay></video><div class="rtag">REPLAY · ${r.hole ? `HOLE ${r.hole}` : 'CLUBHOUSE'}</div>${r.label ? `<div class="rlabel">${esc(r.label)}</div>` : ''}${cs ? `<span class="bug">CAM BY ${cs.logo ? `<img src="${esc(cs.logo)}" alt="${esc(cs.name)}">` : esc(cs.name).toUpperCase()}</span>` : ''}`, 'replay', (tk.secs || 30) * 1000);
     $('take').dataset.from = 'live';
     if (cs) seen(cs.id);
     playReplay($('take').querySelector('video'), r, S.cams[r.hole], endTake).then((res) => { if (!res.ok) endTake(); });

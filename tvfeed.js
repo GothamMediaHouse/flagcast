@@ -1,5 +1,5 @@
 // The feed the native Flagcast TV apps draw (tv.js serves it): the board's pages as data. No Cloudflare imports, so tests run it in Node.
-import { leaderboard, fmtPar, FORMATS, formatName, matches, cup, fmtPts, individuals, hasIndividuals } from './public/golf/core.js';
+import { leaderboard, fmtPar, FORMATS, formatName, matches, cup, fmtPts, individuals, hasIndividuals, contestLeader, fmtDist, camTitle } from './public/golf/core.js';
 
 const abs = (origin, u) => (!u ? '' : /^https:\/\//.test(u) ? u : u.startsWith('/') ? origin + u : '');
 const isHLS = (u) => /^https:\/\/.+\.m3u8(\?|$)/.test(u || '');
@@ -55,17 +55,21 @@ export function tvFeed(S, screenId, origin = 'https://flagcast.app') {
         score: l.played ? fmtPar(l.score, stab).replace(' pts', '') : '—', under: !stab && !!l.played && l.score < 0, thru: String(l.thru || '').replace('Starts ', '#') })),
     }));
   };
+  // a camera page: hole 0 is the clubhouse. label is what the camera is ("Hole 7 · Closest to the pin", "Clubhouse"),
+  // pro is who's sending from an iPhone (Go live), leader is a contest's leader on that hole ("Reyes / Fox · 4 ft 2 in")
   const camPage = (n, secs) => {
-    const h = (S.course?.holes || []).find((x) => x.n === n); if (!h) return [];
+    const h = n === 0 ? { n: 0, par: 0 } : (S.course?.holes || []).find((x) => x.n === n); if (!h) return [];
     const u = cams[n]; const cs = spot('cam', n)[0];
-    return isHLS(u) ? [{ k: 'cam', secs: secs || Math.round(secsDefault * 1.5), hole: n, par: h.par, yards: h.yards || 0, url: u, sponsor: cs ? sponsorOf(cs) : null }] : [];
+    const ct = (S.contests || []).find((c) => c.hole === n && n), lead = ct ? contestLeader(ct, true)[0] : null;
+    return isHLS(u) ? [{ k: 'cam', secs: secs || Math.round(secsDefault * 1.5), hole: n, par: h.par, yards: h.yards || h.yds || 0, url: u, sponsor: cs ? sponsorOf(cs) : null,
+      label: camTitle(S, n), pro: S.golive?.[n] ? String(S.golive[n].by || 'the pro') : '', leader: lead ? `${lead.name} · ${fmtDist(ct, lead.dist)}` : '' }] : [];
   };
   const page = (it) => {
     const secs = it.secs;
     if (it.k === 'matches' || (it.k === 'lb' && S.format?.type === 'match')) return matchPages(secs);
     if (it.k === 'indiv') return indivPages(it.fl, secs);
     if (it.k === 'lb') return lbPages(it.fl, secs);
-    if (it.k === 'cam' || it.k === 'p3') return camPage(it.hole || (S.course?.holes || []).find((h) => h.par === 3 && isHLS(cams[h.n]))?.n, secs);
+    if (it.k === 'cam' || it.k === 'p3') return camPage(it.k === 'cam' && it.hole === 0 ? 0 : it.hole || (S.course?.holes || []).find((h) => h.par === 3 && isHLS(cams[h.n]))?.n, secs);
     if (it.k === 'sponsor') { const x = (S.sponsors || []).find((y) => y.id === it.sponsor); return x ? [{ k: 'sponsor', secs: secs || secsDefault, ...sponsorOf(x) }] : []; }
     if (it.k === 'sponsors') return (S.sponsors || []).length ? [{ k: 'sponsors', secs: secs || secsDefault, list: S.sponsors.slice(0, 12).map(sponsorOf) }] : [];
     return [];

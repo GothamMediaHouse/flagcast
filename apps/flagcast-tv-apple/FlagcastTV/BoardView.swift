@@ -138,9 +138,11 @@ struct CameraPage: View {
         ZStack(alignment: .topLeading) {
             VideoPlayer(player: player).disabled(true).allowsHitTesting(false)
             HStack(spacing: 14) {
-                Text("LIVE · HOLE \(page.hole ?? 0)").font(Theme.mono(28, .semibold)).foregroundStyle(.white)
+                Text("\((page.pro ?? "").isEmpty ? "LIVE" : "LIVE FROM THE PRO") · \((page.label ?? "").isEmpty ? (page.hole == 0 ? "CLUBHOUSE" : "HOLE \(page.hole ?? 0)") : page.label!.uppercased())").font(Theme.mono(28, .semibold)).foregroundStyle(.white)
                     .padding(.horizontal, 16).padding(.vertical, 8).background(Color(hex: "c6362b"), in: .rect(cornerRadius: 8))
-                if let p = page.par { Text("PAR \(p)\((page.yards ?? 0) > 0 ? " · \(page.yards!) YDS" : "")").font(Theme.mono(26)).foregroundStyle(.white)
+                if let l = page.leader, !l.isEmpty { Text("LEADER · \(l)").font(Theme.mono(26, .semibold)).foregroundStyle(Color(hex: "1a1a10"))
+                    .padding(.horizontal, 14).padding(.vertical, 8).background(Color(hex: "e8c547"), in: .rect(cornerRadius: 8)) }
+                if let p = page.par, p > 0 { Text("PAR \(p)\((page.yards ?? 0) > 0 ? " · \(page.yards!) YDS" : "")").font(Theme.mono(26)).foregroundStyle(.white)
                     .padding(.horizontal, 14).padding(.vertical, 8).background(.black.opacity(0.55), in: .rect(cornerRadius: 8)) }
             }
             .padding(30)
