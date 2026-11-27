@@ -30,6 +30,7 @@ import { DurableObject } from 'cloudflare:workers';
 import { SEED, slug } from './courselib.js';
 import { hashPassword, checkPassword, passwordProblem, verifyAppleToken, appleKeys, APPLE_AUDIENCES, verifyGoogleToken, googleKeys } from './auth.js';
 import { cleanLogo, cleanAccent, logoVersion } from './brand.js';
+import { mailHtml, mailText, EMAILS } from './mail.js';
 import { streamReady, liveInput, inputState, deleteInput, listAll, deleteVideo } from './stream.js';
 
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
@@ -55,11 +56,13 @@ export const isAdmin = (env, pass) => !!env.GOLF_CREATE_PASS && same(pass, env.G
 // and so do the ones added in Admin → Staff (the staff table; FlagcastClubs.staffEmail checks both)
 export const adminEmail = (env, email) => !!email && String(env.ADMIN_EMAIL || '').toLowerCase().split(/[\s,]+/).filter(Boolean).includes(String(email).toLowerCase());
 
-async function sendMail(env, to, subject, text) {
+// m: one of EMAILS in mail.js; it goes out as HTML (branded) with a plain-text copy
+async function sendMail(env, to, m) {
   if (!env.RESEND_API_KEY) throw new Error('nomail');
+  const subject = m.subject, text = mailText(m), html = mailHtml(m);
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST', headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: env.MAIL_FROM || 'Flagcast <signin@flagcast.app>', to: [to], subject, text }),
+    body: JSON.stringify({ from: env.MAIL_FROM || 'Flagcast <signin@flagcast.app>', to: String(to).split(/[\s,]+/).filter(Boolean), subject, text, html }),
   });
   if (!r.ok) throw new Error(`mail ${r.status}`);
 }
@@ -336,7 +339,7 @@ export class FlagcastClubs extends DurableObject {
       if (hourCount > 6) this.fail('Too many codes for that email this hour. Try again later.', 429);
       const code = sixDigits();
       this.sql.exec('INSERT OR REPLACE INTO codes (email, code, exp, tries, sent, hour, hourCount) VALUES (?, ?, ?, 0, ?, ?, ?)', email, code, now + 15 * 60000, now, hour, hourCount);
-      try { await sendMail(env, email, `${code} is your Flagcast sign-in code`, `Your Flagcast sign-in code is ${code}\n\nIt works for 15 minutes. If you didn't ask for it, you can ignore this email.\n\nFlagcast · flagcast.app`); }
+      try { await sendMail(env, email, EMAILS.code(code)); }
       catch (e) {
         if (e.message === 'nomail' && local) return json({ ok: true, devCode: code });
         this.sql.exec('DELETE FROM codes WHERE email = ?', email);
@@ -427,7 +430,7 @@ export class FlagcastClubs extends DurableObject {
       this.sql.exec('INSERT INTO clubs (id, name, contact, phone, city, status, created, by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', id, name, clip(b.contact, 80), clip(b.phone, 40), clip(b.city, 80), 'pending', now, u.email);
       this.sql.exec('INSERT OR REPLACE INTO members (email, club, role, added) VALUES (?, ?, ?, ?)', u.email, id, 'owner', now);
       this.note(u.email, id, `Asked to join: ${name}`);
-      if (env.ADMIN_EMAIL) sendMail(env, env.ADMIN_EMAIL, `New club asking for Flagcast: ${name}`, `${name}\n${clip(b.contact, 80)} · ${u.email} · ${clip(b.phone, 40)}\n${clip(b.city, 80)}\n\nApprove it at https://flagcast.app/golf/admin/`).catch(() => {});
+      if (env.ADMIN_EMAIL) sendMail(env, env.ADMIN_EMAIL, EMAILS.newClub(name, [clip(b.contact, 80), u.email, clip(b.phone, 40), clip(b.city, 80)])).catch(() => {});
       return json(this.me(this.who(b.token)));
     }
     if (op === 'invite' || op === 'uninvite') {
@@ -440,7 +443,7 @@ export class FlagcastClubs extends DurableObject {
         const m = this.one('SELECT * FROM members WHERE email = ?', email);
         if (m && m.club !== u.club.id) this.fail('That email already belongs to another club.');
         this.sql.exec('INSERT OR REPLACE INTO members (email, club, role, added) VALUES (?, ?, ?, ?)', email, u.club.id, 'staff', now);
-        sendMail(env, email, `You’ve been added to ${u.club.name} on Flagcast`, `${u.email} added you to ${u.club.name} on Flagcast.\n\nOpen Flagcast Manager (or https://flagcast.app/golf/) and sign in with this email address to see the club’s tournaments.`).catch(() => {});
+        sendMail(env, email, EMAILS.added(u.club.name, u.email)).catch(() => {});
       } else this.sql.exec('DELETE FROM members WHERE email = ? AND club = ? AND role != ?', email, u.club.id, 'owner');
       this.note(u.email, u.club.id, `${op === 'invite' ? 'Added' : 'Removed'} ${email}`);
       return json(this.me(u));
@@ -494,7 +497,7 @@ export class FlagcastClubs extends DurableObject {
       let made = null;
       if (b.op === 'approve' || b.op === 'on') {
         need(); this.sql.exec('UPDATE clubs SET status = ? WHERE id = ?', 'active', cid);
-        if (b.op === 'approve' && c.status === 'pending' && c.by) this.mail(c.by, `${c.name} is ready on Flagcast`, `Good news: ${c.name} is approved on Flagcast.\n\nOpen Flagcast Manager (or https://flagcast.app/golf/), sign in with this email address and make your first tournament.`);
+        if (b.op === 'approve' && c.status === 'pending' && c.by) this.mail(c.by, EMAILS.approved(c.name));
       }
       if (b.op === 'off') { need(); this.sql.exec('UPDATE clubs SET status = ? WHERE id = ?', 'off', cid); }
       if (b.op === 'delete') {
@@ -540,7 +543,7 @@ export class FlagcastClubs extends DurableObject {
         this.sql.exec('INSERT INTO clubs (id, name, contact, phone, city, status, created, by, credits) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', id, name, clip(b.contact, 80), clip(b.phone, 40), clip(b.city, 80), 'active', now, email || null, credits);
         if (email) {
           this.sql.exec('INSERT INTO members (email, club, role, added) VALUES (?, ?, ?, ?)', email, id, 'owner', now);
-          this.mail(email, `${name} is set up on Flagcast`, `Flagcast has set up ${name} for you.\n\nDownload Flagcast Manager at https://flagcast.app, open it and sign in with this email address (we email you a code, no password). Your tournaments will be there.`);
+          this.mail(email, EMAILS.setUp(name));
         }
         // the course picked in Add club (the worker looked it up: golf.js adminWithCourse)
         this.keepCourse(id, b.card, b.map);
@@ -566,7 +569,7 @@ export class FlagcastClubs extends DurableObject {
           if (m && m.club !== cid) this.fail('That email already belongs to another club.');
           const role = this.one('SELECT email FROM members WHERE club = ? AND role = ?', cid, 'owner') ? 'staff' : 'owner';
           this.sql.exec('INSERT OR REPLACE INTO members (email, club, role, added) VALUES (?, ?, ?, ?)', email, cid, m?.role || role, now);
-          if (!m) this.mail(email, `You’ve been added to ${c.name} on Flagcast`, `Flagcast added you to ${c.name}.\n\nOpen Flagcast Manager (download at https://flagcast.app) and sign in with this email address to see the club’s tournaments.`);
+          if (!m) this.mail(email, EMAILS.added(c.name));
         } else this.sql.exec('DELETE FROM members WHERE email = ? AND club = ?', email, cid);
       }
       if (b.op === 'event') {
@@ -754,7 +757,7 @@ export class FlagcastClubs extends DurableObject {
     this.fail('Not found', 404);
   }
 
-  mail(to, subject, text) { sendMail(this.env, to, subject, text).catch(() => {}); }
+  mail(to, m) { sendMail(this.env, to, m).catch(() => {}); }
 
   // ---- the club's TVs (tv.js): the Flagcast TV app on Apple TV, Google TV, Fire TV and Roku, or any TV browser ----
   // A new TV asks for a 6-letter code (hello) and shows it; someone at the club types it in the Manager (add, with a
