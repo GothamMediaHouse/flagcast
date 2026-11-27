@@ -314,27 +314,57 @@ struct DeleteClubAlert: ViewModifier {
         } message: { c in Text(AdminModel.deleteMessage(c)) }
     }
 }
-/// Recently deleted, under the clubs: Restore, or Delete now with the name typed.
+/// Recently deleted, under the clubs: one quiet line, folded until clicked, then a slim list with days left,
+/// Restore, and Delete Now tucked in the ••• menu (typed name to confirm).
 struct RecentlyDeleted: View {
     @Environment(AdminModel.self) private var model
+    @State private var open = false
     @State private var wiping: DeletedClub?
     @State private var typed = ""
+    static func daysLeft(_ c: DeletedClub) -> String {
+        let d = max(0, Int(ceil((c.wipes / 1000 - Date().timeIntervalSince1970) / 86400)))
+        return d == 0 ? "Wiped today" : "\(d) day\(d == 1 ? "" : "s") left"
+    }
     var body: some View {
         if !model.deleted.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Recently deleted").font(.headline)
-                Text("Kept 30 days with their tournaments locked, then wiped for good.").font(.footnote).foregroundStyle(.secondary)
-                ForEach(model.deleted) { c in
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text(c.name).font(.subheadline.weight(.semibold))
-                            Text("\(c.events) tournament\(c.events == 1 ? "" : "s") · wiped \(Date(timeIntervalSince1970: c.wipes / 1000).formatted(date: .abbreviated, time: .omitted))").font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button("Restore") { Task { await model.restoreClub(c) } }
-                        Button("Delete Now", role: .destructive) { typed = ""; wiping = c }
+                Button { withAnimation(.snappy) { open.toggle() } } label: {
+                    HStack(spacing: 7) {
+                        Image(systemName: "chevron.right").font(.caption.weight(.bold)).rotationEffect(.degrees(open ? 90 : 0))
+                        Text("Recently deleted").font(.subheadline.weight(.semibold))
+                        Text("\(model.deleted.count)").font(.caption.weight(.semibold)).padding(.horizontal, 7).padding(.vertical, 1)
+                            .background(.quaternary, in: Capsule())
+                        if open { Text("Wiped for good after 30 days").font(.caption).foregroundStyle(.tertiary) }
                     }
-                    .padding(10).background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 10))
+                    .foregroundStyle(.secondary).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                if open {
+                    VStack(spacing: 0) {
+                        ForEach(Array(model.deleted.enumerated()), id: \.element.id) { i, c in
+                            if i > 0 { Divider() }
+                            HStack(spacing: 10) {
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text(c.name).font(.subheadline.weight(.semibold)).lineLimit(1)
+                                    Text(c.events == 0 ? "No tournaments" : "\(c.events) tournament\(c.events == 1 ? "" : "s")").font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 8)
+                                Text(Self.daysLeft(c)).font(.caption).foregroundStyle(Color(red: 0.54, green: 0.43, blue: 0.11))
+                                    .padding(.horizontal, 8).padding(.vertical, 2).background(Color(red: 0.98, green: 0.95, blue: 0.86), in: Capsule())
+                                Button("Restore") { Task { await model.restoreClub(c) } }
+                                    .buttonStyle(.plain).font(.subheadline.weight(.semibold)).foregroundStyle(FC.green)
+                                Menu {
+                                    Button("Restore") { Task { await model.restoreClub(c) } }
+                                    Button("Delete Now…", role: .destructive) { typed = ""; wiping = c }
+                                } label: { Image(systemName: "ellipsis").foregroundStyle(.secondary).frame(width: 24, height: 22).contentShape(Rectangle()) }
+                                    .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
+                            }
+                            .padding(.horizontal, 12).padding(.vertical, 8)
+                        }
+                    }
+                    .background(.background, in: RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.quaternary))
+                    .frame(maxWidth: 640, alignment: .leading)
                 }
             }
             .alert("Wipe \(wiping?.name ?? "") now?", isPresented: Binding(get: { wiping != nil }, set: { if !$0 { wiping = nil } }), presenting: wiping) { c in

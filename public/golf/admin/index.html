@@ -166,6 +166,19 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
   .row > input, .row > select { min-width: 0; }
   dialog { width: calc(100vw - 24px); }
 }
+.deld { margin-top: 22px; max-width: 640px; }
+.deld-h { display: flex; align-items: center; gap: 8px; border: 0; background: none; padding: 4px 0; font: 600 13px var(--f-body); color: var(--muted); cursor: pointer; }
+.deld-h .chev { font-size: 9px; transition: transform .15s; } .deld-h .chev.on { transform: rotate(90deg); }
+.deld-h .cnt { background: rgba(0,0,0,.07); border-radius: 9px; padding: 0 7px; font-size: 11px; } .deld-h .hint { font-weight: 400; font-size: 12px; opacity: .7; }
+.deld-list { margin-top: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; }
+.deld-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; } .deld-row + .deld-row { border-top: 1px solid var(--line); }
+.deld-nm { flex: 1; min-width: 0; } .deld-nm b { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .deld-nm small { color: var(--muted); font-size: 12px; }
+.deld-row .left { font-size: 11.5px; color: #8a6d1d; background: #fbf3dc; border-radius: 9px; padding: 1px 8px; white-space: nowrap; }
+.deld-row .lnk { border: 0; background: none; font: 600 13px var(--f-body); color: var(--green-2, #1c4a37); cursor: pointer; padding: 2px 4px; }
+.deld-row .more { position: relative; } .deld-row .more summary { list-style: none; cursor: pointer; color: var(--muted); padding: 2px 6px; border-radius: 6px; } .deld-row .more summary::-webkit-details-marker { display: none; }
+.deld-row .more[open] summary { background: rgba(0,0,0,.06); }
+.deld-row .more > div { position: absolute; right: 0; top: 26px; z-index: 6; background: #fff; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.2); padding: 5px; min-width: 150px; display: grid; }
+.deld-row .more > div button { border: 0; background: none; text-align: left; padding: 6px 9px; border-radius: 5px; font: 13px var(--f-body); cursor: pointer; color: var(--ink); } .deld-row .more > div button:hover { background: rgba(0,0,0,.06); } .deld-row .more > div button.red { color: #c0392b; }
 </style>
 </head>
 <body>
@@ -341,12 +354,14 @@ function clubsView() {
   return `${approvals()}<div class="row" style="margin-bottom:14px"><input id="q" type="search" placeholder="Find a club" value="${esc(q)}" style="max-width:320px"></div>
   ${secs || '<div class="box empty">No club matches.</div>'}${deletedView()}`;
 }
-// clubs deleted in the last 30 days: Restore, or wipe now
+// clubs deleted in the last 30 days: one folded line; open shows a slim list with days left, Restore, and Delete now in the ••• menu
+let delOpen = false;
+function daysLeft(t) { const d = Math.max(0, Math.ceil((t - Date.now()) / 864e5)); return d ? `${d} day${d === 1 ? '' : 's'} left` : 'Wiped today'; }
 function deletedView() {
   if (!deletedClubs.length) return '';
-  return `<h3 style="margin:22px 0 8px">Recently deleted</h3><p class="help">Kept ${30} days with their tournaments locked, then wiped for good.</p>
-  <table><tbody>${deletedClubs.map((c) => `<tr data-club="${esc(c.id)}"><td><b>${esc(c.name)}</b><br><small>${esc(c.city || '')}</small></td><td>${c.events} tournament${c.events === 1 ? '' : 's'}</td>
-    <td>Wiped ${date(c.wipes)}</td><td class="num"><button class="btn sm" data-a="restore">Restore</button> <button class="btn sm danger" data-a="purge">Delete now</button></td></tr>`).join('')}</tbody></table>`;
+  return `<div class="deld"><button class="deld-h" data-deltoggle aria-expanded="${delOpen}"><span class="chev${delOpen ? ' on' : ''}">▶</span>Recently deleted <span class="cnt">${deletedClubs.length}</span>${delOpen ? '<span class="hint">Wiped for good after 30 days</span>' : ''}</button>
+  ${delOpen ? `<div class="deld-list">${deletedClubs.map((c) => `<div class="deld-row" data-club="${esc(c.id)}"><div class="deld-nm"><b>${esc(c.name)}</b><small>${c.events ? `${c.events} tournament${c.events === 1 ? '' : 's'}` : 'No tournaments'}</small></div>
+    <span class="left">${daysLeft(c.wipes)}</span><button class="lnk" data-a="restore">Restore</button><details class="more"><summary aria-label="More">•••</summary><div><button data-a="restore">Restore</button><button class="red" data-a="purge">Delete now…</button></div></details></div>`).join('')}</div>` : ''}</div>`;
 }
 function clubDetailWrap() { const c = clubs.find((x) => x.id === sel); return c ? clubDetail(c) : (sel = null, clubsView()); }
 
@@ -692,12 +707,13 @@ $('view').addEventListener('click', async (e) => {
     } catch (x) { toast(x.message); }
     return;
   }
-  const el = e.target.closest('[data-open],[data-a],[data-cr],[data-set],[data-rm],[data-owner],[data-signout],[data-unpay],[data-pay],[data-archive],[data-lock],[data-unhide],[data-copy],[data-reload],[data-csv],[data-newclub],[data-nologo],[data-saveaccent],[data-noaccent],[data-demo],[data-unstaff]');
+  const el = e.target.closest('[data-open],[data-deltoggle],[data-a],[data-cr],[data-set],[data-rm],[data-owner],[data-signout],[data-unpay],[data-pay],[data-archive],[data-lock],[data-unhide],[data-copy],[data-reload],[data-csv],[data-newclub],[data-nologo],[data-saveaccent],[data-noaccent],[data-demo],[data-unstaff]');
   if (!el) return;
   if (el.tagName === 'A' && el.dataset.open) e.preventDefault();
   const club = el.dataset.club || el.closest('[data-club]')?.dataset.club;
   const c = clubs.find((x) => x.id === club);
   try {
+    if (el.hasAttribute('data-deltoggle')) { delOpen = !delOpen; draw(); return; }
     if (el.dataset.open) { sel = el.dataset.open; tab = 'clubs'; draw(); return; }
     if (el.hasAttribute('data-newclub')) { tab = 'overview'; draw(); document.querySelector('#newClub input')?.focus(); return; }
     if (el.dataset.a) {
