@@ -213,7 +213,7 @@ struct NewClubSheet: View {
             TextField("Club name", text: $f.name)
             TextField("Owner’s email", text: $email, prompt: Text("They sign in to Flagcast Manager with it (optional)"))
             TextField("Contact", text: $f.contact); TextField("Phone", text: $f.phone); TextField("Town and state", text: $f.city)
-            Section("Course") { ClubCoursePicker(picked: $course) }
+            SwiftUI.Section("Course") { ClubCoursePicker(picked: $course) }
             Picker("Tournaments", selection: $credits) { ForEach([0, 1, 2, 3, 5, 10, 20], id: \.self) { Text("\($0)").tag($0) }; Text("Unlimited").tag(-1) }
             HStack { Spacer(); Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 Button("Set Up Club") { var b: [String: Any] = ["name": f.name, "email": email, "contact": f.contact, "phone": f.phone, "city": f.city, "credits": credits]
