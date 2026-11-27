@@ -25,6 +25,7 @@ import { trackingOn, cleanPin, yds, holeMap } from './public/golf/gps.js';
 import { demoGroups } from './demogroups.js';
 import { same, pinProblem, mergeTeams, stamp, keepMatch, PIN_WAIT, PIN_TRIES_IP, PIN_TRIES_ALL } from './setup.js';
 import { clubs } from './clubs.js';
+import { clubCourse } from './clubcourse.js';
 import { resultsRows, ghinRows } from './report.js';
 import { camPlaylist } from './stream.js';
 import { tv } from './tv.js';
@@ -62,6 +63,31 @@ async function isCam(env, uid) {
   camOK.set(uid, { ok, at: Date.now() }); return ok;
 }
 
+// Admin's "create" (a new club) and "setcourse" (a club's course) with a course picked: { course: { id, tee } }. The worker
+// looks it up (the directory can't reach the course lookup itself) and sends the directory the finished scorecard and
+// hole map; a card or map sent by the app itself is never kept. The answer says what was filled in (courseNote).
+export async function adminWithCourse(request, env, find = clubCourse) {
+  const text = await request.text();
+  let b; try { b = JSON.parse(text); } catch { return clubs(new Request(request.url, { method: 'POST', headers: request.headers, body: text }), env, 'admin'); }
+  delete b.card; delete b.map;
+  let note = '';
+  if ((b.op === 'create' || b.op === 'setcourse') && b.course && b.course.id) {
+    // only for Flagcast staff: check who's asking before using a lookup
+    const ok = await clubs(new Request(request.url, { method: 'POST', headers: request.headers, body: JSON.stringify({ ...b, op: 'staffcheck' }) }), env, 'admin');
+    if (!ok.ok) return ok;
+    try { const got = await find(env, b.course); b.card = got.card; b.map = got.map; note = got.note; }
+    catch (e) {
+      if (b.op === 'setcourse') return json({ error: e.message || 'The course lookup didn’t work.' }, 502);
+      note = `The club is set up, but its course wasn’t added: ${e.message || 'the lookup didn’t work.'}`;
+    }
+  }
+  delete b.course;
+  const r = await clubs(new Request(request.url, { method: 'POST', headers: request.headers, body: JSON.stringify(b) }), env, 'admin');
+  if (!note || !r.ok) return r;
+  const j = await r.json().catch(() => null);
+  return j ? json({ ...j, courseNote: note }) : r;
+}
+
 export async function golf(request, env) {
   const url = new URL(request.url);
   let m;
@@ -78,6 +104,8 @@ export async function golf(request, env) {
   }
   // making a tournament and the club accounts go through the club directory (clubs.js)
   if (url.pathname === '/golf/api/new') return cors(request, await clubs(request, env, 'new'));
+  // Admin adding a club with its course: look the course up (scorecard, tees, hole map) here, then the directory keeps it
+  if (url.pathname === '/golf/api/club/admin' && request.method === 'POST') return cors(request, await adminWithCourse(request, env));
   if ((m = url.pathname.match(/^\/golf\/api\/club\/(start|verify|login|apple|google|config|setpass|me|request|invite|uninvite|hide|signout|admin|brand)$/))) return cors(request, await clubs(request, env, m[1]));
   // a club's logo, for the Manager apps and Admin (its tournaments serve their own at /golf/api/<id>/logo)
   if ((m = url.pathname.match(/^\/golf\/api\/club\/logo\/([a-z0-9]{4,10})$/)) && request.method === 'GET') {
@@ -429,8 +457,10 @@ export class GolfEvent extends DurableObject {
     if (url.pathname === '/init') {
       if (await this.load()) return json({ error: 'Taken' }, 409);
       const b = await request.json();
+      // the club's course (scorecard, tees, where it is), when Admin's Add club or an earlier tournament set it
+      const card = b.card && typeof b.card === 'object' && Array.isArray(b.card.holes) ? b.card : null;
       const s = cleanSetup({ name: b.name || 'Golf tournament', club: b.club || '', format: { type: 'bestball', count: 1, allowance: 85 }, flights: ['A', 'B'],
-        screens: { seconds: 12, rows: 10 } }, { course: { holes: defaultHoles() }, teams: [] });
+        screens: { seconds: 12, rows: 10 }, ...(card ? { course: card } : {}) }, { course: { holes: defaultHoles() }, teams: [] });
       this.ev = { ...s, id: url.searchParams.get('id'), key: rand(24, 'abcdefghijkmnpqrstuvwxyz23456789'), locked: false, aces: [], created: Date.now(), v: 1 };
       if (b.map) this.ev.map = { ...cleanMap(b.map), at: Date.now(), by: 'Club course map' }; // the club's course, mapped at an earlier tournament
       await this.ctx.storage.put('event', this.ev);
@@ -636,6 +666,9 @@ export class GolfEvent extends DurableObject {
         if (sc[t.id]) { await this.ctx.storage.put(`x:${t.id}`, sc[t.id]); delete sc[t.id]; await this.ctx.storage.delete(`s:${t.id}`); }
       }
       for (const id of Object.keys(sc)) if (!keep.has(id)) { delete sc[id]; await this.ctx.storage.delete(`s:${id}`); }
+      // the club keeps the course from its latest Setup (with a course name), so its next tournament starts with it
+      if (this.env.CLUBS && ev.course?.name) this.ctx.waitUntil(this.env.CLUBS.get(this.env.CLUBS.idFromName('directory')).fetch(new Request('https://clubs/course', { method: 'POST',
+        body: JSON.stringify({ id: ev.id, key: ev.key, card: { name: ev.course.name, at: ev.course.at, holes: ev.course.holes, tees: ev.course.tees } }) })).catch(() => {}));
       for (const k of (await this.ctx.storage.list({ prefix: 'x:' })).keys()) if (!ev.removed.some((r) => `x:${r.team.id}` === k)) await this.ctx.storage.delete(k);
       // banners of sponsors that were removed go too
       const sps = new Set(ev.sponsors.map((x) => `s-${x.id}`));

@@ -82,6 +82,18 @@ export async function clubs(request, env, op) {
   return stub.fetch(new Request(`https://clubs/${op}?local=${local ? 1 : 0}&ip=${encodeURIComponent(ip)}`, { method: 'POST', body: await request.text() }));
 }
 
+// a club's scorecard as kept: { name, at, holes: 18 × { n, par, yds, hcp }, tees: [{ name, rating, slope, par }] } (a tournament's
+// Setup tidies it again when it starts with it)
+const cnum = (v, lo, hi, d) => { const x = Number(v); return Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : d; };
+export function cleanCard(c) {
+  const lat = Number(c?.at?.lat), lng = Number(c?.at?.lng);
+  return { name: clip(c?.name, 80), at: Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && (lat || lng) ? { lat, lng } : null,
+    holes: Array.from({ length: 18 }, (_, i) => { const h = (Array.isArray(c?.holes) ? c.holes : [])[i] || {};
+      return { n: i + 1, par: cnum(h.par, 3, 6, 4), yds: cnum(h.yds, 0, 999, 0), hcp: cnum(h.hcp, 1, 18, i + 1) }; }),
+    tees: (Array.isArray(c?.tees) ? c.tees : []).slice(0, 8).map((t) => ({ name: clip(t?.name, 30), rating: Math.round(cnum(t?.rating, 50, 90, 72) * 10) / 10,
+      slope: cnum(t?.slope, 55, 155, 113), par: cnum(t?.par, 0, 80, 0) })).filter((t) => t.name) };
+}
+
 // where a tournament's course is, for Admin's club and tournament photos: { center: [lat, lng], span: metres } from the
 // course map (every hole), else the spot Find the course gave; null when it has neither
 export function coursePhoto(s) {
@@ -115,7 +127,8 @@ export class FlagcastClubs extends DurableObject {
     // columns added after the first release
     for (const q of ['ALTER TABLE accounts ADD COLUMN google TEXT', 'ALTER TABLE clubs ADD COLUMN notes TEXT', 'ALTER TABLE events ADD COLUMN archived INTEGER DEFAULT 0', 'ALTER TABLE clubs ADD COLUMN course TEXT',
       'ALTER TABLE clubs ADD COLUMN logo TEXT', 'ALTER TABLE clubs ADD COLUMN accent TEXT', 'ALTER TABLE clubs ADD COLUMN powered INTEGER DEFAULT 0',
-      'ALTER TABLE clubs ADD COLUMN deleted INTEGER', 'ALTER TABLE clubs ADD COLUMN was TEXT', 'ALTER TABLE events ADD COLUMN demo INTEGER DEFAULT 0']) { try { this.sql.exec(q); } catch {} }
+      'ALTER TABLE clubs ADD COLUMN deleted INTEGER', 'ALTER TABLE clubs ADD COLUMN was TEXT', 'ALTER TABLE events ADD COLUMN demo INTEGER DEFAULT 0',
+      'ALTER TABLE clubs ADD COLUMN card TEXT']) { try { this.sql.exec(q); } catch {} }
     // the Flagcast course library (courselib.js): courses any club can pick in Find the course
     this.sql.exec('CREATE TABLE IF NOT EXISTS library (id TEXT PRIMARY KEY, name TEXT, city TEXT, state TEXT, data TEXT, club TEXT, updated INTEGER)');
     for (const c of SEED) if (!this.one('SELECT id FROM library WHERE id = ?', c.id)) this.libPut(c, '', 0);
@@ -225,6 +238,15 @@ export class FlagcastClubs extends DurableObject {
 
   // the club's course map (hole GPS) for a new tournament
   courseOf(club) { try { return club?.course ? JSON.parse(club.course) : null; } catch { return null; } }
+  // the club's scorecard (name, spot, holes, tees) for a new tournament: from Admin's Add club, or its latest tournament
+  cardOf(club) { try { return club?.card ? JSON.parse(club.card) : null; } catch { return null; } }
+  // what a new tournament starts with: the club's name, its course map and its scorecard
+  initBody(name, club) { return JSON.stringify({ name, club: club?.name || '', map: this.courseOf(club), card: this.cardOf(club) }); }
+  // keep a club's course: card { name, at, holes, tees } and/or map { holes, src } (left out = stays as it is)
+  keepCourse(id, card, map) {
+    if (card) { const t = JSON.stringify(cleanCard(card)); if (t.length > 20000) this.fail('Too big'); this.sql.exec('UPDATE clubs SET card = ? WHERE id = ?', t, id); }
+    if (map) { const t = JSON.stringify(map); if (t.length > 200000) this.fail('Too big'); this.sql.exec('UPDATE clubs SET course = ? WHERE id = ?', t, id); }
+  }
 
   async route(op, b, local) {
     const env = this.env, now = Date.now();
@@ -296,11 +318,11 @@ export class FlagcastClubs extends DurableObject {
       if (!old) this.note(clip(b.by, 40) || 'Desk', e.club || '', `Go live: hole ${hole} camera from an iPhone · ${clip(b.name || e.name, 80)}`);
       return json({ ok: true, hole, uid: input.uid, srt: input.srt, rtmps: input.rtmps, playback: input.playback, state });
     }
-    if (op === 'course') { // only from a tournament (GolfEvent) after its map was saved: the club keeps the latest one
+    if (op === 'course') { // only from a tournament (GolfEvent) after its map or Setup was saved: the club keeps the latest one
       const e = this.one('SELECT * FROM events WHERE id = ?', clip(b.id, 8));
       if (!e || !b.key || !same(b.key, e.key)) this.fail('Not found', 404);
-      const s = JSON.stringify(b.map || {}); if (s.length > 200000) this.fail('Too big');
-      this.sql.exec('UPDATE clubs SET course = ? WHERE id = ?', s, e.club);
+      // the map when it was saved; the scorecard when the tournament's Setup was saved with a course name
+      this.keepCourse(e.club, b.card && b.card.name ? b.card : null, b.map || (b.card ? null : {}));
       return json({ ok: true });
     }
     if (op === 'start') {
@@ -453,7 +475,7 @@ export class FlagcastClubs extends DurableObject {
         this.sql.exec('UPDATE clubs SET credits = credits - 1 WHERE id = ? AND credits > 0', club.id);
       }
       let r, j;
-      try { r = await env.GOLF.get(env.GOLF.idFromName(id)).fetch(new Request(`https://golf/init?id=${id}`, { method: 'POST', body: JSON.stringify({ name, club: club?.name || '', map: this.courseOf(club) }) })); j = await r.json(); }
+      try { r = await env.GOLF.get(env.GOLF.idFromName(id)).fetch(new Request(`https://golf/init?id=${id}`, { method: 'POST', body: this.initBody(name, club) })); j = await r.json(); }
       catch { r = { ok: false, status: 502 }; j = { error: 'That didn’t work. Try again.' }; }
       if (!r.ok) { if (paid) this.sql.exec('UPDATE clubs SET credits = credits + 1 WHERE id = ?', club.id); return json(j, r.status); }
       if (club) {
@@ -468,6 +490,7 @@ export class FlagcastClubs extends DurableObject {
       const cid = clip(b.club, 10), c = cid ? this.one('SELECT * FROM clubs WHERE id = ?', cid) : null;
       const need = () => { if (!c) this.fail('That club isn’t there any more.', 404); };
       if (c && ['deleted', 'purged'].includes(c.status) && !['restore', 'purge'].includes(b.op)) this.fail(c.status === 'deleted' ? 'That club is in Recently deleted. Restore it first.' : 'That club was deleted.', 410);
+      if (b.op === 'staffcheck') return json({ ok: true }); // the worker asks before it looks a course up (golf.js adminWithCourse)
       let made = null;
       if (b.op === 'approve' || b.op === 'on') {
         need(); this.sql.exec('UPDATE clubs SET status = ? WHERE id = ?', 'active', cid);
@@ -519,7 +542,15 @@ export class FlagcastClubs extends DurableObject {
           this.sql.exec('INSERT INTO members (email, club, role, added) VALUES (?, ?, ?, ?)', email, id, 'owner', now);
           this.mail(email, `${name} is set up on Flagcast`, `Flagcast has set up ${name} for you.\n\nDownload Flagcast Manager at https://flagcast.app, open it and sign in with this email address (we email you a code, no password). Your tournaments will be there.`);
         }
+        // the course picked in Add club (the worker looked it up: golf.js adminWithCourse)
+        this.keepCourse(id, b.card, b.map);
+        if (b.card) this.note('Flagcast', id, `Course: ${clip(b.card.name, 80)}${b.map ? ' with its hole map' : ''}`);
         made = { club: id };
+      }
+      if (b.op === 'setcourse') { // a club's course, picked again in Admin: its next tournaments start with it
+        need(); if (!b.card) this.fail('Pick the course from the list.');
+        this.keepCourse(cid, b.card, b.map);
+        this.note('Flagcast', cid, `Course: ${clip(b.card.name, 80)}${b.map ? ' with its hole map' : ''}`);
       }
       if (b.op === 'credits') {
         need();
@@ -541,7 +572,7 @@ export class FlagcastClubs extends DurableObject {
       if (b.op === 'event') {
         need();
         const id = rand(8, 'abcdefghijkmnpqrstuvwxyz23456789'), name = clip(b.name, 80);
-        const r = await env.GOLF.get(env.GOLF.idFromName(id)).fetch(new Request(`https://golf/init?id=${id}`, { method: 'POST', body: JSON.stringify({ name, club: c.name, map: this.courseOf(c) }) }));
+        const r = await env.GOLF.get(env.GOLF.idFromName(id)).fetch(new Request(`https://golf/init?id=${id}`, { method: 'POST', body: this.initBody(name, c) }));
         const j = await r.json(); if (!r.ok) return json(j, r.status);
         this.sql.exec('INSERT INTO events (id, club, key, name, created) VALUES (?, ?, ?, ?, ?)', id, cid, j.key, name || 'New tournament', now);
         made = j;
@@ -711,8 +742,8 @@ export class FlagcastClubs extends DurableObject {
       const deleted = this.all("SELECT id, name, city, deleted FROM clubs WHERE status = 'deleted' ORDER BY deleted DESC").map((x) => ({ ...x, wipes: x.deleted + PURGE_DAYS * DAY,
         events: this.one('SELECT COUNT(*) AS n FROM events WHERE club = ?', x.id).n }));
       const gone = Object.fromEntries(this.all("SELECT id, name FROM clubs WHERE status IN ('deleted', 'purged')").map((x) => [x.id, x.name]));
-      const clubs = this.all('SELECT * FROM clubs WHERE status NOT IN (\'deleted\', \'purged\') ORDER BY (status = \'pending\') DESC, name COLLATE NOCASE').map(({ logo, was, ...x }) => ({
-        ...x, powered: !!x.powered, logo: this.logoURL({ id: x.id, logo }), members: this.all('SELECT email, role, added FROM members WHERE club = ? ORDER BY role DESC, added', x.id).map((m) => ({ ...m, seen: seen[m.email] || 0 })),
+      const clubs = this.all('SELECT * FROM clubs WHERE status NOT IN (\'deleted\', \'purged\') ORDER BY (status = \'pending\') DESC, name COLLATE NOCASE').map(({ logo, was, card, course, ...x }) => ({
+        ...x, powered: !!x.powered, courseName: this.cardOf({ card })?.name || '', mapped: Object.keys(this.courseOf({ course })?.holes || {}).length, logo: this.logoURL({ id: x.id, logo }), members: this.all('SELECT email, role, added FROM members WHERE club = ? ORDER BY role DESC, added', x.id).map((m) => ({ ...m, seen: seen[m.email] || 0 })),
         events: this.all('SELECT id, key, name, created, hidden, archived, demo FROM events WHERE club = ? ORDER BY created DESC', x.id),
         payments: this.all('SELECT * FROM payments WHERE club = ? ORDER BY at DESC', x.id),
       }));
@@ -840,7 +871,7 @@ export class FlagcastClubs extends DurableObject {
       try { await this.golf(e.id, 'wipe', {}); this.sql.exec('DELETE FROM events WHERE id = ?', e.id); } catch { left++; }
     }
     if (!left) {
-      this.sql.exec("UPDATE clubs SET status = 'purged', was = NULL, logo = NULL, course = NULL, contact = '', phone = '', notes = '' WHERE id = ?", c.id);
+      this.sql.exec("UPDATE clubs SET status = 'purged', was = NULL, logo = NULL, course = NULL, card = NULL, contact = '', phone = '', notes = '' WHERE id = ?", c.id);
       this.note('Flagcast', c.id, `Wiped deleted club ${c.name} and its tournaments`);
     }
     return left;

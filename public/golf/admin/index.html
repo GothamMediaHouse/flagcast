@@ -204,7 +204,7 @@ const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 const KEY = 'flagcast:admin-pass';
 let pass = (() => { try { return localStorage.getItem(KEY) || sessionStorage.getItem(KEY) || ''; } catch { return ''; } })();
 let clubs = [], deletedClubs = [], oldPays = [], events = null, logRows = null, tab = 'overview', sel = null, q = '', filter = '';
-function toast(t) { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), 2800); }
+function toast(t, ms = 2800) { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), ms); }
 const date = (t) => t ? new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '';
 const when = (t) => t ? new Date(t).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'never';
 const money = (n) => `$${Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
@@ -422,9 +422,33 @@ function newClubBox() {
     <label>Club name<input name="name" required placeholder="Willow Creek Country Club"></label>
     <label>Owner’s email<input name="email" type="email" placeholder="pro@willowcreek.com"></label>
     <label>Town and state<input name="city" placeholder="Rye, NY"></label>
+    <label>Course</label>${coursePicker()}
     <label>Tournaments they can make<select name="credits"><option value="0">None yet</option><option value="1" selected>1</option><option value="2">2</option><option value="5">5</option><option value="10">10</option><option value="-1">Unlimited (season)</option></select></label>
     <button class="btn primary" style="width:100%">Set up club</button>
     <p class="help" style="margin:8px 0 0">The owner gets an email telling them to download Flagcast Manager and sign in.</p></form>`;
+}
+// Find the course, in Add club and on a club's page: pick it, and Flagcast fills in its scorecard, tees and hole map
+// (the server looks it up: golf.js adminWithCourse). Search results stay out of draw(), so typing elsewhere keeps them.
+function coursePicker(change) {
+  return `<div class="cpick" style="margin:0 0 12px"><div class="row" style="margin:0;flex-wrap:nowrap"><input data-cq placeholder="Course name or town" style="flex:1;margin:0" autocomplete="off">
+    <button type="button" class="btn sm" data-cfind>Find</button>${change ? '<button type="button" class="btn sm primary" data-csave disabled>Use this course</button>' : ''}</div>
+    <input type="hidden" name="courseId" data-cid><div data-cout><p class="help" style="margin:6px 0 0">${change ? 'Its next tournaments start with the scorecard, tees and hole map.' : 'Optional. Pick it and its scorecard, tees and hole map are added, so every tournament starts with the course in.'}</p></div></div>`;
+}
+async function findCourse(box) {
+  const q = box.querySelector('[data-cq]').value.trim(), out = box.querySelector('[data-cout]');
+  if (q.length < 3) return toast('Type at least 3 letters of the course name.');
+  out.innerHTML = '<p class="help" style="margin:6px 0 0">Looking…</p>';
+  try {
+    const r = await fetch(`/golf/api/courses?q=${encodeURIComponent(q)}`), j = await r.json();
+    if (!r.ok) { out.innerHTML = `<p class="help" style="margin:6px 0 0">${esc(j.error || 'The lookup didn’t work.')}</p>`; return; }
+    out.innerHTML = j.courses.length ? `<div class="row" style="margin:6px 0 0;flex-wrap:wrap">${j.courses.map((c) => `<button type="button" class="btn sm" data-cpick="${esc(String(c.id))}" data-cname="${esc(c.name)}">${c.library ? '<b>Flagcast</b> · ' : ''}${esc(c.name)}${c.city || c.state ? ` <span class="help">· ${esc([c.city, c.state].filter(Boolean).join(', '))}</span>` : ''}</button>`).join('')}</div>`
+      : '<p class="help" style="margin:6px 0 0">No course by that name. Try the club’s name or the town.</p>';
+  } catch { out.innerHTML = '<p class="help" style="margin:6px 0 0">The lookup didn’t answer. Check the internet and try again.</p>'; }
+}
+function pickCourse(box, b) {
+  box.querySelector('[data-cid]').value = b.dataset.cpick;
+  box.querySelector('[data-cout]').innerHTML = `<p class="help" style="margin:6px 0 0">✓ <b>${esc(b.dataset.cname)}</b>. Its scorecard, tees and hole map are added when you save. <button type="button" class="btn sm" data-cclear>Change</button></p>`;
+  const s = box.querySelector('[data-csave]'); if (s) s.disabled = false;
 }
 
 const pillFor = (s) => s === 'pending' ? '<span class="pill wait">Waiting</span>' : s === 'active' ? '<span class="pill ok">Active</span>' : '<span class="pill off">Off</span>';
@@ -444,6 +468,10 @@ function clubDetail(c) {
       <label style="grid-column:1/-1">Notes (only you see these)<textarea name="notes" placeholder="Package, what they need, who to call…">${esc(c.notes || '')}</textarea></label>
       <div><button class="btn sm dark">Save details</button></div>
     </form>
+
+    <div class="sub">Course</div>
+    <p class="help" style="margin:0 0 6px">${c.courseName ? `<b>${esc(c.courseName)}</b>${c.mapped ? ` · ${c.mapped} holes mapped` : ' · no hole map yet'}. New tournaments start with it.` : c.mapped ? `${c.mapped} holes mapped, no scorecard yet.` : 'No course yet. Pick one, or it’s set from the club’s first tournament.'}</p>
+    ${coursePicker(true)}
 
     <div class="sub">Branding</div>
     <div class="row" style="align-items:center;gap:14px;flex-wrap:wrap">
@@ -607,6 +635,8 @@ $('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-t
 $('view').addEventListener('input', (e) => { if (e.target.id === 'scrq') { scrQ = e.target.value.trim().toLowerCase(); const pos = e.target.selectionStart; draw(); const n = $('scrq'); n.focus(); n.setSelectionRange(pos, pos); return; }
   if (e.target.id === 'camq') { camQ = e.target.value.trim().toLowerCase(); const pos = e.target.selectionStart; draw(); const n = $('camq'); n.focus(); n.setSelectionRange(pos, pos); return; }
   if (e.target.id === 'q') { q = e.target.value.trim().toLowerCase(); const pos = e.target.selectionStart; draw(); const n = $('q'); n.focus(); n.setSelectionRange(pos, pos); } });
+// Enter in a course search finds the course (instead of sending the Add club form)
+$('view').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('[data-cq]')) { e.preventDefault(); findCourse(e.target.closest('.cpick')); } });
 $('view').addEventListener('change', async (e) => {
   if (e.target.id === 'filter') { filter = e.target.value; draw(); return; }
   const bclub = e.target.closest('[data-club]')?.dataset.club;
@@ -627,6 +657,18 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('#ahead [data-newclub]')) { tab = 'overview'; sel = null; draw(); document.querySelector('#newClub input')?.focus(); }
 });
 $('view').addEventListener('click', async (e) => {
+  const cbox = e.target.closest('.cpick');
+  if (cbox) {
+    if (e.target.closest('[data-cfind]')) return findCourse(cbox);
+    const pb = e.target.closest('[data-cpick]'); if (pb) return pickCourse(cbox, pb);
+    if (e.target.closest('[data-cclear]')) { cbox.querySelector('[data-cid]').value = ''; const s = cbox.querySelector('[data-csave]'); if (s) s.disabled = true; return findCourse(cbox); }
+    if (e.target.closest('[data-csave]')) {
+      const id = cbox.querySelector('[data-cid]').value, club = cbox.closest('[data-club]')?.dataset.club; if (!id || !club) return;
+      e.target.closest('[data-csave]').disabled = true; toast('Getting the course…');
+      try { const j = await admin({ op: 'setcourse', club, course: { id } }); toast(j.courseNote || 'Course saved.', 9000); } catch (x) { toast(x.message); }
+      return;
+    }
+  }
   const sc = e.target.closest('[data-scr]'); if (sc) { scrOpen = sc.dataset.scr; draw(); return; }
   const sb = e.target.closest('[data-take],[data-route],[data-scene],[data-unscene],[data-savescene],[data-flash]');
   if (sb) {
@@ -711,8 +753,9 @@ $('view').addEventListener('submit', async (e) => {
     }
     if (f.id === 'newClub') {
       const v = Object.fromEntries(new FormData(f));
-      const j = await admin({ op: 'create', name: v.name, email: v.email, city: v.city, credits: Number(v.credits) });
-      if (j.made) { sel = j.made.club; tab = 'clubs'; draw(); } toast('Club set up.'); return;
+      if (v.courseId) toast('Setting up the club and its course…');
+      const j = await admin({ op: 'create', name: v.name, email: v.email, city: v.city, credits: Number(v.credits), ...(v.courseId ? { course: { id: v.courseId } } : {}) });
+      if (j.made) { sel = j.made.club; tab = 'clubs'; draw(); } toast(j.courseNote || 'Club set up.', j.courseNote ? 9000 : undefined); return;
     }
     if (f.hasAttribute('data-edit')) { const v = Object.fromEntries(new FormData(f)); await admin({ op: 'edit', club, ...v }); toast('Saved.'); return; }
     const v = f.querySelector('input').value.trim();
