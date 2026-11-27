@@ -1,6 +1,6 @@
 {
   "name": "flagcast-phone",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Flagcast for iPhone and Android: the cart scorecard, live leaderboard and golf pro tools from flagcast.app in an app.",
   "scripts": {
