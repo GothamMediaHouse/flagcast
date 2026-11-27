@@ -65,9 +65,10 @@ table.t .n { width: 64px; }
 .course td input { width: 54px; text-align: center; padding: 5px 2px; }
 .course th, .course td { text-align: center; }
 .course th:first-child, .course td:first-child { text-align: left; }
-.pl { display: grid; grid-template-columns: minmax(130px, 1fr) 96px 62px 92px 58px; gap: 4px; margin-bottom: 4px; }
+.pl { display: grid; grid-template-columns: minmax(130px, 1fr) 96px 62px 92px 58px minmax(150px, 1fr); gap: 4px; margin-bottom: 4px; }
+.pl input.bad { border-color: var(--bad, #b3261e); }
 .pl input[disabled] { background: var(--paper-2); color: var(--ink); font-weight: 600; }
-.plhead { display: grid; grid-template-columns: minmax(130px, 1fr) 96px 62px 92px 58px; gap: 4px; font-size: .72rem; color: var(--muted); font-weight: 500; }
+.plhead { display: grid; grid-template-columns: minmax(130px, 1fr) 96px 62px 92px 58px minmax(150px, 1fr); gap: 4px; font-size: .72rem; color: var(--muted); font-weight: 500; }
 #tees input { min-width: 70px; }
 .code { font-family: var(--f-mono); font-weight: 600; letter-spacing: .08em; }
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
@@ -116,6 +117,19 @@ table.t .n { width: 64px; }
 .codes .pin .n { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .codes .pin .r { font-size: 12px; color: var(--muted); }
 .codes .pin .c { margin-left: auto; font: 600 15px var(--f-mono); user-select: all; }
+/* Email invites (Overview): optional emails to players with their group and a link to their scorecard */
+.inv .b { display: block; }
+.inv .nums { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.inv .nums > div { flex: 1; min-width: 120px; background: var(--paper-2); border-radius: 10px; padding: 8px 12px; }
+.inv .nums b { display: block; font-size: 1.6rem; }
+.inv .nums span { font-size: 12px; color: var(--muted); }
+.inv .acts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.inv .sure { margin-top: 12px; border: 2px solid var(--ink); border-radius: 12px; padding: 12px 14px; }
+.inv details { margin-top: 12px; } .inv summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+.inv table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13px; }
+.inv td { padding: 6px 6px; border-top: 1px solid var(--hairline); vertical-align: middle; }
+.inv .tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; background: var(--paper-2); color: var(--muted); white-space: nowrap; }
+.inv .tag.ok { background: #e3efe6; color: #2f6b47; } .inv .tag.new { background: #fbf1cc; color: #7a5d00; }
 .codes .none { color: var(--muted); font-size: 14px; }
 .codes .help { padding: 12px 20px 14px 16px; margin: 0; }
 .gate { max-width: 460px; margin: 60px auto; text-align: center; }
@@ -137,6 +151,7 @@ table.t .n { width: 64px; }
   <div class="stats" id="ovStats"></div>
   <div class="ovgrid"><div class="raised lb" id="ovLb"></div><a class="ctp" id="ovCtp" href="#contests"><div class="tilebox" id="ovCtpPic"></div><div class="tx" id="ovCtpTx"></div></a></div>
   <div class="raised lb codes" id="ovCodes"></div>
+  <div class="raised lb codes inv" id="ovInv"></div>
 </section>
 
 <section id="s-setup" hidden>
@@ -180,7 +195,7 @@ table.t .n { width: 64px; }
 
 <section id="s-teams" hidden>
   <h2>Teams</h2>
-  <p class="help">Each team gets its own scorecard code and QR card. Start hole is for a shotgun start. For a scramble, set the team handicap. Type a player’s Handicap Index (use + for plus handicaps, like +1.2) and pick their tees to have the course handicap worked out; or leave Index empty and type the course handicap yourself.</p>
+  <p class="help">Each team gets its own scorecard code and QR card. Start hole is for a shotgun start. For a scramble, set the team handicap. Type a player’s Handicap Index (use + for plus handicaps, like +1.2) and pick their tees to have the course handicap worked out; or leave Index empty and type the course handicap yourself. A player’s email is optional: it’s for the email invite on Overview, and golfers never see it.</p>
   <div class="scroll" style="margin-top:12px"><table class="t" id="teams"></table></div>
   <div class="row"><button class="btn" id="addTeam">Add team</button><button class="btn" id="pasteBtn">Paste from a spreadsheet</button></div>
   <div id="removedTeams" class="help" hidden style="margin-top:10px"></div>
@@ -191,7 +206,7 @@ table.t .n { width: 64px; }
     <div class="scroll"><table class="t" id="matchT"></table></div>
   </div>
   <div id="pasteBox" hidden style="margin-top:12px">
-    <p class="help">One team per line, columns split by tabs or commas: Team name, Flight, Start hole, Player 1, Handicap 1, Player 2, Handicap 2, and so on (up to 4 players). Copy the rows straight out of Excel or Google Sheets.</p>
+    <p class="help">One team per line, columns split by tabs or commas: Team name, Flight, Start hole, Player 1, Handicap 1, Player 2, Handicap 2, and so on (up to 4 players). A player’s email can go after their handicap. Copy the rows straight out of Excel or Google Sheets.</p>
     <textarea id="paste" placeholder="Reilly / Okafor, A, 1, Pat Reilly, 8, Sam Okafor, 14"></textarea>
     <div class="row"><button class="btn primary" id="pasteAdd">Add these teams</button></div>
   </div>
@@ -312,6 +327,7 @@ function setDirty(on = true) {
   dirty = on; $('save').disabled = !on;
   $('sstate').classList.toggle('dirty', on);
   $('sstateT').textContent = on ? 'Unsaved changes' : EV && EV.locked ? 'Results locked' : 'Saved';
+  if (tab === 'overview') drawInvites();
 }
 addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
 
@@ -399,7 +415,7 @@ function drawOverview() {
     <div class="d">${esc(lead ? fmtDist(c, lead.dist) + (c.sponsor ? ` · presented by ${c.sponsor}` : '') : c ? 'Marshals post results from the phone app.' : 'Add one on the Contests page.')}</div>`;
   const pv = (c && holeView(ev, c.hole)) || courseView(ev), sig = JSON.stringify(pv);
   if ($('ovCtpPic').dataset.sig !== sig) { $('ovCtpPic').dataset.sig = sig; paintPhoto($('ovCtpPic'), pv); }
-  drawCodes();
+  drawCodes(); drawInvites();
 }
 // the codes golfers and staff type on the join screen (read-only here; PINs are changed on Staff)
 function drawCodes() {
@@ -412,6 +428,63 @@ function drawCodes() {
       : `<div class="none">No golf pros or marshals yet. <a class="lnk" href="#staff">Add them on Staff ›</a></div>`}</div></div>
     <p class="help">Golfers type the tournament code and their cart code. Pros and marshals type the tournament code and their PIN.</p>`;
 }
+
+// ---- Email invites (optional): each player with an email gets one email with their group, start and scorecard link ----
+const okEmail = (e) => /^[^\s@<>,;"'()]+@[^\s@<>,;"'()]+\.[a-z]{2,}$/i.test(String(e || '').trim());
+const sentAt = (t) => new Date(t).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' });
+let invSure = false, invBusy = false;
+function invPeople() {
+  const inv = EV.invites || {};
+  return EV.teams.flatMap((t) => (t.players || []).map((p) => {
+    const was = inv[p.id], email = String(p.email || '').trim().toLowerCase();
+    return { t, p, email, sent: was && was.to === email ? was : null, fresh: okEmail(email) && !(was && was.to === email) };
+  }));
+}
+function drawInvites() {
+  if (!EV) return;
+  const all = invPeople(), withE = all.filter((x) => okEmail(x.email)), fresh = all.filter((x) => x.fresh), sent = all.filter((x) => x.sent);
+  const first = !sent.length, n = fresh.length;
+  const label = first ? `Send invites to ${n} player${n === 1 ? '' : 's'}` : `Send to ${n} new player${n === 1 ? '' : 's'}`;
+  const row = (x) => `<tr><td>${esc(x.p.name)}</td><td>${esc(x.t.cart ? `Cart ${x.t.cart}` : teamLabel(x.t))}</td><td>${x.email ? esc(x.email) : '<span style="color:var(--muted)">No email</span>'}</td>
+    <td>${x.sent ? `<span class="tag ok">Sent ${esc(sentAt(x.sent.at))}</span>` : x.fresh ? `<span class="tag new">${first ? 'Not sent yet' : 'Added since, not sent'}</span>` : '<span class="tag">Not sent</span>'}</td>
+    <td style="text-align:right">${x.sent ? (x.sent.n >= 4 ? '<span class="help">Sent 4 times</span>' : `<button class="btn" data-inv="${esc(x.p.id)}">Resend</button>`) : x.fresh ? `<button class="btn" data-inv="${esc(x.p.id)}">Send</button>` : ''}</td></tr>`;
+  $('ovInv').innerHTML = `<div class="h"><span>Email invites</span><a class="lnk" href="#teams">Add emails on Teams ›</a></div>
+    <div class="b"><p class="help" style="margin-top:0">Optional. Each player with an email gets one email from ${esc(EV.club || 'the club')} with their group, start and a link to their scorecard. The cart cards still work on the day.</p>
+    <div class="nums"><div><b>${withE.length}</b><span>players have an email</span></div><div><b>${all.length - withE.length}</b><span>have no email</span></div><div><b>${sent.length}</b><span>invited so far</span></div></div>
+    <div class="acts">${dirty ? '<span class="help">Save your changes first.</span>' : `<button class="btn primary" id="invGo" ${n && !invBusy ? '' : 'disabled'}>${n ? label : first ? 'Add emails on Teams to send invites' : 'Everyone with an email has one'}</button>`}
+      <button class="btn" id="invPreview" ${all.length ? '' : 'disabled'}>Preview the email</button><button class="btn" id="invTest" ${all.length ? '' : 'disabled'}>Send me a test</button></div>
+    ${invSure && n ? `<div class="sure"><b>Send ${n} invite${n === 1 ? '' : 's'} now?</b><p class="help" style="margin:4px 0 10px">${n} player${n === 1 ? ' gets' : 's get'} one email each from ${esc(EV.club || 'the club')}, through Flagcast. You can’t unsend them.</p>
+      <div class="acts"><button class="btn primary" id="invYes" ${invBusy ? 'disabled' : ''}>${invBusy ? 'Sending…' : `Send ${n} email${n === 1 ? '' : 's'}`}</button><button class="btn" id="invNo">Cancel</button></div></div>` : ''}
+    <p class="help">Best sent a day or two before.${first ? ' After the first send, this button only sends to players added since.' : ''}</p>
+    ${all.length ? `<details ${sent.length ? 'open' : ''}><summary>Who gets one (${all.length} players)</summary><div class="scroll"><table>${all.map(row).join('')}</table></div></details>` : ''}</div>`;
+}
+async function sendInvites(what) {
+  invBusy = true; drawInvites();
+  try {
+    const r = await desk('invite', { send: what });
+    EV.invites = r.invites || EV.invites;
+    toast(r.error || (r.sent ? `Sent ${r.sent} invite${r.sent === 1 ? '' : 's'}.` : 'Nobody new to send to.'));
+  } catch (e) { toast(e.message || 'That didn’t send. Try again.'); }
+  invBusy = false; invSure = false; drawInvites();
+}
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('#ovInv button'); if (!b || !EV) return;
+  if (b.id === 'invGo') { invSure = true; drawInvites(); }
+  else if (b.id === 'invNo') { invSure = false; drawInvites(); }
+  else if (b.id === 'invYes') sendInvites('new');
+  else if (b.dataset.inv) { b.disabled = true; sendInvites([b.dataset.inv]); }
+  else if (b.id === 'invPreview') {
+    const w = open('', '_blank');
+    try { const r = await desk('invite', { preview: true }); if (w) w.location = URL.createObjectURL(new Blob([r.html], { type: 'text/html' })); }
+    catch (err) { if (w) w.close(); toast(err.message || 'No preview yet.'); }
+  } else if (b.id === 'invTest') {
+    const to = prompt('Send a test invite to which email address?', localStorage.getItem('fc.testMail') || '');
+    if (!to) return;
+    try { localStorage.setItem('fc.testMail', to); } catch {}
+    try { await desk('invite', { test: to }); toast(`Test sent to ${to}.`); } catch (err) { toast(err.message || 'The test didn’t send.'); }
+  }
+});
+document.addEventListener('input', (e) => { if (e.target.dataset && e.target.dataset.pk === 'email') e.target.classList.toggle('bad', !!e.target.value.trim() && !okEmail(e.target.value)); });
 
 // ---- form <-> setup ----
 const val = (id) => $(id).value.trim();
@@ -538,7 +611,8 @@ function plRow(p, k) {
     <input data-p="${k}" data-pk="ghin" inputmode="numeric" value="${esc(p.ghin || '')}" placeholder="GHIN #">
     <input data-p="${k}" data-pk="index" inputmode="decimal" value="${esc(fmtIndex(p.index))}" placeholder="Index">
     <select data-p="${k}" data-pk="tee" ${T.length ? '' : 'disabled'}>${T.length ? T.map((x) => `<option value="${x.id}" ${tee && tee.id === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('') : '<option>No tees</option>'}</select>
-    <input data-p="${k}" data-pk="hcp" type="number" step="1" value="${ch != null ? ch : p.name ? p.hcp ?? 0 : ''}" placeholder="Hcp" ${ch != null ? 'disabled title="From the Handicap Index and tees"' : ''}></div>`;
+    <input data-p="${k}" data-pk="hcp" type="number" step="1" value="${ch != null ? ch : p.name ? p.hcp ?? 0 : ''}" placeholder="Hcp" ${ch != null ? 'disabled title="From the Handicap Index and tees"' : ''}>
+    <input data-p="${k}" data-pk="email" type="email" autocomplete="off" value="${esc(p.email || '')}" placeholder="Email (optional)" title="For the email invite (Overview). Never shown to golfers or on the screens."></div>`;
 }
 // keep each course handicap in step as an Index, tees or a tee's rating/slope changes (without redrawing the table)
 function updateHcps() {
@@ -580,7 +654,7 @@ function drawTeams() {
     <td><input data-k="start" class="n" type="number" min="1" max="18" value="${t.start || 1}"></td>
     ${cupCol ? `<td><select data-k="side" style="min-width:96px"><option value=""></option><option value="A"${t.side === 'A' ? ' selected' : ''}>${esc(sideName('A'))}</option><option value="B"${t.side === 'B' ? ' selected' : ''}>${esc(sideName('B'))}</option></select></td>` : ''}
     ${scr ? `<td><input data-k="hcp" class="n" type="number" step="0.1" value="${t.hcp || 0}"></td>` : ''}
-    <td><div class="plhead"><span>Player</span><span>GHIN number</span><span>Index</span><span>Tees</span><span>Course hcp</span></div>${[0, 1, 2, 3].map((k) => plRow(t.players[k] || {}, k)).join('')}</td>
+    <td><div class="plhead"><span>Player</span><span>GHIN number</span><span>Index</span><span>Tees</span><span>Course hcp</span><span>Email (for the invite)</span></div>${[0, 1, 2, 3].map((k) => plRow(t.players[k] || {}, k)).join('')}</td>
     <td class="code">${t.code ? esc(t.code) : '<span class="help">After save</span>'}</td>
     <td><button class="btn danger" data-del="${i}" title="Remove team">Remove</button></td></tr>`).join('')}</tbody>`;
   drawMatches();
@@ -632,7 +706,7 @@ function readTables() {
       const q = (pk) => tr.querySelector(`[data-p="${k}"][data-pk="${pk}"]`);
       const index = parseIndex(q('index').value), tee = q('tee').value || '';
       const T = EV.course.tees || [], ch = index != null ? courseHcp(index, T.find((x) => x.id === tee) || T[0], coursePar(EV)) : null;
-      players.push({ id: old.id || rid(), name: n, ghin: q('ghin').value.replace(/\D/g, ''), index, tee, hcp: ch != null ? ch : Number(q('hcp').value) || 0 });
+      players.push({ id: old.id || rid(), name: n, ghin: q('ghin').value.replace(/\D/g, ''), index, tee, hcp: ch != null ? ch : Number(q('hcp').value) || 0, email: q('email').value.trim() });
     }
     t.players = players;
   }
@@ -663,7 +737,12 @@ $('pasteAdd').onclick = () => {
     const c = line.split(line.includes('\t') ? '\t' : ',').map((s) => s.trim());
     if (!c.some(Boolean) || /^team/i.test(c[0])) continue;
     const players = [];
-    for (let k = 3; k + 0 < c.length && players.length < 4; k += 2) if (c[k]) players.push({ id: rid(), name: c[k], hcp: Number(c[k + 1]) || 0 });
+    // each player: name, handicap, and an email after them if there is one (a cell with an @)
+    for (let k = 3; k < c.length && players.length < 4;) {
+      const email = (c[k + 2] || '').includes('@') ? c[k + 2] : '';
+      if (c[k]) players.push({ id: rid(), name: c[k], hcp: Number(c[k + 1]) || 0, email });
+      k += email ? 3 : 2;
+    }
     EV.teams.push({ id: rid(), name: c[0], flight: c[1] || '', start: Number(c[2]) || 1, hcp: 0, players }); n++;
   }
   $('paste').value = ''; $('pasteBox').hidden = true; drawTeams(); setDirty(); toast(`Added ${n} team${n === 1 ? '' : 's'}. Save to make their codes.`);

@@ -24,7 +24,8 @@ import { defaultHoles, courseHcp, leaderboard, contestNeedsOk, teamBall } from '
 import { trackingOn, cleanPin, yds, holeMap } from './public/golf/gps.js';
 import { demoGroups } from './demogroups.js';
 import { same, pinProblem, mergeTeams, stamp, keepMatch, PIN_WAIT, PIN_TRIES_IP, PIN_TRIES_ALL } from './setup.js';
-import { clubs } from './clubs.js';
+import { clubs, sendBatch } from './clubs.js';
+import { EMAILS, mailHtml, mailText, cleanEmail } from './mail.js';
 import { clubCourse } from './clubcourse.js';
 import { resultsRows, ghinRows } from './report.js';
 import { camPlaylist } from './stream.js';
@@ -182,6 +183,7 @@ export const SPOTS = ['title', 'leaderboard', 'hole', 'cam', 'contest', 'turn', 
 // (cam = one hole's camera, full frame)
 export const PAGE_KINDS = ['lb', 'matches', 'indiv', 'p3', 'cam', 'contests', 'skins', 'fund', 'sponsors', 'sponsor', 'schedule'];
 // changes made on the day (desk or a pro's PIN); marshals only post contest results
+const INVITE_MAX = 4, INVITE_TOTAL = 1500; // emails per player (the first and 3 resends), and per tournament
 const DAY_OPS = new Set(['fix', 'ctp', 'contest', 'check', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay', 'scene', 'map', 'groups', 'pinsheet', 'report', 'team', 'move', 'notes', 'golive']);
 // marshals post contest results and replays of shots at their hole
 const MARSHAL_OPS = new Set(['ctp', 'check', 'replay']);
@@ -250,6 +252,8 @@ function cleanSetup(s, old) {
   })).filter((x) => x.name);
   const par = holes.reduce((a, h) => a + h.par, 0);
   const codes = new Map((old.teams || []).map((t) => [t.id, t.code]));
+  // players' emails (for invites): a Manager from before invites doesn't send them, so a player sent without one keeps theirs
+  const mails = new Map((old.teams || []).flatMap((t) => (t.players || []).map((p) => [p.id, p.email || ''])));
   const teams = (Array.isArray(s.teams) ? s.teams : []).slice(0, 200).map((t) => {
     const id = /^[a-z0-9]{4,12}$/.test(t.id || '') ? t.id : rand(6, 'abcdefghijkmnpqrstuvwxyz23456789');
     return {
@@ -263,6 +267,7 @@ function cleanSetup(s, old) {
         ghin: String(p.ghin || '').replace(/\D/g, '').slice(0, 11),
         index: p.index === null || p.index === '' || p.index === undefined || !Number.isFinite(Number(p.index)) ? null : Math.round(num(p.index, -10, 54, 0) * 10) / 10,
         tee: clip(p.tee, 12),
+        email: p.email === undefined ? mails.get(p.id) || '' : cleanEmail(p.email),
       })).map((p) => {
         if (p.index == null) return p;
         const tee = tees.find((x) => x.id === p.tee) || tees[0];
@@ -379,9 +384,9 @@ export class GolfEvent extends DurableObject {
   // what anyone can see: the setup without the cart codes or the desk key
   async publicState() {
     const ev = await this.load(), sc = await this.scores();
-    const { key, pins, log, clog, logo, clubBrand, demo, photos, removed, ...rest } = ev; // logos and photos go by address, not in the state
+    const { key, pins, log, clog, logo, clubBrand, demo, photos, removed, invites, ...rest } = ev; // logos and photos go by address, not in the state
 
-    const teams = ev.teams.map(({ code, sv, ...t }) => ({ ...t, players: t.players.map(({ ghin, ...p }) => p) })); // GHIN numbers stay with the desk
+    const teams = ev.teams.map(({ code, sv, ...t }) => ({ ...t, players: t.players.map(({ ghin, email, ...p }) => p) })); // GHIN numbers and emails stay with the desk
     const online = Object.fromEntries((ev.displays || []).map((d) => [d.id, this.ctx.getWebSockets(`d:${d.id}`).length]));
     const scores = {}, lastAt = {};
     for (const t of ev.teams) {
@@ -637,6 +642,7 @@ export class GolfEvent extends DurableObject {
       return json({ ok: true, photos: photoLinks(ev) });
     }
     if (DAY_OPS.has(b.op)) return this.dayOp(b, 'Desk');
+    if (b.op === 'invite') return this.invite(b);
     if (b.op === 'save') {
       // the tournament's own logo (instead of the club's): '' takes it off; left out, it stays as it is
       let logo = ev.logo || '';
@@ -688,6 +694,68 @@ export class GolfEvent extends DurableObject {
     await this.ctx.storage.put('event', ev);
     await this.broadcast();
     return json(b.op === 'save' ? { ...ev, photos: photoLinks(ev) } : { ok: true });
+  }
+
+  // ---- player invites by email (optional): the club adds players' emails on the Teams tab and sends each one email with
+  // their group, start and a link to their cart's scorecard. ev.invites[player id] = { to, at, n } (n = times sent).
+  //   { op: 'invite', send: 'new' }               every player with an email who hasn't had one (or whose email changed since)
+  //   { op: 'invite', send: [player ids] }        one or a few players again (Resend), at most INVITE_MAX times each
+  //   { op: 'invite', test: 'me@club.com' }       a test copy (the first player's) to the club, marked Test
+  //   { op: 'invite', preview: true }             → { html, subject } of the first player's email, sends nothing
+  // → { sent, failed, invites }
+  inviteMail(team, player) {
+    const ev = this.ev, br = brandFor(ev), logo = logoOf(ev);
+    // Gmail and Outlook don't show SVG: an SVG club logo shows the club's name instead
+    const brand = br.demo ? { demo: true } : { logo: logo && logo.type !== 'image/svg+xml' ? `https://flagcast.app${br.logo}` : '', accent: br.accent, demo: false };
+    return EMAILS.invite({ ev, team, player, brand });
+  }
+  async invite(b) {
+    const ev = this.ev, inv = { ...(ev.invites || {}) }, now = Date.now();
+    const all = ev.teams.flatMap((t) => t.players.map((p) => ({ t, p })));
+    const sample = all.find((x) => x.p.email) || all[0];
+    if (b.preview) {
+      if (!sample) return json({ error: 'Add a team with players first.' }, 400);
+      const m = this.inviteMail(sample.t, sample.p);
+      return json({ subject: m.subject, html: mailHtml(m), text: mailText(m) });
+    }
+    if (!this.env.RESEND_API_KEY) return json({ error: 'Email isn’t set up on the server yet. Ask Flagcast.' }, 503);
+    const from = (this.env.MAIL_FROM || 'Flagcast <signin@flagcast.app>').replace(/^.*<([^>]+)>.*$/, '$1');
+    const name = String(ev.club || 'Flagcast').replace(/["<>\r\n,;\\]/g, '').trim().slice(0, 60);
+    const sender = `${name}${name === 'Flagcast' ? '' : ' via Flagcast'} <${from}>`;
+    if (b.test !== undefined) {
+      const to = cleanEmail(b.test);
+      if (!to) return json({ error: 'Type the email address to send the test to.' }, 400);
+      if (!sample) return json({ error: 'Add a team with players first.' }, 400);
+      const tests = (ev.inviteTests || []).filter((t) => now - t < 86400e3);
+      if (tests.length >= 5) return json({ error: 'That’s 5 tests today. Try again tomorrow.' }, 429);
+      const m = this.inviteMail(sample.t, sample.p); m.subject = `Test: ${m.subject}`;
+      try { await sendBatch(this.env, [{ from: sender, to, m }]); } catch { return json({ error: 'The test didn’t send. Try again in a minute.' }, 502); }
+      ev.inviteTests = [...tests, now]; await this.ctx.storage.put('event', ev);
+      return json({ sent: 1, failed: 0, invites: inv });
+    }
+    let list;
+    if (b.send === 'new') list = all.filter(({ p }) => p.email && (!inv[p.id] || inv[p.id].to !== p.email));
+    else if (Array.isArray(b.send)) {
+      const ids = new Set(b.send.slice(0, 20).map(String));
+      list = all.filter(({ p }) => ids.has(p.id) && p.email);
+      const over = list.find(({ p }) => inv[p.id] && inv[p.id].to === p.email && inv[p.id].n >= INVITE_MAX);
+      if (over) return json({ error: `${over.p.name} has had ${INVITE_MAX} emails already.` }, 429);
+    } else return json({ error: 'Say who to send to.' }, 400);
+    if (!list.length) return json({ sent: 0, failed: 0, invites: inv });
+    const total = Object.values(inv).reduce((a, x) => a + (x.n || 0), 0);
+    if (total + list.length > INVITE_TOTAL) return json({ error: `A tournament can send ${INVITE_TOTAL} invites in all.` }, 429);
+    let sent = 0, failed = 0;
+    for (let i = 0; i < list.length; i += 100) { // Resend takes 100 emails a call
+      const part = list.slice(i, i + 100);
+      try {
+        await sendBatch(this.env, part.map(({ t, p }) => ({ from: sender, to: p.email, m: this.inviteMail(t, p) })));
+        for (const { p } of part) inv[p.id] = { to: p.email, at: now, n: (inv[p.id] && inv[p.id].to === p.email ? inv[p.id].n || 0 : 0) + 1 };
+        sent += part.length;
+      } catch { failed += part.length; }
+    }
+    ev.invites = inv;
+    await this.ctx.storage.put('event', ev);
+    return json({ sent, failed, invites: inv, ...(failed ? { error: `${failed} email${failed === 1 ? '' : 's'} didn’t send. Press Send again to try those.` } : {}) });
   }
 
   // a golf pro or marshal signs in with the PIN the Manager gave them. Pros run the day; marshals post contest results.

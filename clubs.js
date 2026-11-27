@@ -67,6 +67,16 @@ async function sendMail(env, to, m) {
   if (!r.ok) throw new Error(`mail ${r.status}`);
 }
 
+// several emails in one call (Resend's batch, up to 100): [{ from, to, m }] (m: one of EMAILS). Throws if Resend says no.
+export async function sendBatch(env, list) {
+  if (!env.RESEND_API_KEY) throw new Error('nomail');
+  const r = await fetch(`${env.RESEND_BASE || 'https://api.resend.com'}/emails/batch`, {
+    method: 'POST', headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(list.map(({ from, to, m }) => ({ from, to: [to], subject: m.subject, text: mailText(m), html: mailHtml(m) }))),
+  });
+  if (!r.ok) throw new Error(`mail ${r.status}`);
+}
+
 // for courses.js and contact.js: may this network do k again? (max times in mins minutes; true if the directory can't answer)
 export async function allowed(env, k, max, mins) {
   if (!env.CLUBS) return true;
