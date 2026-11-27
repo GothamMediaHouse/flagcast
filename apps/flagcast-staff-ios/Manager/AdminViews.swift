@@ -319,6 +319,7 @@ private struct NewClub: View {
     @State private var phone = ""
     @State private var city = ""
     @State private var credits = 1
+    @State private var course: Net.FoundCourse?
     var body: some View {
         CardPage(kicker: "Admin", title: "New club") {
             CardBox(title: "Club") { VStack(spacing: 10) { BoxField(placeholder: "Club name", text: $name); BoxField(placeholder: "Town and state", text: $city) }.padding(14) }
@@ -330,8 +331,12 @@ private struct NewClub: View {
                 }
                 .padding(14)
             }
+            CardBox(title: "Course", footer: "Its scorecard, tees and hole map are filled in for every tournament.") { ClubCoursePicker(picked: $course).padding(14) }
             CardBox(title: "Tournaments they can make") { Stepper("\(credits) tournament\(credits == 1 ? "" : "s")", value: $credits, in: 0...100).padding(14) }
-            Button("Set Up the Club") { Task { await admin.act("create", ["name": name, "email": email, "contact": contact, "phone": phone, "city": city, "credits": credits], done: "Club set up."); dismiss() } }
+            Button("Set Up the Club") {
+                var b: [String: Any] = ["name": name, "email": email, "contact": contact, "phone": phone, "city": city, "credits": credits]
+                if let course { b["course"] = ["id": course.id]; admin.flash("Setting up the club and its course…", seconds: 30) }
+                Task { await admin.act("create", b, done: "Club set up."); dismiss() } }
                 .buttonStyle(GreenButton(full: true)).disabled(name.isEmpty)
         }
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }

@@ -205,10 +205,11 @@ final class AdminModel {
     /// A club or tournament change, then the lists again.
     func act(_ op: String, _ extra: [String: Any] = [:], done: String? = nil) async {
         do {
-            try await call(op, extra)
+            let j = try await call(op, extra)
             try await refresh()
             if ["lock", "archive", "move", "hide", "unhide", "event", "claim", "demo", "delete", "restore", "purge"].contains(op) { await refreshEvents() }
-            if let done { flash(done) }
+            // Add club with a course: what was filled in (scorecard, tees, how many holes mapped)
+            if let note = j["courseNote"] as? String, !note.isEmpty { flash(note, seconds: 10) } else if let done { flash(done) }
         } catch { flash(error.localizedDescription) }
     }
     /// Delete a club. One with tournaments (a test club) goes with them, and only with its name typed (the server checks too). True when it's gone.
@@ -273,7 +274,7 @@ final class AdminModel {
         let h = j["holes"] as? [String: String] ?? [:]
         return Dictionary(uniqueKeysWithValues: h.compactMap { k, v in Int(k).map { ($0, v) } })
     }
-    func flash(_ s: String) { notice = s; Task { try? await Task.sleep(for: .seconds(4)); if notice == s { notice = nil } } }
+    func flash(_ s: String, seconds: Double = 4) { notice = s; Task { try? await Task.sleep(for: .seconds(seconds)); if notice == s { notice = nil } } }
     func open(_ id: String) {
         if let e = events.first(where: { $0.id == id }) { onOpen?(e); return }
         Task { await refreshEvents(); if let e = events.first(where: { $0.id == id }) { onOpen?(e) } }
@@ -346,4 +347,56 @@ struct RecentlyDeleted: View {
 }
 extension View {
     func deleteClubAlert(_ club: Binding<AdminClub?>, deleted: @escaping () -> Void = {}) -> some View { modifier(DeleteClubAlert(club: club, deleted: deleted)) }
+}
+
+/// Find the course in Add club: type a name, pick it from the list. The server fills in its scorecard, tees and hole map
+/// (golf.js adminWithCourse), so the club's tournaments start with the course in. Shared by the Mac and iPhone/iPad.
+struct ClubCoursePicker: View {
+    @Binding var picked: Net.FoundCourse?
+    @State private var q = ""
+    @State private var found: [Net.FoundCourse] = []
+    @State private var msg: String?
+    @State private var busy = false
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let c = picked {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(c.name).font(.system(size: 14, weight: .semibold))
+                        Text("Scorecard, tees and hole map are added").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Change") { picked = nil }
+                }
+            } else {
+                HStack(spacing: 8) {
+                    TextField("Course name or town", text: $q).onSubmit(search)
+                    Button(busy ? "Looking…" : "Find", action: search).disabled(busy || q.trimmingCharacters(in: .whitespaces).count < 3)
+                }
+                if let msg { Text(msg).font(.caption).foregroundStyle(.secondary) }
+                ForEach(found) { c in
+                    Button { picked = c; found = [] } label: {
+                        HStack(spacing: 6) {
+                            if c.library { Text("FLAGCAST").font(.system(size: 9, weight: .bold)).foregroundStyle(.green) }
+                            Text(c.name).foregroundStyle(.primary).lineLimit(1)
+                            if !c.place.isEmpty { Text(c.place).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                            Spacer(minLength: 0)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain).padding(.vertical, 3)
+                }
+                if found.isEmpty && msg == nil { Text("Optional. Pick it and every tournament starts with the course in.").font(.caption).foregroundStyle(.secondary) }
+            }
+        }
+    }
+    private func search() {
+        let t = q.trimmingCharacters(in: .whitespaces); guard t.count >= 3, !busy else { return }
+        busy = true; msg = nil
+        Task { defer { busy = false }
+            do { found = try await Net.findCourses(t); if found.isEmpty { msg = "No course by that name. Try the club’s name or the town." } }
+            catch { found = []; msg = error.localizedDescription }
+        }
+    }
 }

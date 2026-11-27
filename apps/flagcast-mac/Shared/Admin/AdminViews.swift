@@ -207,15 +207,19 @@ struct NewClubSheet: View {
     @State private var f = ClubRequest()
     @State private var email = ""
     @State private var credits = 1
+    @State private var course: Net.FoundCourse?
     var body: some View {
         Form {
             TextField("Club name", text: $f.name)
             TextField("Owner’s email", text: $email, prompt: Text("They sign in to Flagcast Manager with it (optional)"))
             TextField("Contact", text: $f.contact); TextField("Phone", text: $f.phone); TextField("Town and state", text: $f.city)
+            Section("Course") { ClubCoursePicker(picked: $course) }
             Picker("Tournaments", selection: $credits) { ForEach([0, 1, 2, 3, 5, 10, 20], id: \.self) { Text("\($0)").tag($0) }; Text("Unlimited").tag(-1) }
             HStack { Spacer(); Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Set Up Club") { Task { await model.act("create", ["name": f.name, "email": email, "contact": f.contact, "phone": f.phone, "city": f.city, "credits": credits], done: email.isEmpty ? "Club set up." : "Club set up. \(email) has an email with how to sign in."); dismiss() } }
-                    .keyboardShortcut(.defaultAction).disabled(f.name.isEmpty) }
+                Button("Set Up Club") { var b: [String: Any] = ["name": f.name, "email": email, "contact": f.contact, "phone": f.phone, "city": f.city, "credits": credits]
+                    if let course { b["course"] = ["id": course.id]; model.flash("Setting up the club and its course…", seconds: 30) }
+                    Task { await model.act("create", b, done: email.isEmpty ? "Club set up." : "Club set up. \(email) has an email with how to sign in."); dismiss() } }
+                    .disabled(f.name.isEmpty) } // no Return shortcut: Return in the course search finds the course
         }
         .formStyle(.grouped).frame(width: 460).padding(.vertical, 8)
     }
