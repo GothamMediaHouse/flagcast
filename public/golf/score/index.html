@@ -135,6 +135,31 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
 .sg .holes span.tie { color: var(--ink); }
 .sg .sides { display: grid; gap: 6px; margin-top: 10px; }
 .sg .sides div { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: .9rem; }
+.sg .wnow { background: var(--green); color: var(--on-green); border-radius: 12px; padding: 14px; margin-top: 12px; display: grid; gap: 10px; }
+.sg .wnow .top { display: flex; justify-content: space-between; gap: 8px; font: 700 .72rem var(--f-body); letter-spacing: .08em; text-transform: uppercase; color: var(--on-green-muted); align-items: center; }
+.sg .wnow .top i { font-style: normal; color: #fff; background: rgba(255,255,255,.15); border-radius: 6px; padding: 2px 8px; letter-spacing: 0; text-transform: none; font-size: .78rem; }
+.sg .wnow .top i.won { background: #2f8a57; } .sg .wnow .top i.lost { background: #c8312b; }
+.sg .wnow h4 { font: 700 2rem/1 var(--f-display); text-transform: uppercase; margin: 0; }
+.sg .wnow .tee { display: flex; flex-wrap: wrap; gap: 6px; } .sg .wnow .tee span { font-size: .78rem; background: rgba(255,255,255,.1); border-radius: 99px; padding: 3px 9px; }
+.sg .wnow .tee span.w { background: var(--flag); color: var(--on-flag); font-weight: 700; }
+.sg .wnow p { margin: 0; font-size: .92rem; } .sg .wnow p.m { color: var(--on-green-muted); font-size: .82rem; text-align: center; }
+.sg .wnow .chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.sg .wnow .chips button { border: 1.5px solid rgba(255,255,255,.3); background: transparent; color: var(--on-green); border-radius: 99px; padding: 8px 14px; font: 600 .92rem var(--f-body); }
+.sg .wnow .chips button[aria-pressed="true"] { background: var(--flag); border-color: var(--flag); color: var(--on-flag); }
+.sg .wnow .blind { background: var(--flag); color: var(--on-flag); border: 0; border-radius: 10px; padding: 12px; font: 600 1rem var(--f-body); width: 100%; }
+.sg .wnow .back { background: transparent; color: var(--on-green); border: 1.5px solid rgba(255,255,255,.35); border-radius: 10px; padding: 9px; font: 600 .9rem var(--f-body); width: 100%; }
+.sg .wnow .pts { display: grid; grid-template-columns: repeat(auto-fit, minmax(60px, 1fr)); gap: 6px; text-align: center; }
+.sg .wnow .pts div { background: rgba(255,255,255,.08); border-radius: 10px; padding: 6px 2px; font-size: .78rem; color: var(--on-green-muted); }
+.sg .wnow .pts b { display: block; font: 700 1.35rem var(--f-display); color: var(--on-green); } .sg .wnow .pts b.up { color: #7fe0a8; } .sg .wnow .pts b.dn { color: #ffa196; }
+.sg .wtiles { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.sg .wtiles button { border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 9px; padding: 4px 8px; font: 600 .78rem/1.25 var(--f-body); text-align: left; }
+.sg .wtiles button small { display: block; font-size: .68rem; color: var(--muted); font-weight: 700; }
+.sg .wtiles button.won { border-color: var(--ok); color: var(--ok); } .sg .wtiles button.lost { border-color: var(--red); color: var(--red); }
+.sg .wtiles button.alone { background: color-mix(in srgb, var(--flag) 25%, transparent); }
+.sg .wtiles button[aria-current="true"] { outline: 2px solid var(--ink); outline-offset: 0; }
+.sg .worder { display: grid; margin-top: 8px; } .sg .worder div { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); font-size: .92rem; }
+.sg .worder div:first-child { border-top: 0; } .sg .worder b { width: 22px; height: 22px; border-radius: 50%; background: var(--paper-2); display: grid; place-items: center; font-size: .75rem; }
+.sg .worder small { color: var(--muted); } .sg .worder button { margin-left: auto; border: 1px solid var(--line); background: var(--paper); color: var(--ink); border-radius: 6px; padding: 3px 10px; font-size: .9rem; }
 .sg .seg { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: .95rem; }
 .sg .owe { font-size: 1.05rem; padding: 10px 0; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 10px; }
 .sg .owe b { font-family: var(--f-mono); }
@@ -193,10 +218,10 @@ const KEY = `golf:${eventId()}:${code}`;
 const store = { get(k, d) { try { return JSON.parse(localStorage.getItem(`${KEY}:${k}`)) ?? d; } catch { return d; } }, set(k, v) { try { localStorage.setItem(`${KEY}:${k}`, JSON.stringify(v)); } catch {} } };
 let S = null, teams = store.get('teams', []), teamId = store.get('team', null), hole = store.get('hole', null);
 let pending = store.get('pending', []); // [{ team, p, h, v, at }] not yet saved on the server
-let online = false, sending = false, view = 'card', offSince = Date.now();
+let online = false, sending = false, view = 'card', offSince = Date.now(), wolfHole = null;
 // side games: this cart's own settings, kept on this phone
 const SIDE_DEFAULTS = { skins: { on: false, amt: 5, net: true, carry: true }, nassau: { on: false, amt: 10, net: true, sides: {} }, birdies: { on: false, amt: 2, net: false },
-  stableford: { on: false, net: true }, vegas: { on: false, amt: 1, net: true, sides: {} }, wolf: { on: false, amt: 1, net: true, picks: {} },
+  stableford: { on: false, net: true }, vegas: { on: false, amt: 1, net: true, sides: {} }, wolf: { on: false, amt: 1, net: true, lone: 2, blind: false, order: [], picks: {} },
   closest: { on: false, amt: 2, picks: {} }, longDrive: { on: false, amt: 2, picks: {} } };
 let side = store.get('side', {});
 for (const [g, d] of Object.entries(SIDE_DEFAULTS)) side[g] = { ...d, ...(side[g] || {}) }; // older saved settings gain the newer games, turned off
@@ -550,16 +575,38 @@ function renderSide() {
   } else b += `<p class="help" style="margin-top:8px">${n === 4 ? 'Put two players on each side.' : 'Vegas needs exactly four players, two on each side.'}</p>`;
   html += box('vegas', 'Vegas', 'Two against two. Each side’s scores make a number, low score first (a 4 and a 5 make 45). The lower number wins the difference.', b);
 
-  // Wolf
-  b = `<div class="opts">${amt('wolf', 'each hole (a lone wolf plays for double)')}${netSel('wolf')}</div>`;
+  // Wolf: settings, then the hole being played (or the one tapped) as one big card, every hole as tiles, and the tee order
+  b = `<div class="opts">${amt('wolf', 'each hole')}${netSel('wolf')}
+    <label>Lone Wolf <select data-sg="wolf.lone" aria-label="Lone Wolf is worth"><option value="2" ${side.wolf.lone === 3 ? '' : 'selected'}>Double</option><option value="3" ${side.wolf.lone === 3 ? 'selected' : ''}>Triple</option></select></label>
+    <label class="sw"><input type="checkbox" data-sg="wolf.blind" ${side.wolf.blind ? 'checked' : ''}> Blind Wolf (alone before the tee shots, triple)</label></div>`;
   if (r.wolf) {
-    b += `<p class="help">The wolf goes in cart order. Pick the wolf’s call after the tee shots. The hole scores once everyone’s score is in.</p><div class="picks">${r.wolf.holes.map((h) => {
-      const res = h.result === 'wolf' ? 'Wolf won' : h.result === 'others' ? 'Wolf lost' : h.result === 'tie' ? 'Halved' : '';
-      const opts = [...r.players.filter((p) => p.key !== h.wolf).map((p) => [p.key, `With ${esc(p.short)}`]), ['lone', 'Lone wolf']];
-      return `<div><span>Hole ${h.hole}: ${nm(h.wolf)}${res ? `<small>${res}</small>` : ''}</span>${pickSel('wolf', h.hole, h.partner || '', opts)}</div>`;
-    }).join('')}</div>`;
+    const w = r.wolf, h = w.holes.find((x) => x.hole === (wolfHole ?? w.current)) || w.holes[w.holes.length - 1];
+    const alone = h.partner === 'lone' || h.partner === 'blind', par = S.course.holes[h.hole - 1]?.par;
+    const res = h.result === 'wolf' ? `<i class="won">${alone ? 'Lone Wolf won' : 'Wolf won'}</i>` : h.result === 'others' ? `<i class="lost">${alone ? 'Lone Wolf lost' : 'Wolf lost'}</i>` : h.result === 'tie' ? '<i>Halved</i>' : h.partner ? '' : (w.blind ? 'Before the tee shots' : 'After the tee shots');
+    const btn = (v, t) => `<button data-wolf="${h.hole}:${v}" aria-pressed="${h.partner === v}">${t}</button>`;
+    let c = `<div class="top"><span>Hole ${h.hole}${par ? ` · Par ${par}` : ''}</span><span>${res}</span></div><h4>${nm(h.wolf)} is the wolf</h4>
+      <div class="tee">${h.tee.map((k, i) => `<span class="${k === h.wolf ? 'w' : ''}">${i + 1} ${nm(k)}${k === h.wolf ? ' 🐾' : ''}</span>`).join('')}</div>`;
+    if (w.blind && !h.result && (!h.partner || h.partner === 'blind')) c += `<button class="blind" data-wolf="${h.hole}:blind">Blind Wolf · triple${h.partner === 'blind' ? ' ✓' : ''}</button>${h.partner ? '' : '<p class="m">Or watch the drives, then pick below</p>'}`;
+    if (h.partner !== 'blind') c += `<p>${nm(h.wolf)} takes a partner or goes alone</p><div class="chips">${h.tee.filter((k) => k !== h.wolf).map((k) => btn(k, `+ ${nm(k)}`)).join('')}${btn('lone', `Lone Wolf ×${w.lone}`)}</div>`;
+    if (h.partner) {
+      const others = h.tee.filter((k) => k !== h.wolf && k !== h.partner).map(nm);
+      c += `<p>${alone ? `${nm(h.wolf)} alone against ${others.join(', ')}, for ${h.partner === 'blind' || w.lone === 3 ? 'triple' : 'double'}` : `${nm(h.wolf)} &amp; ${nm(h.partner)} against ${others.join(' &amp; ')}`}</p>`;
+      if (!h.result) c += `<p class="m" style="text-align:left">It scores once everyone’s score is in.</p>`;
+    }
+    if (h.result && Object.keys(h.pts).length) c += `<div class="pts">${[...h.tee].sort((x, y) => (h.pts[y] || 0) - (h.pts[x] || 0)).map((k) => { const v = Math.round((h.pts[k] || 0) * 100) / 100; return `<div>${nm(k)}<b class="${v > 0 ? 'up' : v < 0 ? 'dn' : ''}">${v > 0 ? '+' : v < 0 ? '−' : ''}${Math.abs(v)}</b></div>`; }).join('')}</div>`;
+    if (w.current && w.current !== h.hole) c += `<button class="back" data-wolfhole="">Back to hole ${w.current}</button>`;
+    b += `<div class="wnow">${c}</div>`;
+    b += `<div class="label" style="margin-top:12px">Every hole</div><div class="wtiles">${w.holes.map((x) => {
+      const call = x.partner === 'lone' ? 'Alone' : x.partner === 'blind' ? 'Blind' : x.partner ? `+ ${nm(x.partner)}` : '…';
+      const mark = x.result === 'wolf' ? ' ✓' : x.result === 'others' ? ' ✗' : x.result === 'tie' ? ' =' : '';
+      return `<button data-wolfhole="${x.hole}" class="${x.result === 'wolf' ? 'won' : x.result === 'others' ? 'lost' : ''} ${x.partner === 'lone' || x.partner === 'blind' ? 'alone' : ''}" aria-current="${x.hole === h.hole}"><small>${x.hole} · ${nm(x.wolf)}</small>${call}${mark}</button>`;
+    }).join('')}</div><p class="help">Tap a hole to see it or change the call.</p>`;
+    const t = r.tally.wolf || {};
+    b += `<table><tr><th>Wolf points</th><th class="r"></th></tr>${[...r.players].sort((x, y) => (t[y.key] || 0) - (t[x.key] || 0)).map((p) => { const v = Math.round((t[p.key] || 0) * 100) / 100; return `<tr><td>${esc(p.short)}</td><td class="r ${v > 0 ? 'up' : v < 0 ? 'down' : ''}">${v ? `${v > 0 ? '+' : '−'}${pts(v)}` : 'Even'}</td></tr>`; }).join('')}</table>`;
+    b += `<div class="label" style="margin-top:14px">Tee order on the first hole</div><div class="worder">${w.order.map((k, i) => `<div><b>${i + 1}</b>${nm(k)}${i === w.order.length - 1 ? ' <small>first wolf, tees last</small>' : ''}${i ? `<button data-wolfup="${i}" aria-label="Move ${nm(k)} up">↑</button>` : ''}</div>`).join('')}</div>
+      <p class="help">Each hole the first player moves to the back, so everyone is the wolf in turn.</p>`;
   } else b += `<p class="help" style="margin-top:8px">Wolf needs three or four players.</p>`;
-  html += box('wolf', 'Wolf', 'The wolf rotates each hole. After the tee shots the wolf takes a partner or goes it alone, then the best ball on each side wins the hole.', b);
+  html += box('wolf', 'Wolf', 'Players take turns on the tee and the order moves round each hole. The last to tee off is the wolf. After the tee shots the wolf takes a partner or goes it alone as a Lone Wolf, then the best ball on each side wins the hole.', b);
 
   // closest to the pin, long drive
   const pickBox = (g, title, rows, empty, about) => {
@@ -582,7 +629,7 @@ document.addEventListener('change', (e) => {
   const el = e.target;
   if (el.dataset.sg) {
     const [g, k] = el.dataset.sg.split('.');
-    side[g][k] = el.type === 'checkbox' ? el.checked : k === 'amt' ? Math.max(0, Math.min(1000, Number(el.value) || 0)) : !!el.value;
+    side[g][k] = el.type === 'checkbox' ? el.checked : k === 'amt' ? Math.max(0, Math.min(1000, Number(el.value) || 0)) : k === 'lone' ? (Number(el.value) === 3 ? 3 : 2) : !!el.value;
   } else if (el.dataset.side) {
     const at = el.dataset.side.indexOf(':'), g = el.dataset.side.slice(0, at), key = el.dataset.side.slice(at + 1);
     side[g].sides = { ...side[g].sides, [key]: el.value };
@@ -597,6 +644,18 @@ document.addEventListener('change', (e) => {
 document.addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b || !S) return;
   if (b.dataset.view) { view = b.dataset.view; render(); scrollTo(0, 0); return; }
+  // Wolf: the call on a hole (tap it again to clear), a hole to look at, and the tee order
+  if (b.dataset.wolf) {
+    const at = b.dataset.wolf.indexOf(':'), h = b.dataset.wolf.slice(0, at), v = b.dataset.wolf.slice(at + 1), picks = { ...side.wolf.picks };
+    if (picks[h] === v) delete picks[h]; else picks[h] = v;
+    side.wolf.picks = picks; store.set('side', side); render(); return;
+  }
+  if (b.dataset.wolfhole !== undefined) { wolfHole = b.dataset.wolfhole ? Number(b.dataset.wolfhole) : null; render(); return; }
+  if (b.dataset.wolfup) {
+    const o = [...(sideGames(S, myScores(), teams, side).wolf?.order || [])], i = Number(b.dataset.wolfup);
+    if (i > 0 && i < o.length) { [o[i - 1], o[i]] = [o[i], o[i - 1]]; side.wolf.order = o; store.set('side', side); render(); }
+    return;
+  }
   const t = team(); if (!t && !b.dataset.team) return;
   if (S.locked && (b.dataset.p || b.dataset.pu || b.dataset.clear)) return toast('Scoring is closed. The results are final.');
   if (b.dataset.team) { teamId = b.dataset.team; store.set('team', teamId); hole = null; render(); return; }

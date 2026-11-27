@@ -90,7 +90,10 @@ final class CoreTests: XCTestCase {
         if let s = r.stableford { o["stableford"] = s.map { ["key": $0.key, "points": $0.points, "thru": $0.thru] } }
         if let v = r.vegas { o["vegas"] = ["sides": v.sides, "holes": v.holes.map { ["hole": $0.hole, "a": $0.a, "b": $0.b] }, "total": v.total] as [String: Any] }
         if r.vegasNeedsFour { o["vegasNeedsFour"] = true }
-        if let w = r.wolf { o["wolf"] = ["holes": w.holes.map { ["hole": $0.hole, "wolf": $0.wolf, "partner": $0.partner, "result": $0.result] as [String: Any?] }] }
+        if let w = r.wolf {
+            o["wolf"] = ["holes": w.holes.map { ["hole": $0.hole, "wolf": $0.wolf, "partner": $0.partner, "result": $0.result, "tee": $0.tee, "pts": $0.pts] as [String: Any?] },
+                         "order": w.order, "lone": w.lone, "blind": w.blind, "current": w.current] as [String: Any?]
+        }
         if let c = r.closest { o["closest"] = c.map { ["hole": $0.hole, "winner": $0.winner] as [String: Any?] } }
         if let l = r.longDrive { o["longDrive"] = l.map { ["hole": $0.hole, "winner": $0.winner] as [String: Any?] } }
         o["tally"] = r.tally
@@ -238,6 +241,29 @@ final class CoreTests: XCTestCase {
         // an old saved config (before these games) still opens, with them off
         let old = try JSONDecoder().decode(SideConfig.self, from: Data(#"{"skins":{"on":true,"amt":5}}"#.utf8))
         XCTAssertTrue(old.skins.on); XCTAssertFalse(old.wolf.on); XCTAssertEqual(old.closest.amt, 2)
+    }
+
+    // Wolf options: the same hand-worked answers as test/sidegames.test.mjs
+    func testWolfOptions() throws {
+        let ev = try cart()
+        func run(_ f: (inout SideConfig.Picks) -> Void) -> SideResult {
+            var cfg = SideConfig(); cfg.wolf.on = true; f(&cfg.wolf)
+            return Core.sideGames(ev, ev.scores, ["ta", "tb"], cfg)
+        }
+        let plain = run { _ in }
+        XCTAssertEqual(plain.wolf!.order, ["ta:p2", "tb:p3", "tb:p4", "ta:p1"])
+        XCTAssertEqual(plain.wolf!.holes[1].tee, ["tb:p3", "tb:p4", "ta:p1", "ta:p2"])
+        XCTAssertEqual(run { $0.lone = 3; $0.picks = ["2": "lone"] }.tally["wolf"]?["ta:p2"], -9)
+        XCTAssertEqual(run { $0.blind = true; $0.picks = ["3": "blind"] }.tally["wolf"]?["tb:p3"], -9)
+        XCTAssertEqual(run { $0.picks = ["3": "blind"] }.wolf!.holes[2].partner, "lone")
+        XCTAssertEqual(run { $0.picks = ["3": "blind"] }.tally["wolf"]?["tb:p3"], -6)
+        let mine = run { $0.order = ["tb:p4", "ta:p1", "tb:p3", "ta:p2"]; $0.picks = ["1": "tb:p3", "3": "tb:p4"] }
+        XCTAssertEqual(mine.wolf!.holes.prefix(3).map(\.wolf), ["ta:p2", "tb:p4", "ta:p1"])
+        XCTAssertEqual(mine.wolf!.holes[0].result, "tie")
+        XCTAssertEqual(mine.wolf!.holes[2].pts, ["ta:p1": 1, "tb:p4": 1, "ta:p2": -1, "tb:p3": -1])
+        XCTAssertEqual(mine.wolf!.current, 2)
+        var cfg = SideConfig(); cfg.wolf.lone = 3; cfg.wolf.blind = true; cfg.wolf.order = ["a", "b"]
+        XCTAssertEqual(try JSONDecoder().decode(SideConfig.self, from: JSONEncoder().encode(cfg)), cfg)
     }
 
     // Shamble, match play and Individuals: the same hand-worked answers as test/matchplay.test.mjs

@@ -400,7 +400,7 @@ export function mark(v, par) {
 // ---- side games: a cart's own games, scored in points (no money), with each player's running total ----
 // Played among the players in one cart (every team on its cart code). Points only: Flagcast has no money in it.
 // cfg = { skins: { on, amt, net, carry }, nassau: { on, amt, net, sides: { [playerKey]: 'A' | 'B' } }, birdies: { on, amt, net },
-//   stableford: { on, net }, vegas: { on, amt, net, sides }, wolf: { on, amt, net, picks: { [hole]: playerKey | 'lone' } },
+//   stableford: { on, net }, vegas: { on, amt, net, sides }, wolf: { on, amt, net, lone: 2 | 3, blind, order: [playerKey], picks: { [hole]: playerKey | 'lone' | 'blind' } },
 //   closest / longDrive: { on, amt, picks: { [hole]: playerKey } } }. Same math as the players' app (Core.swift).
 export function sideGames(ev, scores, teamIds, cfg = {}) {
   const allow = ev.format?.allowance ?? 100, holes = ev.course.holes;
@@ -542,25 +542,31 @@ export function sideGames(ev, scores, teamIds, cfg = {}) {
     } else { out.vegas = { sides, holes: [], total: 0 }; out.vegasNeedsFour = true; }
   }
 
-  // Wolf: the wolf rotates in cart order. After the tee shots the wolf takes a partner or goes it alone ("lone"),
-  // then the best ball on each side wins the hole. A lone wolf plays for double, both ways.
+  // Wolf: three or four players tee off in turn and the order moves round one place each hole, so the wolf (who tees
+  // last) rotates. After the tee shots the wolf takes a partner or goes it alone ("lone", double or triple, as the cart
+  // picks). With Blind Wolf on, the wolf can go alone before anyone tees off ("blind", triple). Best ball on each side wins.
+  // wf.order is the tee order on the first hole; without one the cart order is used, with its first player as the first wolf.
   const wf = cfg.wolf || {}; game = 'wolf';
   if (wf.on && n >= 3) {
-    const net = wf.net !== false, amt = stake(wf, 1), picks = wf.picks || {};
-    out.wolf = { holes: order.map((i, k) => {
-      const wolf = players[k % n], pick = picks[i + 1];
-      const partner = pick === 'lone' ? 'lone' : players.find((p) => p.key === pick && p.key !== wolf.key)?.key ?? null;
-      let result = null;
+    const net = wf.net !== false, amt = stake(wf, 1), picks = wf.picks || {}, lone = Number(wf.lone) === 3 ? 3 : 2, blind = !!wf.blind;
+    const set = (Array.isArray(wf.order) ? wf.order : []).filter((k, j, a) => players.some((p) => p.key === k) && a.indexOf(k) === j);
+    const tee1 = set.length ? [...set, ...players.map((p) => p.key).filter((k) => !set.includes(k))] : [...players.slice(1), players[0]].map((p) => p.key);
+    const holesOut = order.map((i, k) => {
+      const tee = tee1.map((_, j) => tee1[(j + k) % n]), wolf = tee[n - 1];
+      let pick = picks[i + 1];
+      if (pick === 'blind' && !blind) pick = 'lone';
+      const partner = pick === 'lone' || pick === 'blind' ? pick : players.find((p) => p.key === pick && p.key !== wolf)?.key ?? null;
+      let result = null; const pts = {};
       if (partner && players.every((p) => entered(p, i))) {
-        const mine = players.filter((p) => p.key === wolf.key || p.key === partner), rest = players.filter((p) => !mine.includes(p));
+        const mine = players.filter((p) => p.key === wolf || p.key === partner), rest = players.filter((p) => !mine.includes(p));
         const best = (s) => Math.min(...s.filter((p) => hasScore(p, i)).map((p) => val(p, i, net)));
-        const x = best(mine), y = best(rest), st = partner === 'lone' ? amt * 2 : amt;
-        if (x < y) { result = 'wolf'; for (const l of rest) for (const w of mine) pay(l.key, w.key, st / mine.length); }
-        else if (y < x) { result = 'others'; for (const l of mine) for (const w of rest) pay(l.key, w.key, st / mine.length); }
-        else result = 'tie';
+        const x = best(mine), y = best(rest), st = amt * (partner === 'blind' ? 3 : partner === 'lone' ? lone : 1);
+        const give = (L, W) => { for (const l of L) for (const w of W) { const v = st / mine.length; pay(l.key, w.key, v); pts[l.key] = (pts[l.key] || 0) - v; pts[w.key] = (pts[w.key] || 0) + v; } };
+        if (x < y) { result = 'wolf'; give(rest, mine); } else if (y < x) { result = 'others'; give(mine, rest); } else result = 'tie';
       }
-      return { hole: i + 1, wolf: wolf.key, partner, result };
-    }) };
+      return { hole: i + 1, wolf, partner, result, tee, pts };
+    });
+    out.wolf = { holes: holesOut, order: tee1, lone, blind, current: holesOut.find((h) => !h.result)?.hole ?? null };
   }
 
   // closest to the pin on the par 3s, long drive on the par 5s: the cart picks who won, everyone else gives the stake

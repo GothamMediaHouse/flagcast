@@ -42,7 +42,7 @@ enum SideGame: String, CaseIterable, Identifiable, Hashable {
         case .birdies: "Each birdie collects the points from every other player in the cart. An eagle counts twice."
         case .stableford: "Points against par on every hole: double bogey or worse 0, bogey 1, par 2, birdie 3, eagle 4. Most points wins. These points have their own table."
         case .vegas: "Two against two. Each side's two scores make a number, low score first: a 4 and a 5 make 45. The lower number wins the difference in points."
-        case .wolf: "The wolf rotates each hole, in cart order. After the tee shots, the wolf takes a partner or goes it alone. The best ball on each side wins the hole. A lone wolf plays for double."
+        case .wolf: "Players take turns on the tee and the order moves round each hole. The last to tee off is the wolf. After the tee shots, the wolf takes a partner or goes it alone as a Lone Wolf. The best ball on each side wins the hole."
         case .closest: "On each par 3, pick who finished closest to the pin. Everyone else gives them the points."
         case .longDrive: "On each par 5, pick who hit the longest drive in the fairway. Everyone else gives them the points."
         }
@@ -237,7 +237,7 @@ struct SideGamesHub: View {
             return v.total == 0 ? "All square" : "\(side(v.total > 0 ? "A" : "B")) +\(abs(v.total))"
         case .wolf:
             guard let w = r.wolf else { return "Needs three or four players" }
-            if let next = w.holes.first(where: { $0.partner == nil }) { return "Hole \(next.hole): \(nm(next.wolf)) is the wolf" }
+            if let c = w.current, let h = w.holes.first(where: { $0.hole == c }) { return "Hole \(c): \(nm(h.wolf)) is the wolf" + (leader(tally).map { " · \($0)" } ?? "") }
             return leader(tally) ?? "All holes picked"
         case .closest, .longDrive:
             let rows = (g == .closest ? r.closest : r.longDrive) ?? []
@@ -301,6 +301,8 @@ private struct AddTile: View {
 private struct SideGamePage: View {
     @Bindable var model: ScorecardModel
     let game: SideGame
+    /// Wolf: a hole tapped in "Every hole" (nil: the hole being played)
+    @State private var wolfHole: Int?
 
     var body: some View {
         let r = model.sideResult()
@@ -370,6 +372,22 @@ private struct SideGamePage: View {
             if game == .skins {
                 Toggle(isOn: Binding(get: { model.side.skins.carry != false }, set: { model.side.skins.carry = $0 })) {
                     Text("Ties carry to the next hole").font(.subheadline)
+                }
+                .tint(Color.fcPrimary)
+            }
+            if game == .wolf {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Lone Wolf is worth").fcLabel()
+                    Picker("Lone Wolf is worth", selection: Binding(get: { model.side.wolf.lone == 3 ? 3 : 2 }, set: { model.side.wolf.lone = $0 })) {
+                        Text("Double").tag(2); Text("Triple").tag(3)
+                    }
+                    .pickerStyle(.segmented)
+                }
+                Toggle(isOn: Binding(get: { model.side.wolf.blind }, set: { model.side.wolf.blind = $0 })) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Blind Wolf").font(.subheadline.weight(.semibold))
+                        Text("Go alone before anyone tees off, for triple").font(.caption).foregroundStyle(Color.fcMuted)
+                    }
                 }
                 .tint(Color.fcPrimary)
             }
@@ -455,30 +473,21 @@ private struct SideGamePage: View {
             }
         case .wolf:
             if let w = r.wolf {
-                card("The wolf's call") {
-                    ForEach(w.holes, id: \.hole) { h in
-                        VStack(alignment: .leading, spacing: 6) {
-                            HStack {
-                                Text("Hole \(h.hole)").font(.subheadline.weight(.semibold))
-                                Text("\(nm(h.wolf)) is the wolf").font(.subheadline).foregroundStyle(Color.fcMuted)
-                                Spacer()
-                                if let res = h.result {
-                                    Text(res == "tie" ? "Halved" : res == "wolf" ? "Wolf won" : "Wolf lost").font(.caption.weight(.semibold))
-                                        .foregroundStyle(res == "wolf" ? Color.fcOK : res == "others" ? Color.fcRed : Color.fcMuted)
-                                }
+                let shown = w.holes.first { $0.hole == (wolfHole ?? w.current) } ?? w.holes.last!
+                wolfNow(r, w, shown, nm)
+                card("Every hole") {
+                    FlowLayout(spacing: 6) {
+                        ForEach(w.holes, id: \.hole) { h in
+                            Button { withAnimation(.easeOut(duration: 0.15)) { wolfHole = h.hole } } label: {
+                                WolfTile(h: h, name: nm(h.wolf), partner: h.partner.map { $0 == "lone" ? "Alone" : $0 == "blind" ? "Blind" : "+ " + nm($0) }, on: h.hole == shown.hole)
                             }
-                            FlowLayout(spacing: 6) {
-                                ForEach(r.players.filter { $0.key != h.wolf }, id: \.key) { p in
-                                    Chip(title: "+ \(p.short)", on: h.partner == p.key) { pick(\.wolf, h.hole, p.key, current: h.partner) }
-                                }
-                                Chip(title: "Alone", on: h.partner == "lone") { pick(\.wolf, h.hole, "lone", current: h.partner) }
-                            }
+                            .buttonStyle(.plain)
                         }
-                        .padding(.vertical, 6)
-                        if h.hole != w.holes.last?.hole { Divider().overlay(Color.fcLine) }
                     }
+                    Text("Tap a hole to see it or change the call.").font(.footnote).foregroundStyle(Color.fcMuted)
                 }
                 tallyCard(r)
+                teeOrderCard(w, nm)
             }
         case .closest, .longDrive:
             let rows = (game == .closest ? r.closest : r.longDrive) ?? []
@@ -496,6 +505,107 @@ private struct SideGamePage: View {
                 }
             }
             tallyCard(r)
+        }
+    }
+
+    /// Wolf: the hole being played (or the one tapped), big: who's the wolf, the tee order, and the call
+    @ViewBuilder private func wolfNow(_ r: SideResult, _ w: SideWolf, _ h: WolfHole, _ nm: @escaping (String) -> String) -> some View {
+        let alone = h.partner == "lone" || h.partner == "blind"
+        let mult = h.partner == "blind" ? 3 : w.lone
+        let par = model.state.flatMap { s in s.course.holes.indices.contains(h.hole - 1) ? s.course.holes[h.hole - 1].par : nil }
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Hole \(h.hole)" + (par.map { " · Par \($0)" } ?? "")).font(.caption.weight(.bold)).textCase(.uppercase).foregroundStyle(Color.fcOnGreenMuted)
+                Spacer()
+                if let res = h.result {
+                    Text(res == "tie" ? "Halved" : res == "wolf" ? (alone ? "Lone Wolf won" : "Wolf won") : (alone ? "Lone Wolf lost" : "Wolf lost"))
+                        .font(.caption.weight(.bold)).padding(.horizontal, 8).padding(.vertical, 3)
+                        .background(res == "wolf" ? Color.fcOK : res == "others" ? Color.fcRed : Color.white.opacity(0.15), in: RoundedRectangle(cornerRadius: 6))
+                        .foregroundStyle(.white)
+                } else if h.partner == nil {
+                    Text(w.blind ? "Before the tee shots" : "After the tee shots").font(.caption.weight(.bold)).textCase(.uppercase).foregroundStyle(Color.fcOnGreenMuted)
+                }
+            }
+            Text("\(nm(h.wolf)) is the wolf").font(FCType.display(34)).textCase(.uppercase).foregroundStyle(Color.fcOnGreen)
+            FlowLayout(spacing: 6) {
+                ForEach(Array(h.tee.enumerated()), id: \.offset) { i, k in
+                    Text("\(i + 1) \(nm(k))" + (k == h.wolf ? " 🐾" : "")).font(.caption.weight(k == h.wolf ? .bold : .regular))
+                        .padding(.horizontal, 9).padding(.vertical, 4)
+                        .background(k == h.wolf ? Color.fcFlag : Color.white.opacity(0.1), in: Capsule())
+                        .foregroundStyle(k == h.wolf ? Color.fcOnFlag : Color.fcOnGreen)
+                }
+            }
+            if w.blind && (h.partner == nil || h.partner == "blind") && h.result == nil {
+                Button { pick(\.wolf, h.hole, "blind", current: h.partner) } label: {
+                    Text(h.partner == "blind" ? "Blind Wolf · triple ✓" : "Blind Wolf · triple").font(.body.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 44)
+                        .background(Color.fcFlag, in: RoundedRectangle(cornerRadius: 12, style: .continuous)).foregroundStyle(Color.fcOnFlag)
+                }
+                .buttonStyle(.plain)
+                if h.partner == nil { Text("Or watch the drives, then pick below").font(.footnote).foregroundStyle(Color.fcOnGreenMuted).frame(maxWidth: .infinity) }
+            }
+            if h.partner != "blind" {
+                Text("\(nm(h.wolf)) takes a partner or goes alone").font(.subheadline).foregroundStyle(Color.fcOnGreen)
+                FlowLayout(spacing: 7) {
+                    ForEach(h.tee.filter { $0 != h.wolf }, id: \.self) { k in
+                        WolfChip(title: "+ \(nm(k))", on: h.partner == k) { pick(\.wolf, h.hole, k, current: h.partner) }
+                    }
+                    WolfChip(title: "Lone Wolf ×\(w.lone)", on: h.partner == "lone") { pick(\.wolf, h.hole, "lone", current: h.partner) }
+                }
+            }
+            if let p = h.partner {
+                let others = h.tee.filter { $0 != h.wolf && $0 != p }.map(nm)
+                Text(alone ? "\(nm(h.wolf)) alone against \(others.joined(separator: ", ")), for \(mult == 3 ? "triple" : "double")"
+                     : "\(nm(h.wolf)) & \(nm(p)) against \(others.joined(separator: " & "))")
+                    .font(.subheadline).foregroundStyle(Color.fcOnGreen)
+                if h.result == nil { Text("It scores once everyone's score is in.").font(.footnote).foregroundStyle(Color.fcOnGreenMuted) }
+            }
+            if h.result != nil && !h.pts.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(h.tee.sorted { (h.pts[$0] ?? 0) > (h.pts[$1] ?? 0) }, id: \.self) { k in
+                        let v = jsRound((h.pts[k] ?? 0) * 100) / 100
+                        VStack(spacing: 2) {
+                            Text(nm(k)).font(.caption).foregroundStyle(Color.fcOnGreenMuted).lineLimit(1)
+                            Text(v == 0 ? "0" : "\(v > 0 ? "+" : "−")\(fmtPts(abs(v), unit: false))").font(FCType.display(22)).monospacedDigit()
+                                .foregroundStyle(v > 0 ? Color(red: 0.5, green: 0.88, blue: 0.66) : v < 0 ? Color(red: 1, green: 0.63, blue: 0.59) : Color.fcOnGreen)
+                        }
+                        .frame(maxWidth: .infinity).padding(.vertical, 6)
+                        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+                    }
+                }
+            }
+            if let c = w.current, c != h.hole {
+                Button { withAnimation(.easeOut(duration: 0.15)) { wolfHole = nil } } label: {
+                    Text("Back to hole \(c)").font(.subheadline.weight(.semibold)).frame(maxWidth: .infinity, minHeight: 38)
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.35), lineWidth: 1.5)).foregroundStyle(Color.fcOnGreen)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color.fcGreen, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    /// Wolf: the tee order on the first hole. Tap the arrow to move a player up one place.
+    private func teeOrderCard(_ w: SideWolf, _ nm: @escaping (String) -> String) -> some View {
+        card("Tee order on the first hole") {
+            ForEach(Array(w.order.enumerated()), id: \.element) { i, k in
+                HStack(spacing: 10) {
+                    Text("\(i + 1)").font(.caption.weight(.bold)).frame(width: 24, height: 24).background(Color.fcPaper2, in: Circle())
+                    Text(nm(k)).font(.body.weight(.semibold))
+                    if i == w.order.count - 1 { Text("first wolf, tees last").font(.caption).foregroundStyle(Color.fcMuted) }
+                    Spacer()
+                    if i > 0 {
+                        Button {
+                            var o = w.order; o.swapAt(i, i - 1)
+                            withAnimation(.easeOut(duration: 0.15)) { model.side.wolf.order = o }
+                        } label: { Image(systemName: "arrow.up").font(.subheadline.weight(.bold)).frame(width: 40, height: 34) }
+                            .buttonStyle(.plain).foregroundStyle(Color.fcMuted).accessibilityLabel("Move \(nm(k)) up")
+                    }
+                }
+                if i < w.order.count - 1 { Divider().overlay(Color.fcLine) }
+            }
+            Text("Each hole the first player moves to the back, so everyone is the wolf in turn.").font(.footnote).foregroundStyle(Color.fcMuted)
         }
     }
 
@@ -554,6 +664,39 @@ private struct SideGamePage: View {
                 }
             }
         }
+    }
+}
+
+/// a chip on the green Wolf card
+private struct WolfChip: View {
+    let title: String, on: Bool, action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Text(title).font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 14).frame(minHeight: 38)
+                .background(on ? Color.fcFlag : Color.clear, in: Capsule())
+                .overlay(Capsule().stroke(on ? Color.fcFlag : Color.white.opacity(0.3), lineWidth: 1.5))
+                .foregroundStyle(on ? Color.fcOnFlag : Color.fcOnGreen)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}
+
+/// one hole in Wolf's "Every hole": the wolf, the call, and how it went
+private struct WolfTile: View {
+    let h: WolfHole, name: String, partner: String?, on: Bool
+    var body: some View {
+        let alone = h.partner == "lone" || h.partner == "blind"
+        let tint: Color = h.result == "wolf" ? .fcOK : h.result == "others" ? .fcRed : .fcInk
+        VStack(alignment: .leading, spacing: 1) {
+            Text("\(h.hole) · \(name)").font(.caption2.weight(.bold)).foregroundStyle(Color.fcMuted)
+            Text((partner ?? "…") + (h.result == "wolf" ? " ✓" : h.result == "others" ? " ✗" : h.result == "tie" ? " =" : ""))
+                .font(.caption.weight(.semibold)).foregroundStyle(tint)
+        }
+        .padding(.horizontal, 8).padding(.vertical, 5)
+        .background(alone ? Color.fcFlag.opacity(0.25) : Color.fcCard, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).stroke(on ? Color.fcInk : h.result == nil ? Color.fcLine : tint, lineWidth: on ? 2 : 1))
     }
 }
 

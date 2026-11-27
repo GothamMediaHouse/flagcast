@@ -79,12 +79,16 @@ struct SideConfig: Codable, Hashable {
     /// `picks` maps a hole number ("7") to a player key, or to "lone" for a lone wolf, or "none" when nobody won it.
     struct Picks: Codable, Hashable {
         var on = false, amt: Double = 1, net = true, picks: [String: String] = [:], sides: [String: String] = [:]
+        /// Wolf only: what a Lone Wolf is worth (2 or 3 times), whether Blind Wolf is allowed, and the tee order on the first hole
+        var lone = 2, blind = false, order: [String] = []
         init(on: Bool = false, amt: Double = 1, net: Bool = true) { self.on = on; self.amt = amt; self.net = net }
         init(from d: Decoder) throws {
             let c = try d.container(keyedBy: CodingKeys.self)
             on = c.bool(.on, false); amt = c.dbl(.amt, 1); net = c.bool(.net, true)
             picks = (try? c.decodeIfPresent([String: String].self, forKey: .picks)) ?? [:]
             sides = (try? c.decodeIfPresent([String: String].self, forKey: .sides)) ?? [:]
+            lone = Int(c.dbl(.lone, 2)) == 3 ? 3 : 2; blind = c.bool(.blind, false)
+            order = (try? c.decodeIfPresent([String].self, forKey: .order)) ?? []
         }
     }
     var skins = Game(on: false, amt: 5, net: true, carry: true)
@@ -127,9 +131,13 @@ struct StablefordRow: Hashable { var key: String, points: Int, thru: Int }
 /// Vegas: each side's two scores make a number, low score first (a 4 and a 5 make 45). Points are the difference.
 struct VegasHole: Hashable { var hole: Int, a: Int, b: Int }
 struct SideVegas: Hashable { var sides: [String: [String]]; var holes: [VegasHole]; var total: Int }
-/// Wolf: the wolf rotates each hole. `partner` is a player key, "lone", or nil until the cart picks.
-struct WolfHole: Hashable { var hole: Int, wolf: String, partner: String?, result: String? }  // result: "wolf", "others", "tie"
-struct SideWolf: Hashable { var holes: [WolfHole] }
+/// Wolf: the wolf rotates each hole. `partner` is a player key, "lone", "blind", or nil until the cart picks.
+/// `tee` is the hole's tee order (the wolf last); `pts` the points each player won or lost on it.
+struct WolfHole: Hashable {
+    var hole: Int, wolf: String, partner: String?, result: String?  // result: "wolf", "others", "tie"
+    var tee: [String] = [], pts: [String: Double] = [:]
+}
+struct SideWolf: Hashable { var holes: [WolfHole]; var order: [String] = []; var lone = 2; var blind = false; var current: Int? }
 struct PickHole: Hashable { var hole: Int, winner: String? }
 struct SideResult: Hashable {
     var players: [SidePlayer]
@@ -669,29 +677,42 @@ enum Core {
             } else { out.vegas = SideVegas(sides: ["A": A.map(\.key), "B": B.map(\.key)], holes: [], total: 0); out.vegasNeedsFour = true }
         }
 
-        // Wolf: the wolf rotates in cart order. After the tee shots the wolf takes a partner or goes it alone.
+        // Wolf: the tee order moves round one place each hole and the wolf tees last. After the tee shots the wolf takes
+        // a partner or goes it alone ("lone", double or triple); with Blind Wolf on, alone before anyone tees off ("blind", triple).
+        // Without a tee order set, the cart order is used with its first player as the first wolf.
         let wf = cfg.wolf
         game = "wolf"
         if wf.on && n >= 3 {
+            let lone = wf.lone == 3 ? 3.0 : 2.0
+            var set: [String] = []
+            for k in wf.order where players.contains(where: { $0.key == k }) && !set.contains(k) { set.append(k) }
+            let tee1 = set.isEmpty ? (players.dropFirst() + [players[0]]).map(\.key) : set + players.map(\.key).filter { !set.contains($0) }
             var rows: [WolfHole] = []
             for (k, i) in order.enumerated() {
-                let wolf = players[k % n]
-                let pick = wf.picks["\(i + 1)"]
-                let partner = pick.flatMap { pk in pk == "lone" ? "lone" : players.first { $0.key == pk && $0.key != wolf.key }?.key }
-                var result: String?
+                let tee = (0..<n).map { tee1[($0 + k) % n] }, wolf = tee[n - 1]
+                var pick = wf.picks["\(i + 1)"]
+                if pick == "blind" && !wf.blind { pick = "lone" }
+                let partner = pick.flatMap { pk in pk == "lone" || pk == "blind" ? pk : players.first { $0.key == pk && $0.key != wolf }?.key }
+                var result: String?, pts: [String: Double] = [:]
                 if let partner, players.allSatisfy({ entered($0, i) }) {
-                    let mine = players.filter { $0.key == wolf.key || $0.key == partner }
+                    let mine = players.filter { $0.key == wolf || $0.key == partner }
                     let rest = players.filter { p in !mine.contains { $0.key == p.key } }
                     let x = mine.filter { hasScore($0, i) }.map { val($0, i, wf.net) }.min() ?? Int.max
                     let y = rest.filter { hasScore($0, i) }.map { val($0, i, wf.net) }.min() ?? Int.max
-                    let stake = partner == "lone" ? wf.amt * 2 : wf.amt  // going it alone doubles the hole, both ways
-                    if x < y { result = "wolf"; for l in rest { for w in mine { pay(l.key, w.key, stake / Double(mine.count)) } } }
-                    else if y < x { result = "others"; for l in mine { for w in rest { pay(l.key, w.key, stake / Double(mine.count)) } } }
+                    let stake = wf.amt * (partner == "blind" ? 3 : partner == "lone" ? lone : 1)
+                    func give(_ L: [SidePlayer], _ W: [SidePlayer]) {
+                        for l in L { for w in W {
+                            let v = stake / Double(mine.count)
+                            pay(l.key, w.key, v); pts[l.key, default: 0] -= v; pts[w.key, default: 0] += v
+                        } }
+                    }
+                    if x < y { result = "wolf"; give(rest, mine) }
+                    else if y < x { result = "others"; give(mine, rest) }
                     else { result = "tie" }
                 }
-                rows.append(WolfHole(hole: i + 1, wolf: wolf.key, partner: partner, result: result))
+                rows.append(WolfHole(hole: i + 1, wolf: wolf, partner: partner, result: result, tee: tee, pts: pts))
             }
-            out.wolf = SideWolf(holes: rows)
+            out.wolf = SideWolf(holes: rows, order: tee1, lone: Int(lone), blind: wf.blind, current: rows.first { $0.result == nil }?.hole)
         }
 
         // Closest to the pin on the par 3s, long drive on the par 5s: the cart picks who won, everyone else gives the stake.

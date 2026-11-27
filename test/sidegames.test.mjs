@@ -33,3 +33,21 @@ const two = sideGames(ev, scores, ['ta'], { vegas: { on: true }, wolf: { on: tru
 assert.ok(two.vegasNeedsFour); assert.equal(two.wolf, undefined); assert.ok(two.stableford);
 const none = sideGames(ev, scores, [], { skins: { on: true }, stableford: { on: true } });
 assert.equal(none.skins, undefined); assert.equal(none.stableford, undefined); ok('games wait for enough players');
+
+// Wolf options: Lone Wolf worth triple, Blind Wolf (triple, only when switched on), the cart's own tee order
+const w = (wolf) => sideGames(ev, scores, ['ta', 'tb'], { wolf: { on: true, amt: 1, net: true, ...wolf } }).wolf;
+const tw = (wolf) => sideGames(ev, scores, ['ta', 'tb'], { wolf: { on: true, amt: 1, net: true, ...wolf } }).tally.wolf;
+assert.deepEqual(w({}).order, ['ta:p2', 'tb:p3', 'tb:p4', 'ta:p1']);
+assert.deepEqual(w({}).holes[1].tee, ['tb:p3', 'tb:p4', 'ta:p1', 'ta:p2']); ok('the first wolf tees last, and the order moves round');
+assert.equal(tw({ lone: 3, picks: { 2: 'lone' } })['ta:p2'], -9);
+assert.equal(w({ lone: 3 }).lone, 3); ok('a Lone Wolf can be worth triple');
+assert.equal(tw({ blind: true, picks: { 3: 'blind' } })['tb:p3'], -9);
+assert.equal(w({ blind: true, picks: { 3: 'blind' } }).holes[2].partner, 'blind');
+assert.equal(w({ picks: { 3: 'blind' } }).holes[2].partner, 'lone');
+assert.equal(tw({ picks: { 3: 'blind' } })['tb:p3'], -6);
+assert.equal(w({ blind: true, picks: { 1: 'blind' } }).holes[0].result, 'tie'); ok('Blind Wolf is triple, and only when switched on');
+const mine = w({ order: ['tb:p4', 'ta:p1', 'tb:p3', 'ta:p2'], picks: { 1: 'tb:p3', 3: 'tb:p4' } });
+assert.deepEqual(mine.holes.slice(0, 3).map((h) => h.wolf), ['ta:p2', 'tb:p4', 'ta:p1']);
+assert.equal(mine.holes[0].result, 'tie'); assert.deepEqual(mine.holes[0].pts, {});
+assert.deepEqual(mine.holes[2].pts, { 'ta:p1': 1, 'tb:p4': 1, 'ta:p2': -1, 'tb:p3': -1 });
+assert.equal(mine.current, 2); ok('the cart sets its own tee order; each hole shows its points and the hole they are on');

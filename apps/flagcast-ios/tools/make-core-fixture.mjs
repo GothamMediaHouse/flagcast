@@ -86,6 +86,10 @@ const SIDE_CFGS = [
     closest: { on: true, amt: 2, picks: { 4: 't0x:p00', 7: 't1x:p11', 11: 't2x:p20', 16: 't3x:p31' } }, longDrive: { on: true, amt: 3, picks: { 2: 't1x:p10', 8: 't0x:p01', 13: 't2x:p21' } } },
   { stableford: { on: true, net: false }, vegas: { on: true, amt: 0.5, net: false, sides: { 't2x:p20': 'B', 't3x:p30': 'A' } },
     wolf: { on: true, amt: 1, net: true, picks: { 1: 'lone', 2: 't0x:p00', 4: 't2x:p20', 9: 'lone', 18: 't3x:p31' } } },
+  // Wolf with the options: Lone Wolf triple, Blind Wolf on, the cart's own tee order (with a player not in the cart)
+  { wolf: { on: true, amt: 1, net: true, lone: 3, blind: true, order: ['t0x:p02', 'zz:p9', 't0x:p00', 't2x:p21', 't0x:p02'],
+    picks: { 1: 'blind', 2: 'lone', 3: 't0x:p03', 4: 't2x:p20', 6: 'blind', 7: 't3x:p31', 12: 'lone' } } },
+  { wolf: { on: true, amt: 2, net: false, lone: 2, blind: false, picks: { 1: 'blind', 2: 't0x:p01', 3: 'lone' } } },
 ];
 
 const cases = [];
