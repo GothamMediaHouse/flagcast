@@ -12,14 +12,23 @@ export function attach(video, src, { live = true } = {}) {
   detach(video);
   // Safari plays HLS itself (with the stream's clock and rewind); everywhere else hls.js does, so replays line up
   const safari = /^((?!chrome|android|crios|fxios).)*safari/i.test(navigator.userAgent);
-  if (!isHls(src) || safari || !window.Hls || !Hls.isSupported()) { video.src = src; return null; }
+  // a live camera that isn't sending yet (a phone that just went live: Cloudflare takes 10–30 seconds to have the
+  // first picture) answers 404, and the player gives up for good: keep trying every few seconds until it plays
+  const again = () => { clearTimeout(video._retry); video._retry = setTimeout(() => { if (video.isConnected) attach(video, src, { live }); }, 4000); };
+  if (!isHls(src) || safari || !window.Hls || !Hls.isSupported()) {
+    video.src = src;
+    if (live) video.onerror = again;
+    return null;
+  }
   const h = new Hls(live ? { liveSyncDurationCount: 2, backBufferLength: 120 } : {});
   h.loadSource(src); h.attachMedia(video); video._hls = h;
+  if (live) h.on(Hls.Events.ERROR, (_, d) => { if (d && d.fatal) again(); });
   return h;
 }
 export function detach(video) {
   if (video._hls) { try { video._hls.destroy(); } catch {} video._hls = null; }
   clearTimeout(video._stop); video._stop = null;
+  clearTimeout(video._retry); video._retry = null; video.onerror = null;
 }
 
 const once = (el, ev, ms = 12000) => new Promise((res, rej) => {
