@@ -297,7 +297,7 @@ const ROLES = [
   {id:'golfer', small:'Playing today', name:'Golfers'},
   {id:'pro', small:'On the course', name:'Golf pros'},
   {id:'desk', small:'In the pro shop', name:'Running it'},
-  {id:'tv', small:'Around the club', name:'Club TVs'},
+  {id:'tv', small:'Around the club', name:'TVs'},
 ];
 const U = s => `<span class="ui">${s}</span>`;
 const SHOTS = {
@@ -406,10 +406,10 @@ const A = [
   steps:[`On the TV, open its app store.`,`Search for Flagcast and install it.`,`Open it. The TV shows a code.`]},
  {id:'pair', role:'tv', title:'Pair a club TV', works:['Apple TV','Google TV','Fire TV','Roku'], keys:'pair tv code connect screen add a tv',
   intro:'You do this once. After that, the TV shows your club’s tournament on the day, all by itself.', shot:'pair',
-  steps:[`Open the Flagcast app on the TV. It shows a ${U('TV code')}.`,`In Manager, open ${U('Screens and sponsors')}, then ${U('Add a TV')}.`,`Type the code. The TV joins your club straight away.`,`To take a TV off, remove it under ${U('Club TVs')}.`]},
+  steps:[`Open the Flagcast app on the TV (or flagcast.app/tv in its web browser). It shows a ${U('TV code')}.`,`In Manager, open ${U('Screens')}, then ${U('Add a TV')}, and pick what’s on the TV.`,`Type the code. The TV joins your club straight away. Name it, pick where it is and what it shows.`,`To take a TV off, tap it in the TV list, then ${U('Remove this TV')}.`]},
  {id:'browser', role:'tv', title:'Use any TV with a browser', works:['Any smart TV','LED wall','Laptop'], keys:'browser link full screen led wall laptop hdmi',
   intro:'No app for your TV? Every screen also has its own link.',
-  steps:[`In ${U('Screens and sponsors')}, click the screen and copy its ${U('Link for this screen')}.`,`Open the link on the TV’s browser, or on a laptop plugged into the TV.`,`Go full screen.`]},
+  steps:[`Best: open flagcast.app/tv in the TV’s browser and add it with the code it shows (see Pair a club TV).`,`Can’t type on the TV? In ${U('Screens')}, ${U('Add a TV')}, choose ${U('Send a link instead')} and open that link on the TV or a laptop plugged into it.`,`Go full screen.`]},
  {id:'tvdemo', role:'tv', title:'Watch a demo on a TV', works:['Apple TV','Google TV','Fire TV','Roku'], keys:'demo tv watch sample',
   intro:'See what your TVs will show before your first tournament.',
   steps:[`Open the Flagcast app on the TV.`,`Choose ${U('Watch a demo')}.`]},
@@ -421,7 +421,7 @@ const TOOLS = {
 };
 const CHECK = [
   {h:'The week before', items:[['Club set up with logo and colour','club'],['Tournament made','make'],['Course found and holes mapped','course'],['Format and allowance picked','format'],['Teams, handicaps and flights added','teams'],['Contests set up','contests'],['Pros and marshals added, PINs sent','codes']]},
-  {h:'The day before', items:[['Cart cards and signs printed','cards'],['Each screen’s list chosen, sponsors added','screens'],['Club TVs paired and showing','pair'],['Tried a demo cart','demo']]},
+  {h:'The day before', items:[['Cart cards and signs printed','cards'],['Each screen’s list chosen, sponsors added','screens'],['TVs added and showing','pair'],['Tried a demo cart','demo']]},
   {h:'On the day', items:[['Today’s pins set','pins'],['Cards in every cart','cards'],['Day of: TVs on, cameras sending','dayof'],['Results locked and downloaded','results']]},
 ];
 const store = {get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};

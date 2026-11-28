@@ -1,9 +1,8 @@
 import SwiftUI
 
-/// Screens & sponsors (the Mac's page): every TV at the club as a card ("What should this TV show?" picture tiles, Show
-/// something else for a bit and Back to normal, Where is it?, Set up this TV, the detail under Customize), and beside
-/// them on a wide iPad (or under "Sponsors & more" on iPhone) the board as it is now, the announcement, sponsors, the
-/// big screens' settings, par 3 cameras and replays, and fundraising. (Engineering is Flagcast's: Admin.)
+/// Screens: Show on every TV, Back to normal and Go live at the top, then the TVs (one line each: tap one for its page)
+/// and the other parts (sponsors, the announcement, cameras and replays, fundraising, how the TVs look), each on its own
+/// page. A wide iPad shows them as tabs, with the TV list beside the picked TV. TVs save as they change (no Save).
 struct ScreensView: View {
     var body: some View {
         WithTournament { doc in ScreensPage(doc: doc) }
@@ -18,244 +17,285 @@ private struct PageWidthKey: PreferenceKey {
 
 private struct ScreensPage: View {
     @Bindable var doc: DeskDoc
-    @Environment(DeskNav.self) private var nav
+    @State private var tvs = ClubTVs()
+    @State private var width: CGFloat = 0
+    @State private var adding = false
     @State private var allSending = false
+    @State private var goingLive = false
+    @State private var picked: String?
+    @AppStorage("screens.part") private var part = "tvs"
+    @Environment(\.horizontalSizeClass) private var size
+    @Environment(\.openURL) private var openURL
 
-    static let PLACES = ["Clubhouse", "Bar", "Grill room", "Pro shop", "Tent", "Patio", "Locker room", "Hole 7 tee", "Hole 18 green"]
-    private var choices: PageChoices { doc.pageChoices }
-    private var saved: Set<String> { Set((doc.live?.displays ?? []).map(\.id)) }
+    /// tabs, with the TV list beside the picked TV: iPad landscape, or a big iPad
+    private var wide: Bool { size == .regular && width >= 860 }
+    /// the places the TVs are at (Show on every TV can pick one)
     private var places: [String] {
         var seen: [String] = []
         for d in doc.ev.displays where !d.place.isEmpty && !seen.contains(where: { $0.caseInsensitiveCompare(d.place) == .orderedSame }) { seen.append(d.place) }
         return seen
     }
-
-    @Environment(\.horizontalSizeClass) private var size
-    @Environment(\.openURL) private var openURL
-    @AppStorage("screens.tab") private var tab = "screens"
-    @State private var width: CGFloat = 0
-    /// two columns (TVs | board, sponsors and more) when the page is wide enough: iPad landscape, or a big iPad
-    private var wide: Bool { size == .regular && width >= 860 }
-    private var onCount: Int { doc.ev.displays.filter { (doc.live?.online[$0.id] ?? 0) > 0 }.count }
+    private var kicker: String {
+        let n = doc.ev.displays.count
+        return n == 0 ? "No TVs yet" : "\(doc.tvsOn) of \(n) TV\(n == 1 ? "" : "s") on"
+    }
+    private var forced: Bool { doc.live?.live.force.values.contains { $0.isOn } ?? false }
+    private var phoneLive: [Int: String] { doc.live?.golive ?? [:] }
 
     var body: some View {
-        PhotoPage(image: doc.picture.image, kicker: doc.ev.displays.isEmpty ? doc.ev.name : "\(onCount) of \(doc.ev.displays.count) TVs on",
-                  title: "Screens & sponsors", sub: "The TVs at the club, what they show, and your sponsors", height: 220, maxWidth: wide ? 1320 : 820) {
-            HStack(spacing: 8) {
-                Button { openURL(doc.boardURL) } label: { Label("Open the Board", systemImage: "tv") }.buttonStyle(GlassButton())
-                ShareLink(item: doc.boardURL) { Label("Send the Link", systemImage: "square.and.arrow.up") }.buttonStyle(GlassButton())
-            }
-        } content: {
-            Group {
-                if wide {
-                    HStack(alignment: .top, spacing: 18) {
-                        VStack(alignment: .leading, spacing: 14) {
-                            CardTitle("TVs at the club").padding(.leading, 4)
-                            tvs
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        VStack(alignment: .leading, spacing: 18) { ScreensSide(doc: doc) }
-                            .frame(width: min(440, max(360, width * 0.4)))
-                    }
-                } else {
-                    Picker("Show", selection: Binding(get: { tab == "settings" ? "settings" : "screens" }, set: { tab = $0 })) {
-                        Text("TVs").tag("screens"); Text("Sponsors & more").tag("settings")
-                    }
-                    .pickerStyle(.segmented)
-                    .padding(.bottom, 4)
-                    if tab == "settings" { VStack(alignment: .leading, spacing: 18) { ScreensSide(doc: doc) } }
-                    else { VStack(alignment: .leading, spacing: 14) { tvs } }
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+        Group { if wide { wideBody } else { narrowBody } }
+            .background(FC.paper)
             .background(GeometryReader { g in Color.clear.preference(key: PageWidthKey.self, value: g.size.width) })
             .onPreferenceChange(PageWidthKey.self) { width = $0 }
-        }
-    }
-
-    @ViewBuilder private var tvs: some View {
-        ClubTVsCard(doc: doc)
-        if doc.ev.displays.isEmpty {
-            VStack(spacing: 12) {
-                Image(systemName: "tv").font(.system(size: 40)).foregroundStyle(FC.muted)
-                Text("No TVs yet").font(FC.display(32))
-                Text("Add each TV at the club. You’ll pick what it shows, and we’ll show you how to put Flagcast on it.")
-                    .font(.subheadline).foregroundStyle(FC.muted).multilineTextAlignment(.center)
-                Button("Add Your First TV") { addTV() }.buttonStyle(GreenButton())
-            }
-            .frame(maxWidth: .infinity).card(padding: 24)
-        } else {
-            if doc.ev.displays.count > 1 { allAtOnce }
-            // a big iPad's TV column fits two cards side by side
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 380), spacing: 14, alignment: .top)], spacing: 14) {
-                ForEach($doc.ev.displays) { $d in TVCard(display: $d, doc: doc, saved: saved.contains(d.id), places: Self.PLACES + places.filter { !Self.PLACES.contains($0) }) }
-            }
-            Button { addTV() } label: { Label("Add Another TV", systemImage: "plus") }.buttonStyle(PlainCardButton(full: true))
-        }
-    }
-
-    private var allAtOnce: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            CardTitle("All at once")
-            HStack(spacing: 8) {
-                Button("Back to Normal") { send(doc, "*", nil, 0, to: "every TV") }.buttonStyle(PlainCardButton(full: true))
-                Button("Show Something Else…") { allSending = true }.buttonStyle(GreenButton(full: true))
+            .task { await tvs.load(doc); while !Task.isCancelled { try? await Task.sleep(for: .seconds(60)); await tvs.load(doc) } }
+            .sheet(isPresented: $adding) {
+                AddTVFlow(doc: doc, tvs: tvs) { id in adding = false; if let id { picked = id } }
+                    .presentationDetents([.large])
             }
             .sheet(isPresented: $allSending) {
-                SendSheet(target: "every TV", choices: choices, places: places) { page, mins, place in
-                    let ids: Any = place.map { p in doc.ev.displays.filter { $0.place.caseInsensitiveCompare(p) == .orderedSame && saved.contains($0.id) }.map(\.id) } ?? "*"
-                    send(doc, ids, page, mins, to: place.map { "the TVs at \($0)" } ?? "every TV")
+                SendSheet(target: "every TV", choices: doc.pageChoices, places: places) { page, mins, place in
+                    let ids: Any = place.map { p in doc.ev.displays.filter { $0.place.caseInsensitiveCompare(p) == .orderedSame }.map(\.id) } ?? "*"
+                    sendToTVs(doc, ids, page, mins, to: place.map { "the TVs at \($0)" } ?? "every TV")
+                }
+            }
+            .fullScreenCover(isPresented: $goingLive) {
+                GoLiveView(model: GoLiveModel(holes: GoLiveHole.from(doc.ev.course.holes)) { [doc] body in
+                    var b = body
+                    let op = b.removeValue(forKey: "op") as? String ?? ""
+                    return try await Net.desk(doc.id, doc.key, op, b)
+                }, liveNow: phoneLive)
+            }
+    }
+
+    // MARK: iPhone (and a narrow iPad): one column
+
+    private var narrowBody: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("\(kicker) · \(doc.ev.name)").font(.subheadline.weight(.semibold)).foregroundStyle(doc.tvsOn > 0 ? FC.ok : FC.muted)
+                    .padding(.top, -6)
+                actions
+                VStack(alignment: .leading, spacing: 7) {
+                    CardTitle("TVs").padding(.leading, 4)
+                    if doc.ev.displays.isEmpty {
+                        Text("Add each TV at the club once. It shows this tournament, and every one after it.")
+                            .font(.subheadline).foregroundStyle(FC.muted).padding(.horizontal, 4)
+                    }
+                    TVList(doc: doc, add: { adding = true }) { d in
+                        NavigationLink { TVScreen(doc: doc, tvs: tvs, id: d.id) } label: {
+                            HStack(spacing: 0) { row(d); Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(FC.muted).padding(.trailing, 12) }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                VStack(alignment: .leading, spacing: 7) {
+                    CardTitle("On the TVs").padding(.leading, 4)
+                    VStack(spacing: 0) {
+                        ForEach(ScreensPart.allCases) { p in
+                            NavigationLink { PartScreen(doc: doc, part: p) } label: { partRow(p, last: p == ScreensPart.allCases.last) }.buttonStyle(.plain)
+                        }
+                    }
+                    .background(FC.card, in: RoundedRectangle(cornerRadius: 14)).overlay(RoundedRectangle(cornerRadius: 14).stroke(FC.line))
+                    .clipShape(RoundedRectangle(cornerRadius: 14))
+                }
+            }
+            .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 110)
+            .frame(maxWidth: 680).frame(maxWidth: .infinity)
+        }
+        .navigationTitle("Screens")
+        .navigationBarTitleDisplayMode(.large)
+    }
+
+    /// Show on every TV, Back to normal, Go live
+    private var actions: some View {
+        HStack(spacing: 8) {
+            bigButton("Show on Every TV", "tv", fill: FC.green, ink: FC.onGreen) { allSending = true }
+                .disabled(doc.ev.displays.isEmpty)
+            bigButton("Back to Normal", "arrow.uturn.backward", fill: FC.card, ink: forced ? FC.ink : FC.muted) { sendToTVs(doc, "*", nil, 0, to: "every TV") }
+                .disabled(doc.ev.displays.isEmpty)
+            bigButton(phoneLive.isEmpty ? "Go Live" : "Live now", "record.circle", fill: FC.red, ink: .white) { goingLive = true }
+        }
+    }
+    private func bigButton(_ t: String, _ icon: String, fill: Color, ink: Color, _ go: @escaping () -> Void) -> some View {
+        Button(action: go) {
+            VStack(spacing: 5) {
+                Image(systemName: icon).font(.system(size: 20, weight: .semibold))
+                Text(t).font(.system(size: 13, weight: .semibold)).multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.85)
+            }
+            .foregroundStyle(ink).frame(maxWidth: .infinity, minHeight: 74).padding(.horizontal, 4)
+            .background(fill, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(fill == FC.card ? FC.line : .clear))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+    private func row(_ d: Display, selected: Bool = false) -> some View {
+        TVRow(display: d, online: doc.live?.online[d.id] ?? 0, force: doc.live?.live.force[d.id], choices: doc.pageChoices, selected: selected)
+    }
+    private func partRow(_ p: ScreensPart, last: Bool) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: p.icon).font(.system(size: 14, weight: .semibold)).foregroundStyle(p == .sponsors ? FC.onFlag : .white)
+                .frame(width: 30, height: 30).background(p.color, in: RoundedRectangle(cornerRadius: 8))
+            Text(p.title).font(.system(size: 15, weight: .semibold)).foregroundStyle(FC.ink)
+            Spacer()
+            badge(p)
+            Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(FC.muted)
+        }
+        .padding(.horizontal, 12).frame(minHeight: 50).contentShape(Rectangle())
+        .overlay(alignment: .bottom) { if !last { Rectangle().fill(FC.hairline).frame(height: 1).padding(.leading, 54) } }
+    }
+    @ViewBuilder private func badge(_ p: ScreensPart) -> some View {
+        switch p {
+        case .sponsors where !doc.ev.sponsors.isEmpty: Text("\(doc.ev.sponsors.count)").font(.subheadline).foregroundStyle(FC.muted)
+        case .cameras where !phoneLive.isEmpty:
+            Text("LIVE \(phoneLive.keys.sorted().map { $0 == 0 ? "CLUBHOUSE" : String($0) }.joined(separator: ", "))")
+                .font(.system(size: 10, weight: .heavy)).foregroundStyle(FC.red).padding(.horizontal, 7).padding(.vertical, 3).background(FC.red.opacity(0.12), in: Capsule())
+        case .announcement where !(doc.live?.flash?.text ?? "").isEmpty: Text("Showing").font(.subheadline).foregroundStyle(FC.ok)
+        case .fund where doc.ev.fund.on: Text("On").font(.subheadline).foregroundStyle(FC.muted)
+        default: EmptyView()
+        }
+    }
+
+    // MARK: a wide iPad: tabs, and the TV list beside the picked TV
+
+    private var wideBody: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Screens").font(FC.display(34)).foregroundStyle(FC.ink)
+                    Text(kicker).font(.subheadline.weight(.semibold)).foregroundStyle(doc.tvsOn > 0 ? FC.ok : FC.muted)
+                }
+                Spacer()
+                Button { openURL(doc.boardURL) } label: { Label("Open the Board", systemImage: "arrow.up.right.square") }.buttonStyle(PlainCardButton())
+                Button { sendToTVs(doc, "*", nil, 0, to: "every TV") } label: { Label("Back to Normal", systemImage: "arrow.uturn.backward") }.buttonStyle(PlainCardButton())
+                    .disabled(doc.ev.displays.isEmpty)
+                Button { allSending = true } label: { Label("Show on Every TV…", systemImage: "tv") }.buttonStyle(GreenButton())
+                    .disabled(doc.ev.displays.isEmpty)
+                Button { goingLive = true } label: {
+                    Label(phoneLive.isEmpty ? "Go Live" : "Live now", systemImage: "record.circle").font(.system(size: 15, weight: .semibold)).foregroundStyle(.white)
+                        .padding(.horizontal, 16).frame(minHeight: 44).background(FC.red, in: RoundedRectangle(cornerRadius: 10)).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.horizontal, 22).padding(.vertical, 12)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    tab("TVs", "tvs", count: doc.ev.displays.count)
+                    ForEach(ScreensPart.allCases) { p in tab(p.short, p.rawValue, count: p == .sponsors ? doc.ev.sponsors.count : 0, live: p == .cameras && !phoneLive.isEmpty) }
+                }
+                .padding(.horizontal, 20).padding(.vertical, 8)
+            }
+            .background(FC.paper2.opacity(0.5))
+            .overlay(alignment: .bottom) { Rectangle().fill(FC.line).frame(height: 1) }
+            if let p = ScreensPart(rawValue: part) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 18) { p.view(doc) }
+                        .padding(20).padding(.bottom, 90).frame(maxWidth: 760).frame(maxWidth: .infinity)
+                }
+            } else {
+                HStack(alignment: .top, spacing: 0) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 8) {
+                            CardTitle("TVs at the club").padding(.leading, 4)
+                            TVList(doc: doc, add: { adding = true }) { d in
+                                Button { picked = d.id } label: { row(d, selected: d.id == shown) }.buttonStyle(.plain)
+                            }
+                            Text("A TV you add once shows every tournament at the club. What it shows is picked for each tournament.")
+                                .font(.footnote).foregroundStyle(FC.muted).padding(.horizontal, 4)
+                        }
+                        .padding(16).padding(.bottom, 90)
+                    }
+                    .frame(width: min(360, max(300, width * 0.34)))
+                    Rectangle().fill(FC.line).frame(width: 1)
+                    ScrollView {
+                        Group {
+                            if let id = shown { TVDetail(doc: doc, tvs: tvs, id: id) { picked = nil }.id(id) }
+                            else {
+                                VStack(spacing: 12) {
+                                    Image(systemName: "tv").font(.system(size: 40)).foregroundStyle(FC.muted)
+                                    Text("No TVs yet").font(FC.display(30)).foregroundStyle(FC.ink)
+                                    Text("Add each TV at the club once. It shows this tournament, and every one after it.").font(.subheadline).foregroundStyle(FC.muted).multilineTextAlignment(.center)
+                                    Button("Add a TV") { adding = true }.buttonStyle(GreenButton())
+                                }
+                                .frame(maxWidth: .infinity).padding(.top, 60)
+                            }
+                        }
+                        .padding(22).padding(.bottom, 90).frame(maxWidth: 720).frame(maxWidth: .infinity)
+                    }
                 }
             }
         }
-        .card()
+        .toolbar(.visible, for: .navigationBar)
+        .navigationBarTitleDisplayMode(.inline)
     }
+    /// the picked TV, or the first one
+    private var shown: String? { picked.flatMap { p in doc.ev.displays.contains { $0.id == p } ? p : nil } ?? doc.ev.displays.first?.id }
+    private func tab(_ t: String, _ key: String, count: Int = 0, live: Bool = false) -> some View {
+        let on = part == key || (key == "tvs" && ScreensPart(rawValue: part) == nil)
+        return Button { part = key } label: {
+            HStack(spacing: 5) {
+                Text(t).font(.system(size: 14, weight: on ? .semibold : .regular))
+                if count > 0 { Text("\(count)").font(.system(size: 11, weight: .semibold)).padding(.horizontal, 6).padding(.vertical, 1).background(FC.paper2, in: Capsule()) }
+                if live { Text("LIVE").font(.system(size: 9, weight: .heavy)).foregroundStyle(FC.red).padding(.horizontal, 5).padding(.vertical, 2).background(FC.red.opacity(0.12), in: Capsule()) }
+            }
+            .foregroundStyle(on ? FC.ink : FC.muted).padding(.horizontal, 13).frame(height: 32)
+            .background(on ? FC.card : .clear, in: RoundedRectangle(cornerRadius: 8))
+            .shadow(color: on ? .black.opacity(0.1) : .clear, radius: 2, y: 1)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
 
-    private func addTV() { doc.ev.displays.append(Display(name: "TV \(doc.ev.displays.count + 1)", playlist: ShowTile.mix.pages)) }
+/// A page pushed from Screens on iPhone, with the notices and Save that the tournament's pages have.
+private struct PushedPage<Content: View>: View {
+    let doc: DeskDoc
+    var title: String
+    @ViewBuilder var content: Content
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) { content }
+                .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 110).frame(maxWidth: 680).frame(maxWidth: .infinity)
+        }
+        .background(FC.paper)
+        .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
+        .overlay(alignment: .bottom) {
+            VStack(spacing: 8) {
+                NoticeBar(text: doc.notice)
+                if doc.dirty { SaveBar(doc: doc) }
+            }
+            .padding(.bottom, 10)
+            .animation(.snappy, value: doc.notice)
+            .animation(.snappy, value: doc.dirty)
+        }
+    }
+}
+
+/// One TV's page (iPhone).
+private struct TVScreen: View {
+    @Bindable var doc: DeskDoc
+    let tvs: ClubTVs
+    let id: String
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        PushedPage(doc: doc, title: "") { TVDetail(doc: doc, tvs: tvs, id: id) { dismiss() } }
+    }
+}
+
+/// Sponsors, the announcement, cameras, fundraising or how the TVs look (iPhone).
+private struct PartScreen: View {
+    @Bindable var doc: DeskDoc
+    let part: ScreensPart
+    var body: some View { PushedPage(doc: doc, title: part.title) { part.view(doc) } }
 }
 
 /// Switch one TV, a list of TVs or every TV ("*"); page nil = back to normal.
-@MainActor func send(_ doc: DeskDoc, _ display: Any, _ page: PageRef?, _ mins: Int, to: String) {
-    if let ids = display as? [String], ids.isEmpty { doc.flash("No saved TVs there yet."); return }
-    var b: [String: Any] = ["display": display, "page": pageDict(page)]
-    if page != nil, mins > 0 { b["mins"] = mins }
-    let done = page == nil ? "Back to normal: \(to)." : mins > 0 ? "On \(to) for \(mins) minutes." : "On \(to) until you switch back."
-    Task { await doc.day("screen", b, done: done) }
-}
-
-/// One TV: what it shows now (with Show something else and Back to normal), its name and where it is, the picture
-/// tiles for what it shows normally, Set up this TV, and Customize.
-private struct TVCard: View {
-    @Binding var display: Display
-    let doc: DeskDoc
-    let saved: Bool
-    let places: [String]
-    @State private var sending = false
-    @State private var setup = false
-    @State private var customize = false
-
-    private var online: Int { doc.live?.online[display.id] ?? 0 }
-    private var force: PageRef? { doc.live?.live.force[display.id] }
-    private var url: URL { URL(string: "\(doc.boardURL.absoluteString)?screen=\(display.id)")! }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 12) {
-                Preview(force: force, playlist: display.playlist, choices: doc.pageChoices, online: online > 0)
-                VStack(alignment: .leading, spacing: 4) {
-                    TextField("Name this TV", text: $display.name).font(FC.display(26))
-                    Menu {
-                        ForEach(places, id: \.self) { p in Button(p) { display.place = p; display.group = p } }
-                        if !display.place.isEmpty { Divider(); Button("Not set", role: .destructive) { display.place = ""; display.group = "" } }
-                    } label: {
-                        Label(display.place.isEmpty ? "Where is it?" : display.place, systemImage: "mappin.and.ellipse").font(.subheadline).foregroundStyle(display.place.isEmpty ? FC.link : FC.muted)
-                    }
-                    TimelineView(.periodic(from: .now, by: 15)) { _ in
-                        Text(online > 0 ? screenStatus(force, playlist: display.playlist, choices: doc.pageChoices) : "This TV isn’t showing Flagcast yet.")
-                            .font(.footnote).foregroundStyle(FC.muted).fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                Spacer(minLength: 0)
-                // the Mac's link menu: once the TV is on, its link is tucked away here
-                if online > 0 {
-                    Menu {
-                        ShareLink(item: url) { Label("Send the TV’s Link", systemImage: "square.and.arrow.up") }
-                        Button { copy(url.absoluteString); doc.flash("Link copied.") } label: { Label("Copy the TV’s Link", systemImage: "doc.on.doc") }
-                    } label: { Image(systemName: "ellipsis.circle").font(.title3).foregroundStyle(FC.link) }
-                    .accessibilityLabel("This TV’s link")
-                }
-            }
-            HStack(spacing: 8) {
-                if force?.isOn == true { Button("Back to Normal") { go(nil, 0) }.buttonStyle(GreenButton(full: true)) }
-                Button("Show Something Else…") { sending = true }.buttonStyle(force?.isOn == true ? AnyStyle(PlainCardButton(full: true)) : AnyStyle(GreenButton(full: true)))
-            }
-            if online == 0 { Button { setup = true } label: { Label("Set Up This TV", systemImage: "tv.badge.wifi") }.buttonStyle(PlainCardButton(full: true)) }
-            Divider().overlay(FC.hairline)
-            Text("What should this TV show?").font(.subheadline.weight(.bold))
-            Tiles(playlist: $display.playlist)
-            DisclosureGroup(isExpanded: $customize) {
-                PlaylistList(playlist: $display.playlist, choices: doc.pageChoices,
-                             others: doc.ev.displays.filter { $0.id != display.id }.map { ($0.id, $0.name) },
-                             copyTo: { ids in let l = display.playlist; for i in doc.ev.displays.indices where ids.contains(doc.ev.displays[i].id) { doc.ev.displays[i].playlist = l }; doc.flash("Copied. Save to put it on those TVs.") })
-                if display.tv { Text("Club TV: remove it under Club TVs").font(.caption).foregroundStyle(.secondary).padding(.top, 6) }
-                else { Button("Remove This TV", role: .destructive) { let id = display.id; doc.ev.displays.removeAll { $0.id == id } }.font(.subheadline).padding(.top, 6) }
-            } label: { Text("Customize…").font(.subheadline.weight(.semibold)).foregroundStyle(FC.link) }
-            if !saved { Label("New TV: press Save to switch it on.", systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(FC.muted) }
-        }
-        .card()
-        .sheet(isPresented: $sending) {
-            SendSheet(target: display.name.isEmpty ? "this TV" : display.name, choices: doc.pageChoices, places: []) { page, mins, _ in go(page, mins) }
-        }
-        .sheet(isPresented: $setup) { NavigationStack { SetUpTV(name: display.name, url: url) } }
-    }
-    private func go(_ page: PageRef?, _ mins: Int) {
-        if !saved { doc.flash("Press Save first, then you can switch this TV."); return }
-        send(doc, display.id, page, mins, to: display.name.isEmpty ? "the TV" : display.name)
-    }
-}
+@MainActor func send(_ doc: DeskDoc, _ display: Any, _ page: PageRef?, _ mins: Int, to: String) { sendToTVs(doc, display, page, mins, to: to) }
 
 struct AnyStyle: ButtonStyle {
     private let make: (Configuration) -> AnyView
     init<S: ButtonStyle>(_ s: S) { make = { AnyView(s.makeBody(configuration: $0)) } }
     func makeBody(configuration c: Configuration) -> some View { make(c) }
-}
-
-/// A small picture of what the TV shows now.
-private struct Preview: View {
-    var force: PageRef?
-    var playlist: [PageRef]
-    var choices: PageChoices
-    var online: Bool
-    var body: some View {
-        ZStack {
-            LinearGradient(colors: [FC.green2, FC.green], startPoint: .topLeading, endPoint: .bottomTrailing)
-            VStack(spacing: 4) {
-                if let f = force, f.isOn {
-                    Image(systemName: PageChoices.icon(f.k)).font(.system(size: 20, weight: .semibold)).foregroundStyle(FC.flag)
-                    Text(choices.label(f)).font(FC.display(15)).multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.7)
-                } else {
-                    let t = ShowTile.matching(playlist)
-                    Image(systemName: t?.icon ?? "rectangle.stack").font(.system(size: 20, weight: .semibold))
-                    Text(t?.title ?? "Own mix").font(FC.display(15))
-                }
-            }
-            .padding(6)
-            if !online { Color.black.opacity(0.45) }
-        }
-        // off: a small tag in the corner, not on top of the picture's own words
-        .overlay(alignment: .topLeading) {
-            if !online {
-                Text("OFF").font(.system(size: 8, weight: .heavy)).tracking(1).foregroundStyle(.white)
-                    .padding(.horizontal, 5).padding(.vertical, 2).background(Color.black.opacity(0.6), in: Capsule()).padding(5)
-                    .accessibilityLabel("This TV isn’t on")
-            }
-        }
-        .foregroundStyle(FC.onGreen).frame(width: 116, height: 70).clipShape(RoundedRectangle(cornerRadius: 9))
-    }
-}
-
-/// The picture tiles: Mix (recommended), Leaderboard, Par 3 camera, Sponsors, Contests.
-private struct Tiles: View {
-    @Binding var playlist: [PageRef]
-    var body: some View {
-        let on = ShowTile.matching(playlist)
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 8)], spacing: 8) {
-            ForEach(ShowTile.allCases) { t in
-                let sel = on == t
-                Button { withAnimation(.snappy) { playlist = t.pages } } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: t.icon).font(.system(size: 20, weight: .semibold))
-                        Text(t.title).font(.system(size: 13, weight: .semibold)).lineLimit(1).minimumScaleFactor(0.8)
-                        Text(t.note).font(.system(size: 10)).opacity(0.75).lineLimit(1)
-                    }
-                    .foregroundStyle(sel ? FC.onGreen : FC.ink).frame(maxWidth: .infinity, minHeight: 78)
-                    .background(sel ? FC.green : FC.paper2.opacity(0.7), in: RoundedRectangle(cornerRadius: 11))
-                    .overlay(RoundedRectangle(cornerRadius: 11).stroke(sel ? FC.flag : .clear, lineWidth: 2))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
 }
 
 /// Show something else for a bit: big buttons for what, then one tap for how long.
@@ -312,36 +352,6 @@ struct SendSheet: View {
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
         }
         .presentationDetents([.large])
-    }
-}
-
-/// How to put Flagcast on a TV: three steps and one button to send the link.
-private struct SetUpTV: View {
-    var name: String
-    var url: URL
-    @Environment(\.dismiss) private var dismiss
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                step(1, "Send yourself the TV’s link", "Text or email it to yourself so you can open it on the TV.")
-                HStack {
-                    ShareLink(item: url) { Label("Send the Link", systemImage: "square.and.arrow.up") }.buttonStyle(GreenButton(full: true))
-                    Button { copy(url.absoluteString) } label: { Label("Copy", systemImage: "doc.on.doc") }.buttonStyle(PlainCardButton())
-                }
-                step(2, "Open it in the TV’s web browser", "Or on the computer or stick plugged into the TV.")
-                step(3, "Make it full screen", "This TV’s card says it’s on once the TV shows Flagcast.")
-            }
-            .padding(20)
-        }
-        .background(FC.paper)
-        .navigationTitle("Put Flagcast on \(name.isEmpty ? "this TV" : name)").navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-    }
-    private func step(_ n: Int, _ t: String, _ sub: String) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            Text("\(n)").font(FC.display(22)).foregroundStyle(FC.onGreen).frame(width: 34, height: 34).background(FC.green, in: Circle())
-            VStack(alignment: .leading, spacing: 2) { Text(t).font(.headline); Text(sub).font(.subheadline).foregroundStyle(FC.muted) }
-        }
     }
 }
 

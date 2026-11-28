@@ -7,46 +7,52 @@ let SPOT_NAMES: [(String, String)] = [("title", "Title sponsor (every screen)"),
 
 struct ReplayDraft { var hole = 0; var label = ""; var url = "" }
 
-/// Screens and sponsors: what the big screens show, the announcement, par 3 cameras and replays, sponsors, fundraising.
+/// Screens and sponsors: the TVs (a list beside the picked TV, saved as they change), then a tab each for sponsors, the
+/// announcement, par 3 cameras and replays, fundraising and how the TVs look (those save with Save).
 struct ScreensView: View {
     @Bindable var doc: DeskDoc
     @State private var flash = ""
     @State private var raised = ""
     @State private var replay = ReplayDraft()
-    @AppStorage("screens.tab") private var tab = "screens"
+    @AppStorage("screens.tab") private var tab = "tvs"
     @Environment(DeskNav.self) private var nav
 
-    private var par3s: [Hole] { doc.ev.course.holes.filter { $0.par == 3 } }
+    private static let tabs: [(String, String)] = [("TVs", "tvs"), ("Sponsors", "sponsors"), ("Announcement", "announcement"), ("Cameras & replays", "cameras"),
+                                                   ("Fundraising", "fund"), ("How the TVs look", "look")]
+    private var shownTab: String { Self.tabs.contains { $0.1 == tab } ? tab : "tvs" }
 
     var body: some View {
         DeskPage(doc: doc, section: .screens) {
-            PhotoSegments(options: [("TVs", "screens"), ("Sponsors & more", "settings")], selection: Binding(get: { tab == "settings" ? "settings" : "screens" }, set: { tab = $0 }))
+            PhotoSegments(options: Self.tabs, selection: Binding(get: { shownTab }, set: { tab = $0 }))
             Button("Open the board") { NSWorkspace.shared.open(doc.boardURL) }.buttonStyle(GlassButton())
         } title: {
-            HeroTitle(title: "Screens & sponsors", size: 52, sub: tab == "settings" ? "Sponsors, cameras, announcements" : "The TVs at the club and what they show", subBeside: true)
+            HeroTitle(title: "Screens & sponsors", size: 52, sub: doc.ev.displays.isEmpty ? "No TVs yet" : "\(doc.tvsOn) of \(doc.ev.displays.count) TVs on", subBeside: true)
         } content: {
-            if tab == "settings" { settings } else { ScreenWall(doc: doc) }
+            if shownTab == "tvs" { TVWall(doc: doc) }
+            else { CardForm { settings } }
         }
     }
 
-    private var settings: some View {
-            CardForm {
-            SwiftUI.Section("Big screens") {
-                TextField("Title on the screens", text: $doc.ev.screens.title, prompt: Text("Uses the tournament name"))
-                Stepper("\(doc.ev.screens.seconds) seconds on each page", value: $doc.ev.screens.seconds, in: 5...60)
-                Stepper("\(doc.ev.screens.rows) rows on each leaderboard page", value: $doc.ev.screens.rows, in: 5...20)
-                Toggle("Show gross skins", isOn: $doc.ev.screens.skins)
-                TextField("Ticker along the bottom", text: $doc.ev.screens.ticker, prompt: Text("Lunch is served at the turn. Awards at 3 PM in the tent."), axis: .vertical)
+    @ViewBuilder private var settings: some View {
+        switch shownTab {
+        case "sponsors":
+            SwiftUI.Section {
+                ForEach($doc.ev.sponsors) { $s in SponsorRow(sponsor: $s, holes: doc.ev.course.holes, doc: doc) { doc.ev.sponsors.removeAll { $0.id == s.id } } }
+                Button { doc.ev.sponsors.append(Sponsor(id: Ids.make(), name: "")) } label: { Label("Add Sponsor", systemImage: "plus") }
+            } header: { Text("Sponsors") } footer: {
+                Help("Pick where each sponsor shows. Hole, camera and contest spots use the hole numbers. The link and offer show on the players’ phones, and taps are counted for the report. Logos: PNG or JPG under 140 KB.")
             }
+        case "announcement":
             SwiftUI.Section {
                 HStack {
                     TextField("Announcement", text: $flash, prompt: Text("Shotgun start in 10 minutes"))
                     Button("Show on Every Screen Now") { Task { if await doc.day("flash", ["text": flash], done: "On every screen now.") != nil { flash = "" } } }.disabled(flash.isEmpty)
                 }
-                if let f = doc.live?.flash {
+                if let f = doc.live?.flash, !f.text.isEmpty {
                     HStack { Text("Showing: “\(f.text)”").foregroundStyle(.secondary); Spacer(); Button("Clear") { Task { await doc.day("flash", ["text": ""], done: "Cleared.") } } }
                 }
-            } header: { Text("Announcement") }
+            } header: { Text("Announcement") } footer: { Help("Shows across every TV and on golfers’ phones until you clear it.") }
+        case "cameras":
             SwiftUI.Section {
                 PlayerCameraSwitches(doc: doc)
             } header: { Text("Cameras for players") } footer: {
@@ -73,12 +79,7 @@ struct ScreensView: View {
             } header: { Text("Replays") } footer: {
                 Help("Save Replay plays the hole’s camera back from 25 seconds before you press it (the camera’s HLS link must keep a recording window). Or paste a clip link (.mp4 or .m3u8). Players see replays on their phones, and groups can save their own shot on camera holes.")
             }
-            SwiftUI.Section {
-                ForEach($doc.ev.sponsors) { $s in SponsorRow(sponsor: $s, holes: doc.ev.course.holes, doc: doc) { doc.ev.sponsors.removeAll { $0.id == s.id } } }
-                Button { doc.ev.sponsors.append(Sponsor(id: Ids.make(), name: "")) } label: { Label("Add Sponsor", systemImage: "plus") }
-            } header: { Text("Sponsors") } footer: {
-                Help("Pick where each sponsor shows. Hole, camera and contest spots use the hole numbers. The link and offer show on the players’ phones, and taps are counted for the report. Logos: PNG or JPG under 140 KB.")
-            }
+        case "fund":
             SwiftUI.Section("Fundraising") {
                 Toggle("Show the total on the screens", isOn: $doc.ev.fund.on)
                 TextField("Heading", text: $doc.ev.fund.label, prompt: Text("Raised for the foundation today"))
@@ -91,7 +92,15 @@ struct ScreensView: View {
                     Button("Update the Total") { if let n = Double(raised) { Task { if await doc.day("fund", ["raised": n], done: "Total updated on the screens.") != nil { raised = "" } } } }.disabled(Double(raised) == nil)
                 }
             }
-            }
+        default:
+            SwiftUI.Section {
+                TextField("Title on the screens", text: $doc.ev.screens.title, prompt: Text("Uses the tournament name"))
+                Stepper("\(doc.ev.screens.seconds) seconds on each page", value: $doc.ev.screens.seconds, in: 5...60)
+                Stepper("\(doc.ev.screens.rows) rows on each leaderboard page", value: $doc.ev.screens.rows, in: 5...20)
+                Toggle("Show gross skins", isOn: $doc.ev.screens.skins)
+                TextField("Ticker along the bottom", text: $doc.ev.screens.ticker, prompt: Text("Lunch is served at the turn. Awards at 3 PM in the tent."), axis: .vertical)
+            } header: { Text("How the TVs look") } footer: { Help("For every TV in this tournament. Press Save to put it on them.") }
+        }
     }
     private func saveReplay(screens: Bool) {
         Task {
@@ -166,116 +175,72 @@ struct SponsorRow: View {
 
 // MARK: - the TVs
 
-/// Every TV at the club as a card: its name and where it is, what it shows now (and something else for a bit), and
-/// what it shows normally (big picture tiles; the detail is behind Customize).
-struct ScreenWall: View {
+/// The TVs: Back to normal and Show on every TV (or the TVs in one place) across the top, the list on the left (Add a
+/// TV at the end), the picked TV on the right. A TV saves as it changes, so these need no Save.
+struct TVWall: View {
     @Bindable var doc: DeskDoc
-    @State private var custom: Set<String> = []
+    @State private var tvs = ClubTVs()
+    @State private var picked: String?
+    @State private var adding = false
 
-    static let PLACES = ["Clubhouse", "Bar", "Grill room", "Pro shop", "Tent", "Patio", "Locker room", "Hole 7 tee", "Hole 18 green"]
-
-    private var choices: PageChoices {
-        PageChoices(flights: doc.ev.flights, p3: doc.ev.course.holes.filter { $0.par == 3 }.map(\.n), holes: doc.ev.course.holes.map(\.n),
-                    sponsors: doc.ev.sponsors.map { ($0.id, $0.name.isEmpty ? "Sponsor" : $0.name) })
-    }
-    /// the places TVs are at (more than one TV there, or any named place): "All at once" can pick one
+    /// the places the TVs are at (Show on every TV can pick one)
     private var places: [String] {
         var seen: [String] = []
         for d in doc.ev.displays where !d.place.isEmpty && !seen.contains(where: { $0.caseInsensitiveCompare(d.place) == .orderedSame }) { seen.append(d.place) }
         return seen
     }
-    /// TVs the server knows (saved): only those can be switched
-    private var saved: Set<String> { Set((doc.live?.displays ?? []).map(\.id)) }
+    private var shown: String? { picked.flatMap { p in doc.ev.displays.contains { $0.id == p } ? p : nil } ?? doc.ev.displays.first?.id }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                ClubTVsCard(doc: doc)
-                if doc.ev.displays.isEmpty { empty }
-                else {
-                    if doc.ev.displays.count > 1 {
-                        SendToManyBar(groups: places, choices: choices) { place, page, mins in
-                            let ids = place.map { g in doc.ev.displays.filter { $0.place.caseInsensitiveCompare(g) == .orderedSame && saved.contains($0.id) }.map(\.id) }
-                            send(ids.map { $0 as Any } ?? "*", page, mins, to: place.map { "the TVs at \($0)" } ?? "every TV")
+        VStack(spacing: 14) {
+            if !doc.ev.displays.isEmpty {
+                SendToManyBar(groups: places, choices: doc.pageChoices) { place, page, mins in
+                    let ids: Any = place.map { g in doc.ev.displays.filter { $0.place.caseInsensitiveCompare(g) == .orderedSame }.map(\.id) } ?? "*"
+                    sendToTVs(doc, ids, page, mins, to: place.map { "the TVs at \($0)" } ?? "every TV")
+                }
+            }
+            HStack(alignment: .top, spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("TVS AT THE CLUB").font(.system(size: 11, weight: .bold)).tracking(0.6).foregroundStyle(FC.muted).padding(.leading, 4)
+                        TVList(doc: doc, add: { adding = true }) { d in
+                            Button { picked = d.id } label: {
+                                TVRow(display: d, online: doc.live?.online[d.id] ?? 0, force: doc.live?.live.force[d.id], choices: doc.pageChoices, selected: d.id == shown)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        Text("A TV you add once shows every tournament at the club. What it shows is picked for each tournament.")
+                            .font(.system(size: 12)).foregroundStyle(FC.muted).padding(.horizontal, 4)
+                    }
+                    .padding(16)
+                }
+                .frame(width: 350)
+                Rectangle().fill(FC.line).frame(width: 1)
+                ScrollView {
+                    Group {
+                        if let id = shown { TVDetail(doc: doc, tvs: tvs, id: id) { picked = nil }.id(id) }
+                        else {
+                            VStack(spacing: 12) {
+                                Image(systemName: "tv").font(.system(size: 40)).foregroundStyle(FC.muted)
+                                Text("No TVs yet").font(FC.display(32))
+                                Text("Add each TV at the club once. It shows this tournament, and every one after it.")
+                                    .font(.system(size: 14)).foregroundStyle(FC.muted).multilineTextAlignment(.center).frame(maxWidth: 420)
+                                Button("Add a TV") { adding = true }.buttonStyle(GreenButton()).controlSize(.large)
+                            }
+                            .frame(maxWidth: .infinity).padding(.top, 50)
                         }
                     }
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 500, maximum: 760), spacing: 16, alignment: .top)], spacing: 16) {
-                        ForEach($doc.ev.displays) { $d in card($d) }
-                    }
-                    HStack { Spacer(); Button { addTV() } label: { Label("Add Another TV", systemImage: "plus") }.buttonStyle(PlainCardButton()) }
+                    .padding(22).frame(maxWidth: 720, alignment: .leading).frame(maxWidth: .infinity)
                 }
             }
-            .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 22)
+            .background(FC.paper, in: RoundedRectangle(cornerRadius: 12))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .raisedCard()
         }
-    }
-
-    private var empty: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "tv").font(.system(size: 40)).foregroundStyle(FC.muted)
-            Text("No TVs yet").font(FC.display(32))
-            Text("Add each TV at the club. You’ll pick what it shows, and we’ll show you how to put Flagcast on it.")
-                .font(.system(size: 14)).foregroundStyle(FC.muted).multilineTextAlignment(.center).frame(maxWidth: 420)
-            Button("Add Your First TV") { addTV() }.buttonStyle(GreenButton()).controlSize(.large)
+        .padding(.horizontal, 20).padding(.top, 4).padding(.bottom, 22)
+        .task { await tvs.load(doc); while !Task.isCancelled { try? await Task.sleep(for: .seconds(60)); await tvs.load(doc) } }
+        .sheet(isPresented: $adding) {
+            AddTVFlow(doc: doc, tvs: tvs) { id in adding = false; if let id { picked = id } }.frame(width: 600, height: 640)
         }
-        .padding(36).frame(maxWidth: .infinity).raisedCard()
-    }
-
-    private func addTV() {
-        doc.ev.displays.append(Display(name: "TV \(doc.ev.displays.count + 1)", playlist: ShowTile.mix.pages))
-    }
-
-    private func card(_ d: Binding<Display>) -> some View {
-        let id = d.wrappedValue.id, isSaved = saved.contains(id)
-        let place = Binding<String>(get: { d.wrappedValue.place }, set: { d.wrappedValue.place = $0; d.wrappedValue.group = $0 })   // TVs in one place go together
-        return ScreenCard(name: d.wrappedValue.name, online: doc.live?.online[id] ?? 0, force: doc.live?.live.force[id], playlist: d.wrappedValue.playlist,
-                          url: URL(string: "\(doc.boardURL.absoluteString)?screen=\(id)"), choices: choices,
-                          send: { page, mins in
-                              if !isSaved { doc.flash("Press Save first, then you can switch this TV."); return }
-                              send(id, page, mins, to: d.wrappedValue.name.isEmpty ? "the TV" : d.wrappedValue.name)
-                          }) {
-            VStack(alignment: .leading, spacing: 2) {
-                TextField("TV name", text: d.name, prompt: Text("Name this TV")).textFieldStyle(.plain).font(FC.display(24))
-                HStack(spacing: 4) {
-                    Image(systemName: "mappin.and.ellipse").font(.system(size: 11)).foregroundStyle(FC.muted)
-                    TextField("Where is it?", text: place, prompt: Text("Where is it? (optional)")).textFieldStyle(.plain).font(.system(size: 13))
-                    Menu { ForEach(Self.PLACES + places.filter { p in !Self.PLACES.contains(p) }, id: \.self) { p in Button(p) { place.wrappedValue = p } } } label: { Image(systemName: "chevron.down") }
-                        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Pick a place")
-                }
-            }
-        } details: {
-            Divider().overlay(FC.hairline)
-            Text("What should this TV show?").font(.system(size: 14, weight: .bold))
-            ShowTiles(playlist: d.playlist)
-            DisclosureGroup(isExpanded: Binding(get: { custom.contains(id) }, set: { if $0 { custom.insert(id) } else { custom.remove(id) } })) {
-                PlaylistEditor(playlist: d.playlist, choices: choices,
-                               others: doc.ev.displays.filter { $0.id != id }.map { ($0.id, $0.name) },
-                               copyTo: { ids in
-                                   let list = d.wrappedValue.playlist
-                                   for i in doc.ev.displays.indices where ids.contains(doc.ev.displays[i].id) { doc.ev.displays[i].playlist = list }
-                                   doc.flash("Copied. Press Save to put it on those TVs.")
-                               })
-                .padding(.top, 6)
-                HStack {
-                    Spacer()
-                    if d.wrappedValue.tv {
-                        Text("Club TV: remove it under Club TVs").font(.caption).foregroundStyle(FC.muted)
-                    } else {
-                        Button(role: .destructive) { doc.ev.displays.removeAll { $0.id == id } } label: { Label("Remove This TV", systemImage: "trash") }
-                            .buttonStyle(.borderless).controlSize(.small)
-                    }
-                }
-            } label: { Text("Customize…").font(.system(size: 12, weight: .semibold)).foregroundStyle(FC.link) }
-            if !isSaved { Label("New TV: press Save to switch it on.", systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(FC.muted) }
-        }
-    }
-
-    /// display: an id, a list of ids or "*"; page nil = back to normal
-    private func send(_ display: Any, _ page: PageRef?, _ mins: Int, to: String) {
-        if let ids = display as? [Any], ids.isEmpty { doc.flash("No saved TVs there yet."); return }
-        var b: [String: Any] = ["display": display, "page": page.map { ["k": $0.k, "fl": $0.fl, "hole": $0.hole, "sponsor": $0.sponsor] as [String: Any] } ?? NSNull()]
-        if page != nil, mins > 0 { b["mins"] = mins }
-        let done = page == nil ? "\(to.prefix(1).uppercased() + to.dropFirst()) is back to normal." : mins > 0 ? "On \(to) for \(mins) minutes." : "On \(to) until you switch back."
-        Task { await doc.day("screen", b, done: done) }
     }
 }
-

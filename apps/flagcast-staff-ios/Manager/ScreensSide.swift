@@ -2,7 +2,7 @@ import SwiftUI
 import PhotosUI
 import WebKit
 
-// Screens & sponsors, the Mac's "Sponsors & more": beside the TVs on a wide iPad, under its own tab on iPhone.
+// Screens & sponsors besides the TVs: a page each on iPhone ("On the TVs"), a tab each on a wide iPad.
 // The board as it is now, the announcement, sponsors, the big screens, par 3 cameras and replays, and fundraising.
 // Everything here is the Mac's: the same tournament fields (saved with Save) and the same day-of calls.
 
@@ -12,26 +12,33 @@ let SPONSOR_SPOTS: [(String, String)] = [("title", "Title sponsor (every screen)
                                          ("ace", "Hole in one sponsor"), ("slide", "Own slide on the screens")]
 func sponsorSpotName(_ k: String) -> String { SPONSOR_SPOTS.first { $0.0 == k }?.1 ?? "Own slide on the screens" }
 
-struct ScreensSide: View {
-    @Bindable var doc: DeskDoc
-    var body: some View {
-        BoardCard(doc: doc)
-        AnnouncementCard(doc: doc)
-        SponsorsCard(doc: doc)
-        BigScreensCard(doc: doc)
-        CamerasCard(doc: doc)
-        FundCard(doc: doc)
+/// The parts of Screens besides the TVs, each on its own page (iPhone) or tab (iPad).
+enum ScreensPart: String, CaseIterable, Identifiable {
+    case sponsors, announcement, cameras, fund, look
+    var id: String { rawValue }
+    var title: String { switch self { case .sponsors: "Sponsors"; case .announcement: "Announcement"; case .cameras: "Cameras & replays"; case .fund: "Fundraising"; case .look: "How the TVs look" } }
+    var short: String { switch self { case .cameras: "Cameras"; case .look: "Look"; default: title } }
+    var icon: String { switch self { case .sponsors: "star.fill"; case .announcement: "megaphone.fill"; case .cameras: "video.fill"; case .fund: "heart.fill"; case .look: "slider.horizontal.3" } }
+    var color: Color { switch self { case .sponsors: FC.flag; case .announcement: FC.blue; case .cameras: FC.red; case .fund: FC.ok; case .look: FC.muted } }
+    @MainActor @ViewBuilder func view(_ doc: DeskDoc) -> some View {
+        switch self {
+        case .sponsors: SponsorsCard(doc: doc)
+        case .announcement: AnnouncementCard(doc: doc)
+        case .cameras: CamerasCard(doc: doc)
+        case .fund: FundCard(doc: doc)
+        case .look: BoardCard(doc: doc); BigScreensCard(doc: doc)
+        }
     }
 }
 
 // MARK: - the board, live
 
 /// The board link as it is right now (what a TV shows without its own pages), with the club's logo and colour.
-private struct BoardCard: View {
+struct BoardCard: View {
     let doc: DeskDoc
     @Environment(\.openURL) private var openURL
     var body: some View {
-        CardBox(title: "On the board now", footer: "This is the board link, live. Each TV shows its own pages: pick them on the TV’s card.") {
+        CardBox(title: "On the board now", footer: "This is the board link, live. Each TV shows its own pages: pick them on the TV’s page.") {
             VStack(alignment: .leading, spacing: 12) {
                 BoardPreview(url: doc.boardURL, brand: doc.live?.brand, club: doc.ev.club)
                 HStack(spacing: 8) {
@@ -114,7 +121,7 @@ private struct BoardWeb: UIViewRepresentable {
 
 // MARK: - announcement
 
-private struct AnnouncementCard: View {
+struct AnnouncementCard: View {
     let doc: DeskDoc
     @State private var text = ""
     var body: some View {
@@ -137,7 +144,7 @@ private struct AnnouncementCard: View {
 
 private struct SponsorID: Identifiable { let id: String }
 
-private struct SponsorsCard: View {
+struct SponsorsCard: View {
     @Bindable var doc: DeskDoc
     @State private var editing: SponsorID?
     var body: some View {
@@ -312,7 +319,7 @@ enum SponsorLogoPrep {
 
 // MARK: - the big screens
 
-private struct BigScreensCard: View {
+struct BigScreensCard: View {
     @Bindable var doc: DeskDoc
     var body: some View {
         CardBox(title: "Big screens") {
@@ -333,7 +340,7 @@ private struct BigScreensCard: View {
 // MARK: - par 3 cameras and replays
 
 /// Whether each par 3 has a camera (Flagcast sets them up; the feeds themselves stay with Flagcast staff), and replays.
-private struct CamerasCard: View {
+struct CamerasCard: View {
     let doc: DeskDoc
     @State private var replay = ReplayDraft()
     @State private var goingLive = false
@@ -420,7 +427,7 @@ private struct ReplayDraft { var hole = 0; var label = ""; var url = "" }
 
 // MARK: - fundraising
 
-private struct FundCard: View {
+struct FundCard: View {
     @Bindable var doc: DeskDoc
     @State private var raised = ""
     private func money(_ v: Double) -> String { v.formatted(.currency(code: "USD").precision(.fractionLength(0))) }

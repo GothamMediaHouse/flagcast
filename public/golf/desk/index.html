@@ -77,6 +77,51 @@ section[hidden] { display: none; }
 @media (max-width: 900px) { .pinwrap { grid-template-columns: 1fr; } .pined { position: static; } }
 @media print { body.pinprint .side, body.pinprint #hero, body.pinprint .pined, body.pinprint .pinbar { display: none !important; } body.pinprint main > section { box-shadow: none; margin: 0; } }
 
+.stabs { display: flex; gap: 4px; flex-wrap: wrap; background: var(--paper-2, #e6eae1); border-radius: 9px; padding: 3px; margin: 0 0 16px; width: max-content; max-width: 100%; }
+.stabs button { all: unset; cursor: pointer; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 7px; color: var(--muted); }
+.stabs button[aria-selected="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.stabs .n:empty, .stabs .lv:empty { display: none; }
+.stabs .n { font-size: 11px; background: var(--paper-2, #e6eae1); border-radius: 8px; padding: 0 6px; margin-left: 5px; }
+.stabs .lv { font-size: 10px; font-weight: 800; color: #c8312b; margin-left: 5px; }
+.tvwrap { display: grid; grid-template-columns: 340px 1fr; gap: 18px; align-items: start; }
+@media (max-width: 860px) { .tvwrap { grid-template-columns: 1fr; } }
+.tvlist { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--card); }
+.tvrow { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 11px; width: 100%; padding: 8px 12px; border-bottom: 1px solid var(--line); min-height: 54px; }
+.tvrow[aria-current="true"] { background: var(--paper-2, #e6eae1); box-shadow: inset 3px 0 0 #123628; }
+.tvrow .tx { flex: 1; min-width: 0; } .tvrow b { display: block; font-size: 14.5px; } .tvrow small { display: block; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tvpic { flex: none; width: 60px; height: 38px; border-radius: 7px; background: linear-gradient(135deg, #1c4a37, #123628); color: #eef3ec; display: grid; place-items: center; font: 700 10px/1.1 var(--f-display, inherit); text-align: center; text-transform: uppercase; position: relative; }
+.tvpic.off { filter: grayscale(.6) brightness(.55); }
+.tvpic.big { width: 100%; height: 170px; border-radius: 14px; font-size: 28px; text-transform: none; }
+.tvpic.big small { display: block; font: 400 12px var(--f-body, inherit); color: #a9bdb0; margin-top: 4px; }
+.tvpic .tag { position: absolute; top: 10px; left: 10px; font: 800 10px var(--f-body, inherit); letter-spacing: .08em; padding: 2px 7px; border-radius: 8px; background: #2f8a57; color: #fff; }
+.tvpic.off .tag { background: rgba(0,0,0,.6); }
+.tvdot { width: 8px; height: 8px; border-radius: 50%; background: #2f8a57; flex: none; } .tvdot.off { background: var(--line); }
+.tvaddrow { all: unset; cursor: pointer; display: block; padding: 14px; font-weight: 600; color: #1c4a37; }
+.tvpage h3 { margin: 0; font: 700 30px/1.1 var(--f-display, inherit); } .tvpage .sub { color: var(--muted); font-size: 13px; margin: 2px 0 12px; }
+.showtiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.showtiles button { all: unset; cursor: pointer; box-sizing: border-box; text-align: center; padding: 10px 4px; border-radius: 11px; background: var(--paper-2, #e6eae1); font-size: 13px; font-weight: 600; border: 2px solid transparent; }
+.showtiles button small { display: block; font-size: 10px; font-weight: 400; opacity: .75; }
+.showtiles button[aria-pressed="true"] { background: #123628; color: #eef3ec; border-color: #e8c547; }
+.tvopts { border: 1px solid var(--line); border-radius: 12px; background: var(--card); margin-top: 14px; }
+.tvopts > div { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); min-height: 28px; }
+.tvopts > div:last-child { border-bottom: 0; } .tvopts > div > span { flex: 1; font-weight: 600; font-size: 14px; } .tvopts small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; }
+.tvopts select { width: auto; }
+dialog#addtv { border: 0; border-radius: 14px; padding: 22px 24px; width: min(560px, calc(100vw - 32px)); background: var(--paper, #f2f4ef); color: var(--ink); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+dialog#addtv::backdrop { background: rgba(0,0,0,.3); }
+.atvhead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; } .atvhead b { font-size: 16px; }
+.atvsteps { display: flex; gap: 5px; margin-bottom: 16px; } .atvsteps i { flex: 1; height: 4px; border-radius: 2px; background: var(--line); } .atvsteps i.on { background: #123628; }
+.atvq { font: 700 26px/1.15 var(--f-display, inherit); margin: 0 0 4px; } .atvs { color: var(--muted); font-size: 14px; margin: 0 0 14px; }
+.kinds { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 9px; }
+.kinds button { all: unset; cursor: pointer; box-sizing: border-box; text-align: center; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 8px; }
+.kinds button i { display: block; font-style: normal; font-size: 26px; margin-bottom: 4px; } .kinds button b { display: block; font-size: 14px; } .kinds button small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+.kinds button:hover { border-color: #123628; }
+.tvshot { width: 210px; height: 112px; margin: 4px auto 16px; border-radius: 6px; background: #123628; border: 6px solid #222; color: #a9bdb0; text-align: center; font-size: 10px; padding-top: 20px; box-sizing: border-box; }
+.tvshot b { display: block; font: 700 24px var(--f-mono); letter-spacing: 4px; color: #e8c547; margin-top: 6px; }
+#atvCode { font: 700 30px var(--f-mono); letter-spacing: .4em; text-align: center; text-transform: uppercase; max-width: 300px; display: block; margin: 0 auto; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 14px; }
+.chips button { all: unset; cursor: pointer; font-size: 13px; padding: 6px 11px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); }
+.chips button[aria-pressed="true"] { background: #123628; color: #eef3ec; border-color: #123628; }
+.linkbtn { all: unset; cursor: pointer; color: #1c4a37; font-weight: 600; font-size: 13px; }
 h2 { font-size: 1.8rem; margin: 6px 0 14px; }
 h3 { font-size: 1.2rem; margin: 22px 0 10px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
@@ -278,6 +323,19 @@ table.t .n { width: 64px; }
 
 <section id="s-screens" hidden>
   <h2>Screens and sponsors</h2>
+  <div class="stabs" id="stabs" role="tablist" aria-label="Screens">
+    <button role="tab" data-st="tvs">TVs<span class="n" id="stabN"></span></button><button role="tab" data-st="sponsors">Sponsors</button><button role="tab" data-st="announce">Announcement</button>
+    <button role="tab" data-st="cams">Cameras &amp; replays<span class="lv" id="stabLive"></span></button><button role="tab" data-st="fund">Fundraising</button><button role="tab" data-st="look">How the TVs look</button>
+  </div>
+  <div data-sp="tvs">
+    <div class="row" style="margin-top:0;margin-bottom:14px"><b id="tvsOn"></b><span style="flex:1"></span>
+      <button class="btn" id="allNormal">Back to normal</button>
+      <select id="allPage" aria-label="What to show on every TV" style="width:auto"></select><select id="allMins" aria-label="For how long" style="width:auto"><option value="5">For 5 minutes</option><option value="15">For 15 minutes</option><option value="0">Until I switch back</option></select>
+      <button class="btn primary" id="allShow">Show on every TV</button></div>
+    <div class="tvwrap"><div><div class="tvlist" id="tvlist"></div><p class="help">A TV you add once shows every tournament at the club. What it shows is picked for each tournament. TVs save as you change them.</p></div><div class="tvpage" id="tvpage"></div></div>
+  </div>
+  <div data-sp="look" hidden>
+  <p class="help">For every TV in this tournament. Press Save to put it on them.</p>
   <div class="grid">
     <label class="f">Title on the screens<input id="f-title" placeholder="Uses the tournament name"></label>
     <label class="f">Seconds on each page<input id="f-secs" type="number" min="5" max="60"></label>
@@ -285,20 +343,29 @@ table.t .n { width: 64px; }
     <label class="f">Show gross skins<select id="f-skins"><option value="">No</option><option value="1">Yes</option></select></label>
   </div>
   <label class="f" style="margin-top:14px">Ticker text along the bottom<input id="f-ticker" placeholder="Lunch is served at the turn. Awards at 3 PM in the tent."></label>
-  <h3>Announcement</h3>
+  </div>
+  <div data-sp="announce" hidden>
+  <h3 style="margin-top:0">Announcement</h3>
+  <p class="help">Shows across every TV and on golfers’ phones until you clear it.</p>
   <div class="row" style="margin-top:0"><input id="flash" placeholder="Shotgun start in 10 minutes" style="max-width:520px"><button class="btn dark" id="flashGo">Show on every screen now</button></div>
-  <h3>Cameras for players</h3>
+  </div>
+  <div data-sp="cams" hidden>
+  <h3 style="margin-top:0">Cameras for players</h3>
   <p class="help">Cameras are set up by Flagcast, and a golf pro can go live from an iPhone. Choose which ones golfers see on the Cameras tab of the app and the live leaderboard. Pick “Par 3 camera” for a screen, or route any camera to a TV from the Manager’s Screens.</p>
   <div id="cams" class="camlist" style="margin-top:10px"></div>
   <h3>Replays</h3>
   <p class="help">Players watch replays on their phones (Latest replays on the Cameras tab, and under each camera), and you can put one on every screen. Groups can also save their own shot on camera holes. Save replay plays the hole’s camera back from 25 seconds before you press it, so the camera’s HLS link must keep a recording window (DVR). Or paste a clip link (.mp4 or .m3u8), for example from a replay system. Golf pros and marshals can save replays from the Flagcast app too.</p>
   <div class="row" style="margin-top:0;flex-wrap:wrap"><select id="rHole"></select><input id="rLabel" maxlength="80" placeholder="Who and what (Dana Ruiz, 3 feet!)" style="max-width:300px"><input id="rUrl" placeholder="Clip link, optional" style="max-width:260px"><button class="btn dark" id="rSave">Save replay</button><button class="btn" id="rSaveShow">Save and show on screens</button></div>
   <div id="replays" class="help" style="margin-top:8px"></div>
-  <h3>Sponsors</h3>
+  </div>
+  <div data-sp="sponsors" hidden>
+  <h3 style="margin-top:0">Sponsors</h3>
   <p class="help">Pick where each sponsor shows. Hole, camera and contest spots use the hole numbers. The link and offer show on the players’ phones, and taps are counted for the report. Logos are small pictures (PNG or JPG, under 140 KB).</p>
   <div id="sponsors" style="margin-top:10px"></div>
   <div class="row"><button class="btn" id="addSponsor">Add sponsor</button></div>
-  <h3>Fundraising</h3>
+  </div>
+  <div data-sp="fund" hidden>
+  <h3 style="margin-top:0">Fundraising</h3>
   <div class="grid">
     <label class="f">Show the total on the screens<select id="f-fund"><option value="">No</option><option value="1">Yes</option></select></label>
     <label class="f">Heading<input id="f-fundLabel" placeholder="Raised for the foundation today"></label>
@@ -306,24 +373,17 @@ table.t .n { width: 64px; }
     <label class="f">Giving link (https)<input id="f-give" placeholder="https://"></label>
   </div>
   <div class="row"><label class="f" style="max-width:220px">Raised so far ($)<input id="raised" type="number" min="0"></label><button class="btn dark" id="raisedGo" style="align-self:end">Update the total</button></div>
+  </div>
+  <dialog id="addtv" aria-label="Add a TV"><div id="atv"></div></dialog>
 </section>
 
 <section id="s-staff" hidden>
-  <h2>Staff and playlists</h2>
+  <h2>Staff and schedule</h2>
   <h3>Golf pros and marshals</h3>
   <p class="help">They sign in to the Flagcast app with the tournament code and their PIN. A golf pro can fix scores, switch screens, take over the screens and nudge a cart. A marshal can only post contest results.</p>
   <div class="card2"><span class="label">Tournament code</span><div class="big-code" id="evcode"></div></div>
   <div id="staff"></div>
   <div class="row"><button class="btn" id="addPro">Add golf pro</button><button class="btn" id="addMarshal">Add marshal</button></div>
-  <h3>Club TVs</h3>
-  <p class="help">TVs with the Flagcast TV app (Apple TV, Google TV, Fire TV, Roku), or any TV’s browser at flagcast.app/tv. Open it on the TV and type the code it shows. A club TV shows the tournament of the day by itself, so you only add it once. Each one also gets a screen below, where you pick what it shows in this tournament.</p>
-  <div id="tvs"><p class="help">Loading…</p></div>
-  <div class="row" id="tvadd"><input id="tvcode" placeholder="TV code" maxlength="6" autocomplete="off" style="text-transform:uppercase;letter-spacing:.2em;font-family:var(--f-mono);width:9rem" aria-label="TV code">
-    <input id="tvname" placeholder="Name, like Clubhouse bar" maxlength="40" aria-label="TV name"><button class="btn primary" id="addTV">Add a TV</button></div>
-  <h3>Screens at the club</h3>
-  <p class="help">Add each TV or LED wall and pick what it plays, in order. Open its link full screen on that TV. A screen with an empty list shows everything.</p>
-  <div id="displays"></div>
-  <div class="row"><button class="btn" id="addDisplay">Add screen</button></div>
   <h3>Schedule</h3>
   <p class="help">Shows on the Schedule page of the screens.</p>
   <div id="schedule"></div>
@@ -593,8 +653,8 @@ function read() {
   EV.screens = { title: val('f-title'), seconds: Number($('f-secs').value) || 12, rows: Number($('f-rows').value) || 10, skins: !!$('f-skins').value, ticker: val('f-ticker') };
   EV.fund = { ...EV.fund, on: !!$('f-fund').value, label: val('f-fundLabel'), goal: Number($('f-goal').value) || 0, give: val('f-give') };
 }
-document.addEventListener('input', (e) => { if (e.target.closest('#s-setup, #s-teams, #s-screens, #s-contests') && !e.target.closest('.entries') && !['flash', 'raised', 'paste', 'cq'].includes(e.target.id)) setDirty(); });
-document.addEventListener('change', (e) => { if (e.target.closest('#s-setup, #s-teams, #s-screens, #s-contests') && !e.target.closest('.entries, #cams') && !['flash', 'raised'].includes(e.target.id)) { readTables(); setDirty(); } });
+document.addEventListener('input', (e) => { if (e.target.closest('#s-setup, #s-teams, #s-screens, #s-contests') && !e.target.closest('.entries, [data-sp="tvs"], #addtv') && !['flash', 'raised', 'paste', 'cq'].includes(e.target.id)) setDirty(); });
+document.addEventListener('change', (e) => { if (e.target.closest('#s-setup, #s-teams, #s-screens, #s-contests') && !e.target.closest('.entries, #cams, [data-sp="tvs"], #addtv') && !['flash', 'raised'].includes(e.target.id)) { readTables(); setDirty(); } });
 
 function drawCourse() {
   const H = EV.course.holes;
@@ -982,96 +1042,292 @@ $('replays').addEventListener('click', async (e) => {
 $('flashGo').onclick = async () => { try { await desk('flash', { text: val('flash') }); toast(val('flash') ? 'Showing on every screen.' : 'Cleared.'); $('flash').value = ''; } catch (e) { toast(e.message); } };
 $('raisedGo').onclick = async () => { try { await desk('fund', { raised: Number($('raised').value) || 0 }); EV.fund.raised = Number($('raised').value) || 0; toast('Total updated on the screens.'); } catch (e) { toast(e.message); } };
 
-// ---- staff, screens and schedule (changed straight in EV) ----
+// ---- staff and schedule (changed straight in EV) ----
 const PAGE_NAMES = { lb: 'Leaderboard', p3: 'Par 3 camera', contests: 'Contests', skins: 'Skins', fund: 'Fundraising', sponsors: 'All sponsors', sponsor: 'One sponsor', schedule: 'Schedule' };
 const pinGen = () => { let p; do p = String(100000 + crypto.getRandomValues(new Uint32Array(1))[0] % 900000); while ((EV.pins || []).some((x) => x.pin === p)); return p; };
 function drawStaff() {
   EV.pins = EV.pins || []; EV.displays = EV.displays || []; EV.schedule = EV.schedule || [];
   $('evcode').textContent = eventId().toUpperCase();
-  drawCodes();
+  drawCodes(); drawTVs();
   $('staff').innerHTML = EV.pins.map((x, i) => `<div class="staff"><input data-pin="${i}" data-pk="name" value="${esc(x.name)}" placeholder="Name"><select data-pin="${i}" data-pk="role"><option value="pro" ${x.role === 'pro' ? 'selected' : ''}>Golf pro</option><option value="marshal" ${x.role === 'marshal' ? 'selected' : ''}>Marshal</option></select><input data-pin="${i}" data-pk="pin" class="mono" value="${esc(x.pin)}" inputmode="numeric" maxlength="8" aria-label="PIN"><button class="btn danger" data-delpin="${i}">Remove</button></div>`).join('') || '<p class="help">No one yet.</p>';
-  const base = `${location.origin}/g/${eventId()}/board?screen=`;
-  const p3 = EV.course.holes.filter((h) => h.par === 3);
-  $('displays').innerHTML = EV.displays.map((d, i) => `<div class="card2" data-d="${i}"><div class="grid"><label class="f">Screen name<input data-dk="name" value="${esc(d.name)}" placeholder="Grill room TV"></label>
-    <div class="f">Link for this screen<div class="row" style="margin:0"><code class="mono" style="font-size:.8rem;overflow-wrap:anywhere">${esc(base + d.id)}</code><button class="btn" data-copy="${esc(base + d.id)}">Copy</button><a class="btn" href="${esc(base + d.id)}" target="_blank" rel="noopener">Open</a></div></div></div>
-    <div class="pls">${d.playlist.map((it, k) => `<div class="pli"><span class="n">${k + 1}</span><select data-pl="${k}" data-pk="k">${Object.entries(PAGE_NAMES).map(([v, l]) => `<option value="${v}" ${it.k === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
-      ${it.k === 'lb' ? `<input data-pl="${k}" data-pk="fl" value="${esc(it.fl || '')}" placeholder="Flight (empty for all)">` : it.k === 'p3' ? `<select data-pl="${k}" data-pk="hole">${p3.map((h) => `<option value="${h.n}" ${it.hole === h.n ? 'selected' : ''}>Hole ${h.n}</option>`).join('')}</select>` : it.k === 'sponsor' ? `<select data-pl="${k}" data-pk="sponsor">${EV.sponsors.map((x) => `<option value="${x.id}" ${it.sponsor === x.id ? 'selected' : ''}>${esc(x.name || 'Sponsor')}</option>`).join('')}</select>` : '<span></span>'}
-      <label class="f" style="grid-template-columns:auto 1fr;align-items:center">Secs<input data-pl="${k}" data-pk="secs" type="number" min="4" max="300" value="${it.secs || 12}"></label>
-      <button class="btn" data-plmove="${k}" data-dir="-1" title="Move up" ${k ? '' : 'disabled'}>↑</button><button class="btn" data-plmove="${k}" data-dir="1" title="Move down" ${k < d.playlist.length - 1 ? '' : 'disabled'}>↓</button><button class="btn danger" data-pldel="${k}">✕</button></div>`).join('') || '<p class="help">Empty: this screen shows everything.</p>'}</div>
-    <div class="row"><button class="btn" data-pladd="1">Add page</button>${d.tv ? '<span class="help" style="margin:0">Club TV: remove it under Club TVs</span>' : `<button class="btn danger" data-deld="${i}">Remove screen</button>`}</div></div>`).join('') || '<p class="help">No screens yet.</p>';
   $('schedule').innerHTML = EV.schedule.map((x, i) => `<div class="sched"><input data-sc="${i}" data-sk2="time" value="${esc(x.time)}" placeholder="9:00 AM"><input data-sc="${i}" data-sk2="what" value="${esc(x.what)}" placeholder="Shotgun start"><button class="btn danger" data-delsc="${i}">Remove</button></div>`).join('') || '<p class="help">Nothing yet.</p>';
 }
-// the club's TVs (tv.js): kept by the club, not saved with this tournament
+// ---- the TVs (Screens → TVs): one list, the picked TV's page beside it, and Add a TV. A TV saves as it changes (desk op
+// tvset), so TVs aren't part of Save. A club TV (connected with the code it shows) is the club's: it joins every
+// tournament by itself, and its name and place are kept in the club's TV list (tv.js).
 const KINDS = { appletv: 'Apple TV', androidtv: 'Google TV', firetv: 'Fire TV', roku: 'Roku', web: 'TV browser' };
-let TVS = null;
+const ADD_KINDS = [
+  { k: 'appletv', t: 'Apple TV', i: '', get: 'With the Flagcast TV app', open: 'On the Apple TV, open Flagcast TV.', name: 'Apple TV' },
+  { k: 'google', t: 'Google TV or Fire TV', i: '▶︎', get: 'With the Flagcast TV app', open: 'On the TV, open Flagcast TV.', name: 'Google TV' },
+  { k: 'roku', t: 'Roku', i: '◼︎', get: 'With the Flagcast TV app', open: 'On the Roku, open Flagcast TV.', name: 'Roku' },
+  { k: 'web', t: 'Smart TV or computer', i: '🌐', get: 'Open flagcast.app/tv in its web browser', open: 'In the TV’s web browser, go to flagcast.app/tv.', name: 'TV' },
+];
+const SHOW = [
+  { k: 'mix', t: 'Mix', n: 'Recommended', pages: [['lb', 15], ['p3', 20], ['sponsors', 8]] },
+  { k: 'leaderboard', t: 'Leaderboard', n: 'Scores only', pages: [['lb', 20]] },
+  { k: 'camera', t: 'Par 3 camera', n: 'The live hole', pages: [['p3', 30]] },
+  { k: 'sponsors', t: 'Sponsors', n: 'Logos, in turn', pages: [['sponsors', 10]] },
+  { k: 'contests', t: 'Contests', n: 'Closest & longest', pages: [['contests', 15]] },
+];
+const showPages = (t) => t.pages.map(([k, secs]) => ({ k, fl: '', hole: 0, sponsor: '', secs }));
+const tileOf = (pl = []) => SHOW.find((t) => t.pages.length === pl.length && t.pages.every(([k], i) => pl[i].k === k && !pl[i].fl && !pl[i].hole && !pl[i].sponsor));
+const TV_PLACES = ['Clubhouse', 'Bar', 'Grill room', 'Pro shop', 'Tent', 'Patio', 'Locker room', 'Hole 7 tee', 'Hole 18 green'];
+const tvPlaces = () => { const all = [...TV_PLACES]; for (const d of EV.displays || []) if (d.where && !all.some((p) => p.toLowerCase() === d.where.toLowerCase())) all.push(d.where); return all; };
+const SEND_PAGES = [['lb', 'Leaderboard'], ['p3', 'Par 3 camera'], ['contests', 'Contests'], ['sponsors', 'Sponsors'], ['fund', 'Fundraising'], ['schedule', 'Schedule'], ['skins', 'Skins']];
+let TVS = null, PICK = null, STAB = 'tvs';
+const tvOnline = (id) => (LIVE?.online?.[id] || 0) > 0;
+const tvForce = (id) => { const f = LIVE?.live?.force?.[id]; return f && (!f.until || f.until > Date.now()) ? f : null; };
+const tvURL = (id) => `${location.origin}/g/${eventId()}/board?screen=${id}`;
+function pageLabel(p) {
+  const n = PAGE_NAMES[p.k] || SEND_PAGES.find(([k]) => k === p.k)?.[1] || p.k;
+  if (p.k === 'lb' && p.fl) return `${n} · Flight ${p.fl}`;
+  if (p.k === 'p3') return p.hole ? `Par 3 camera · Hole ${p.hole}` : 'Par 3 cameras';
+  if (p.k === 'cam') return p.hole ? `Camera · Hole ${p.hole}` : 'Cameras';
+  if (p.k === 'sponsor') return `Sponsor · ${(EV.sponsors || []).find((x) => x.id === p.sponsor)?.name || 'one sponsor'}`;
+  return n;
+}
+function tvLine(d) {
+  let what;
+  if (!tvOnline(d.id)) what = 'Off · set it up';
+  else { const f = tvForce(d.id); what = f ? pageLabel(f) + (f.until ? `, ${Math.max(1, Math.round((f.until - Date.now()) / 60000))} more min` : '') : picText(d); }
+  return [d.where, what].filter(Boolean).join(' · ');
+}
+function picText(d) { const f = tvForce(d.id); return f ? pageLabel(f) : tileOf(d.playlist)?.t || (d.playlist.length ? 'Own mix' : 'Everything'); }
+function setStab(t) {
+  STAB = t;
+  for (const b of $('stabs').querySelectorAll('[data-st]')) b.setAttribute('aria-selected', b.dataset.st === t);
+  for (const el of $('s-screens').querySelectorAll('[data-sp]')) el.hidden = el.dataset.sp !== t;
+}
+$('stabs').addEventListener('click', (e) => { const b = e.target.closest('[data-st]'); if (b) setStab(b.dataset.st); });
+setStab('tvs');
+$('allPage').innerHTML = SEND_PAGES.map(([k, l]) => `<option value="${k}">${l}</option>`).join('');
+function drawTVs() { if (!EV) return; drawTVList(); if (!$('tvpage').contains(document.activeElement)) drawTVPage(); }
+function drawTVList() {
+  if (!EV) return;
+  const ds = EV.displays || [], on = ds.filter((d) => tvOnline(d.id)).length;
+  $('stabN').textContent = ds.length || ''; $('stabLive').textContent = Object.keys(LIVE?.golive || {}).length ? 'LIVE' : '';
+  $('tvsOn').textContent = ds.length ? `${on} of ${ds.length} TV${ds.length === 1 ? '' : 's'} on` : 'No TVs yet';
+  for (const id of ['allNormal', 'allShow']) $(id).disabled = !ds.length;
+  if (!ds.some((d) => d.id === PICK)) PICK = ds[0]?.id || null;
+  $('tvlist').innerHTML = ds.map((d) => `<button class="tvrow" data-tvpick="${esc(d.id)}" aria-current="${d.id === PICK}">
+    <span class="tvpic${tvOnline(d.id) ? '' : ' off'}">${esc(picText(d))}</span><span class="tx"><b>${esc(d.name || 'TV')}</b><small>${esc(tvLine(d))}</small></span>
+    <span class="tvdot${tvOnline(d.id) ? '' : ' off'}" aria-label="${tvOnline(d.id) ? 'On' : 'Off'}"></span></button>`).join('')
+    + '<button class="tvaddrow" id="tvAdd">+ Add a TV</button>';
+}
+function drawTVPage() {
+  const d = (EV.displays || []).find((x) => x.id === PICK);
+  if (!d) { $('tvpage').innerHTML = '<div style="text-align:center;padding:40px 10px"><h3 style="font:700 30px var(--f-display)">No TVs yet</h3><p class="help" style="margin:8px auto 14px">Add each TV at the club once. It shows this tournament, and every one after it.</p><button class="btn primary" id="tvAdd2">Add a TV</button></div>'; return; }
+  const club = (TVS || []).find((t) => t.id === d.id), on = tvOnline(d.id), f = tvForce(d.id), t = tileOf(d.playlist), p3 = EV.course.holes.filter((h) => h.par === 3);
+  const status = on ? (f ? `Showing ${pageLabel(f)}${f.until ? ` until ${new Date(f.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}, then back to normal` : ' until you switch back'}` : `Showing its normal: ${t?.t || 'your own mix'}`)
+    : d.tv ? 'This TV is off. Turn it on and open Flagcast TV; it comes back by itself.' : 'This TV isn’t showing Flagcast yet. Open its link on the TV.';
+  $('tvpage').innerHTML = `<h3>${esc(d.name || 'TV')}</h3><div class="sub">${esc([d.where, club ? KINDS[club.kind] || 'TV' : d.tv ? '' : 'TV browser, with its link', on ? 'on' : 'off'].filter(Boolean).join(' · '))}</div>
+    <div class="tvpic big${on ? '' : ' off'}"><span class="tag">${on ? 'ON' : 'OFF'}</span><div>${esc(picText(d))}${!f && d.playlist.length > 1 ? `<small>${esc(d.playlist.map(pageLabel).join(', then '))}</small>` : ''}</div></div>
+    <p class="help" style="margin:10px 0">${esc(status)}</p>
+    <div class="row" style="margin-top:0">${f ? '<button class="btn" data-tvnormal="1">Back to normal</button>' : ''}
+      <select data-tvsendpage aria-label="What to show" style="width:auto">${SEND_PAGES.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>
+      <select data-tvsendmins aria-label="For how long" style="width:auto"><option value="5">For 5 minutes</option><option value="15">For 15 minutes</option><option value="0">Until I switch back</option></select>
+      <button class="btn primary" data-tvsend="1">Show something else</button></div>
+    <h3 style="font:600 14px var(--f-body,inherit);margin:18px 0 8px">Normally shows</h3>
+    <div class="showtiles">${SHOW.map((x) => `<button data-tvtile="${x.k}" aria-pressed="${t === x}">${x.t}<small>${x.n}</small></button>`).join('')}</div>
+    <details style="margin-top:10px"><summary class="linkbtn">Customize…</summary>
+    <div class="pls">${d.playlist.map((it, k) => `<div class="pli"><span class="n">${k + 1}</span><select data-pl="${k}" data-pk="k">${Object.entries(PAGE_NAMES).map(([v, l]) => `<option value="${v}" ${it.k === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      ${it.k === 'lb' ? `<input data-pl="${k}" data-pk="fl" value="${esc(it.fl || '')}" placeholder="Flight (empty for all)">` : it.k === 'p3' ? `<select data-pl="${k}" data-pk="hole"><option value="0">Each in turn</option>${p3.map((h) => `<option value="${h.n}" ${it.hole === h.n ? 'selected' : ''}>Hole ${h.n}</option>`).join('')}</select>` : it.k === 'sponsor' ? `<select data-pl="${k}" data-pk="sponsor">${EV.sponsors.map((x) => `<option value="${x.id}" ${it.sponsor === x.id ? 'selected' : ''}>${esc(x.name || 'Sponsor')}</option>`).join('')}</select>` : '<span></span>'}
+      <label class="f" style="grid-template-columns:auto 1fr;align-items:center">Secs<input data-pl="${k}" data-pk="secs" type="number" min="4" max="300" value="${it.secs || 12}"></label>
+      <button class="btn" data-plmove="${k}" data-dir="-1" title="Move up" ${k ? '' : 'disabled'}>↑</button><button class="btn" data-plmove="${k}" data-dir="1" title="Move down" ${k < d.playlist.length - 1 ? '' : 'disabled'}>↓</button><button class="btn danger" data-pldel="${k}" title="Take this page off">✕</button></div>`).join('') || '<p class="help">Empty: this TV shows everything.</p>'}</div>
+    <div class="row"><button class="btn" data-pladd="1">Add a page</button>${(EV.displays || []).length > 1 ? '<button class="btn" data-plcopy="1">Copy to every other TV</button>' : ''}</div></details>
+    <div class="tvopts">
+      <div><span>Where is it?</span><select data-tvplace aria-label="Where is it?"><option value="">Pick a place</option>${tvPlaces().map((p) => `<option ${p === d.where ? 'selected' : ''}>${esc(p)}</option>`).join('')}<option value="+">Other…</option></select></div>
+      <div><span>Name</span><button class="btn" data-tvren="1">Rename</button></div>
+      ${club ? `<div><span>Always show this tournament<small>${club.event === eventId() ? 'On: shows this tournament on every day' : club.event ? `Shows ${esc(club.eventName || 'another tournament')} now` : 'Off: shows the tournament of the day'}</small></span><input type="checkbox" data-tvpin="1" ${club.event === eventId() ? 'checked' : ''} style="width:auto" aria-label="Always show this tournament"></div>` : ''}
+      ${d.tv ? '' : `<div><span>This TV’s link<small style="overflow-wrap:anywhere">${esc(tvURL(d.id))}</small></span><button class="btn" data-copy="${esc(tvURL(d.id))}">Copy</button><a class="btn" href="${esc(tvURL(d.id))}" target="_blank" rel="noopener">Open</a></div>`}
+      <div><button class="btn danger" data-tvdel="1">Remove this TV</button></div>
+    </div>`;
+}
+// one TV, saved a moment after the last change (taps and typing in a row become one save)
+const tvTimers = {};
+function saveTV(d, wait = 600) {
+  clearTimeout(tvTimers[d.id]);
+  tvTimers[d.id] = setTimeout(async () => { delete tvTimers[d.id]; try { await desk('tvset', { display: d }); } catch (e) { toast(e.message); } }, wait);
+}
+function sendTV(display, page, mins, to) {
+  return desk('screen', { display, page, ...(page && mins ? { mins } : {}) })
+    .then(() => toast(page ? (mins ? `On ${to} for ${mins} minutes.` : `On ${to} until you switch back.`) : `Back to normal: ${to}.`)).catch((e) => toast(e.message));
+}
 async function tvCall(op, b = {}) {
   const r = await fetch(`/golf/api/tv/${op}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: eventId(), key, ...b }) });
   const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'That didn’t work. Try again.'); return j;
 }
-function drawTVs() {
-  if (!TVS) return;
-  $('tvs').innerHTML = TVS.length ? TVS.map((t) => `<div class="card2" data-tv="${esc(t.id)}"><div class="row" style="margin:0;justify-content:space-between">
-    <div><b>${esc(t.name)}</b> <span class="help" style="margin:0">${esc(KINDS[t.kind] || 'TV')}${t.where ? ` · ${esc(t.where)}` : ''}${t.event ? ` · Always shows ${t.event === eventId() ? 'this tournament' : esc(t.eventName || 'another tournament')}` : ''}</span></div>
-    <div class="row" style="margin:0"><span class="pill ${t.on ? 'live' : 'off'}">${t.on ? 'On' : 'Off'}</span><button class="btn" data-tvpin="${esc(t.id)}">${t.event === eventId() ? 'Show the tournament of the day' : 'Always show this tournament'}</button><button class="btn" data-tvren="${esc(t.id)}">Rename</button><button class="btn danger" data-tvdel="${esc(t.id)}">Remove</button></div></div></div>`).join('')
-    : '<p class="help">No club TVs yet.</p>';
-}
-// the server makes every club TV one of this tournament's screens when it's asked from here: show new ones, gone ones go
+// the server makes every club TV one of this tournament's TVs when it's asked from here: new ones show, gone ones go
 async function gotTVs(j) {
-  TVS = j.tvs; drawTVs();
+  TVS = j.tvs;
   if (!EV) return;
   const have = (EV.displays || []).filter((d) => d.tv).map((d) => d.id).sort().join(), want = TVS.map((t) => t.id).sort().join();
-  if (!j.added && have === want) return;
-  const fresh = await desk('get').catch(() => null); if (!fresh) return;
-  if (!dirty) { EV = fresh; fill(); return; }
-  EV.displays = EV.displays.filter((d) => !d.tv || fresh.displays.some((x) => x.id === d.id));
-  for (const d of fresh.displays) if (d.tv && !EV.displays.some((x) => x.id === d.id)) EV.displays.push(d);
-  drawStaff();
+  if (j.added || have !== want) {
+    const fresh = await desk('get').catch(() => null);
+    if (fresh) {
+      if (!dirty) { EV = fresh; fill(); return; }
+      EV.displays = EV.displays.filter((d) => !d.tv || fresh.displays.some((x) => x.id === d.id));
+      for (const d of fresh.displays) if (d.tv && !EV.displays.some((x) => x.id === d.id)) EV.displays.push(d);
+    }
+  }
+  drawTVs();
 }
-async function loadTVs() { try { await gotTVs(await tvCall('list')); } catch (e) { $('tvs').innerHTML = `<p class="help">${esc(e.message)}</p>`; } }
+async function loadTVs() { try { await gotTVs(await tvCall('list')); } catch (e) { toast(e.message); } }
 loadTVs(); setInterval(loadTVs, 60000);
-$('tvadd').addEventListener('click', async (e) => {
-  if (!e.target.closest('#addTV')) return;
-  const code = $('tvcode').value.trim(); if (!code) return toast('Type the code on the TV.');
-  try { const j = await tvCall('add', { code, name: $('tvname').value.trim() }); await gotTVs(j); $('tvcode').value = ''; $('tvname').value = ''; toast(`${j.tv.name} is connected.`); }
-  catch (err) { toast(err.message); }
-});
-$('tvs').addEventListener('click', async (e) => {
+setInterval(() => { if (tab === 'screens') drawTVList(); }, 30000);
+
+$('allNormal').addEventListener('click', () => sendTV('*', null, 0, 'every TV'));
+$('allShow').addEventListener('click', () => sendTV('*', { k: $('allPage').value }, Number($('allMins').value), 'every TV'));
+$('tvlist').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
-  try {
-    if (b.dataset.tvpin) { const t = TVS.find((x) => x.id === b.dataset.tvpin), on = t.event !== eventId(); await gotTVs(await tvCall('edit', { tv: t.id, event: on ? eventId() : '' })); toast(on ? `${t.name} always shows this tournament now.` : `${t.name} shows the tournament of the day.`); }
-    if (b.dataset.tvren) { const t = TVS.find((x) => x.id === b.dataset.tvren); const name = prompt('Name for this TV', t?.name || ''); if (!name) return; await gotTVs(await tvCall('edit', { tv: t.id, name })); }
-    if (b.dataset.tvdel) { const t = TVS.find((x) => x.id === b.dataset.tvdel); if (!confirm(`Remove ${t?.name || 'this TV'}? It goes back to showing a code.`)) return; await gotTVs(await tvCall('remove', { tv: t.id })); }
-  } catch (err) { toast(err.message); }
+  if (b.id === 'tvAdd') return openAddTV();
+  if (b.dataset.tvpick) { PICK = b.dataset.tvpick; drawTVList(); drawTVPage(); }
 });
+$('tvpage').addEventListener('input', (e) => {
+  const t = e.target, d = EV.displays.find((x) => x.id === PICK); if (!d || t.dataset.pl === undefined) return;
+  const it = d.playlist[t.dataset.pl], k = t.dataset.pk; it[k] = ['hole', 'secs'].includes(k) ? Number(t.value) || 0 : t.value;
+  if (k === 'k') { it.fl = ''; it.hole = 0; it.sponsor = ''; drawTVPage(); }
+  saveTV(d, 900); drawTVList();
+});
+$('tvpage').addEventListener('change', async (e) => {
+  const t = e.target, d = EV.displays.find((x) => x.id === PICK); if (!d) return;
+  if (t.dataset.tvplace !== undefined) {
+    let p = t.value; if (p === '+') { p = (prompt('Where is it?', '') || '').trim(); if (!p) return drawTVPage(); }
+    await setTVPlace(d, p);
+  }
+  if (t.dataset.tvpin !== undefined) {
+    try { await gotTVs(await tvCall('edit', { tv: d.id, event: t.checked ? eventId() : '' })); toast(t.checked ? `${d.name} always shows this tournament now.` : `${d.name} shows the tournament of the day.`); } catch (err) { toast(err.message); }
+  }
+});
+async function setTVPlace(d, p) {
+  d.where = p; d.group = p.slice(0, 24);
+  if (d.tv) { try { await gotTVs(await tvCall('edit', { tv: d.id, where: p })); } catch (err) { toast(err.message); } }
+  saveTV(d, 0); drawTVs();
+}
+$('tvpage').addEventListener('click', async (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.id === 'tvAdd2') return openAddTV();
+  const d = EV.displays.find((x) => x.id === PICK); if (!d) return;
+  if (b.dataset.copy) { try { await navigator.clipboard.writeText(b.dataset.copy); toast('Copied.'); } catch { toast('Select the link and copy it.'); } return; }
+  if (b.dataset.tvnormal) return sendTV(d.id, null, 0, d.name || 'the TV');
+  if (b.dataset.tvsend) return sendTV(d.id, { k: $('tvpage').querySelector('[data-tvsendpage]').value }, Number($('tvpage').querySelector('[data-tvsendmins]').value), d.name || 'the TV');
+  if (b.dataset.tvtile) { d.playlist = showPages(SHOW.find((x) => x.k === b.dataset.tvtile)); saveTV(d, 0); drawTVs(); return; }
+  if (b.dataset.tvren) {
+    const name = (prompt('Name for this TV', d.name || '') || '').trim(); if (!name) return;
+    if (d.tv) { try { await gotTVs(await tvCall('edit', { tv: d.id, name })); } catch (err) { return toast(err.message); } }
+    d.name = name; saveTV(d, 0); drawTVs(); return;
+  }
+  if (b.dataset.tvdel) {
+    if (!confirm(d.tv ? `Remove ${d.name || 'this TV'}? It’s taken off every tournament and goes back to showing a code.` : `Remove ${d.name || 'this TV'}? It stops showing this tournament.`)) return;
+    try {
+      if (d.tv) await gotTVs(await tvCall('remove', { tv: d.id }));
+      else await desk('tvset', { remove: d.id });
+      EV.displays = EV.displays.filter((x) => x.id !== d.id); PICK = null; drawTVs(); toast('Removed.');
+    } catch (err) { toast(err.message); }
+    return;
+  }
+  if (b.dataset.pladd) { const p3 = EV.course.holes.find((h) => h.par === 3); d.playlist.push({ k: 'p3', fl: '', hole: p3 ? p3.n : 0, sponsor: EV.sponsors[0]?.id || '', secs: 20 }); }
+  else if (b.dataset.pldel !== undefined) d.playlist.splice(Number(b.dataset.pldel), 1);
+  else if (b.dataset.plmove !== undefined) { const k = Number(b.dataset.plmove), to = k + Number(b.dataset.dir); [d.playlist[k], d.playlist[to]] = [d.playlist[to], d.playlist[k]]; }
+  else if (b.dataset.plcopy) { for (const x of EV.displays) if (x.id !== d.id) { x.playlist = d.playlist.map((p) => ({ ...p })); saveTV(x, 0); } toast('Copied to every other TV.'); }
+  else return;
+  saveTV(d, 300); drawTVs();
+  const det = $('tvpage').querySelector('details'); if (det) det.open = true;
+});
+
+// Add a TV: what's on the TV, the code it shows (or its link), then its name, where it is and what it shows
+let ATV = null;
+function openAddTV() { ATV = { step: 'kind' }; drawATV(); $('addtv').showModal(); }
+function closeAddTV(id) { $('addtv').close(); if (id) PICK = id; ATV = null; drawTVs(); }
+function drawATV() {
+  const a = ATV, k = ADD_KINDS.find((x) => x.k === a.kind), n = { kind: 0, code: 1, link: 1, name: 2 }[a.step];
+  const head = `<div class="atvhead">${a.step === 'kind' ? '<button class="linkbtn" data-atv="cancel">Cancel</button>' : a.step === 'code' ? '<button class="linkbtn" data-atv="back">‹ Back</button>' : '<span></span>'}<b>Add a TV</b>${a.step === 'name' ? '<button class="linkbtn" data-atv="done">Done</button>' : '<span></span>'}</div>
+    <div class="atvsteps">${[0, 1, 2].map((i) => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')}</div>`;
+  let body = '';
+  if (a.step === 'kind') body = `<p class="atvq">What’s on the TV?</p><p class="atvs">Pick one. We’ll show you how to put Flagcast on it.</p>
+    <div class="kinds">${ADD_KINDS.map((x) => `<button data-atvkind="${x.k}"><i>${x.i || '📺'}</i><b>${x.t}</b><small>${x.get}</small></button>`).join('')}</div>
+    <p style="text-align:center;margin:16px 0 0"><button class="linkbtn" data-atv="link">No way to type a code? Send a link instead</button></p>`;
+  if (a.step === 'code') body = `<p class="atvq">Type the code on the TV</p><p class="atvs">${k.open} It shows a code like this:</p>
+    <div class="tvshot">flagcast.app/tv<b>K7PMR4</b></div>
+    <input id="atvCode" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="The code on the TV" value="${esc(a.code || '')}" ${a.busy ? 'disabled' : ''}>
+    <p class="help" style="text-align:center;margin:10px auto 0">${a.busy ? 'Connecting…' : a.err ? `<b style="color:#c8312b">${esc(a.err)}</b>` : k.k === 'web' ? '' : 'No Flagcast TV app on it yet? Open flagcast.app/tv in the TV’s web browser instead: it shows a code too.'}</p>`;
+  if (a.step === 'link') body = `<p class="atvq">Put Flagcast on the TV</p><p class="atvs">Use this when you can’t type a code on the TV. It shows this tournament only.</p>
+    <ol class="help" style="font-size:14px;line-height:1.6"><li>Send yourself the TV’s link: <code class="mono" style="overflow-wrap:anywhere">${esc(tvURL(a.id))}</code> <button class="btn" data-copy="${esc(tvURL(a.id))}">Copy</button></li><li>Open it in the TV’s web browser (or the computer or stick plugged into the TV).</li><li>Make it full screen. The TV’s dot turns green when it shows Flagcast.</li></ol>
+    <button class="btn primary" data-atv="next" style="width:100%">Next</button>`;
+  if (a.step === 'name') body = `${a.club ? `<p class="atvq" style="color:#2f8a57">✓ Connected</p><p class="atvs">It’s showing ${esc(EV.name || 'this tournament')} now, and each new tournament by itself.</p>` : '<p class="atvq">Name it</p><p class="atvs">Then pick where it is and what it shows.</p>'}
+    <label class="f">Name<input id="atvName" maxlength="40" value="${esc(a.name)}" placeholder="Bar TV"></label>
+    <p style="font-weight:700;margin:14px 0 0;font-size:13px">Where is it?</p>
+    <div class="chips">${[...tvPlaces(), ...(a.place && !tvPlaces().includes(a.place) ? [a.place] : [])].map((p) => `<button data-atvplace="${esc(p)}" aria-pressed="${p === a.place}">${esc(p)}</button>`).join('')}<button data-atvplace="+">+ Other</button></div>
+    <p style="font-weight:700;margin:0 0 6px;font-size:13px">What should it show?</p>
+    <div class="showtiles">${SHOW.map((x) => `<button data-atvtile="${x.k}" aria-pressed="${tileOf(a.playlist) === x}">${x.t}<small>${x.n}</small></button>`).join('')}</div>
+    <div class="row" style="margin-top:18px"><button class="btn primary" data-atv="done" style="flex:1">Done</button><button class="btn" data-atv="another">Add another TV</button></div>`;
+  $('atv').innerHTML = head + body;
+  if (a.step === 'code' && !a.busy) setTimeout(() => $('atvCode')?.focus(), 0);
+}
+$('atv').addEventListener('input', (e) => {
+  if (e.target.id === 'atvName') { ATV.name = e.target.value; return; }
+  if (e.target.id !== 'atvCode') return;
+  const c = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6); e.target.value = c; ATV.code = c; ATV.err = '';
+  if (c.length === 6) connectTV();
+});
+async function connectTV() {
+  const a = ATV, k = ADD_KINDS.find((x) => x.k === a.kind); a.busy = true; drawATV();
+  try {
+    const j = await tvCall('add', { code: a.code, name: k.name });
+    await gotTVs(j);
+    Object.assign(a, { busy: false, id: j.tv.id, club: true, name: j.tv.name, place: j.tv.where || '', playlist: (EV.displays.find((d) => d.id === j.tv.id)?.playlist || []).length ? EV.displays.find((d) => d.id === j.tv.id).playlist : showPages(SHOW[0]), step: 'name' });
+  } catch (err) { Object.assign(a, { busy: false, err: err.message, code: '' }); }
+  if (ATV === a) drawATV();
+}
+async function finishTV(another) {
+  const a = ATV; if (!a.id) return closeAddTV();
+  const name = (a.name || '').trim() || (a.club ? 'TV' : 'TV');
+  try {
+    if (a.club) await gotTVs(await tvCall('edit', { tv: a.id, name, where: a.place || '' }));
+    let d = EV.displays.find((x) => x.id === a.id);
+    if (!d) { d = { id: a.id, name, where: '', group: '', playlist: [] }; EV.displays.push(d); }
+    Object.assign(d, { name, where: a.place || '', group: (a.place || '').slice(0, 24), playlist: a.playlist });
+    await desk('tvset', { display: d });
+    toast(`${name} is set up.`);
+  } catch (err) { return toast(err.message); }
+  if (another) { ATV = { step: 'kind' }; drawATV(); drawTVs(); } else closeAddTV(a.id);
+}
+$('atv').addEventListener('click', async (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  const a = ATV;
+  if (b.dataset.copy) { try { await navigator.clipboard.writeText(b.dataset.copy); toast('Copied.'); } catch { toast('Select the link and copy it.'); } return; }
+  if (b.dataset.atvkind) { Object.assign(a, { kind: b.dataset.atvkind, step: 'code', code: '', err: '' }); return drawATV(); }
+  if (b.dataset.atvplace) { let p = b.dataset.atvplace; if (p === '+') { p = (prompt('Where is it?', '') || '').trim(); if (!p) return; } a.place = a.place === p ? '' : p; return drawATV(); }
+  if (b.dataset.atvtile) { a.playlist = showPages(SHOW.find((x) => x.k === b.dataset.atvtile)); return drawATV(); }
+  const act = b.dataset.atv;
+  if (act === 'cancel') return closeAddTV();
+  if (act === 'back') { a.step = 'kind'; return drawATV(); }
+  if (act === 'next') { a.step = 'name'; return drawATV(); }
+  if (act === 'done') return finishTV(false);
+  if (act === 'another') return finishTV(true);
+  if (act === 'link') {
+    const d = { id: rid(), name: `TV ${(EV.displays || []).length + 1}`, where: '', group: '', playlist: showPages(SHOW[0]) };
+    try { await desk('tvset', { display: d }); EV.displays.push(d); Object.assign(a, { id: d.id, club: false, name: d.name, place: '', playlist: d.playlist, step: 'link' }); drawATV(); drawTVs(); }
+    catch (err) { toast(err.message); }
+  }
+});
+$('addtv').addEventListener('close', () => { if (ATV) { ATV = null; drawTVs(); } });
 $('s-staff').addEventListener('input', (e) => {
   const t = e.target;
   if (t.dataset.pin !== undefined) { const x = EV.pins[t.dataset.pin]; x[t.dataset.pk] = t.dataset.pk === 'pin' ? t.value.replace(/\D/g, '') : t.value; }
   if (t.dataset.sc !== undefined) EV.schedule[t.dataset.sc][t.dataset.sk2] = t.value;
-  const box = t.closest('[data-d]');
-  if (box) {
-    const d = EV.displays[box.dataset.d];
-    if (t.dataset.dk) d[t.dataset.dk] = t.value;
-    if (t.dataset.pl !== undefined) { const it = d.playlist[t.dataset.pl]; const k = t.dataset.pk; it[k] = ['hole', 'secs'].includes(k) ? Number(t.value) || 0 : t.value; if (k === 'k') drawStaff(); }
-  }
   setDirty();
 });
 $('s-staff').addEventListener('click', async (e) => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.copy) { try { await navigator.clipboard.writeText(b.dataset.copy); toast('Copied.'); } catch { toast('Select the link and copy it.'); } return; }
-  const box = b.closest('[data-d]'), d = box ? EV.displays[box.dataset.d] : null;
   if (b.id === 'addPro' || b.id === 'addMarshal') EV.pins.push({ id: rid(), name: '', role: b.id === 'addPro' ? 'pro' : 'marshal', pin: pinGen() });
   else if (b.dataset.delpin) EV.pins.splice(Number(b.dataset.delpin), 1);
-  else if (b.id === 'addDisplay') EV.displays.push({ id: rid(), name: `Screen ${EV.displays.length + 1}`, playlist: [{ k: 'lb', fl: '', hole: 0, sponsor: '', secs: 15 }] });
-  else if (b.dataset.deld) EV.displays.splice(Number(b.dataset.deld), 1);
-  else if (b.dataset.pladd && d) { const p3 = EV.course.holes.find((h) => h.par === 3); d.playlist.push({ k: 'p3', fl: '', hole: p3 ? p3.n : 0, sponsor: EV.sponsors[0]?.id || '', secs: 20 }); }
-  else if (b.dataset.pldel !== undefined && d) d.playlist.splice(Number(b.dataset.pldel), 1);
-  else if (b.dataset.plmove !== undefined && d) { const k = Number(b.dataset.plmove), to = k + Number(b.dataset.dir); [d.playlist[k], d.playlist[to]] = [d.playlist[to], d.playlist[k]]; }
   else if (b.id === 'addSched') EV.schedule.push({ time: '', what: '' });
   else if (b.dataset.delsc) EV.schedule.splice(Number(b.dataset.delsc), 1);
   else return;
   drawStaff(); setDirty();
 });
-$('s-staff').addEventListener('change', (e) => { if (e.target.dataset.pk === 'k') drawStaff(); });
 
 // ---- report: results, sponsor counts, staff score changes ----
 let REPORT = { stats: {}, log: [] };
@@ -1284,7 +1540,7 @@ async function start() {
   mountSidebar($('side'), { current: { id: eventId(), key, name: EV.name, date: EV.date, locked: EV.locked }, section: tab, onSection: showTab })
     .then((side) => { SIDE = side; if (!(side.me?.events || []).some((e) => e.id === eventId())) rememberLink({ id: eventId(), key, name: EV.name }, side.me?.email); });
   live((s) => {
-    LIVE = s; drawReplays(); drawResults(); drawCams(); if (!dirty) { EV.locked = s.locked; drawLock(); setDirty(false); }
+    LIVE = s; drawReplays(); drawResults(); drawCams(); drawTVs(); if (!dirty) { EV.locked = s.locked; drawLock(); setDirty(false); }
     drawHero(); if (tab === 'overview') drawOverview(); if (tab === 'scores') drawScores(); if (tab === 'pins' && !pinBusy) drawPins(); if (tab === 'pace') drawPace(); if (tab === 'links') drawLinks();
     if (SIDE) SIDE.setCurrent({ name: s.name, date: s.date, locked: s.locked });
   });

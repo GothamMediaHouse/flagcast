@@ -185,7 +185,7 @@ export const SPOTS = ['title', 'leaderboard', 'hole', 'cam', 'contest', 'turn', 
 export const PAGE_KINDS = ['lb', 'matches', 'indiv', 'p3', 'cam', 'contests', 'skins', 'fund', 'sponsors', 'sponsor', 'schedule'];
 // changes made on the day (desk or a pro's PIN); marshals only post contest results
 const INVITE_MAX = 4, INVITE_TOTAL = 1500; // emails per player (the first and 3 resends), and per tournament
-const DAY_OPS = new Set(['privacy', 'fix', 'ctp', 'contest', 'check', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay', 'scene', 'map', 'groups', 'pinsheet', 'report', 'team', 'move', 'notes', 'golive', 'camshow', 'pace']);
+const DAY_OPS = new Set(['privacy', 'fix', 'ctp', 'contest', 'check', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay', 'scene', 'map', 'groups', 'pinsheet', 'report', 'team', 'move', 'notes', 'golive', 'camshow', 'pace', 'tvset']);
 // marshals post contest results and replays of shots at their hole
 const MARSHAL_OPS = new Set(['ctp', 'check', 'replay']);
 // a replay with no clip link replays the hole's live camera from this many seconds before it was marked
@@ -239,6 +239,18 @@ function keepTVs(s, before) {
   s.displays = s.displays.filter((d) => !d.tv || tvs.some((t) => t.id === d.id));
   for (const d of s.displays) if (tvs.some((t) => t.id === d.id)) d.tv = true;
   for (const t of tvs) if (!s.displays.some((d) => d.id === t.id) && s.displays.length < 20) s.displays.push(t);
+}
+
+// one TV or LED wall at the club and what it plays (a board page opened with ?screen=<id>)
+function cleanDisplay(d) {
+  d = d && typeof d === 'object' ? d : {};
+  return {
+    id: /^[a-z0-9]{3,12}$/.test(d.id || '') ? d.id : rand(5, 'abcdefghijkmnpqrstuvwxyz23456789'), name: clip(d.name, 40),
+    where: clip(d.where, 40), group: clip(d.group, 24), // where it hangs ("Clubhouse bar") and a group to send to together ("Clubhouse")
+    ...(d.tv ? { tv: true } : {}), // one of the club's TVs (the Flagcast TV app, tv.js): it joins each tournament by itself
+    playlist: (Array.isArray(d.playlist) ? d.playlist : []).slice(0, 30).filter((x) => x && PAGE_KINDS.includes(x.k)).map((x) => ({
+      k: x.k, fl: clip(x.fl, 12), hole: num(x.hole, 0, 18, 0), sponsor: clip(x.sponsor, 12), secs: num(x.secs, 4, 300, 12) })),
+  };
 }
 
 function cleanSetup(s, old) {
@@ -325,13 +337,7 @@ function cleanSetup(s, old) {
       name: clip(x.name, 40), role: x.role === 'marshal' ? 'marshal' : 'pro', pin: String(x.pin || '').replace(/\D/g, '').slice(0, 8),
     })).filter((x) => x.name && x.pin.length >= 4),
     // each TV or LED wall at the club and what it plays (a board page opened with ?screen=<id>)
-    displays: (Array.isArray(s.displays) ? s.displays : []).slice(0, 20).map((d) => ({
-      id: /^[a-z0-9]{3,12}$/.test(d.id || '') ? d.id : rand(5, 'abcdefghijkmnpqrstuvwxyz23456789'), name: clip(d.name, 40),
-      where: clip(d.where, 40), group: clip(d.group, 24), // where it hangs ("Clubhouse bar") and a group to send to together ("Clubhouse")
-      ...(d.tv ? { tv: true } : {}), // one of the club's TVs (the Flagcast TV app, tv.js): it joins each tournament by itself
-      playlist: (Array.isArray(d.playlist) ? d.playlist : []).slice(0, 30).filter((x) => PAGE_KINDS.includes(x.k)).map((x) => ({
-        k: x.k, fl: clip(x.fl, 12), hole: num(x.hole, 0, 18, 0), sponsor: clip(x.sponsor, 12), secs: num(x.secs, 4, 300, 12) })),
-    })),
+    displays: (Array.isArray(s.displays) ? s.displays : []).slice(0, 20).map(cleanDisplay),
     fund: { on: !!s.fund?.on, label: clip(s.fund?.label, 80), goal: num(s.fund?.goal, 0, 1e9, 0), raised: num(s.fund?.raised, 0, 1e9, 0), give: /^https:\/\//.test(s.fund?.give || '') ? clip(s.fund.give, 300) : '' },
     contests: (Array.isArray(s.contests) ? s.contests : []).slice(0, 30).map(cleanContest),
   };
@@ -1123,6 +1129,29 @@ export class GolfEvent extends DurableObject {
         if (c) sheet[n] = c; else delete sheet[n];
       }
       ev.pinsheet = sheet;
+    } else if (b.op === 'tvset') {
+      // one TV, saved at once (the Managers' TV page has no Save): { display: { id, name, where, group, playlist } } changes
+      // it, or adds it when it's new (a TV that shows its link, not a club TV: those join through the club's TV list,
+      // tv.js, which also names them). { remove: id } takes a link TV off (a club TV is removed from the club's TVs)
+      ev.displays = ev.displays || [];
+      if (b.remove !== undefined) {
+        const d = ev.displays.find((x) => x.id === b.remove);
+        if (d && d.tv) return json({ error: 'This is one of the club’s TVs. Remove it from the club’s TVs.' }, 409);
+        if (d) { ev.displays = ev.displays.filter((x) => x.id !== b.remove); delete ev.live.force[b.remove]; }
+      } else {
+        if (!b.display || typeof b.display !== 'object') return json({ error: 'Which TV?' }, 400);
+        const d = cleanDisplay({ ...b.display, tv: false }), i = ev.displays.findIndex((x) => x.id === d.id);
+        if (i >= 0) {
+          const was = ev.displays[i];
+          // a club TV keeps the name and place the club gave it (renaming one is done for every tournament, in tv.js)
+          ev.displays[i] = was.tv ? { ...d, name: was.name, where: was.where || '', tv: true } : d;
+        } else {
+          if (!/^[a-z0-9]{3,12}$/.test(b.display.id || '')) return json({ error: 'Which TV?' }, 400);
+          if (ev.displays.length >= 20) return json({ error: 'This tournament already has 20 screens.' }, 409);
+          ev.displays.push(d);
+        }
+      }
+      ev.v = (ev.v || 0) + 1;
     } else if (b.op === 'lock') {
       ev.locked = !!b.locked;
       if (ev.locked) await this.wipeSpots(); // results are final: group spots are wiped

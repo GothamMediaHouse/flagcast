@@ -61,6 +61,34 @@ final class DeskDoc {
             return r
         } catch { flash(error.localizedDescription); return nil }
     }
+    /// One TV, saved at once (desk op "tvset"): the TV page has no Save. The copy "Unsaved changes" is measured against
+    /// gets the same change, so other unsaved edits stay unsaved and this one doesn't count as one. A club TV's name and
+    /// place are the club's (ClubTVs.edit); this sends what it shows. New link TVs are added this way too.
+    @discardableResult
+    func saveTV(_ d: Display) async -> Bool {
+        guard let data = try? JSONEncoder().encode(d), let dict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
+        do {
+            try await Net.desk(id, key, "tvset", ["display": dict])
+            if let i = ev.displays.firstIndex(where: { $0.id == d.id }) { ev.displays[i] = d } else { ev.displays.append(d) }
+            markSaved { s in if let i = s.displays.firstIndex(where: { $0.id == d.id }) { s.displays[i] = d } else { s.displays.append(d) } }
+            return true
+        } catch { flash(error.localizedDescription); return false }
+    }
+    /// Take a link TV off (a club TV is removed from the club's TVs: ClubTVs.remove).
+    @discardableResult
+    func removeTV(_ tvID: String) async -> Bool {
+        do {
+            try await Net.desk(id, key, "tvset", ["remove": tvID])
+            ev.displays.removeAll { $0.id == tvID }
+            markSaved { $0.displays.removeAll { $0.id == tvID } }
+            return true
+        } catch { flash(error.localizedDescription); return false }
+    }
+    private func markSaved(_ change: (inout DeskEvent) -> Void) {
+        guard var s = try? JSONDecoder().decode(DeskEvent.self, from: savedData) else { return }
+        change(&s)
+        savedData = s.setupData
+    }
     /// Reload the read-only parts (contest results, replays, scenes, report) without touching unsaved edits.
     func refreshDay() async {
         guard let fresh = try? await Net.deskGet(id, key) else { return }
