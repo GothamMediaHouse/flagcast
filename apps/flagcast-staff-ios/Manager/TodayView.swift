@@ -328,6 +328,82 @@ struct WelcomeView: View {
     }
 }
 
+/// A tournament someone with Can go live may stream to (POST /golf/api/club/cameras)
+struct CameraEvent: Decodable, Identifiable {
+    struct H: Decodable { var n: Int, par: Int, yds: Int
+        init(from d: Decoder) throws { let c = try d.container(keyedBy: CodingKeys.self); n = c.int(.n, 0); par = c.int(.par, 4); yds = c.int(.yds, 0) }
+        enum CodingKeys: String, CodingKey { case n, par, yds }
+    }
+    var id: String, name: String, clubName: String, date: String, holes: [H], golive: [Int: String]
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        id = c.str(.id); name = c.str(.name); clubName = c.str(.clubName); date = c.str(.date); holes = c.list(.holes)
+        let g = (try? c.decodeIfPresent([String: String].self, forKey: .golive)) ?? [:]
+        golive = Dictionary(uniqueKeysWithValues: g.compactMap { k, v in Int(k).map { ($0, v) } })
+    }
+    enum CodingKeys: String, CodingKey { case id, name, clubName, date, holes, golive }
+    var when: String {
+        guard let d = DateFormatter.ymd.date(from: date) else { return date }
+        return Calendar.current.isDateInToday(d) ? "Today" : Calendar.current.isDateInTomorrow(d) ? "Tomorrow" : d.formatted(.dateTime.weekday(.wide).month().day())
+    }
+}
+private extension DateFormatter { static let ymd: DateFormatter = { let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.locale = Locale(identifier: "en_US_POSIX"); return f }() }
+
+/// Signed in with Can go live only (a club's pro, a volunteer camera person): the tournaments Flagcast gave them and the
+/// Go live camera (the same one pros use). The server checks every start (clubs.js op 'camera').
+struct CameraHomeView: View {
+    @Environment(AppModel.self) private var model
+    @State private var events: [CameraEvent] = []
+    @State private var loaded = false
+    @State private var err: String?
+    @State private var live: CameraEvent?
+    var body: some View {
+        CardPage(kicker: model.me?.email, title: "Go live", sub: "Send this iPhone’s camera to a hole. Club TVs and golfers’ phones show it.", height: 260) {
+            if let err { Text(err).font(.footnote).foregroundStyle(FC.red) }
+            if loaded && events.isEmpty && err == nil {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("No tournaments yet").font(.headline).foregroundStyle(FC.ink)
+                    Text("Tournaments Flagcast adds you to show up here on the day.").font(.subheadline).foregroundStyle(FC.muted)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading).card(padding: 18)
+            }
+            ForEach(events) { e in
+                VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(e.name).font(FC.display(26)).foregroundStyle(FC.ink)
+                        Text([e.clubName, e.when].filter { !$0.isEmpty }.joined(separator: " · ")).font(.subheadline).foregroundStyle(FC.muted)
+                    }
+                    ForEach(e.golive.keys.sorted(), id: \.self) { h in
+                        Label("\(h == 0 ? "The clubhouse" : "Hole \(h)") is live from \(e.golive[h] ?? "")’s phone", systemImage: "dot.radiowaves.left.and.right")
+                            .font(.footnote).foregroundStyle(FC.red)
+                    }
+                    Button { live = e } label: { Label("Go live", systemImage: "video.fill").frame(maxWidth: .infinity) }
+                        .buttonStyle(GreenButton(full: true))
+                }
+                .card(padding: 18)
+            }
+            Button("Not you? Sign out") { Task { await model.signOut() } }.font(.subheadline).foregroundStyle(FC.muted).frame(maxWidth: .infinity)
+        }
+        .task { await load() }
+        .refreshable { await load() }
+        .fullScreenCover(item: $live, onDismiss: { Task { await load() } }) { e in
+            GoLiveView(model: GoLiveModel(holes: e.holes.map { GoLiveHole(n: $0.n, par: $0.par, yds: $0.yds) }) { [model] body in
+                var b = body; b.removeValue(forKey: "op"); b["id"] = e.id
+                return try await model.club("camera", b)
+            }, liveNow: e.golive)
+        }
+    }
+    private func load() async {
+        do {
+            let j = try await model.club("cameras")
+            let d = try JSONSerialization.data(withJSONObject: j["events"] ?? [])
+            events = try JSONDecoder().decode([Lenient<CameraEvent>].self, from: d).compactMap(\.value); err = nil
+        } catch { err = error.localizedDescription }
+        loaded = true
+        await model.refresh()   // Admin may have changed what they can do
+    }
+}
+
 private struct ClubRequestView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss

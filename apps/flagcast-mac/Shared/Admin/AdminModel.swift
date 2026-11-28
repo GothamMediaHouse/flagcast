@@ -133,6 +133,43 @@ struct StaffMember: Decodable, Hashable, Identifiable {
     enum CodingKeys: String, CodingKey { case email, fixed, added, by, seen }
 }
 
+/// Someone who Can go live (Admin → Staff): they stream from their iPhone to a hole, and nothing else. where: any (every
+/// tournament), club (that club's) or event (one tournament, done when it's over). Admins can always go live.
+struct GoLivePerson: Decodable, Hashable, Identifiable {
+    var email: String, name: String, added: Double, by: String, seen: Double
+    var where_: String, club: String, clubName: String, event: String, eventName: String
+    var id: String { email }
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        email = c.str(.email); name = c.str(.name); added = c.dbl(.added, 0); by = c.str(.by); seen = c.dbl(.seen, 0)
+        where_ = c.str(.where_, "any"); club = c.str(.club); clubName = c.str(.clubName); event = c.str(.event); eventName = c.str(.eventName)
+    }
+    enum CodingKeys: String, CodingKey { case email, name, added, by, seen, club, clubName, event, eventName; case where_ = "where" }
+    /// where, in words
+    var whereText: String {
+        switch where_ {
+        case "club": "\(clubName) (all its tournaments)"
+        case "event": clubName.isEmpty ? eventName : "\(eventName) · \(clubName)"
+        default: "Any tournament"
+        }
+    }
+}
+
+/// One row on the Staff screen: an admin, a camera person, or both
+struct StaffPerson: Identifiable, Hashable {
+    var email: String, admin: StaffMember?, live: GoLivePerson?
+    var id: String { email }
+    var seen: Double { max(admin?.seen ?? 0, live?.seen ?? 0) }
+    var fixed: Bool { admin?.fixed ?? false }
+    var whereText: String { admin != nil ? "Everywhere" : live?.whereText ?? "" }
+    var detail: String {
+        let s = seen > 0 ? Date(timeIntervalSince1970: seen / 1000).formatted(date: .abbreviated, time: .shortened) : "never"
+        if fixed { return "Set in Cloudflare (ADMIN_EMAIL) · last signed in \(s)" }
+        let added = admin.map { ($0.added, $0.by) } ?? live.map { ($0.added, $0.by) } ?? (0, "")
+        return "Added \(Date(timeIntervalSince1970: added.0 / 1000).formatted(date: .abbreviated, time: .omitted))\(added.1.isEmpty ? "" : " by \(added.1)") · last signed in \(s)"
+    }
+}
+
 enum AdminSection: String, CaseIterable, Identifiable {
     case overview, today, signups, clubs, tournaments, cameras, screens, staff, activity
     var id: String { rawValue }
@@ -154,6 +191,8 @@ final class AdminModel {
     var events: [AdminEvent] = []
     var log: [LogLine] = []
     var staff: [StaffMember] = []
+    /// Can go live (not Admin): see GoLivePerson
+    var golive: [GoLivePerson] = []
     var mail = true
     var loading = false
     var error: String?
@@ -184,7 +223,7 @@ final class AdminModel {
     }
     func forget() { pass = nil; Keychain.pass = nil; clear() }
     /// drop every club's data from memory (sign-out, or another account signing in)
-    func clear() { clubs = []; events = []; log = []; staff = []; error = nil; notice = nil }
+    func clear() { clubs = []; events = []; log = []; staff = []; golive = []; error = nil; notice = nil }
 
     @discardableResult
     func call(_ op: String?, _ extra: [String: Any] = [:]) async throws -> [String: Any] {
@@ -194,9 +233,10 @@ final class AdminModel {
     func refresh() async throws {
         loading = true; defer { loading = false }
         let d = try await Net.post("/golf/api/club/admin", body([:]))
-        struct R: Decodable { var clubs: [Lenient<AdminClub>]; var mail: Bool?; var staff: [Lenient<StaffMember>]?; var deleted: [Lenient<DeletedClub>]? }
+        struct R: Decodable { var clubs: [Lenient<AdminClub>]; var mail: Bool?; var staff: [Lenient<StaffMember>]?; var golive: [Lenient<GoLivePerson>]?; var deleted: [Lenient<DeletedClub>]? }
         let r = try JSONDecoder().decode(R.self, from: d)
         clubs = r.clubs.compactMap(\.value); mail = r.mail ?? true; staff = (r.staff ?? []).compactMap(\.value); deleted = (r.deleted ?? []).compactMap(\.value)
+        golive = (r.golive ?? []).compactMap(\.value)
     }
     func refreshEvents() async {
         do {
@@ -222,6 +262,34 @@ final class AdminModel {
             if let note = j["courseNote"] as? String, !note.isEmpty { flash(note, seconds: 10) } else if let done { flash(done) }
         } catch { flash(error.localizedDescription) }
     }
+    /// Admins and camera people, one row each
+    var people: [StaffPerson] {
+        var out = staff.map { StaffPerson(email: $0.email, admin: $0, live: golive.first { g in g.email == $0.email }) }
+        for g in golive where !out.contains(where: { $0.email == g.email }) { out.append(StaffPerson(email: g.email, admin: nil, live: g)) }
+        return out
+    }
+    /// Save someone from the Add / Edit person sheet: Admin on or off, Can go live on or off and where. True when it worked.
+    func savePerson(_ email: String, admin wantAdmin: Bool, live wantLive: Bool, where w: String, club: String, event: String, name: String, mail: Bool) async -> Bool {
+        let e = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let was = people.first { $0.email == e }
+        do {
+            if wantAdmin && was?.admin == nil { try await call("staff-add", ["email": e]) }
+            if !wantAdmin, was?.admin != nil { try await call("staff-remove", ["email": e]) }
+            if wantLive && !wantAdmin {
+                var b: [String: Any] = ["email": e, "where": w, "name": name, "mail": mail]
+                if w == "club" { b["club"] = club }; if w == "event" { b["event"] = event }
+                try await call("golive-set", b)
+            } else if was?.live != nil { try await call("golive-remove", ["email": e]) }
+            try await refresh()
+            flash(!wantAdmin && !wantLive ? "Removed." : wantLive && !wantAdmin && mail ? "Saved. They’ve been emailed how to go live." : "Saved.")
+            return true
+        } catch { try? await refresh(); flash(error.localizedDescription); return false }
+    }
+    /// the tournaments Can go live can be given for: every club's that aren't deleted or archived
+    var liveEventChoices: [(id: String, name: String)] {
+        clubs.flatMap { c in c.events.filter { !$0.hidden && !$0.archived }.map { (id: $0.id, name: "\($0.name) · \(c.name)") } }
+    }
+
     /// Delete a club. One with tournaments (a test club) goes with them, and only with its name typed (the server checks too). True when it's gone.
     func deleteClub(_ club: AdminClub, typed: String = "") async -> Bool {
         await act("delete", ["club": club.id, "confirm": typed], done: "Deleted. It’s in Recently deleted for 30 days.")
@@ -437,6 +505,89 @@ struct ClubCoursePicker: View {
         Task { defer { busy = false }
             do { found = try await Net.findCourses(t); if found.isEmpty { msg = "No course by that name. Try the club’s name or the town." } }
             catch { found = []; msg = error.localizedDescription }
+        }
+    }
+}
+
+
+/// an email to open in the Add / Edit person sheet
+struct StaffEmail: Identifiable { var id: String }
+
+/// Add or edit someone on Staff (Mac, iPhone and iPad): Admin, Can go live, and where they can go live.
+struct StaffPersonSheet: View {
+    @Environment(AdminModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let email: String
+    @State private var admin = false
+    @State private var live = true
+    @State private var where_ = "any"
+    @State private var club = ""
+    @State private var event = ""
+    @State private var name = ""
+    @State private var mail = true
+    @State private var saving = false
+    @State private var confirmRemove = false
+    private var was: StaffPerson? { model.people.first { $0.email == email.lowercased() } }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section { Text(email) } header: { Text("Email") }
+                Section {
+                    Toggle(isOn: $admin) { VStack(alignment: .leading, spacing: 2) { Text("Admin"); Text("Everything in Admin: clubs, tournaments, cameras, payments").font(.caption).foregroundStyle(.secondary) } }
+                    Toggle(isOn: admin ? .constant(true) : $live) { VStack(alignment: .leading, spacing: 2) { Text("Can go live"); Text(admin ? "Admins can always go live, at any tournament." : "Stream from their iPhone to a hole. Nothing else.").font(.caption).foregroundStyle(.secondary) } }
+                        .disabled(admin)
+                } header: { Text("What they can do") }
+                if live && !admin {
+                    Section {
+                        Picker("Where", selection: $where_) {
+                            Text("Any tournament").tag("any"); Text("One club’s tournaments").tag("club"); Text("One tournament").tag("event")
+                        }
+                        if where_ == "club" {
+                            Picker("Club", selection: $club) { ForEach(model.clubs) { Text($0.name).tag($0.id) } }
+                        }
+                        if where_ == "event" {
+                            Picker("Tournament", selection: $event) { ForEach(model.liveEventChoices, id: \.id) { Text($0.name).tag($0.id) } }
+                        }
+                        TextField("Their name (for “live from …’s phone”)", text: $name)
+                        Toggle("Email them how to go live", isOn: $mail)
+                    } header: { Text("Where") } footer: {
+                        Text(where_ == "event" ? "Ends by itself when that tournament is over. They sign in to the Flagcast Manager on their iPhone with this email and only see a Go live screen." : "They sign in to the Flagcast Manager on their iPhone with this email and only see a Go live screen.")
+                    }
+                }
+                if was != nil && !(was?.fixed ?? false) {
+                    Section { Button("Remove", role: .destructive) { confirmRemove = true } }
+                }
+            }
+            .formStyle(.grouped)
+            .navigationTitle(was == nil ? "Add person" : "Edit person")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(was == nil ? "Add" : "Save") { save(admin: admin, live: live) }
+                        .disabled(saving || (!admin && !live) || (live && !admin && ((where_ == "club" && club.isEmpty) || (where_ == "event" && event.isEmpty))))
+                }
+            }
+            .confirmationDialog("Take \(email) off? \(was?.admin != nil ? "They lose Admin and" : "They") can’t go live any more.", isPresented: $confirmRemove, titleVisibility: .visible) {
+                Button("Remove", role: .destructive) { save(admin: false, live: false) }
+            }
+        }
+        #if os(macOS)
+        .frame(minWidth: 460, minHeight: 440)
+        #endif
+        .onAppear {
+            let p = was
+            admin = p?.admin != nil; live = p == nil || p?.live != nil || admin; mail = p?.live == nil
+            if let g = p?.live { where_ = g.where_; club = g.club; event = g.event; name = g.name }
+            if club.isEmpty { club = model.clubs.first?.id ?? "" }
+            if event.isEmpty { event = model.liveEventChoices.first?.id ?? "" }
+        }
+    }
+    private func save(admin: Bool, live: Bool) {
+        saving = true
+        Task {
+            let ok = await model.savePerson(email, admin: admin, live: live, where: where_, club: club, event: event, name: name, mail: mail)
+            saving = false; if ok { dismiss() }
         }
     }
 }

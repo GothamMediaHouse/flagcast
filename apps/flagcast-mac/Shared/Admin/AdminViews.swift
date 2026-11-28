@@ -409,54 +409,58 @@ struct ActivityView: View {
 
 // MARK: - staff
 
-/// Who gets Admin when they sign in (the web Admin's Staff tab). ADMIN_EMAIL ones are listed but changed in Cloudflare.
+/// Who gets Admin when they sign in, and who Can go live (the web Admin's Staff tab). ADMIN_EMAIL ones are listed but changed in Cloudflare.
 struct AdminStaffView: View {
     @Environment(AdminModel.self) private var model
     @State private var email = ""
     @State private var search = ""
+    @State private var editing: String?
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text("Anyone here gets Admin, in the Manager and on the web, when they sign in with that email. Club owners never see Admin.")
+                Text("Admin opens everything, in the Manager and on the web. Can go live only lets someone send their iPhone camera to a hole: they sign in to the Flagcast Manager on their iPhone and see a Go live screen, nothing else. Admins can always go live. Club owners never see Admin.")
                     .font(.system(size: 13)).foregroundStyle(FC.muted).padding(14)
-                ForEach(model.staff.filter { search.isEmpty || $0.email.localizedCaseInsensitiveContains(search) }) { m in
+                ForEach(model.people.filter { search.isEmpty || $0.email.localizedCaseInsensitiveContains(search) || ($0.live?.name ?? "").localizedCaseInsensitiveContains(search) }) { p in
                     Divider()
-                    HStack {
+                    HStack(spacing: 8) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(m.email).font(.system(size: 13, weight: .semibold))
-                            Text(detail(m)).font(.system(size: 12)).foregroundStyle(FC.muted)
+                            HStack(spacing: 4) { Text(p.email).font(.system(size: 13, weight: .semibold)); if let n = p.live?.name, !n.isEmpty { Text("(\(n))").font(.system(size: 13)).foregroundStyle(FC.muted) } }
+                            Text(p.detail).font(.system(size: 12)).foregroundStyle(FC.muted)
                         }
-                        Spacer()
-                        if !m.fixed {
-                            Button("Remove") { Task { await model.act("staff-remove", ["email": m.email], done: "Removed from staff.") } }.buttonStyle(PlainCardButton())
-                        }
+                        Spacer(minLength: 8)
+                        if p.admin != nil { StaffTag(text: "Admin", fg: Color(red: 0.09, green: 0.24, blue: 0.17), bg: Color(red: 0.90, green: 0.94, blue: 0.91)) }
+                        StaffTag(text: "Can go live", fg: Color(red: 0.70, green: 0.15, blue: 0.12), bg: Color(red: 0.99, green: 0.91, blue: 0.90))
+                        StaffTag(text: p.whereText, fg: FC.muted, bg: FC.line.opacity(0.5))
+                        if !p.fixed { Button("Edit") { editing = p.email }.buttonStyle(PlainCardButton()) }
                     }
                     .padding(.horizontal, 14).padding(.vertical, 10)
                 }
                 Divider()
                 HStack {
                     TextField("name@example.com", text: $email).textFieldStyle(.roundedBorder).onSubmit(add)
-                    Button("Add to staff", action: add).buttonStyle(.borderedProminent).disabled(!email.contains("@"))
+                    Button("Add person…", action: add).buttonStyle(.borderedProminent).disabled(!email.contains("@"))
                 }
                 .padding(14)
             }
             .background(FC.card).clipShape(RoundedRectangle(cornerRadius: 12)).overlay(RoundedRectangle(cornerRadius: 12).stroke(FC.line))
-            .frame(maxWidth: 720, alignment: .leading)
+            .frame(maxWidth: 820, alignment: .leading)
             .padding(20)
         }
         .safeAreaInset(edge: .top, spacing: 0) {
-            AdminHeader(title: "Staff", sub: "\(model.staff.count) with Admin", search: $search, prompt: "Find someone") { EmptyView() }
+            AdminHeader(title: "Staff", sub: "\(model.staff.count) with Admin · \(model.golive.count) can go live", search: $search, prompt: "Find someone") { EmptyView() }
         }
         .background(FC.paper)
+        .sheet(item: Binding(get: { editing.map { StaffEmail(id: $0) } }, set: { editing = $0?.id })) { e in StaffPersonSheet(email: e.id).environment(model) }
         .task { try? await model.refresh() }
     }
     private func add() {
-        let e = email.trimmingCharacters(in: .whitespacesAndNewlines); guard !e.isEmpty else { return }
-        Task { await model.act("staff-add", ["email": e], done: "Added. They get Admin the next time they sign in."); if !model.staff.contains(where: { $0.email == e.lowercased() }) { return }; email = "" }
+        let e = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(); guard e.contains("@"), e.contains(".") else { return }
+        email = ""; editing = e
     }
-    private func detail(_ m: StaffMember) -> String {
-        let seen = m.seen > 0 ? Date(timeIntervalSince1970: m.seen / 1000).formatted(date: .abbreviated, time: .shortened) : "never"
-        let from = m.fixed ? "Set in Cloudflare (ADMIN_EMAIL)" : "Added \(Date(timeIntervalSince1970: m.added / 1000).formatted(date: .abbreviated, time: .omitted))\(m.by.isEmpty ? "" : " by \(m.by)")"
-        return "\(from) · last signed in \(seen)"
-    }
+}
+
+/// a small coloured label on a Staff row
+struct StaffTag: View {
+    var text: String, fg: Color, bg: Color
+    var body: some View { Text(text).font(.system(size: 11, weight: .semibold)).foregroundStyle(fg).lineLimit(1).padding(.horizontal, 8).padding(.vertical, 2).background(bg, in: Capsule()) }
 }

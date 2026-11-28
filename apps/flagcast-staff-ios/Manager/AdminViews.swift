@@ -657,20 +657,23 @@ private struct CamCard: View {
     }
 }
 
-/// Who gets Admin when they sign in (the Mac and web Admin's Staff). ADMIN_EMAIL ones are listed but changed in Cloudflare.
+/// Who gets Admin when they sign in, and who Can go live (the Mac and web Admin's Staff). ADMIN_EMAIL ones are listed but changed in Cloudflare.
 private struct AdminStaff: View {
     @Environment(AdminModel.self) private var admin
     @State private var email = ""
-    @State private var removing: StaffMember?
+    @State private var editing: String?
     var body: some View {
-        CardPage(kicker: "Admin", title: "Staff", sub: "\(admin.staff.count) with Admin") {
-            Text("Anyone here gets Admin, on the iPhone, iPad, Mac and web, when they sign in with that email. Club owners never see Admin.")
+        CardPage(kicker: "Admin", title: "Staff", sub: "\(admin.staff.count) with Admin · \(admin.golive.count) can go live") {
+            Text("Admin opens everything, on the iPhone, iPad, Mac and web. Can go live only lets someone send their iPhone camera to a hole: they sign in to this app and see a Go live screen, nothing else. Admins can always go live.")
                 .font(.footnote).foregroundStyle(FC.muted)
             CardBox {
-                if admin.staff.isEmpty { Text("Only the passcode opens Admin.").foregroundStyle(FC.muted).padding(14) }
-                ForEach(Array(admin.staff.enumerated()), id: \.element.id) { i, m in
-                    ListRow(icon: m.fixed ? "lock.fill" : "person.fill", iconColor: m.fixed ? FC.muted : FC.primary, title: m.email, sub: detail(m), last: i == admin.staff.count - 1) {
-                        if !m.fixed { Button("Remove") { removing = m }.font(.subheadline.weight(.semibold)).foregroundStyle(FC.red) }
+                let people = admin.people
+                if people.isEmpty { Text("Only the passcode opens Admin.").foregroundStyle(FC.muted).padding(14) }
+                ForEach(Array(people.enumerated()), id: \.element.id) { i, p in
+                    ListRow(icon: p.fixed ? "lock.fill" : p.admin != nil ? "person.fill" : "video.fill", iconColor: p.fixed ? FC.muted : p.admin != nil ? FC.primary : FC.red,
+                            title: p.live?.name.isEmpty == false ? "\(p.live!.name) · \(p.email)" : p.email,
+                            sub: "\(p.admin != nil ? "Admin" : "Can go live: \(p.whereText)") · \(p.detail)", last: i == people.count - 1) {
+                        if !p.fixed { Button("Edit") { editing = p.email }.font(.subheadline.weight(.semibold)) }
                     }
                 }
             }
@@ -678,24 +681,18 @@ private struct AdminStaff: View {
                 HStack {
                     TextField("name@example.com", text: $email).keyboardType(.emailAddress).textContentType(.emailAddress)
                         .textInputAutocapitalization(.never).autocorrectionDisabled().onSubmit(add)
-                    Button("Add", action: add).font(.body.weight(.semibold)).disabled(!email.contains("@"))
+                    Button("Add…", action: add).font(.body.weight(.semibold)).disabled(!email.contains("@"))
                 }
                 .padding(14)
             }
         }
-        .confirmationDialog("Take \(removing?.email ?? "") off staff? They lose Admin.", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
-            Button("Remove from staff", role: .destructive) { if let m = removing { Task { await admin.act("staff-remove", ["email": m.email], done: "Removed from staff.") } } }
-        }
+        .sheet(item: Binding(get: { editing.map { StaffEmail(id: $0) } }, set: { editing = $0?.id })) { e in StaffPersonSheet(email: e.id).environment(admin) }
         .overlay(alignment: .bottom) { NoticeBar(text: admin.notice).padding(.bottom, 10).animation(.snappy, value: admin.notice) }
         .task { try? await admin.refresh() }
         .refreshable { try? await admin.refresh() }
     }
     private func add() {
-        let e = email.trimmingCharacters(in: .whitespacesAndNewlines); guard e.contains("@") else { return }
-        Task { await admin.act("staff-add", ["email": e], done: "Added. They get Admin the next time they sign in."); if admin.staff.contains(where: { $0.email == e.lowercased() }) { email = "" } }
-    }
-    private func detail(_ m: StaffMember) -> String {
-        let seen = m.seen > 0 ? Date(timeIntervalSince1970: m.seen / 1000).formatted(date: .abbreviated, time: .shortened) : "never"
-        return "\(m.fixed ? "Set in Cloudflare" : "Added \(Date(timeIntervalSince1970: m.added / 1000).formatted(date: .abbreviated, time: .omitted))") · signed in \(seen)"
+        let e = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(); guard e.contains("@"), e.contains(".") else { return }
+        email = ""; editing = e
     }
 }

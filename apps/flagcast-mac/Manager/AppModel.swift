@@ -20,15 +20,17 @@ struct ClubMe: Decodable {
     var email: String, role: String, club: Club?, members: [Member], events: [Ev]
     /// Flagcast staff (an email in the server's ADMIN_EMAIL list): the Admin section shows
     var admin = false
+    /// Can go live (Admin → Staff): this email may stream from an iPhone (the iPhone Manager shows a Go live screen)
+    var camera = false
     /// a password is set (sign in with email + password), Sign in with Apple is linked
     var password = false, apple = false
     init(from d: Decoder) throws {
         let c = try d.container(keyedBy: CodingKeys.self)
         email = c.str(.email); role = c.str(.role); club = try? c.decodeIfPresent(Club.self, forKey: .club)
         members = c.list(.members); events = c.list(.events); admin = c.bool(.admin, false)
-        password = c.bool(.password, false); apple = c.bool(.apple, false)
+        password = c.bool(.password, false); apple = c.bool(.apple, false); camera = c.bool(.camera, false)
     }
-    enum CodingKeys: String, CodingKey { case email, role, club, members, events, admin, password, apple }
+    enum CodingKeys: String, CodingKey { case email, role, club, members, events, admin, password, apple, camera }
     var isOwner: Bool { role == "owner" }
 }
 

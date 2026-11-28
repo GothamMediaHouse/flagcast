@@ -41,6 +41,8 @@ struct RootView: View {
         Group {
             if !model.signedIn && model.events.isEmpty && !model.isAdmin {
                 NavigationStack { SignInView() }
+            } else if model.signedIn, model.me?.camera == true, model.me?.club == nil, !model.isAdmin, model.events.isEmpty {
+                NavigationStack { CameraHomeView() }   // Can go live only: their tournaments and Go live, nothing else
             } else if model.signedIn, model.me != nil, model.me?.club == nil, !model.isAdmin, model.events.isEmpty {
                 NavigationStack { WelcomeView() }
             } else if size == .regular {
