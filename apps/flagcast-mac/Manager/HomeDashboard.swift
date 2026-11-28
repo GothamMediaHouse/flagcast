@@ -119,7 +119,7 @@ private struct LeadCard: View {
                         num("\(ev.teams.count)", "teams")
                         let played = board.reduce(0) { $0 + $1.played }
                         if played > 0 { num("\(played)", "holes played") }
-                        if let l = board.first(where: { $0.played > 0 }) { num(ev.format.isStableford ? "\(l.score)" : Core.fmtPar(l.score), l.name, color: l.score < 0 && !ev.format.isStableford ? FC.red : FC.ink) }
+                        if let l = (doc.live.map { Core.board($0, $0.scores) } ?? board).first(where: { $0.played > 0 }) { num(ev.format.isStableford ? "\(l.score)" : Core.fmtPar(l.score), l.name, color: l.score < 0 && !ev.format.isStableford ? FC.red : FC.ink) }
                         let most = board.map(\.played).max() ?? 0
                         let behind = board.filter { most > 0 && $0.played < most - 2 }.count
                         if behind > 0 { num("\(behind)", "behind on scores", color: FC.flag) }

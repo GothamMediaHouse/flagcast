@@ -9,8 +9,15 @@ struct OverviewView: View {
     private var live: EventState? { doc.live }
     private var ev: DeskEvent { doc.ev }
     private var holes: [Hole] { ev.course.holes.filter { ev.playHoles.contains($0.n) } }
-    private var isToday: Bool { ev.date == ISO8601DateFormatter.day.string(from: Date()) }
-    private var board: [Line] { live.map { Core.leaderboard($0, $0.scores) } ?? [] }
+    private var isToday: Bool { let t = ISO8601DateFormatter.day.string(from: Date()); return ev.date == t || ev.rounds.contains { $0.date == t } }
+    /// this round on its own (who's on the course) and the board everyone sees (multi-day: the total over the rounds)
+    private var today: [Line] { live.map { Core.leaderboard($0, $0.scores) } ?? [] }
+    private var board: [Line] { live.map { Core.board($0, $0.scores) } ?? [] }
+    private var kicker: String {
+        guard let live, Core.multiRound(live) else { return dayLine(ev.date) ?? "NO DATE SET" }
+        let d = Core.roundDay(live)
+        return (Core.roundName(live) + (d.isEmpty ? "" : " · \(d)")).uppercased()
+    }
 
     var body: some View {
         PhotoPage(image: doc.picture.image, height: 420, section: "Overview", titleHeight: 312) {
@@ -22,7 +29,7 @@ struct OverviewView: View {
             VStack(alignment: .leading, spacing: 14) {
                 // the logo golfers and the TVs see: the club's (or this tournament's own); none on a Demo
                 if let u = logoURL(live?.brand.logo) { RemoteLogo(url: u).frame(maxWidth: 240, maxHeight: 64, alignment: .leading).shadow(color: .black.opacity(0.3), radius: 6) }
-                HeroTitle(kicker: dayLine(ev.date) ?? "NO DATE SET", live: isToday && !ev.locked, title: ev.name.isEmpty ? "Tournament" : ev.name, size: 76, sub: subtitle)
+                HeroTitle(kicker: kicker, live: isToday && !ev.locked, title: ev.name.isEmpty ? "Tournament" : ev.name, size: 76, sub: subtitle)
             }
         } content: {
             // scrolls: in a short window the cards below (Codes, Email invites) need room
@@ -42,6 +49,7 @@ struct OverviewView: View {
                     }
                 }
                 .padding(.horizontal, 24)
+                if let live, Core.multiRound(live) { RoundsTile(doc: doc, live: live).padding(.horizontal, 24) }
                 codesTile.padding(.horizontal, 24)
                 InvitesTile(doc: doc).padding(.horizontal, 24).padding(.bottom, 22)
             }
@@ -60,8 +68,8 @@ struct OverviewView: View {
 
     // ---- the four numbers ----
     private var stats: some View {
-        let scoring = board.filter { $0.played > 0 && $0.thru != "F" }.count
-        let finished = board.filter { $0.thru == "F" }.count
+        let scoring = today.filter { $0.played > 0 && $0.thru != "F" }.count
+        let finished = today.filter { $0.thru == "F" }.count
         let leader = board.first { $0.played > 0 }
         let screens = ev.displays.count, on = ev.displays.filter { (live?.online[$0.id] ?? 0) > 0 }.count
         return HStack(spacing: 1) {
@@ -133,7 +141,7 @@ struct OverviewView: View {
     private var strokeBoard: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Leaderboard").font(.system(size: 14, weight: .bold))
+                Text("Leaderboard" + (live.map { Core.showsTotal($0) ? " · Total after \(Core.roundNow($0) + 1) round\(Core.roundNow($0) > 0 ? "s" : "")" : Core.multiRound($0) ? " · Round \(Core.roundNow($0) + 1)" : "" } ?? "")).font(.system(size: 14, weight: .bold))
                 Spacer()
                 Button("All scores ›") { nav.section = .scores }.buttonStyle(.plain).font(.system(size: 13, weight: .semibold)).foregroundStyle(FC.link)
             }
@@ -152,7 +160,7 @@ struct OverviewView: View {
                     Text(l.pos).font(.system(size: 14, weight: .bold)).foregroundStyle(FC.muted).frame(width: 30, alignment: .leading)
                     Text(l.name).font(.system(size: 14, weight: .semibold)).lineLimit(1)
                     Spacer()
-                    Text(l.thru == "F" ? "F" : "Thru \(l.thru)").font(.system(size: 12)).foregroundStyle(FC.muted).frame(width: 60, alignment: .leading)
+                    Text(l.thru == "F" || l.thru.hasPrefix("R") ? l.thru : "Thru \(l.thru)").font(.system(size: 12)).foregroundStyle(FC.muted).frame(width: 60, alignment: .leading)
                     Text(scoreText(l)).font(FC.display(22)).foregroundStyle(scoreColor(l)).lineLimit(1).fixedSize().frame(minWidth: 58, alignment: .trailing)
                 }
                 .padding(.leading, 16).padding(.trailing, 20).padding(.vertical, 7)
@@ -331,5 +339,45 @@ struct InvitesTile: View {
         guard let html = await doc.invitePreview() else { return }
         let f = FileManager.default.temporaryDirectory.appendingPathComponent("flagcast-invite-preview.html")
         do { try html.write(to: f, atomically: true, encoding: .utf8); NSWorkspace.shared.open(f) } catch { doc.flash("The preview didn’t open.") }
+    }
+}
+
+
+/// Multi-day: each round with its date, which one the carts are scoring, and a button to play another round now
+/// (two rounds on one day, or back a round to fix a card). Each morning the server moves on to that day's round by itself.
+struct RoundsTile: View {
+    @Bindable var doc: DeskDoc
+    var live: EventState
+    @State private var sure: Int?
+    var body: some View {
+        let now = Core.roundNow(live)
+        VStack(spacing: 0) {
+            HStack {
+                Text("Rounds").font(.system(size: 14, weight: .bold))
+                Spacer()
+                Text(Core.roundName(live)).font(.system(size: 13, weight: .semibold)).foregroundStyle(FC.muted)
+            }
+            .padding(.leading, 16).padding(.trailing, 20).padding(.vertical, 12)
+            ForEach(0..<Core.roundCount(live), id: \.self) { i in
+                Divider().overlay(FC.hairline)
+                HStack(spacing: 12) {
+                    Text("\(i + 1)").font(.system(size: 14, weight: .bold)).foregroundStyle(FC.muted).frame(width: 30, alignment: .leading)
+                    Text("Round \(i + 1)" + (Core.roundDay(live, i).isEmpty ? "" : " · \(Core.roundDay(live, i))")).font(.system(size: 14, weight: .semibold))
+                    Spacer()
+                    if i == now {
+                        Text(live.locked ? "Scoring now · locked" : "● Scoring now").font(.system(size: 13, weight: .semibold)).foregroundStyle(FC.ok)
+                    } else {
+                        Text(live.past[i] == nil ? "Not started" : live.past[i]!.locked ? "Played · locked" : "Played").font(.system(size: 12)).foregroundStyle(FC.muted)
+                        Button(sure == i ? "Sure? Click again" : "Play round \(i + 1) now") {
+                            if sure == i { sure = nil; Task { await doc.playRound(i) } } else { sure = i }
+                        }
+                        .disabled(doc.dirty)
+                        .help(doc.dirty ? "Save your changes first." : "The carts score round \(i + 1) from now on. The other rounds’ scores are kept.")
+                    }
+                }
+                .padding(.leading, 16).padding(.trailing, 20).padding(.vertical, 8)
+            }
+        }
+        .raisedCard()
     }
 }

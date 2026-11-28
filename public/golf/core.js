@@ -185,6 +185,84 @@ export function individuals(ev, scores, opts = {}) {
   return leaderboard({ ...ev, format: { ...f, type: f.type === 'stableford' ? 'stableford' : 'stroke', count: 1 } }, scores, { ...opts, individual: true });
 }
 
+// ---- multi-day tournaments: two or more rounds, each on its own date (a member-guest over three days, a 36-hole medal) ----
+// event.rounds = [{ date }] (empty or one = a one-day tournament, as before); event.round = the round being played now
+// (0 = round 1). The scores in the state are always that round's. The server keeps the other rounds in
+// event.past[i] = { format, scores, hcps: { teamId: { playerId | 'T': handicap } }, locked } (golf.js switchRound).
+// event.boardBy: 'total' (the leaderboard adds the rounds up; the default) or 'round' (each round on its own).
+export const roundCount = (ev) => Math.max(1, Math.min(4, (ev?.rounds || []).length));
+export const multiRound = (ev) => roundCount(ev) > 1;
+export const roundNow = (ev) => Math.min(roundCount(ev) - 1, Math.max(0, Number(ev?.round) || 0));
+// the board adds the rounds up (not in match play, where each round is its own set of matches)
+export const showsTotal = (ev) => multiRound(ev) && ev.boardBy !== 'round' && (ev.format || {}).type !== 'match';
+// "Round 2 of 3"
+export const roundName = (ev, i = roundNow(ev)) => `Round ${i + 1} of ${roundCount(ev)}`;
+// "Sat 12 Jun" for a round's date ('' when it has none)
+export function roundDay(ev, i = roundNow(ev)) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((ev?.rounds || [])[i]?.date || '');
+  if (!m) return '';
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getUTCDay()]} ${+m[3]} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+m[2] - 1]}`;
+}
+
+// the date a multi-day tournament goes by on this day (YYYY-MM-DD): today's round, else the next one, else the last
+export function dateNow(ev, today) {
+  const ds = (ev?.rounds || []).map((r) => r && r.date).filter(Boolean); if (!ds.length) return ev?.date || '';
+  return ds.find((d) => d === today) || ds.find((d) => d > today) || ds[ds.length - 1];
+}
+
+// the event as it was in round i (that round's format and handicaps) with its scores; null for a round not played yet
+export function roundOf(ev, i, scores = ev.scores) {
+  if (i === roundNow(ev)) return { ev, scores: scores || {} };
+  const p = (ev.past || {})[i]; if (!p) return null;
+  const hc = p.hcps || {};
+  const teams = (ev.teams || []).map((t) => {
+    const h = hc[t.id]; if (!h) return t;
+    return { ...t, hcp: h.T ?? t.hcp, players: (t.players || []).map((x) => ({ ...x, hcp: h[x.id] ?? x.hcp })) };
+  });
+  return { ev: { ...ev, format: p.format || ev.format, teams, locked: !!p.locked }, scores: p.scores || {} };
+}
+
+// the leaderboard over every round: each line is this round's line (its card, thru and today's score) plus
+//   rounds: [{ score, total, played, thru, nr } | null for each round], today: { score, played, pos } (this round alone),
+//   and score / toPar / total / played / nr / pos for all the rounds together.
+// fn makes one round's lines: leaderboard (the default) or individuals.
+export function totalBoard(ev, scores, opts = {}, fn = leaderboard) {
+  const now = roundNow(ev), stab = (ev.format || {}).type === 'stableford';
+  const per = Array.from({ length: roundCount(ev) }, (_, i) => {
+    const r = roundOf(ev, i, scores);
+    return r ? new Map(fn(r.ev, r.scores, { ...opts, flight: null }).map((l) => [l.key, l])) : null;
+  });
+  const lines = fn(ev, scores, opts).map((l) => {
+    const rounds = per.map((m) => { const x = m && m.get(l.key); return x && x.played ? { score: x.score, total: x.total, played: x.played, thru: x.thru, nr: x.nr } : null; });
+    const got = rounds.filter(Boolean);
+    return {
+      ...l, rounds, today: { score: l.score, played: l.played, pos: l.pos },
+      score: got.reduce((a, r) => a + r.score, 0), toPar: got.reduce((a, r) => a + (stab ? 0 : r.score), 0),
+      total: got.reduce((a, r) => a + r.total, 0), played: got.reduce((a, r) => a + r.played, 0), nr: got.some((r) => r.nr),
+      // nothing yet in this round: "R1 F" (where it stands after the last round played)
+      thru: rounds[now] || !got.length ? l.thru : `R${rounds.lastIndexOf(got[got.length - 1]) + 1} F`,
+    };
+  });
+  lines.sort((a, b) => {
+    if (!a.played !== !b.played) return a.played ? -1 : 1;
+    if (a.nr !== b.nr) return a.nr ? 1 : -1;
+    const d = stab ? b.score - a.score : a.score - b.score;
+    return d || b.played - a.played || a.name.localeCompare(b.name);
+  });
+  let pos = 0;
+  lines.forEach((l, i) => {
+    const tied = (o) => o && o.played && l.played && o.nr === l.nr && o.score === l.score;
+    if (!tied(lines[i - 1])) pos = i + 1;
+    l.pos = l.played ? (tied(lines[i - 1]) || tied(lines[i + 1]) ? `T${pos}` : String(pos)) : '';
+  });
+  return lines;
+}
+
+// the leaderboard every page shows: the total over the rounds when the tournament adds them up, else this round's
+export const board = (ev, scores, opts = {}) => (showsTotal(ev) && !opts.round ? totalBoard(ev, scores, opts) : leaderboard(ev, scores, opts));
+export const indivBoard = (ev, scores, opts = {}) => (showsTotal(ev) && !opts.round && hasIndividuals(ev) ? totalBoard(ev, scores, opts, individuals) : individuals(ev, scores, opts));
+
 // ---- match play: two teams head to head, hole by hole ----
 // Singles: one player a side. Four-ball: each side's best ball. Scramble: one ball a side (entered as 'T', team handicap).
 // Strokes come off the lowest player in the match (allowance first). A picked-up ball loses the hole to any score.

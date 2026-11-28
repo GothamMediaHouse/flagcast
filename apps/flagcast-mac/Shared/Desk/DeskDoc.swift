@@ -47,6 +47,11 @@ final class DeskDoc {
         do { try await Net.desk(id, key, "lock", ["locked": on]); ev.locked = on; flash(on ? "Results locked. Scoring is closed." : "Results unlocked.") }
         catch { flash(error.localizedDescription) }
     }
+    /// Multi-day: the carts score round i (0 = round 1) from now on; its scores come back (golf.js op "round").
+    func playRound(_ i: Int) async {
+        do { try await Net.desk(id, key, "round", ["round": i]); ev.round = i; flash("Round \(i + 1) is on. Cart phones now score round \(i + 1).") }
+        catch { flash(error.localizedDescription) }
+    }
     /// A change made on the day (it saves at once, no Save needed).
     @discardableResult
     func day(_ op: String, _ extra: [String: Any] = [:], done: String? = nil) async -> [String: Any]? {
@@ -116,6 +121,6 @@ extension DeskEvent {
     mutating func apply(setup s: DeskEvent) {
         name = s.name; club = s.club; date = s.date; course = s.course; format = s.format; sideGames = s.sideGames; flights = s.flights
         teams = s.teams; screens = s.screens; cams = s.cams; sponsors = s.sponsors; schedule = s.schedule; pins = s.pins
-        displays = s.displays; fund = s.fund; contests = s.contests
+        displays = s.displays; fund = s.fund; contests = s.contests; rounds = s.rounds; boardBy = s.boardBy
     }
 }

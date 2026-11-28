@@ -29,6 +29,9 @@ struct Line: Hashable, Identifiable {
     var card: [CardRow]
     var played = 0, total = 0, toPar = 0, nr = false, score = 0
     var pos = "", thru = ""
+    /// multi-day (Core.totalBoard): each round's score (nil = not played), and this round's own score and holes
+    var rounds: [RoundScore?] = []
+    var todayScore = 0, todayPlayed = 0
     var id: String { entry.key }
     var key: String { entry.key }
     var teamId: String { entry.teamId }
@@ -37,6 +40,8 @@ struct Line: Hashable, Identifiable {
     var flight: String { entry.flight }
     var team: Team { entry.team }
 }
+
+struct RoundScore: Hashable { var score = 0, total = 0, played = 0, nr = false }
 
 struct HoleStats: Hashable {
     var holeNo: Int, par: Int, eagle = 0, birdie = 0, par0 = 0, bogey = 0, worse = 0
@@ -333,6 +338,84 @@ enum Core {
         return GroupInfo(name: best.map { per ? (team.name.isEmpty ? $0.entry.sub : team.name) : $0.name } ?? team.name,
                          thru: best?.thru ?? "—", score: best.map { $0.played > 0 ? fmtPar($0.score, stab) : "—" } ?? "—",
                          pos: best.map { $0.pos.isEmpty ? "—" : $0.pos } ?? "—", players: players)
+    }
+
+    // MARK: multi-day (public/golf/core.js roundCount … totalBoard)
+    static func roundCount(_ ev: EventState) -> Int { max(1, min(4, ev.rounds.count)) }
+    static func multiRound(_ ev: EventState) -> Bool { roundCount(ev) > 1 }
+    static func roundNow(_ ev: EventState) -> Int { min(roundCount(ev) - 1, max(0, ev.round)) }
+    /// the board adds the rounds up (not in match play, where each round is its own set of matches)
+    static func showsTotal(_ ev: EventState) -> Bool { multiRound(ev) && ev.boardBy != "round" && ev.format.type != "match" }
+    /// "Round 2 of 3"
+    static func roundName(_ ev: EventState, _ i: Int? = nil) -> String { "Round \((i ?? roundNow(ev)) + 1) of \(roundCount(ev))" }
+    /// "Sat 12 Jun" for a round's date ("" when it has none)
+    static func roundDay(_ ev: EventState, _ i: Int? = nil) -> String {
+        let i = i ?? roundNow(ev)
+        guard i < ev.rounds.count else { return "" }
+        let f = DateFormatter(); f.calendar = Calendar(identifier: .gregorian); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; f.timeZone = TimeZone(identifier: "UTC")
+        guard let d = f.date(from: ev.rounds[i].date) else { return "" }
+        f.dateFormat = "EEE d MMM"
+        return f.string(from: d)
+    }
+    /// the event as it was in round i (that round's format and handicaps) with its scores; nil for a round not played yet
+    static func roundOf(_ ev: EventState, _ i: Int, _ scores: Scores? = nil) -> (ev: EventState, scores: Scores)? {
+        if i == roundNow(ev) { return (ev, scores ?? ev.scores) }
+        guard let p = ev.past[i] else { return nil }
+        var e = ev
+        if let f = p.format { e.format = f }
+        e.locked = p.locked
+        e.teams = ev.teams.map { t in
+            guard let h = p.hcps[t.id] else { return t }
+            var t = t; t.hcp = h["T"] ?? t.hcp
+            t.players = t.players.map { var x = $0; x.hcp = h[x.id] ?? x.hcp; return x }
+            return t
+        }
+        return (e, p.scores)
+    }
+    /// The leaderboard over every round: each line is this round's line plus rounds (each round's score), todayScore /
+    /// todayPlayed, and score / toPar / total / played / nr / pos for all the rounds together. individual: the Individuals board.
+    static func totalBoard(_ ev: EventState, _ scores: Scores, flight: String? = nil, mode: String? = nil, individual: Bool = false) -> [Line] {
+        let now = roundNow(ev), stab = ev.format.type == "stableford"
+        func one(_ e: EventState, _ s: Scores, _ fl: String?) -> [Line] { individual ? individuals(e, s, flight: fl, mode: mode) : leaderboard(e, s, flight: fl, mode: mode) }
+        let per: [[String: Line]?] = (0..<roundCount(ev)).map { i in
+            guard let r = roundOf(ev, i, scores) else { return nil }
+            return Dictionary(one(r.ev, r.scores, nil).map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
+        }
+        var lines: [Line] = one(ev, scores, flight).map { l in
+            var x = l
+            x.rounds = per.map { m in m?[l.key].flatMap { $0.played > 0 ? RoundScore(score: $0.score, total: $0.total, played: $0.played, nr: $0.nr) : nil } }
+            let got = x.rounds.compactMap { $0 }
+            x.todayScore = l.score; x.todayPlayed = l.played
+            x.score = got.reduce(0) { $0 + $1.score }; x.toPar = stab ? 0 : x.score
+            x.total = got.reduce(0) { $0 + $1.total }; x.played = got.reduce(0) { $0 + $1.played }; x.nr = got.contains { $0.nr }
+            // nothing yet in this round: "R1 F" (where it stands after the last round played)
+            if x.rounds[now] == nil, let last = x.rounds.lastIndex(where: { $0 != nil }) { x.thru = "R\(last + 1) F" }
+            return x
+        }
+        func cmp(_ a: Line, _ b: Line) -> Int {
+            if (a.played == 0) != (b.played == 0) { return a.played > 0 ? -1 : 1 }
+            if a.nr != b.nr { return a.nr ? 1 : -1 }
+            let d = stab ? b.score - a.score : a.score - b.score
+            if d != 0 { return d }
+            if b.played != a.played { return b.played - a.played }
+            switch a.name.localizedCompare(b.name) { case .orderedAscending: return -1; case .orderedDescending: return 1; default: return 0 }
+        }
+        lines = lines.stableSorted { cmp($0, $1) < 0 }
+        var pos = 0
+        func tied(_ o: Line?, _ l: Line) -> Bool { guard let o else { return false }; return o.played > 0 && l.played > 0 && o.nr == l.nr && o.score == l.score }
+        for i in lines.indices {
+            let l = lines[i], prev = i > 0 ? lines[i - 1] : nil, next = i + 1 < lines.count ? lines[i + 1] : nil
+            if !tied(prev, l) { pos = i + 1 }
+            lines[i].pos = l.played > 0 ? (tied(prev, l) || tied(next, l) ? "T\(pos)" : String(pos)) : ""
+        }
+        return lines
+    }
+    /// the leaderboard every screen shows: the total over the rounds when the tournament adds them up, else this round's
+    static func board(_ ev: EventState, _ scores: Scores, flight: String? = nil, mode: String? = nil) -> [Line] {
+        showsTotal(ev) ? totalBoard(ev, scores, flight: flight, mode: mode) : leaderboard(ev, scores, flight: flight, mode: mode)
+    }
+    static func indivBoard(_ ev: EventState, _ scores: Scores, flight: String? = nil, mode: String? = nil) -> [Line] {
+        showsTotal(ev) && ev.format.hasIndividuals ? totalBoard(ev, scores, flight: flight, mode: mode, individual: true) : individuals(ev, scores, flight: flight, mode: mode)
     }
 
     /// Every player on their own line, whatever the team format (a club championship's gross and net medal), with flights.

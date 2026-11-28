@@ -380,20 +380,34 @@ struct ScorecardScreen: View {
     @ViewBuilder private func roundPage(_ s: EventState, _ t: Team) -> some View {
         let l = model.line(), stab = s.format.isStableford
         let lb = Core.leaderboard(s, model.myScores())
+        // multi-day: the total over the rounds, and where the team stands on it
+        let tl = Core.showsTotal(s) ? Core.board(s, model.myScores()).first { $0.teamId == t.id } : nil
+        let rn = Core.multiRound(s) ? "Round \(Core.roundNow(s) + 1) · " : ""
         if let r = myMatch(s, t) {
             matchCard(s, t, r)
         } else {
         HStack(alignment: .top, spacing: 0) {
-            summary(stab ? "Points" : s.format.show == "gross" ? "Gross to par" : "Net to par",
+            summary(rn + (stab ? "Points" : s.format.show == "gross" ? "Gross to par" : "Net to par"),
                     l.map { $0.played > 0 ? Core.fmtPar($0.score, stab).replacingOccurrences(of: " pts", with: "") : "—" } ?? "—",
                     red: (l?.score ?? 0) < 0 && !stab && (l?.played ?? 0) > 0)
             Rectangle().fill(Color.fcLine).frame(width: 1).padding(.vertical, 4)
-            summary("Position", l.map { $0.pos.isEmpty ? "—" : $0.pos } ?? "—", sub: lb.isEmpty ? "" : "of \(lb.count)")
+            summary(tl != nil ? "Overall" : "Position", (tl ?? l).map { $0.pos.isEmpty ? "—" : $0.pos } ?? "—", sub: lb.isEmpty ? "" : "of \(lb.count)")
             Rectangle().fill(Color.fcLine).frame(width: 1).padding(.vertical, 4)
             summary("Thru", l.map { $0.played > 0 ? $0.thru : "—" } ?? "—")
         }
         .fcCard(padding: 14)
         .accessibilityElement(children: .combine)
+
+        if let tl, tl.played > 0 {
+            HStack {
+                Text("Total after \(Core.roundNow(s) + 1) of \(Core.roundCount(s)) rounds").font(.subheadline)
+                Spacer()
+                Text(Core.fmtPar(tl.score, stab).replacingOccurrences(of: " pts", with: stab ? " pts" : ""))
+                    .font(FCType.display(22)).foregroundStyle(!stab && tl.score < 0 ? Color.fcRed : Color.fcInk)
+            }
+            .fcCard(padding: 14)
+            .accessibilityElement(children: .combine)
+        }
 
         if let k = lb.firstIndex(where: { $0.teamId == t.id }) {
             VStack(alignment: .leading, spacing: 0) {

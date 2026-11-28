@@ -14,9 +14,10 @@ export const KEEP_DAYS_ALL = 730;
 export const HIDDEN_DAYS = 30;
 export const REMOVED = 'Removed player';
 
-// the tournament's day (its date, else when it was made), as ms
+// the tournament's day (its date, a multi-day tournament's last round, else when it was made), as ms
 export function eventDay(ev) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ev?.date || '');
+  const last = (ev?.rounds || []).map((r) => r && r.date).filter(Boolean).sort().pop();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(last || ev?.date || '');
   return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : Number(ev?.created) || 0;
 }
 

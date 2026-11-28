@@ -20,7 +20,7 @@
 //
 // Pages: /g/<id> live page · /g/<id>/board screens · /g/<id>/desk#<key> desk · /g/<id>/map#<key> course map · /g/<id>/s/<code> cart · /g/<id>/cards QR cards
 import { DurableObject } from 'cloudflare:workers';
-import { defaultHoles, courseHcp, leaderboard, contestNeedsOk, teamBall, CLIP_BACK, paceGoal, paceOrder } from './public/golf/core.js';
+import { defaultHoles, courseHcp, leaderboard, contestNeedsOk, teamBall, CLIP_BACK, paceGoal, paceOrder, dateNow } from './public/golf/core.js';
 import { trackingOn, cleanPin, yds, holeMap } from './public/golf/gps.js';
 import { demoGroups, demoPace } from './demogroups.js';
 import { same, pinProblem, mergeTeams, stamp, keepMatch, PIN_WAIT, PIN_TRIES_IP, PIN_TRIES_ALL } from './setup.js';
@@ -278,8 +278,12 @@ function cleanSetup(s, old) {
     };
   });
   const f = s.format || {};
+  const rounds = cleanRounds(s, old);
   return {
-    name: clip(s.name, 80), club: clip(s.club, 80), date: clip(s.date, 20), course: { name: clip(s.course?.name, 80), holes, tees,
+    name: clip(s.name, 80), club: clip(s.club, 80), date: rounds.length ? rounds[0].date : clip(s.date, 20),
+    // multi-day: each round's date (core.js roundCount); boardBy: the leaderboard adds the rounds up ('total') or not ('round')
+    rounds, boardBy: (s.boardBy === undefined ? old.boardBy : s.boardBy) === 'round' ? 'round' : 'total',
+    course: { name: clip(s.course?.name, 80), holes, tees,
       // where the course is (from Find the course), so the course map opens on it
       at: (() => { const a = s.course?.at || old.course?.at; const lat = Number(a?.lat), lng = Number(a?.lng);
         return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && (lat || lng) ? { lat, lng } : null; })() },
@@ -333,6 +337,23 @@ function cleanSetup(s, old) {
   };
 }
 
+// multi-day tournaments: [{ date }] for each round, two to four of them (none = a one-day tournament). Round 1's date is
+// the tournament's date. A Manager from before multi-day doesn't send rounds: they stay, with round 1 on the date it sends.
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+export function cleanRounds(s, old = {}) {
+  const sent = Array.isArray(s.rounds);
+  const list = (sent ? s.rounds : old.rounds || []).slice(0, 4).map((r) => ({ date: DAY.test(r?.date || '') ? r.date : '' }));
+  if (list.length < 2) return [];
+  if (!sent && DAY.test(s.date || '')) list[0].date = s.date;
+  return list;
+}
+// the US date it is now (the day runs 04:00 to 04:00 UTC, so an evening on the west coast is still that day)
+export const usToday = (now = Date.now()) => new Date(now - 4 * 3600000).toISOString().slice(0, 10);
+// the round whose date is today (the first, when two rounds share a day), or -1
+export const roundToday = (ev, now = Date.now()) => (ev.rounds || []).findIndex((r) => r.date === usToday(now));
+// the date the club's TVs and lists go by: today's round, else the next one, else the last (core.js dateNow)
+export const tvDate = (ev, now = Date.now()) => dateNow(ev, usToday(now));
+
 // a long drive or closest to the pin contest. self: golfers enter their own results on the contest hole (default on).
 // check: which golfer entries wait for a pro's OK before they count on the TVs: 'top' (any that would make the top 3,
 // the default), 'all' or 'none' (trust golfers). prize: points for the winner, 0 = none (points only, never money).
@@ -382,10 +403,45 @@ export class GolfEvent extends DurableObject {
     return this.sc;
   }
 
+  // ---- multi-day: the rounds not being played, kept under 'past' (core.js roundOf) ----
+  async pastData() {
+    if (!this.pa) this.pa = (await this.ctx.storage.get('past')) || {};
+    return this.pa;
+  }
+  // play round n now: this round's scores, format, handicaps, lock and clocks are put away, and round n's come back
+  // (a round not played yet starts empty, with the format the last one had). Group spots go: they were today's.
+  async switchRound(n) {
+    const ev = this.ev, cur = Math.max(0, ev.round || 0);
+    if (n === cur) return;
+    const sc = await this.scores(), past = await this.pastData(), pc = await this.paceData();
+    past[cur] = { format: ev.format, locked: !!ev.locked, scores: sc, pace: pc,
+      hcps: Object.fromEntries(ev.teams.map((t) => [t.id, { T: t.hcp, ...Object.fromEntries(t.players.map((p) => [p.id, p.hcp])) }])) };
+    const nx = past[n] || {}; delete past[n];
+    const keys = Object.keys(sc).map((id) => `s:${id}`);
+    for (let i = 0; i < keys.length; i += 128) await this.ctx.storage.delete(keys.slice(i, i + 128));
+    this.sc = { ...(nx.scores || {}) };
+    for (const [id, v] of Object.entries(this.sc)) await this.ctx.storage.put(`s:${id}`, v);
+    this.pc = { ...(nx.pace || {}) }; await this.ctx.storage.put('pace', this.pc);
+    if (nx.format) ev.format = nx.format;
+    ev.locked = !!nx.locked; ev.round = n;
+    await this.ctx.storage.put('past', past);
+    if (Object.keys(await this.spots()).length) await this.wipeSpots();
+  }
+  // on the morning of a round's date, the tournament moves on to it by itself (once: the desk can still go back a round)
+  async autoRound() {
+    const ev = this.ev; if ((ev.rounds || []).length < 2) return false;
+    const r = roundToday(ev);
+    if (r <= (ev.autoRound || 0)) return false;
+    ev.autoRound = r;
+    if (r > (ev.round || 0)) await this.switchRound(r);
+    await this.ctx.storage.put('event', ev);
+    return true;
+  }
+
   // what anyone can see: the setup without the cart codes or the desk key
   async publicState() {
     const ev = await this.load(), sc = await this.scores();
-    const { key, pins, log, clog, logo, clubBrand, demo, photos, removed, invites, ...rest } = ev; // logos and photos go by address, not in the state
+    const { key, pins, log, clog, logo, clubBrand, demo, photos, removed, invites, autoRound, ...rest } = ev; // logos and photos go by address, not in the state
 
     const teams = ev.teams.map(({ code, sv, ...t }) => ({ ...t, players: t.players.map(({ ghin, email, ...p }) => p) })); // GHIN numbers and emails stay with the desk
     const online = Object.fromEntries((ev.displays || []).map((d) => [d.id, this.ctx.getWebSockets(`d:${d.id}`).length]));
@@ -401,8 +457,15 @@ export class GolfEvent extends DurableObject {
     const real = await this.paceData();
     // (not the "Try a demo" cart: its clock starts when the scorecard opens, see the scorecard's myPace)
     const pace = demo ? { ...demoPace(ev, scores, Date.now(), new Set([...Object.keys(real), tryTeam(ev)?.id])), ...real } : real;
+    // multi-day: the other rounds' scores (values only), formats, handicaps and locks
+    const past = {};
+    if ((ev.rounds || []).length > 1) for (const [i, p] of Object.entries(await this.pastData())) {
+      if (Number(i) >= ev.rounds.length) continue;
+      past[i] = { format: p.format, locked: !!p.locked, hcps: p.hcps || {},
+        scores: Object.fromEntries(Object.entries(p.scores || {}).map(([t, s]) => [t, Object.fromEntries(Object.entries(s).map(([k, arr]) => [k, arr.map((x) => (x ? x.v : null))]))])) };
+    }
     // a junior event turns things off for golfers (privacy.js juniorFlags)
-    return { ...rest, ...juniorFlags(ev), teams, scores, lastAt, online, pace, paceGoal: paceGoal(ev), brand: brandFor(ev), photos: photoLinks(ev) };
+    return { ...rest, ...juniorFlags(ev), round: ev.round || 0, past, teams, scores, lastAt, online, pace, paceGoal: paceGoal(ev), brand: brandFor(ev), photos: photoLinks(ev) };
   }
 
   // ---- pace of play: ev.pace in the public state (see core.js paceOf), kept under its own key ----
@@ -512,6 +575,7 @@ export class GolfEvent extends DurableObject {
         'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'" } });
     }
     const op = url.pathname.split('/').pop();
+    if (['state', 'ws', 'score', 'desk', 'where', 'pro', 'tvinfo'].includes(op) && await this.autoRound()) this.ctx.waitUntil(this.broadcast());
     if (op === 'state') return json(await this.publicState());
     // the logo golfers and the TVs see (the tournament's own, else its club's); none when it shows Flagcast's
     if (op === 'logo') {
@@ -556,7 +620,7 @@ export class GolfEvent extends DurableObject {
     // the club's TVs (tv.js through the club directory). Never routed from the web.
     // tvinfo: what a TV needs to pick today's tournament. tvjoin { tv: { id, name, where } }: the TV becomes one of this
     // tournament's screens (so the Manager's screen controls and playlists work for it). tvleave { tv: id }: it's gone
-    if (op === 'tvinfo') return json({ name: ev.name, date: ev.date || '', locked: !!ev.locked, created: ev.created || 0, last: Math.max(0, ...Object.values(await this.scores()).flatMap((p) => Object.values(p).flatMap((arr) => arr.map((x) => (x ? x.at || 0 : 0))))) });
+    if (op === 'tvinfo') return json({ name: ev.name, date: tvDate(ev), locked: !!ev.locked, created: ev.created || 0, last: Math.max(0, ...Object.values(await this.scores()).flatMap((p) => Object.values(p).flatMap((arr) => arr.map((x) => (x ? x.at || 0 : 0))))) });
     // tvjoin also takes { tvs: [...] } (every club TV at once, when a Manager opens this tournament) and { only: true }
     // (rename the TV where it already is, don't add it). It answers { added }: how many TVs are new here.
     if (op === 'tvjoin' || op === 'tvleave') {
@@ -595,6 +659,8 @@ export class GolfEvent extends DurableObject {
       if (plan.personal) {
         changed = stripPersonal(ev) || changed;
         await this.ctx.storage.delete('pace'); this.pc = null; // the round and hole times
+        const pa = await this.pastData(); // and the other rounds' (multi-day)
+        if (Object.values(pa).some((r) => r.pace)) { for (const r of Object.values(pa)) delete r.pace; await this.ctx.storage.put('past', pa); }
         ev.tidied = now; changed = true;
       }
       if (plan.replays) changed = dropOldReplays(ev, now) || changed;
@@ -610,7 +676,7 @@ export class GolfEvent extends DurableObject {
     }
     if (op === 'wipe') {
       for (const w of this.ctx.getWebSockets()) { try { w.close(1000, 'Deleted'); } catch {} }
-      await this.ctx.storage.deleteAll(); this.ev = null; this.sc = null;
+      await this.ctx.storage.deleteAll(); this.ev = null; this.sc = null; this.pa = null;
       return json({ ok: true });
     }
     if (op === 'cams') {
@@ -721,6 +787,7 @@ export class GolfEvent extends DurableObject {
       // a Manager from before match play doesn't send the pairings, the match settings or each team's cup side: keep them
       if (b.setup) b.setup = keepMatch(b.setup, ev);
       const s = cleanSetup(b.setup || {}, ev);
+      if ((ev.round || 0) > 0 && s.rounds.length <= ev.round) return json({ error: `Round ${ev.round + 1} is being played. Go back to round 1 on the Overview before taking rounds off.` }, 400);
       keepTVs(s, ev.displays);
       const pp = pinProblem(s.pins, ev.pins || []); if (pp) return json({ error: pp }, 400);
       s.cams = ev.cams || {};
@@ -753,6 +820,10 @@ export class GolfEvent extends DurableObject {
       ev.removed = ev.removed.filter((x) => x !== r);
       const x = await this.ctx.storage.get(`x:${r.team.id}`);
       if (x) { const sc = await this.scores(); sc[r.team.id] = x; await this.ctx.storage.put(`s:${r.team.id}`, x); await this.ctx.storage.delete(`x:${r.team.id}`); }
+    } else if (b.op === 'round') { // multi-day: play another round now ({ round: 0-based }); its scores come back
+      const n = Number(b.round);
+      if (!Number.isInteger(n) || n < 0 || n >= (ev.rounds || []).length) return json({ error: 'That round isn’t in this tournament.' }, 400);
+      await this.switchRound(n);
     } else if (b.op === 'ace') ev.aces = (ev.aces || []).filter((a) => a.at !== b.remove);
     else if (b.op === 'clear') {
       const sc = await this.scores(); delete sc[b.team]; await this.ctx.storage.delete(`s:${b.team}`);

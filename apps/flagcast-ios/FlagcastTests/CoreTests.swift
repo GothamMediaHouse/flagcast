@@ -323,4 +323,23 @@ final class CoreTests: XCTestCase {
         XCTAssertEqual(Core.individuals(shev, shev.scores, flight: "A").count, 3)
         XCTAssertEqual(Core.leaderboard(shev, shev.scores).count, 2)
     }
+
+    /// Multi-day (core.js totalBoard): round 1 put away in past, round 2 being played; the total adds them up.
+    func testMultiDayTotal() throws {
+        let js = #"{"format":{"type":"bestball","count":1,"allowance":100,"show":"net"},"rounds":[{"date":"2027-06-11"},{"date":"2027-06-12"},{"date":"2027-06-13"}],"round":1,"teams":[{"id":"teama","name":"Fox / Ramirez","start":1,"players":[{"id":"a1","name":"Matt Fox","hcp":0},{"id":"a2","name":"Luis Ramirez","hcp":0}]},{"id":"teamb","name":"Chen / Walsh","start":1,"players":[{"id":"b1","name":"Amy Chen","hcp":0},{"id":"b2","name":"Pat Walsh","hcp":0}]}],"past":{"0":{"format":{"type":"bestball","count":1,"allowance":100,"show":"net"},"locked":true,"hcps":{},"scores":{"teama":{"a1":[3,4,4],"a2":[5,5,5]},"teamb":{"b1":[4,5,4],"b2":[5,6,5]}}}},"scores":{"teama":{"a1":[5],"a2":[6]},"teamb":{"b1":[2,4],"b2":[5,5]}}}"#
+        var ev = try JSONDecoder().decode(EventState.self, from: Data(js.utf8))
+        ev.course.holes = Core.defaultHoles()
+        XCTAssertEqual(Core.roundCount(ev), 3); XCTAssertEqual(Core.roundNow(ev), 1); XCTAssertTrue(Core.showsTotal(ev)); XCTAssertEqual(Core.roundName(ev), "Round 2 of 3")
+        XCTAssertEqual(Core.roundDay(ev, 0), "Fri 11 Jun")
+        let tb = Core.board(ev, ev.scores)
+        XCTAssertEqual(tb.map(\.name), ["Chen / Walsh", "Fox / Ramirez"])
+        XCTAssertEqual(tb.map(\.score), [-3, -1]); XCTAssertEqual(tb.map(\.todayScore), [-3, 1]); XCTAssertEqual(tb.map(\.pos), ["1", "2"])
+        XCTAssertEqual(tb[0].rounds.map { $0?.score }, [0, -3, nil]); XCTAssertEqual(tb.map(\.played), [5, 4])
+        XCTAssertEqual(Core.leaderboard(ev, ev.scores).map(\.score), [-3, 1])
+        var each = ev; each.boardBy = "round"
+        XCTAssertEqual(Core.board(each, each.scores).map(\.score), [-3, 1])
+        // between rounds: nothing yet today, the board shows where they stood ("R1 F")
+        var next = ev; next.round = 2; next.past[1] = PastRound(); next.past[1]!.scores = ev.scores; next.scores = [:]
+        XCTAssertEqual(Core.board(next, next.scores).map(\.thru), ["R2 F", "R2 F"])
+    }
 }
