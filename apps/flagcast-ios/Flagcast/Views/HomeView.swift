@@ -21,6 +21,9 @@ struct HomeView: View {
     @State private var proOpen = false
     @State private var demoError: String?
     @State private var opening = false
+    /// the Try a demo card: the golfer closed it (X), or this phone has been in a real tournament. A small link stays.
+    @AppStorage("demoCardHidden") private var demoHidden = false
+    @AppStorage("demoId") private var demoId = ""
     @State private var editing = false
     @State private var confirmAll = false
     @FocusState private var focus: Field?
@@ -32,7 +35,7 @@ struct HomeView: View {
                 hero
                 VStack(spacing: 14) {
                     playCard
-                    demoCard
+                    if showDemoCard { demoCard.transition(.opacity) }
                     if let r = current { resumeCard(r) }
                     if !others.isEmpty || !pros.isEmpty { recentCard }
                     proCard
@@ -136,10 +139,13 @@ struct HomeView: View {
         .fcCard(padding: 18)
     }
 
+    /// the big card shows until the golfer closes it or joins a real tournament (one that isn't the demo)
+    private var showDemoCard: Bool { !demoHidden && !recents.contains { $0.id != demoId } }
+
     /// No cart card (or Apple's reviewer): open the live Demo tournament on its sample cart, no code or sign-in
     private var demoCard: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 14) {
+            HStack(alignment: .top, spacing: 14) {
                 Image(systemName: "play.fill").font(.system(size: 22, weight: .semibold))
                     .frame(width: 54, height: 54).background(Color.fcGreen, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .foregroundStyle(Color.fcFlag)
@@ -147,6 +153,13 @@ struct HomeView: View {
                     Text("No code? Try a demo").font(.title3.weight(.bold))
                     Text("A live sample tournament. No sign-in.").font(.subheadline).foregroundStyle(Color.fcMuted)
                 }
+                Spacer(minLength: 0)
+                Button { withAnimation(.snappy) { demoHidden = true } } label: {
+                    Image(systemName: "xmark").font(.footnote.weight(.bold)).foregroundStyle(Color.fcMuted)
+                        .frame(width: 32, height: 32).background(Color.fcMuted.opacity(0.12), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Hide Try a demo")
             }
             Button { Task { await openDemo() } } label: { if opening { ProgressView() } else { Text("Try a demo") } }
                 .buttonStyle(.fcPlain).disabled(opening)
@@ -162,6 +175,7 @@ struct HomeView: View {
         opening = true; defer { opening = false }
         do {
             let d = try await API.demo()
+            demoId = d.id
             let s = try await API.state(d.id)
             Recents.remember(id: d.id, name: s.name, code: d.code)
             router.go(.score(id: d.id, code: d.code))
@@ -338,11 +352,23 @@ struct HomeView: View {
     }
 
     private var footer: some View {
-        Link("flagcast.app", destination: Server.production)
-            .font(.footnote).foregroundStyle(Color.fcMuted).padding(.top, 6)
-            #if DEBUG
-            .onLongPressGesture { serverSheet = true }
-            #endif
+        VStack(spacing: 10) {
+            // the demo is always one tap away, once its card is out of the way
+            if !showDemoCard {
+                Button { Task { await openDemo() } } label: {
+                    if opening { ProgressView() } else { Label("Try a demo", systemImage: "play.fill") }
+                }
+                .font(.subheadline.weight(.semibold)).tint(Color.fcPrimary).disabled(opening)
+                .accessibilityHint("Opens a sample tournament on a sample cart")
+                if let demoError { Text(demoError).font(.footnote).foregroundStyle(Color.fcRed) }
+            }
+            Link("flagcast.app", destination: Server.production)
+                .font(.footnote).foregroundStyle(Color.fcMuted)
+                #if DEBUG
+                .onLongPressGesture { serverSheet = true }
+                #endif
+        }
+        .padding(.top, 6)
     }
 
     private func join() async {

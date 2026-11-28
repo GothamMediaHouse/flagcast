@@ -77,6 +77,8 @@ struct TourHeader<Trailing: View, Below: View>: View {
     @ViewBuilder var trailing: Trailing
     @ViewBuilder var below: Below
     @Environment(Router.self) private var router
+    /// the golfer tapped the DEMO tag away (on this phone)
+    @AppStorage("demoTagHidden") private var demoTagHidden = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -94,10 +96,19 @@ struct TourHeader<Trailing: View, Below: View>: View {
                     } else {
                         HStack(spacing: 6) {
                             // a Demo tournament (Admin marked it, "Try a demo" opens it): a small pill, so nobody takes it for a real round
-                            if state?.brand.marked == true {
-                                Text("DEMO").font(.system(size: 10, weight: .heavy)).tracking(0.8).foregroundStyle(Color.fcOnFlag)
+                            // a tap on it hides it on this phone
+                            if state?.brand.marked == true && !demoTagHidden {
+                                Button { withAnimation(.snappy) { demoTagHidden = true } } label: {
+                                    HStack(spacing: 3) {
+                                        Text("DEMO").font(.system(size: 10, weight: .heavy)).tracking(0.8)
+                                        Image(systemName: "xmark").font(.system(size: 7, weight: .heavy))
+                                    }
+                                    .foregroundStyle(Color.fcOnFlag)
                                     .padding(.horizontal, 6).padding(.vertical, 2).background(Color.fcFlag, in: RoundedRectangle(cornerRadius: 5))
-                                    .accessibilityLabel("Demo tournament")
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Demo tournament")
+                                .accessibilityHint("Hides the demo tag")
                             }
                             Text(state?.title ?? title).font(.headline).lineLimit(1)
                         }

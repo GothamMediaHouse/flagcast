@@ -44,7 +44,10 @@ main { max-width: 480px; margin: -18px auto 0; padding: 0 16px calc(40px + env(s
 .scan .frame i { width: min(68vw, 300px); aspect-ratio: 1; border: 3px solid var(--flag); border-radius: 18px; box-shadow: 0 0 0 100vmax rgba(0,0,0,.45); }
 .scan .bottom { background: #000; color: #fff; padding: 16px 20px calc(18px + env(safe-area-inset-bottom, 0px)); text-align: center; display: grid; gap: 10px; }
 .scan .bottom p { margin: 0; font-size: .95rem; }
-.demo { border: 2px solid var(--flag); }
+.demo { border: 2px solid var(--flag); position: relative; }
+.demo .x { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; border: 0; border-radius: 50%; background: rgba(0,0,0,.06); color: var(--muted); font-size: 1rem; line-height: 1; cursor: pointer; }
+.demo h2 { padding-right: 40px; }
+.foot .linkbtn { display: block; margin: 0 auto 10px; font-size: .9rem; }
 .foot { text-align: center; font-size: .78rem; color: var(--muted); }
 .foot a { color: var(--muted); }
 </style>
@@ -70,7 +73,8 @@ main { max-width: 480px; margin: -18px auto 0; padding: 0 16px calc(40px + env(s
     </form>
   </section>
 
-  <section class="box demo" aria-labelledby="h-demo">
+  <section class="box demo" id="demoBox" aria-labelledby="h-demo">
+    <button class="x" id="demoHide" type="button" aria-label="Hide Try a demo">✕</button>
     <h2 id="h-demo">No code? Try a demo</h2>
     <p>A live sample tournament on a sample cart. No sign-in.</p>
     <button class="btn big" id="demoBtn">Try a demo</button>
@@ -94,7 +98,7 @@ main { max-width: 480px; margin: -18px auto 0; padding: 0 16px calc(40px + env(s
       <div class="err" id="proErr" role="alert" hidden></div>
     </form>
   </section>
-  <p class="foot"><a href="https://flagcast.app/">flagcast.app</a></p>
+  <div class="foot"><button class="linkbtn" id="demoLink" type="button" hidden>▶ Try a demo</button><div class="err" id="demoErr2" role="alert" hidden></div><a href="https://flagcast.app/">flagcast.app</a></div>
 </main>
 
 <div class="scan" id="scan" hidden>
@@ -164,14 +168,25 @@ $('joinForm').addEventListener('submit', async (e) => {
 });
 
 // no cart card (or an app reviewer): the live Demo tournament on its sample cart (GET /golf/api/demo)
-$('demoBtn').addEventListener('click', async () => {
-  const err = $('demoErr'); err.hidden = true; $('demoBtn').disabled = true;
+const keep = { get: (k) => { try { return localStorage.getItem(k) || ''; } catch { return ''; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+async function openDemo(btn, err) {
+  err.hidden = true; btn.disabled = true;
   try {
     const r = await fetch('/golf/api/demo', { cache: 'no-store' }); const j = await r.json().catch(() => ({}));
     if (!r.ok || !ID.test(j.id || '') || !CODE.test(j.code || '')) throw new Error(j.error || 'The demo isn’t available right now. Try again later.');
+    keep.set('flagcast:demoId', j.id);
     location.href = `/g/${j.id}/s/${j.code}`;
-  } catch (x) { err.textContent = /fetch/i.test(x.message) ? 'No signal. Check your connection and try again.' : x.message; err.hidden = false; $('demoBtn').disabled = false; }
-});
+  } catch (x) { err.textContent = /fetch/i.test(x.message) ? 'No signal. Check your connection and try again.' : x.message; err.hidden = false; btn.disabled = false; }
+}
+$('demoBtn').addEventListener('click', () => openDemo($('demoBtn'), $('demoErr')));
+$('demoLink').addEventListener('click', () => openDemo($('demoLink'), $('demoErr2')));
+// the big card shows until the golfer closes it (✕) or this phone has been in a real tournament; a small link stays
+function drawDemo() {
+  const demoId = keep.get('flagcast:demoId'), show = keep.get('flagcast:demoHidden') !== '1' && !recent().some((r) => r.id !== demoId);
+  $('demoBox').hidden = !show; $('demoLink').hidden = show;
+}
+$('demoHide').addEventListener('click', () => { keep.set('flagcast:demoHidden', '1'); drawDemo(); });
+drawDemo();
 
 $('proForm').addEventListener('submit', async (e) => {
   e.preventDefault();
