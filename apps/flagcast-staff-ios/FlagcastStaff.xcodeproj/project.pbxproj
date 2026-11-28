@@ -287,7 +287,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.9.25;
+				MARKETING_VERSION = 2.9.26;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.manager;
 				PRODUCT_NAME = "Flagcast Manager";
 				SDKROOT = iphoneos;
@@ -315,7 +315,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.9.25;
+				MARKETING_VERSION = 2.9.26;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.manager;
 				PRODUCT_NAME = "Flagcast Manager";
 				SDKROOT = iphoneos;

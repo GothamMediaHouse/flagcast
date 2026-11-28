@@ -22,7 +22,12 @@ export function attach(video, src, { live = true } = {}) {
     if (live) video.onerror = again;
     return null;
   }
-  const h = new Hls(live ? { liveSyncDurationCount: 1, liveMaxLatencyDurationCount: 4, maxLiveSyncPlaybackRate: 1.1, backBufferLength: 120 } : {});
+  // a big screen (club TVs, a laptop) starts on the sharpest picture and only steps down if it truly can't keep up:
+  // with a short live buffer hls.js never measures enough to step up from the small size it guesses at first
+  const big = Math.max(screen.width, innerWidth) >= 1000;
+  const h = new Hls(live ? { liveSyncDurationCount: 1, liveMaxLatencyDurationCount: 4, maxLiveSyncPlaybackRate: 1.1, backBufferLength: 120,
+    abrEwmaDefaultEstimate: big ? 8e6 : 2e6, abrBandWidthUpFactor: 0.9, capLevelToPlayerSize: !big } : {});
+  if (live && big) h.on(Hls.Events.MANIFEST_PARSED, (_, d) => { const n = (d && d.levels || h.levels || []).length; if (n) h.startLevel = n - 1; });
   h.loadSource(src); h.attachMedia(video); video._hls = h;
   if (live) h.on(Hls.Events.ERROR, (_, d) => { if (d && d.fatal) again(); });
   return h;

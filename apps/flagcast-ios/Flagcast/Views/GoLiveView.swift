@@ -209,12 +209,12 @@ final class GoLiveModel {
             guard let s = try await StreamSessionBuilderFactory.shared.make(url).setMode(.publish).build() else { return false }
             var v = await s.stream.videoSettings
             v.videoSize = orientation == .portrait ? CGSize(width: 720, height: 1280) : CGSize(width: 1280, height: 720)
-            v.bitRate = 2_500_000
+            v.bitRate = 4_000_000  // sharp 720p on big TVs; drops on its own when the signal is weak
             v.profileLevel = kVTProfileLevel_H264_High_AutoLevel as String
             v.maxKeyFrameIntervalDuration = 1  // short segments: TVs can sit closer to live
             v.expectedFrameRate = 30
             try? await s.stream.setVideoSettings(v)
-            await s.stream.setBitRateStrategy(GoLiveRate(mamimumVideoBitRate: 2_500_000) { [weak self] bytes, weak in
+            await s.stream.setBitRateStrategy(GoLiveRate(mamimumVideoBitRate: 4_000_000) { [weak self] bytes, weak in
                 Task { @MainActor in
                     guard let self else { return }
                     self.kbps = bytes * 8 / 1000
