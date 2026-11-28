@@ -391,6 +391,29 @@ struct GoLiveWho: Codable, Hashable {
     init(from d: Decoder) throws { by = ((try? d.container(keyedBy: CodingKeys.self).decodeIfPresent(String.self, forKey: .by)) ?? nil) ?? "" }
 }
 
+/// One group's times for pace of play (golf.js keeps them; public/golf/core.js paceOf), all in ms:
+/// s = the round started, d = hole → its first score from the cart, g = the hole the scorecard was last on and since when.
+struct PaceTimes: Codable, Hashable {
+    var s: Double = 0
+    var d: [Int: Double] = [:]
+    var gHole = 0, gAt: Double = 0
+    enum CodingKeys: String, CodingKey { case s, d, g }
+    struct G: Codable { var h: Int?; var at: Double? }
+    init(s: Double = 0, d: [Int: Double] = [:]) { self.s = s; self.d = d }
+    init(from dec: Decoder) throws {
+        let c = try dec.container(keyedBy: CodingKeys.self)
+        s = c.dbl(.s, 0)
+        let raw = (try? c.decodeIfPresent([String: Double].self, forKey: .d)) ?? [:]
+        d = Dictionary(uniqueKeysWithValues: raw.compactMap { k, v in Int(k).map { ($0, v) } })
+        if let g = try? c.decodeIfPresent(G.self, forKey: .g) { gHole = g.h ?? 0; gAt = g.at ?? 0 }
+    }
+    func encode(to e: Encoder) throws {
+        var c = e.container(keyedBy: CodingKeys.self)
+        try c.encode(s, forKey: .s); try c.encode(Dictionary(uniqueKeysWithValues: d.map { (String($0.key), $0.value) }), forKey: .d)
+        if gHole > 0 { try c.encode(G(h: gHole, at: gAt), forKey: .g) }
+    }
+}
+
 struct EventState: Codable, Hashable {
     var id = "", name = "", club = "", date = ""
     var course = Course()
@@ -429,10 +452,13 @@ struct EventState: Codable, Hashable {
     var camsOff: [Int] = []
     /// the desk turned off golfers' "Save your shot" (op "clip")
     var clipsOff = false
+    /// pace of play: each group's round start and hole times (Core.pace), and the goal in minutes for 18 holes
+    var pace: [String: PaceTimes] = [:]
+    var paceGoal = 255
 
     enum CodingKeys: String, CodingKey {
         case id, name, club, date, course, format, sideGames, flights, teams, matches, screens, cams, sponsors, schedule, displays, fund, contests
-        case locked, aces, flash, news, nudges, live, replays, map, pinsheet, scores, online, brand, lastAt, photos, notesOff, golive, camsOff, clipsOff
+        case locked, aces, flash, news, nudges, live, replays, map, pinsheet, scores, online, brand, lastAt, photos, notesOff, golive, camsOff, clipsOff, pace, paceGoal
     }
     init() {}
     init(from d: Decoder) throws {
@@ -468,6 +494,8 @@ struct EventState: Codable, Hashable {
         golive = Dictionary(uniqueKeysWithValues: rawLive.compactMap { k, v in Int(k).map { ($0, v.by) } })
         camsOff = (try? c.decodeIfPresent([Int].self, forKey: .camsOff)) ?? []
         clipsOff = c.bool(.clipsOff, false)
+        pace = ((try? c.decodeIfPresent([String: Lenient<PaceTimes>].self, forKey: .pace)) ?? [:]).compactMapValues(\.value)
+        paceGoal = c.int(.paceGoal, 255)
     }
     func encode(to e: Encoder) throws {
         var c = e.container(keyedBy: CodingKeys.self)
@@ -483,6 +511,7 @@ struct EventState: Codable, Hashable {
         try c.encode(notesOff, forKey: .notesOff)
         try c.encode(Dictionary(uniqueKeysWithValues: golive.map { (String($0.key), GoLiveWho(by: $0.value)) }), forKey: .golive)
         try c.encode(camsOff, forKey: .camsOff); try c.encode(clipsOff, forKey: .clipsOff)
+        try c.encode(pace, forKey: .pace); try c.encode(paceGoal, forKey: .paceGoal)
     }
 
     /// "Sat, Nov 21" for the tournament's day (it's stored as 2026-11-21, a day where the club is)

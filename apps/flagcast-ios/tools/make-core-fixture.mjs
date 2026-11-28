@@ -131,5 +131,20 @@ const marks = [];
 for (let v = 0; v <= 9; v++) for (const par of [3, 4, 5]) marks.push([v, par, core.mark(v, par)]);
 const dists = [0, 0.04, 3.04, 6.5, 12.99, 281.5, 300.49].flatMap((d) => [['ctp', d, core.fmtDist({ kind: 'ctp' }, d)], ['ld', d, core.fmtDist({ kind: 'ld' }, d)]]);
 
-writeFileSync(join(here, '../FlagcastTests/core-fixture.json'), JSON.stringify({ cases, strokes, playing, fmtPar, marks, dists }));
+// pace of play (core.js paceOf): a shotgun group part way round, one finished, one on the GPS's hole, a 9-hole round
+const M = 60000, T0 = Date.UTC(2026, 10, 28, 13), paces = [];
+{
+  const ev = makeEvent('bestball', { teams: 3, shotgun: true });
+  const ord = (t) => core.paceOrder(ev, t), [a, b, c] = ev.teams;
+  const full = {}; ord(b).forEach((h, i) => { full[h] = T0 + (i + 1) * 13.5 * M; });
+  ev.pace = { [a.id]: { s: T0, d: Object.fromEntries(ord(a).slice(0, 5).map((h, i) => [h, T0 + (i + 1) * (12 + i * 2) * M])) },
+    [b.id]: { s: T0, d: full }, [c.id]: { s: T0, d: { [ord(c)[0]]: T0 + 20 * M, [ord(c)[1]]: T0 + 95 * M }, g: { h: ord(c)[2], at: T0 + 90 * M } } };
+  ev.paceGoal = 240;
+  for (const now of [T0 + 30 * M, T0 + 100 * M, T0 + 400 * M]) for (const t of ev.teams) paces.push({ now, team: t.id, out: core.paceOf(ev, t.id, now), word: core.paceWord(core.paceOf(ev, t.id, now)) });
+  const nine = { ...ev, format: { ...ev.format, nine: 'back' }, pace: { [a.id]: { s: T0, d: { 10: T0 + 15 * M } } } };
+  paces.push({ nine: true, now: T0 + 40 * M, team: a.id, out: core.paceOf(nine, a.id, T0 + 40 * M), word: core.paceWord(core.paceOf(nine, a.id, T0 + 40 * M)) });
+  var paceEvent = ev;
+}
+const clocks = [[0, false], [9 * M + 32000, true], [102 * M + 5000, true], [255 * M, false], [59 * 1000, true]].map(([ms, secs]) => [ms, secs, core.fmtClock(ms, secs)]);
+writeFileSync(join(here, '../FlagcastTests/core-fixture.json'), JSON.stringify({ cases, strokes, playing, fmtPar, marks, dists, paceEvent, paces, clocks }));
 console.log(`Wrote ${cases.length} sample tournaments to FlagcastTests/core-fixture.json`);

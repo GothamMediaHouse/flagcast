@@ -66,6 +66,20 @@ final class ScorecardModel {
     var state: EventState? { feed.state }
     var team: Team? { state?.team(teamId) }
 
+    /// "Try a demo" (a tournament Admin marked Demo): the cart's round clock starts when its scorecard opens, and again
+    /// after 3 hours; it goes with the scores so the desk sees the same start (the web scorecard's myPace)
+    var tryStart: Double {
+        let now = Date().timeIntervalSince1970 * 1000, k = "\(keyBase):trystart", was = Store.get(k, 0.0)
+        if was > 0 && now - was < 3 * 3600_000 { return was }
+        Store.set(k, now); return now
+    }
+    /// The round and hole clocks for this cart (Core.pace), nil before its round starts
+    func pace(now: Double = Date().timeIntervalSince1970 * 1000) -> Pace? {
+        guard let s = state, let t = teamId else { return nil }
+        if let p = Core.pace(s, t, now: now) { return p }
+        return s.brand.marked ? Core.pace(s, t, now: now, times: PaceTimes(s: tryStart)) : nil
+    }
+
     func start() {
         feed.onState["score:\(code)"] = { [weak self] s in self?.arrived(s) }
         feed.onLink["score:\(code)"] = { [weak self] on in if on { self?.send() } }
@@ -226,7 +240,7 @@ final class ScorecardModel {
             let byTeam = Dictionary(grouping: batch, by: \.team)
             for (t, list) in byTeam {
                 do {
-                    let body: [String: Any?] = ["code": code, "team": t,
+                    let body: [String: Any?] = ["code": code, "team": t, "start": state?.brand.marked == true ? tryStart : nil,
                         "list": list.map { ["p": $0.p, "h": $0.h, "v": $0.v.map { $0 as Any } ?? NSNull(), "at": $0.at] as [String: Any] }]
                     try await API.post(id, "score", body)
                     let sent = Set(list)

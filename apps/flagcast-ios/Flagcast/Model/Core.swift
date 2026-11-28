@@ -805,3 +805,62 @@ extension EventState {
     /// "Save your shot" works on this hole: an HLS camera golfers can see, and the desk hasn't turned it off
     func canSaveShot(_ n: Int) -> Bool { !clipsOff && (camShown(n)?.path.lowercased().hasSuffix(".m3u8") ?? false) }
 }
+
+// MARK: pace of play (public/golf/core.js paceOf): the round clock, the hole clock, ahead or behind the goal
+
+/// One group's pace right now. Times in ms; vs is + behind the goal, − ahead.
+struct Pace: Hashable {
+    enum Level: String { case ok, amber, red }
+    var started: Double, elapsed: Double, hole: Int, onHole: Double, done: Int, total: Int, fin: Bool, finAt: Double
+    var vs: Double, level: Level, goal: Double, per: Double
+    /// hole → ms spent on it, for the holes with both ends known
+    var times: [Int: Double]
+    /// "On pace", "+12 min", "3 min ahead"; "9 min under", "7 min over" once finished (core.js paceWord)
+    var word: String {
+        let m = Int((vs / 60000).rounded(.toNearestOrAwayFromZero))
+        if fin { return m > 0 ? "\(m) min over" : m < 0 ? "\(-m) min under" : "On goal" }
+        if m > Core.paceAmber { return "+\(m) min" }
+        if m < -1 { return "\(-m) min ahead" }
+        return "On pace"
+    }
+    /// over the goal for one hole by a third: the hole clock shows red
+    var slowHole: Bool { !fin && onHole > per * 1.3 }
+}
+
+extension Core {
+    static let paceAmber = 3, paceRed = 8
+    /// "4:15" (hours:minutes); "9:32" (minutes:seconds) under an hour when secs is on (core.js fmtClock)
+    static func clock(_ ms: Double, secs: Bool = false) -> String {
+        let t = max(0, Int(ms / 1000)), h = t / 3600, m = (t / 60) % 60, s = t % 60
+        if secs && h == 0 { return "\(m):" + String(format: "%02d", s) }
+        return "\(h):" + String(format: "%02d", m)
+    }
+    /// The holes in the order this group plays them, from its start hole round (a shotgun).
+    static func paceOrder(_ ev: EventState, _ team: Team) -> [Int] {
+        let holes = playHoles(ev), i = holes.firstIndex(of: team.start) ?? 0
+        return Array(holes[i...] + holes[..<i])
+    }
+    /// nil before the group's round has started. `times` overrides the server's (the "Try a demo" cart's own start).
+    static func pace(_ ev: EventState, _ teamId: String, now: Double = Date().timeIntervalSince1970 * 1000, times: PaceTimes? = nil) -> Pace? {
+        guard let team = ev.teams.first(where: { $0.id == teamId }), let p = times ?? ev.pace[teamId], p.s > 0 else { return nil }
+        let order = paceOrder(ev, team), total = order.count
+        let d = p.d.filter { $0.value > 0 && $0.value <= now + 60000 } // a time still to come isn't counted yet
+        let goal = Double(ev.paceGoal) * 60000 * Double(total) / 18, per = goal / Double(total)
+        var last = -1; for (i, h) in order.enumerated() where d[h] != nil { last = i }
+        let fin = last == total - 1, finAt = fin ? (d[order[total - 1]] ?? 0) : 0
+        let end = fin ? finAt : max(now, p.s)
+        var times: [Int: Double] = [:], prev = p.s
+        for (i, h) in order.enumerated() where i <= last {
+            if let t = d[h], prev > 0 { times[h] = max(0, t - prev) }
+            prev = d[h] ?? 0
+        }
+        let hole = fin ? 0 : order[last + 1]
+        var from = last >= 0 ? (d[order[last]] ?? p.s) : p.s
+        if !fin && p.gHole == hole && p.gAt > 0 { from = max(p.s, min(from, p.gAt)) }
+        let onHole = fin ? 0 : max(0, end - from), elapsed = max(0, end - p.s), done = last + 1
+        let vs = fin ? elapsed - goal : elapsed - Double(done) * per - min(onHole, per)
+        let level: Pace.Level = vs > Double(paceRed) * 60000 ? .red : vs > Double(paceAmber) * 60000 ? .amber : .ok
+        return Pace(started: p.s, elapsed: elapsed, hole: hole, onHole: onHole, done: done, total: total, fin: fin, finAt: finAt,
+                    vs: vs, level: level, goal: goal, per: per, times: times)
+    }
+}

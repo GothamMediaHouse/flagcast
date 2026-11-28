@@ -183,6 +183,27 @@ final class CoreTests: XCTestCase {
         }
     }
 
+    func testPace() throws {
+        let evData = try JSONSerialization.data(withJSONObject: Self.raw["paceEvent"]!)
+        let ev = try JSONDecoder().decode(EventState.self, from: evData)
+        XCTAssertEqual(ev.paceGoal, 240); XCTAssertEqual(ev.pace.count, 3)
+        for (k, row) in (Self.raw["paces"] as! [[String: Any]]).enumerated() {
+            var e = ev
+            if row["nine"] as? Bool == true { e.format.nine = "back"; e.pace = [e.teams[0].id: PaceTimes(s: ev.pace[e.teams[0].id]!.s, d: [10: ev.pace[e.teams[0].id]!.s + 15 * 60000])] }
+            let now = (row["now"] as! NSNumber).doubleValue, p = Core.pace(e, row["team"] as! String, now: now)
+            guard let o = row["out"] as? [String: Any] else { XCTAssertNil(p, "pace\(k)"); continue }
+            guard let p else { XCTFail("pace\(k) missing"); continue }
+            for (key, v) in [("elapsed", p.elapsed), ("onHole", p.onHole), ("vs", p.vs), ("goal", p.goal), ("per", p.per), ("finAt", p.finAt), ("started", p.started)] {
+                XCTAssertEqual(v, (o[key] as! NSNumber).doubleValue, accuracy: 0.5, "pace\(k).\(key)")
+            }
+            XCTAssertEqual(p.hole, o["hole"] as! Int, "pace\(k).hole"); XCTAssertEqual(p.done, o["done"] as! Int); XCTAssertEqual(p.total, o["total"] as! Int)
+            XCTAssertEqual(p.fin, o["fin"] as! Bool); XCTAssertEqual(p.level.rawValue, o["level"] as! String, "pace\(k).level")
+            let times = (o["times"] as! [String: NSNumber]).reduce(into: [Int: Double]()) { $0[Int($1.key)!] = $1.value.doubleValue }
+            XCTAssertEqual(p.times, times, "pace\(k).times"); XCTAssertEqual(p.word, row["word"] as! String, "pace\(k).word")
+        }
+        for row in Self.raw["clocks"] as! [[Any]] { XCTAssertEqual(Core.clock((row[0] as! NSNumber).doubleValue, secs: row[1] as! Bool), row[2] as! String) }
+    }
+
     func testStateDecodesLeniently() throws {
         let json = #"{"name":"X","teams":[{"id":"a1b2","players":[{"id":"p1","name":"Ann","hcp":"7"}],"start":3},{"bad":true}],"cams":{"4":"https://x/a.m3u8"},"scores":{"a1b2":{"p1":[4,null,0]}}}"#
         let s = try JSONDecoder().decode(EventState.self, from: Data(json.utf8))

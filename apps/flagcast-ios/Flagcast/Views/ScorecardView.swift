@@ -92,6 +92,7 @@ struct ScorecardScreen: View {
                     if model.teams.count > 1 { teamTabs(s) }
                     HeaderSwitch(options: [(Page.hole, "This hole"), (Page.round, "Your round")], selection: $page)
                     if page == .hole { strip(s, t, h) }
+                    PaceTiles(model: model)
                 }
             }
             if s.locked {
@@ -422,6 +423,8 @@ struct ScorecardScreen: View {
             .fcCard(padding: 14)
         }
         }
+
+        PaceCard(model: model, holes: s.course.holes.filter { Core.playHoles(s).contains($0.n) }.map(\.n))
 
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -1002,5 +1005,91 @@ struct ContestEntrySheet: View {
             dismiss()
         } catch { self.error = error.localizedDescription }
         saving = false
+    }
+}
+
+// MARK: pace of play
+
+extension Pace.Level {
+    var tint: Color { switch self { case .ok: Color(UIColor(hex: 0x7fd8a3)); case .amber: Color(UIColor(hex: 0xf5b35c)); case .red: Color(UIColor(hex: 0xf08a80)) } }
+}
+
+/// Round, this hole and pace, under the holes once the round has started (core.js paceOf, the web scorecard's timers).
+struct PaceTiles: View {
+    let model: ScorecardModel
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { ctx in
+            if let p = model.pace(now: ctx.date.timeIntervalSince1970 * 1000) {
+                HStack(spacing: 6) {
+                    if p.fin {
+                        tile("Round", Core.clock(p.elapsed))
+                        tile("Finished", Date(timeIntervalSince1970: p.finAt / 1000).formatted(date: .omitted, time: .shortened))
+                        pace(p, "Goal \(Core.clock(p.goal))")
+                    } else {
+                        tile("Round", Core.clock(p.elapsed), secs: String(format: ":%02d", Int(p.elapsed / 1000) % 60))
+                        tile("Hole \(p.hole)", Core.clock(p.onHole, secs: true), red: p.slowHole)
+                        pace(p, "Pace")
+                    }
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+    }
+    private func tile(_ label: String, _ value: String, secs: String = "", red: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label).font(.system(size: 10, weight: .bold)).tracking(1).textCase(.uppercase).foregroundStyle(Color.fcOnGreenMuted).lineLimit(1)
+            (Text(value).font(FCType.display(26)) + Text(secs).font(.system(size: 12, weight: .semibold)).foregroundColor(Color.fcOnGreenMuted))
+                .foregroundStyle(red ? Pace.Level.red.tint : Color.fcOnGreen).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10).padding(.vertical, 7)
+        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+    private func pace(_ p: Pace, _ label: String) -> some View {
+        VStack(spacing: 4) {
+            Text(label).font(.system(size: 10, weight: .bold)).tracking(1).textCase(.uppercase).opacity(0.85).lineLimit(1)
+            Text(p.word).font(.system(size: 15, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
+        }
+        .foregroundStyle(p.level.tint)
+        .frame(width: 100).padding(.vertical, 8)
+        .background(p.level.tint.opacity(0.18), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+/// "Your round": the round's time, and the minutes on each hole (red when well over the goal for one hole).
+struct PaceCard: View {
+    let model: ScorecardModel
+    let holes: [Int]
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 30)) { ctx in
+            if let p = model.pace(now: ctx.date.timeIntervalSince1970 * 1000) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(p.fin ? "Your round" : "Time so far").fcLabel()
+                        Spacer()
+                        Text("Goal \(Core.clock(p.goal))").font(.caption.monospaced()).foregroundStyle(Color.fcMuted)
+                    }
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(Core.clock(p.elapsed)).font(FCType.display(40)).monospacedDigit()
+                        Text(p.fin ? "finished \(Date(timeIntervalSince1970: p.finAt / 1000).formatted(date: .omitted, time: .shortened)) · \(p.word)" : p.word)
+                            .font(.subheadline.weight(.semibold)).foregroundStyle(p.level == .ok ? Color.fcMuted : Color.fcRed)
+                    }
+                    let known = holes.filter { p.times[$0] != nil }
+                    if !known.isEmpty {
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 9), spacing: 6) {
+                            ForEach(holes, id: \.self) { h in
+                                VStack(spacing: 2) {
+                                    Text("\(h)").font(.caption2.weight(.semibold)).foregroundStyle(Color.fcMuted)
+                                    Text(p.times[h].map { "\(Int(($0 / 60000).rounded()))" } ?? "–").font(.footnote.monospacedDigit().weight(.semibold))
+                                        .foregroundStyle((p.times[h] ?? 0) > p.per * 1.3 ? Color.fcRed : Color.fcInk)
+                                }
+                            }
+                        }
+                        Text("Minutes on each hole").font(.caption).foregroundStyle(Color.fcMuted)
+                    }
+                }
+                .fcCard(padding: 14)
+            }
+        }
     }
 }

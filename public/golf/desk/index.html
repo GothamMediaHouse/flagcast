@@ -39,6 +39,20 @@ body.maponly #hero { display: none !important; }
 @media (max-width: 640px) { main { padding: 0 12px 60px; } main > section:not(.ov):not(.embed) { padding: 4px 14px 18px; } main > section.embed { margin: 0 -12px -60px; } }
 section[hidden] { display: none; }
 /* pin sheet */
+.pacebar label { white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.pacestats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 14px 0; }
+.pacestats div { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; }
+.pacestats small { display: block; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.pacestats b { display: block; font: 700 1.6rem var(--f-display, inherit); margin-top: 4px; }
+.pacestats b i { font: 500 .8rem var(--f-body, inherit); font-style: normal; color: var(--muted); margin-left: 5px; }
+.pacestats .red b { color: #c8443a; }
+@media (max-width: 700px) { .pacestats { grid-template-columns: repeat(2, 1fr); } }
+.pacet td { vertical-align: middle; } .pacet tr.off td { color: var(--muted); }
+.pacet td.slow { color: #c8443a; font-weight: 700; }
+.phole { display: inline-grid; place-items: center; min-width: 30px; height: 30px; border-radius: 8px; background: #3a8bff; color: #fff; font: 700 14px var(--f-mono, monospace); }
+.phole.done { background: #2f8a57; }
+.pchip { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; white-space: nowrap; }
+.pchip.ok { background: #e1f3e8; color: #257347; } .pchip.amber { background: #fbefd9; color: #9a5d0b; } .pchip.red { background: #fbe2df; color: #b23a30; }
 .pinwrap { display: grid; grid-template-columns: 1fr 300px; gap: 16px; align-items: start; margin-top: 12px; }
 .pingrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
 .ptile { all: unset; cursor: pointer; background: var(--card); border: 2px solid var(--line); border-radius: 10px; padding: 6px 8px 8px; display: grid; justify-items: center; text-align: center; }
@@ -228,6 +242,14 @@ table.t .n { width: 64px; }
   <div class="scroll" style="margin-top:12px"><table class="t scores" id="scores"></table></div>
 </section>
 
+<section id="s-pace" hidden>
+  <h2>Pace of play</h2>
+  <p class="help">Each group’s round clock and how long it’s been on the hole it’s playing, slowest first. Times come from the cart phones: the round starts on the first hole, and each hole ends with the cart’s first score on it. Nothing to start or stop.</p>
+  <div class="row pacebar"><label>Goal for 18 holes <select id="paceGoal"></select></label><span class="help" id="paceHint"></span></div>
+  <div class="pacestats" id="paceStats"></div>
+  <div class="scroll"><table class="t pacet" id="paceList"></table></div>
+</section>
+
 <section id="s-contests" hidden>
   <h2>Contests</h2>
   <p class="help">Closest to the pin is measured in feet (4.5 = 4 ft 6 in). Long drive in yards. Golfers can enter their own on the contest hole in the Flagcast app; the ones that need a check wait here, and the TVs only show checked results. Points only, no money.</p>
@@ -322,7 +344,7 @@ table.t .n { width: 64px; }
 <script type="module">
 import { defaultHoles, leaderboard, courseHcp, coursePar, parseIndex, fmtIndex, netDoubleBogey } from '/golf/core.js';
 import { eventId, post, live, esc } from '/golf/client.js';
-import { fmtPar, contestLeader, contestFlag, fmtDist, playHoles, teamBall, matches, matchFor, cup, fmtPts, camList } from '/golf/core.js';
+import { fmtPar, contestLeader, contestFlag, fmtDist, playHoles, teamBall, matches, matchFor, cup, fmtPts, camList, paceOf, paceWord, paceGoal, fmtClock } from '/golf/core.js';
 import { GREEN_PATH, pinSpot, pinLabel, pinPaces, pinYards, yds, middle } from '/golf/gps.js';
 import { SECTIONS, sectionTitle, mountSidebar, menuButton, paintPhoto, courseView, holeView, dayLine, today, rememberLink, shrinkPhoto } from '/golf/shell.js';
 
@@ -355,6 +377,7 @@ function showTab(t) {
   if (tab === 'links') drawLinks();
   if (tab === 'report') drawReport();
   if (tab === 'pins') drawPins();
+  if (tab === 'pace') drawPace();
   if (tab === 'map' && !$('mapFrame').src) $('mapFrame').src = `/g/${eventId()}/map?embed#${key}`;
   if (tab === 'groups' && !$('groupsFrame').src) $('groupsFrame').src = `/g/${eventId()}/map?embed#${key}&groups`;
   scrollTo(0, 0);
@@ -1057,6 +1080,49 @@ $('scores').addEventListener('change', async (e) => {
   try { await post('score', { desk: key, team, list: [{ p, h: Number(h), v, at: Date.now() }] }); } catch (err) { toast(err.message); }
 });
 
+// ---- pace of play: every group's round and hole clocks (core.js paceOf), slowest first ----
+function drawPace() {
+  if (!LIVE) return;
+  const goal = paceGoal(LIVE), sel = $('paceGoal');
+  if (document.activeElement !== sel) {
+    const opts = []; for (let m = 180; m <= 330; m += 5) opts.push(m);
+    if (!opts.includes(goal)) opts.push(goal);
+    sel.innerHTML = opts.sort((a, b) => a - b).map((m) => `<option value="${m}" ${m === goal ? 'selected' : ''}>${fmtClock(m * 60000)}${m === 255 ? ' (usual)' : ''}</option>`).join('');
+  }
+  $('paceHint').textContent = `About ${Math.round(goal / 18)} minutes a hole. Golfers see the same goal on their phones.`;
+  const now = Date.now(), rows = LIVE.teams.map((t) => ({ t, p: paceOf(LIVE, t.id, now) }));
+  const on = rows.filter((r) => r.p && !r.p.fin), fin = rows.filter((r) => r.p && r.p.fin), behind = on.filter((r) => r.p.level !== 'ok');
+  const avg = (list) => list.length ? list.reduce((a, r) => a + r.p.vs, 0) / list.length : 0;
+  const avgVs = Math.round(avg(on) / 60000);
+  $('paceStats').innerHTML = [
+    ['On the course', `${on.length}`, on.length === 1 ? 'group' : 'groups'],
+    ['Average so far', on.length ? `${avgVs > 0 ? '+' : ''}${avgVs}` : '—', on.length ? 'min v goal' : ''],
+    ['Behind pace', `${behind.length}`, behind.length === 1 ? 'group' : 'groups', behind.some((r) => r.p.level === 'red') ? 'red' : ''],
+    ['Finished', `${fin.length}`, fin.length ? `avg ${fmtClock(fin.reduce((a, r) => a + r.p.elapsed, 0) / fin.length)}` : ''],
+  ].map(([l, v, u, c]) => `<div class="${c || ''}"><small>${l}</small><b>${v}<i>${esc(u)}</i></b></div>`).join('');
+  const order = (r) => (r.p ? (r.p.fin ? 1 : 0) : 2);
+  rows.sort((a, b) => order(a) - order(b) || (a.p && b.p ? b.p.vs - a.p.vs : 0));
+  $('paceList').innerHTML = `<thead><tr><th>Group</th><th>Hole</th><th>On hole</th><th>Round</th><th>Vs goal</th><th></th></tr></thead><tbody>${rows.map(({ t, p }) => {
+    const sub = `${t.cart ? `Cart ${esc(t.cart)} · ` : ''}${p && p.fin ? 'finished' : `starts on ${t.start || 1}`}`;
+    if (!p) return `<tr class="off"><td><b>${esc(teamLabel(t))}</b><br><span class="help">${sub}</span></td><td>—</td><td>—</td><td>—</td><td><span class="help">Not started</span></td><td></td></tr>`;
+    return `<tr><td><b>${esc(teamLabel(t))}</b><br><span class="help">${sub}</span></td>
+      <td><span class="phole ${p.fin ? 'done' : ''}">${p.fin ? '✓' : p.hole}</span></td>
+      <td class="mono ${p.onHole > p.per * 1.3 ? 'slow' : ''}">${p.fin ? '—' : fmtClock(p.onHole, true)}</td>
+      <td class="mono">${fmtClock(p.elapsed)}</td>
+      <td><span class="pchip ${p.level}">${esc(paceWord(p))}</span></td>
+      <td>${!p.fin && p.level !== 'ok' && !String(t.id).startsWith('sample') ? `<button class="pbtn" data-pnudge="${t.id}">Nudge</button>` : ''}</td></tr>`;
+  }).join('')}</tbody>`;
+}
+setInterval(() => { if (tab === 'pace') drawPace(); }, 1000);
+$('paceGoal').addEventListener('change', async (e) => {
+  try { await desk('pace', { goal: Number(e.target.value) }); toast('Pace goal saved.'); } catch (err) { toast(err.message); }
+});
+$('paceList').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-pnudge]'); if (!b) return;
+  b.disabled = true;
+  try { await desk('nudge', { team: b.dataset.pnudge, text: 'Please pick up the pace. Thank you!' }); b.textContent = 'Sent'; } catch (err) { b.disabled = false; toast(err.message); }
+});
+
 // ---- pin sheet: where the pin is on each green today (saved straight away, like contest results) ----
 let pinHole = 1, pinBusy = false;
 const PINS = () => (LIVE && LIVE.pinsheet) || EV.pinsheet || {};
@@ -1154,7 +1220,7 @@ async function start() {
     .then((side) => { SIDE = side; if (!(side.me?.events || []).some((e) => e.id === eventId())) rememberLink({ id: eventId(), key, name: EV.name }, side.me?.email); });
   live((s) => {
     LIVE = s; drawReplays(); drawResults(); drawCams(); if (!dirty) { EV.locked = s.locked; drawLock(); setDirty(false); }
-    drawHero(); if (tab === 'overview') drawOverview(); if (tab === 'scores') drawScores(); if (tab === 'pins' && !pinBusy) drawPins(); if (tab === 'links') drawLinks();
+    drawHero(); if (tab === 'overview') drawOverview(); if (tab === 'scores') drawScores(); if (tab === 'pins' && !pinBusy) drawPins(); if (tab === 'pace') drawPace(); if (tab === 'links') drawLinks();
     if (SIDE) SIDE.setCurrent({ name: s.name, date: s.date, locked: s.locked });
   });
 }
