@@ -15,7 +15,7 @@ enum FC {
     static let paper = Color(light: 0xf2f4ef, dark: 0x0f1713), paper2 = Color(light: 0xe6eae1, dark: 0x16211b)
     static let card = Color(light: 0xffffff, dark: 0x1b2620), ink = Color(light: 0x14201a, dark: 0xe7ece5)
     static let muted = Color(light: 0x56625a, dark: 0x9aa89f), line = Color(light: 0xd3dacf, dark: 0x2a3830)
-    static let hairline = Color(light: 0xeef1ea, dark: 0x22302a)
+    static let hairline = Color(light: 0xeef1ea, dark: 0x22302a), head = Color(light: 0xf7f8f4, dark: 0x1b2822)
 
     static func display(_ size: CGFloat, _ weight: Font.Weight = .bold) -> Font {
         .custom(weight == .bold ? "BarlowCondensed-Bold" : "BarlowCondensed-SemiBold", size: size)
