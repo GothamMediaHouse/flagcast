@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Privacy · Flagcast</title>
-<meta name="description" content="What Flagcast stores, why, and how to have it deleted.">
+<meta name="description" content="What Flagcast collects (location, cameras, names and scores), who sees it, how long it’s kept, and how to have it deleted.">
 <link rel="icon" href="/brand/icon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/fonts/fonts.css">
 <style>
 :root{--paper:#f4f1e6;--ink:#14201a;--muted:#56625a;--line:#d8d2bf;--card:#fffdf6;--green:#123628;--on-green:#f4f1e6;--flag:#e8c547}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--paper:#0f1713;--ink:#e9eee6;--muted:#9fb0a5;--line:#2a3830;--card:#17231d;color-scheme:dark}}
@@ -31,37 +31,54 @@ footer .in{max-width:760px;margin:0 auto}
 <header><div class="in"><a href="/"><img src="/brand/wide-on-dark.svg" alt="Flagcast"></a></div></header>
 <main>
 <h1>Privacy</h1>
-<p class="updated">Last updated November 21, 2026</p>
-<div class="box">The short version: Flagcast keeps only what it needs to run golf tournaments. We don’t sell your information, we don’t show ads, and we don’t track you around the web. Ask us and we’ll delete your information.</div>
+<p class="updated">Last updated November 28, 2026</p>
+<div class="box">The short version: Flagcast keeps only what it needs to run golf tournaments. We don’t sell your information, show ads or track you around the web. Location is only used on the tournament day, the cameras belong to the club, and you can ask us to delete your information at any time.</div>
 
 <h2>Who we are</h2>
-<p>Flagcast runs live scoring, leaderboards, big-screen displays and course cameras for golf tournaments, through flagcast.app and the Flagcast apps. Questions about this page: <a href="mailto:hello@flagcast.app">hello@flagcast.app</a>.</p>
+<p>Flagcast runs live scoring, leaderboards, clubhouse TV boards and course cameras for golf tournaments, through flagcast.app and the Flagcast apps. The club running your tournament decides what goes into it, and Flagcast runs the service for the club. Questions about this page: <a href="mailto:hello@flagcast.app">hello@flagcast.app</a>.</p>
 
-<h2>What we store</h2>
+<h2>What we collect</h2>
 <ul>
-<li><b>Club staff accounts:</b> your email address and the club you belong to. If you set a password, we keep only a scrambled (hashed) copy, never the password itself.</li>
-<li><b>Signing in with Apple or Google:</b> we receive your email address and an account number from Apple or Google to recognize you next time. We don’t receive your Apple or Google password, contacts or anything else.</li>
-<li><b>Tournaments:</b> what the club enters: the tournament name and date, the course, team and player names, handicaps or GHIN numbers when the club adds them, scores, contest results, sponsors, and the photos or logos the club uploads.</li>
-<li><b>Players’ phones:</b> scores entered on a cart scorecard. If a group turns on location for hole distances, the phone uses it for yardages, and the organizers may see where groups are on the course during the event. Locations are deleted when the tournament ends.</li>
-<li><b>Running the service:</b> basic records such as when an account signed in and what changed in a tournament, so clubs can see who did what and we can fix problems. Sponsor views and taps are counted for the club’s report, without identifying who tapped.</li>
+<li><b>Players:</b> your name, team, flight, tee, handicap and cart, as the club enters them, and GHIN numbers and email addresses if the club adds them. Your scores, contest results and side-game points.</li>
+<li><b>Location, only if your group turns on GPS:</b> where your group’s phone is on the course, how accurate that is, and which hole you’re on. We use it for yardages, the course map, long-drive distances and pace of play. The app only asks while it’s open, and never follows you in the background.</li>
+<li><b>Cameras:</b> some holes and the clubhouse may have the club’s cameras, and a golf pro may go live from a phone. You may appear in live video, replays and saved shots on the tournament’s screens and phones. Golfers’ phones never send video.</li>
+<li><b>Club staff:</b> your email address and the club you belong to. If you set a password, we keep only a scrambled (hashed) copy. If you sign in with Apple or Google, we receive your email address and an account number, nothing else.</li>
+<li><b>The lock screen card on iPhone:</b> a code from Apple that lets us update your score on the lock screen. Nobody else can use it, and we drop it 12 hours after it was last used.</li>
+<li><b>Running the service:</b> records of sign-ins and changes, so clubs can see who did what and we can fix problems, and counts of sponsor views and taps that don’t identify anyone. Internet addresses are only used to stop abuse (too many tries), and those counts are deleted within a day.</li>
 </ul>
 
-<h2>How we use it</h2>
-<p>Only to run the tournaments: show scores and leaderboards, send sign-in codes and club notices by email, and help clubs with their events. Players’ names and scores appear on the public leaderboard and on the club’s screens, since that is the point of a live leaderboard.</p>
-
-<h2>Who else sees it</h2>
+<h2>Who can see it</h2>
 <ul>
-<li>The club running the tournament, and people the club gives access to.</li>
-<li>Anyone with the tournament’s leaderboard link sees names and scores, and GHIN numbers are never shown publicly.</li>
-<li>Services that run Flagcast for us: Cloudflare (hosting and storage) and our email provider (to send sign-in codes). They handle data only to provide that service.</li>
+<li><b>Anyone with the tournament’s link:</b> names, teams, scores and contest results, and live video and replays. That is the point of a live leaderboard. GHIN numbers and email addresses are never shown.</li>
+<li><b>Other golfers in the same tournament:</b> your group’s name, hole and spot on the course map during the round (only spots from the last 15 minutes). Tap Hide on the map and other golfers stop seeing your group. The tournament desk and golf pros still see every group, for pace of play.</li>
+<li><b>The club</b> running the tournament, and the people it gives access to.</li>
+<li><b>Services that run Flagcast for us:</b> Cloudflare (hosting, storage and video), Resend (email), and Apple and Google (sign-in and iPhone notifications). Map pictures come from Esri and OpenStreetMap, and your phone loads them directly, so they see its internet address but not who you are. These services handle data only to provide their service.</li>
 </ul>
 <p>We don’t sell or rent personal information, and we don’t use advertising or cross-site tracking.</p>
 
-<h2>Keeping and deleting</h2>
-<p>Clubs can hide or remove their tournaments. To delete your account or a player’s information, email <a href="mailto:hello@flagcast.app">hello@flagcast.app</a> from the address on the account, and we’ll do it within 30 days. Sign-in codes expire after 15 minutes and sessions after 90 days.</p>
+<h2>How long we keep it</h2>
+<ul>
+<li><b>Location:</b> only collected on the tournament day. Wiped when the results are final, and at the latest the morning after the tournament.</li>
+<li><b>Camera recordings:</b> deleted 30 days after they’re made. Live rewind only reaches back 2½ minutes.</li>
+<li><b>Email addresses, GHIN numbers and pace-of-play times:</b> deleted 90 days after the tournament.</li>
+<li><b>Names, scores and results:</b> kept for 2 years so the club can look back, then deleted. When a club deletes a tournament, it’s wiped 30 days later (in case it was a mistake).</li>
+<li><b>Staff accounts:</b> until you or your club delete them. Sign-in codes expire after 15 minutes and sessions after 90 days.</li>
+<li><b>Clubs that leave:</b> a deleted club waits 30 days in case it was a mistake, then everything is wiped.</li>
+</ul>
+
+<h2>Your choices</h2>
+<ul>
+<li><b>Location:</b> leave GPS off, turn location off for Flagcast in your phone’s settings, or tap Hide on the course map.</li>
+<li><b>Cameras:</b> ask the tournament desk to keep your group off camera. Your group then can’t save shots, any it saved are removed, and the desk won’t send replays of you to the screens. To have a clip or replay taken down, email <a href="mailto:hello@flagcast.app">hello@flagcast.app</a> with the tournament and the hole, and we’ll remove it within 2 business days.</li>
+<li><b>Emails:</b> invite emails are only sent for a tournament you’re in. We don’t send marketing to players.</li>
+<li><b>See or delete your information:</b> email <a href="mailto:hello@flagcast.app">hello@flagcast.app</a>, or ask your club. We’ll reply within 30 days. When we delete a player’s information, their name, email and GHIN number go from every tournament, and their scores stay without a name so the team’s results still add up. Depending on where you live (for example California or the EU), you may have more rights, and we’ll honour them.</li>
+</ul>
 
 <h2>Children</h2>
-<p>Flagcast is for clubs and tournament players. Junior players may appear on a leaderboard when their club or event adds them, and parents can ask us to remove a junior’s information at any time.</p>
+<p>Flagcast is for clubs and the golfers they invite. We don’t knowingly collect information directly from children under 13. Clubs that add junior players are responsible for getting a parent’s permission. Junior events turn off the other groups on the golfers’ course map, saved shots, notes between groups and invite emails. A parent can ask us to remove a child’s information at any time at <a href="mailto:hello@flagcast.app">hello@flagcast.app</a>.</p>
+
+<h2>Security</h2>
+<p>Everything travels over HTTPS and is stored with Cloudflare. Scorecards, the tournament desk and golf pros’ tools each need their own code or PIN.</p>
 
 <h2>Changes</h2>
 <p>If we change this page in a way that matters, we’ll update the date above and tell club accounts by email.</p>

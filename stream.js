@@ -9,6 +9,9 @@
 const API = 'https://api.cloudflare.com/client/v4';
 
 export const streamReady = (env) => !!(env.CF_ACCOUNT_ID && env.CF_STREAM_TOKEN);
+// camera recordings are deleted this many days after they're made (the privacy page says so). Cloudflare deletes them
+// itself (deleteRecordingAfterDays, 30 is its smallest), and the daily tidy (oldRecordings) catches any it missed.
+export const KEEP_DAYS = 30;
 
 // tests point this at a stand-in on this computer (CF_STREAM_API=http://127.0.0.1:<port>); nothing else can
 const apiBase = (env) => (/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(env.CF_STREAM_API || '') ? env.CF_STREAM_API : API);
@@ -49,7 +52,11 @@ export async function liveInput(env, fetcher, { uid, name }) {
     input = await call(env, fetcher, 'POST', '/live_inputs', {
       meta: { name: String(name || 'Flagcast camera').slice(0, 120) },
       recording: { mode: 'automatic', timeoutSeconds: 0, requireSignedURLs: false },
+      deleteRecordingAfterDays: KEEP_DAYS,
     });
+  } else if (input.deleteRecordingAfterDays !== KEEP_DAYS) {
+    // a camera made before recordings were deleted on their own: from now on its recordings go after KEEP_DAYS too
+    try { input = { ...input, ...(await call(env, fetcher, 'PUT', `/live_inputs/${encodeURIComponent(input.uid)}`, { meta: input.meta, recording: input.recording, deleteRecordingAfterDays: KEEP_DAYS })) }; } catch {}
   }
   return {
     uid: input.uid, rtmps: { url: input.rtmps?.url || '', streamKey: input.rtmps?.streamKey || '' },
@@ -84,6 +91,17 @@ export async function listAll(env, fetcher) {
     inputs: (inputs || []).map((i) => ({ uid: i.uid, name: i.meta?.name || '', created: i.created || '', state: i.status?.current?.state || '' })),
     videos: (videos || []).map((v) => ({ uid: v.uid, name: v.meta?.name || '', input: v.liveInput || '', created: v.created || '', secs: Math.round(v.duration || 0), state: v.status?.state || '' })),
   };
+}
+/** the daily tidy: delete every recording older than KEEP_DAYS (one still being made is left for the next day). → how many went */
+export async function oldRecordings(env, fetcher, now = Date.now()) {
+  const videos = (await call(env, fetcher, 'GET', '')) || [];
+  let n = 0;
+  for (const v of videos) {
+    const t = Date.parse(v.created || '');
+    if (!Number.isFinite(t) || now - t < KEEP_DAYS * 86400000) continue;
+    try { await deleteVideo(env, fetcher, v.uid); n++; } catch {}
+  }
+  return n;
 }
 /** delete one recording */
 export async function deleteVideo(env, fetcher, uid) {

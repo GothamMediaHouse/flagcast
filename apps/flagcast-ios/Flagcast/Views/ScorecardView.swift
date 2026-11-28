@@ -203,7 +203,7 @@ struct ScorecardScreen: View {
         let mine = s.contests.filter { $0.hole == h && $0.golfersEnter && !s.locked }
         let cs = s.contests.filter { $0.hole == h && !($0.golfersEnter && !s.locked) }
         let tiles = (sp == nil ? 0 : 1) + (turn == nil ? 0 : 1) + cs.count
-        if s.canSaveShot(h) && !s.locked { saveShotCard(h) }
+        if s.canSaveShot(h) && !s.locked && !s.nocam.contains(model.teamId ?? "") { saveShotCard(h) }
         ForEach(mine) { c in contestCard(c) }
         if tiles > 0 {
             // one tile gets the whole width, so a sponsor's name fits on one line

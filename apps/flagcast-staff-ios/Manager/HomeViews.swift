@@ -165,7 +165,7 @@ struct TournamentPicker: View {
         .confirmationDialog(deleting?.fromClub == true ? "Delete \(deleting?.name ?? "this tournament")?" : "Remove \(deleting?.name ?? "this tournament") from this \(Self.device)?",
                             isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible, presenting: deleting) { e in
             Button(e.fromClub == true ? "Delete Tournament" : "Remove", role: .destructive) { Task { await model.remove(e.id) } }
-        } message: { e in Text(e.fromClub == true ? "It comes off your club’s list on every phone, iPad and Mac. Its scores and pages stay, so Flagcast can bring it back if you need it." : "You can add it again with its desk link.") }
+        } message: { e in Text(e.fromClub == true ? "It comes off your club’s list on every phone, iPad and Mac. 30 days later it’s deleted for good, with its scores, names and camera recordings. Until then, email hello@flagcast.app to bring it back." : "You can add it again with its desk link.") }
         .refreshable { await model.refresh() }
     }
     private func make() {

@@ -213,10 +213,10 @@ struct ManagerSidebar: View {
         .foregroundStyle(FC.onGreen)
         .background(FC.green)
         .environment(\.colorScheme, .dark)
-        .confirmationDialog(confirmRemove?.fromClub == true ? "Hide this tournament from your club’s list?" : "Remove this tournament from this Mac?",
+        .confirmationDialog(confirmRemove?.fromClub == true ? "Delete this tournament?" : "Remove this tournament from this Mac?",
                             isPresented: Binding(get: { confirmRemove != nil }, set: { if !$0 { confirmRemove = nil } }), presenting: confirmRemove) { e in
-            Button(e.fromClub == true ? "Hide" : "Remove", role: .destructive) { Task { await model.remove(e.id) } }
-        } message: { e in Text(e.fromClub == true ? "It isn’t deleted. Its scores and pages stay." : "Copy its desk link first if you’ll need it again: right-click → Copy Desk Link.") }
+            Button(e.fromClub == true ? "Delete" : "Remove", role: .destructive) { Task { await model.remove(e.id) } }
+        } message: { e in Text(e.fromClub == true ? "It comes off your club’s list now and is deleted for good in 30 days, with its scores, names and camera recordings. Until then, email hello@flagcast.app to bring it back." : "Copy its desk link first if you’ll need it again: right-click → Copy Desk Link.") }
     }
 
     @ViewBuilder private func eventRow(_ e: EventRef) -> some View {
@@ -235,7 +235,7 @@ struct ManagerSidebar: View {
             Button("Open Live Leaderboard") { NSWorkspace.shared.open(URL(string: "\(Server.base.absoluteString)/g/\(e.id)")!) }
             Button("Copy Desk Link") { copy("\(Server.base.absoluteString)/g/\(e.id)/desk#\(e.key)") }
             Divider()
-            Button(e.fromClub == true ? "Hide from List…" : "Remove from List…", role: .destructive) { confirmRemove = e }
+            Button(e.fromClub == true ? "Delete Tournament…" : "Remove from List…", role: .destructive) { confirmRemove = e }
         }
         if open {
             ForEach(Section.allCases) { s in

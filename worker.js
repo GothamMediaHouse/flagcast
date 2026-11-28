@@ -26,4 +26,9 @@ export default {
     if (/^\/(download\/[a-z]|api\/[a-z]+\/latest|updates\/)/.test(url.pathname)) { const r = await downloads(request, env, ctx); if (r) return r; }
     return env.ASSETS.fetch(request);
   },
+  // every day at 12:00 UTC (7 or 8 AM in New York): the privacy tidy (clubs.js tidy, privacy.js), after every
+  // tournament's map tracking has ended for the day before
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(env.CLUBS.get(env.CLUBS.idFromName('directory')).fetch(new Request('https://clubs/tidy', { method: 'POST', body: '{}' })));
+  },
 };

@@ -287,7 +287,8 @@ struct LinksView: View {
         CardPage(image: doc.picture.image, kicker: doc.ev.name, title: "Links & cart cards") {
             CardBox(title: "For everyone") {
                 link("Live leaderboard", doc.liveURL, "Players and guests, on their phones", "list.number", FC.ok)
-                link("The board", doc.boardURL, "For a TV (or set up each TV on Screens)", "tv.fill", FC.green2, last: true)
+                link("The board", doc.boardURL, "For a TV (or set up each TV on Screens)", "tv.fill", FC.green2)
+                link("Course notice to print", URL(string: "\(doc.liveURL.absoluteString)/notice")!, "Post at the first tee and camera holes: cameras and GPS", "doc.text.fill", FC.green2, last: true)
             }
             CardBox(title: "Organizers only", footer: "Anyone with the desk link can change this tournament.") {
                 link("Desk link", doc.deskURL, "Opens this tournament’s desk", "key.fill", FC.red, last: true)

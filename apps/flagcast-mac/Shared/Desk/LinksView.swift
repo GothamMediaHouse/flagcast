@@ -10,6 +10,7 @@ struct LinksView: View {
         let p3 = doc.ev.course.holes.first { $0.par == 3 }?.n ?? 1
         return [("Live leaderboard for phones", "Share with players, guests and anyone at home.", doc.liveURL, false),
                 ("Big screens", "Open full screen on each TV, or add as a web page in Screens or OBS.", doc.boardURL, false),
+                ("Course notice to print", "A sign for the first tee, the clubhouse door and each camera hole: cameras are on, and what the course map shares.", URL(string: "\(doc.liveURL.absoluteString)/notice")!, false),
                 ("One par 3 only", "For a TV at that tee. Change the hole number at the end.", URL(string: "\(doc.boardURL.absoluteString)?hole=\(p3)")!, false),
                 ("Leaderboard only", "Just the standings, no par 3 or sponsor pages.", URL(string: "\(doc.boardURL.absoluteString)?show=leaderboard")!, false),
                 ("This desk", "Keep this private. Anyone with it can change the tournament.", doc.deskURL, true)]

@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-title" content="Admin">
 <meta name="theme-color" content="#123628">
 <link rel="icon" href="/golf/brand/mark.svg" type="image/svg+xml">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="/fonts/fonts.css">
 <link rel="stylesheet" href="/golf/golf.css">
 <link rel="stylesheet" href="/golf/manager.css">
 <style>
@@ -617,8 +617,30 @@ function staffView() {
   <p class="help">Anyone here gets this Admin, in the Manager and on the web, when they sign in with that email. Club owners never see Admin.</p>
   <table><tbody>${staff.map((m) => `<tr><td><b>${esc(m.email)}</b><small>${m.fixed ? 'Set in Cloudflare (ADMIN_EMAIL)' : `Added ${date(m.added)}${m.by ? ` by ${esc(m.by)}` : ''}`} · last signed in ${when(m.seen)}</small></td>
     <td class="acts">${m.fixed ? '' : `<button class="btn sm" data-unstaff="${esc(m.email)}">Remove</button>`}</td></tr>`).join('') || '<tr><td class="empty">Only the passcode opens Admin.</td></tr>'}</tbody></table>
-  <form class="row" data-staff style="margin-top:12px"><input type="email" placeholder="name@example.com" required autocomplete="off" style="flex:1;min-width:220px"><button class="btn primary">Add to staff</button></form></div>`;
+  <form class="row" data-staff style="margin-top:12px"><input type="email" placeholder="name@example.com" required autocomplete="off" style="flex:1;min-width:220px"><button class="btn primary">Add to staff</button></form></div>`
+  + forgetView();
 }
+// ---- someone asked us to delete their information (privacy page): find them by full name or email in every
+// tournament, then remove their name, email and GHIN number (their scores stay, unnamed). Admin op 'forget'.
+let forgetHits = null, forgetQ = '';
+function forgetView() {
+  return `<div class="box"><h2>Delete a person’s information</h2>
+  <p class="help">When someone emails hello@flagcast.app to have their details deleted: search their full name or email, check the tournaments, then remove. Their name, email and GHIN number go; their scores stay, unnamed. Do it within 30 days of the email.</p>
+  <form class="row" data-forget style="margin-top:8px"><input name="q" placeholder="Full name or email" value="${esc(forgetQ)}" required minlength="3" autocomplete="off" style="flex:1;min-width:220px"><button class="btn">Find</button></form>
+  ${forgetHits ? (forgetHits.length ? `<table style="margin-top:10px"><tbody>${forgetHits.map((t) => `<tr><td><b>${esc(t.name)}</b><small>${esc([t.club, t.date].filter(Boolean).join(' · '))} · ${t.players.map((p) => esc(p.name) + (p.email ? ' (email on file)' : '')).join(', ')}</small></td></tr>`).join('')}</tbody></table>
+    <button class="btn danger" data-forget-go style="margin-top:10px">Remove from ${forgetHits.length === 1 ? '1 tournament' : `${forgetHits.length} tournaments`}</button>` : '<p class="help" style="margin-top:10px">Not found in any tournament.</p>') : ''}</div>`;
+}
+document.addEventListener('submit', async (e) => {
+  const f = e.target.closest('[data-forget]'); if (!f) return;
+  e.preventDefault(); e.stopPropagation();
+  forgetQ = f.q.value.trim();
+  try { forgetHits = (await call({ op: 'forget', q: forgetQ })).tournaments; draw(); } catch (err) { toast(err.message); }
+}, true);
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-forget-go]'); if (!b) return;
+  if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = 'Sure? This can’t be undone'; return; }
+  try { const j = await call({ op: 'forget', q: forgetQ, apply: true }); toast(`Removed from ${j.tournaments.length} tournament${j.tournaments.length === 1 ? '' : 's'}.`); forgetHits = null; forgetQ = ''; draw(); } catch (err) { toast(err.message); }
+});
 
 function activityView() {
   if (!logRows) return '<div class="box empty">Loading…</div>';

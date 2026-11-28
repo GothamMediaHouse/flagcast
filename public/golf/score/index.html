@@ -7,7 +7,7 @@
 <title>Scorecard · Flagcast</title>
 <link rel="icon" href="/golf/brand/mark.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/golf/brand/app-icon-180.png">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="/fonts/fonts.css">
 <link rel="stylesheet" href="/golf/golf.css">
 <style>
 body { min-height: 100vh; padding-bottom: env(safe-area-inset-bottom, 0px); }
@@ -482,7 +482,7 @@ function render() {
     ${sponsor ? spHtml(sponsor, 'Presented by') : ''}
     ${turn ? `<div class="note"><b>At the turn</b><br>${spHtml(turn, '')}</div>` : ''}
     ${contests.map((c) => contestCard(c, t)).join('')}
-    ${camOn(hole) && !S.clipsOff && /\.m3u8(\?|$)/.test(S.cams[hole]) ? `<button class="saveshot" data-saveshot="${hole}"><span class="ic">▶</span><span><b>Just hit? Save your shot</b><small>The hole ${hole} camera keeps the last 15 seconds for your group.</small></span></button>` : ''}
+    ${camOn(hole) && !S.clipsOff && !(S.nocam || []).includes(teamId) && /\.m3u8(\?|$)/.test(S.cams[hole]) ? `<button class="saveshot" data-saveshot="${hole}"><span class="ic">▶</span><span><b>Just hit? Save your shot</b><small>The hole ${hole} camera keeps the last 15 seconds for your group.</small></span></button>` : ''}
     ${camOn(hole) ? `<a class="btn cam" href="/g/${eventId()}#hole-${hole}">Watch the hole ${hole} camera</a>` : ''}
     <div class="players">${ps.map((p) => {
       const v = (mine[p.id] || [])[hole - 1];

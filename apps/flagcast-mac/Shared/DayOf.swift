@@ -109,10 +109,15 @@ struct PlayerCameraSwitches: View {
     /// changed here and not back from the server yet
     @State private var offNow: Set<Int>?
     @State private var clipsNow: Bool?
+    @State private var juniorNow: Bool?
+    @State private var nocamNow: Set<String>?
 
     private var cams: [CamItem] { doc.live?.camList(all: true) ?? [] }
     private var off: Set<Int> { offNow ?? Set(doc.live?.camsOff ?? []) }
     private var clips: Bool { clipsNow ?? !(doc.live?.clipsOff ?? false) }
+    private var junior: Bool { juniorNow ?? (doc.live?.junior ?? false) }
+    private var nocam: Set<String> { nocamNow ?? Set(doc.live?.nocam ?? []) }
+    private var teams: [Team] { doc.live?.teams ?? [] }
     private static let tags: [CamItem.Kind: String] = [.pro: "Pro’s phone", .contest: "Contest", .par3: "Par 3", .club: "Around the club", .hole: "Hole"]
 
     var body: some View {
@@ -140,19 +145,58 @@ struct PlayerCameraSwitches: View {
             Toggle(isOn: Binding(get: { clips }, set: { on in setClips(on) })) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Golfers can save their shot").font(.subheadline.weight(.semibold))
-                    Text("A “Save your shot” button on the scorecard of camera holes: a 15-second replay from the club’s camera").font(.caption).foregroundStyle(.secondary)
+                    Text(junior ? "Off for a junior event" : "A “Save your shot” button on the scorecard of camera holes: a 15-second replay from the club’s camera").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            .disabled(junior)
+            .padding(.horizontal, inset).padding(.vertical, 6)
+            Divider().padding(.leading, inset)
+            // privacy (day op "privacy"): groups that asked to stay off camera, and junior events
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Groups that asked to stay off camera").font(.subheadline.weight(.semibold))
+                Text("They can’t save their shot, their saved shots are removed, and please don’t send replays of them to the screens. To take a clip down later, email hello@flagcast.app.")
+                    .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                ForEach(teams.filter { nocam.contains($0.id) }) { t in
+                    HStack {
+                        Text(t.displayName).font(.subheadline)
+                        Spacer()
+                        Button("Back on camera") { setNocam(t.id, false) }.font(.caption)
+                    }
+                }
+                Menu("Keep a group off camera") {
+                    ForEach(teams.filter { !nocam.contains($0.id) }) { t in Button(t.displayName) { setNocam(t.id, true) } }
+                }
+                .disabled(teams.allSatisfy { nocam.contains($0.id) })
+            }
+            .padding(.horizontal, inset).padding(.vertical, 6)
+            Divider().padding(.leading, inset)
+            Toggle(isOn: Binding(get: { junior }, set: { on in setJunior(on) })) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Junior event").font(.subheadline.weight(.semibold))
+                    Text("For players under 18: golfers don’t see other groups on the course map, no Save your shot, no notes between groups and no invite emails. Get parents’ OK before juniors appear on cameras.").font(.caption).foregroundStyle(.secondary)
                 }
             }
             .padding(.horizontal, inset).padding(.vertical, 6)
         }
         .onChange(of: doc.live?.camsOff) { offNow = nil }
         .onChange(of: doc.live?.clipsOff) { clipsNow = nil }
+        .onChange(of: doc.live?.junior) { juniorNow = nil }
+        .onChange(of: doc.live?.nocam) { nocamNow = nil }
     }
 
     private func set(_ n: Int, _ on: Bool) {
         var o = off; if on { o.remove(n) } else { o.insert(n) }
         offNow = o
         Task { if await doc.day("camshow", ["off": o.sorted()], done: on ? "Golfers see that camera." : "Hidden from golfers.") == nil { offNow = nil } }
+    }
+    private func setJunior(_ on: Bool) {
+        juniorNow = on
+        Task { if await doc.day("privacy", ["junior": on], done: on ? "Junior event: those are off for golfers." : "Junior event is off.") == nil { juniorNow = nil } }
+    }
+    private func setNocam(_ team: String, _ off: Bool) {
+        var s = nocam; if off { s.insert(team) } else { s.remove(team) }
+        nocamNow = s
+        Task { if await doc.day("privacy", ["team": team, "nocam": off], done: off ? "That group stays off camera." : "They can be on camera again.") == nil { nocamNow = nil } }
     }
     private func setClips(_ on: Bool) {
         clipsNow = on

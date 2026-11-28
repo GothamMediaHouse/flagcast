@@ -1,6 +1,6 @@
 // Cloudflare Stream Live for NDI cameras (stream.js), with the Stream API mocked.  node test/stream.test.mjs
 import assert from 'node:assert/strict';
-import { streamReady, liveInput, inputState, playbackURL, deleteInput, camUid, parseMpd, camPlaylist, WINDOW, listAll, deleteVideo } from '../stream.js';
+import { streamReady, liveInput, inputState, playbackURL, deleteInput, camUid, parseMpd, camPlaylist, WINDOW, listAll, deleteVideo, oldRecordings, KEEP_DAYS } from '../stream.js';
 
 let n = 0; const ok = (name) => console.log(`ok ${++n} - ${name}`);
 const env = { CF_ACCOUNT_ID: 'acct123', CF_STREAM_TOKEN: 'tok-test' };
@@ -16,10 +16,11 @@ function mock() {
     if (!m || m[1] !== 'acct123') return res(404, { success: false, errors: [{ message: 'not found' }] });
     if ((init.method || 'GET') === 'POST') {
       const uid = `uid${next++}`;
-      inputs[uid] = { uid, meta: JSON.parse(init.body).meta, recording: JSON.parse(init.body).recording, rtmps: { url: 'rtmps://live.cloudflare.com:443/live/', streamKey: `key-${uid}` }, status: null };
+      inputs[uid] = { uid, meta: JSON.parse(init.body).meta, recording: JSON.parse(init.body).recording, deleteRecordingAfterDays: JSON.parse(init.body).deleteRecordingAfterDays, rtmps: { url: 'rtmps://live.cloudflare.com:443/live/', streamKey: `key-${uid}` }, status: null };
       return res(200, { success: true, result: inputs[uid] });
     }
     const i = inputs[decodeURIComponent(m[2] || '')];
+    if (i && init.method === 'PUT') Object.assign(i, JSON.parse(init.body));
     return i ? res(200, { success: true, result: i }) : res(404, { success: false, errors: [{ message: 'Live input not found' }] });
   };
   return { fetcher, inputs, calls };
@@ -33,11 +34,17 @@ const a = await liveInput(env, m.fetcher, { name: 'Member-Guest · hole 7' });
 assert.equal(a.uid, 'uid1'); assert.equal(a.rtmps.streamKey, 'key-uid1'); assert.equal(a.playback, playbackURL('uid1'));
 assert.equal(m.calls[0].method, 'POST'); assert.equal(m.calls[0].auth, 'Bearer tok-test');
 assert.equal(m.calls[0].body.recording.mode, 'automatic'); assert.equal(m.calls[0].body.meta.name, 'Member-Guest · hole 7');
-ok('a new hole gets a recorded live input (RTMPS address, key, HLS playback)');
+assert.equal(m.calls[0].body.deleteRecordingAfterDays, KEEP_DAYS); assert.equal(KEEP_DAYS, 30);
+ok('a new hole gets a recorded live input (RTMPS address, key, HLS playback), its recordings deleted after 30 days');
 
 const again = await liveInput(env, m.fetcher, { uid: 'uid1', name: 'x' });
 assert.equal(again.uid, 'uid1'); assert.equal(Object.keys(m.inputs).length, 1); assert.equal(m.calls.at(-1).method, 'GET');
 ok('the same hole reuses its live input');
+
+m.inputs.uid1.deleteRecordingAfterDays = undefined; // a camera made before recordings were deleted on their own
+await liveInput(env, m.fetcher, { uid: 'uid1', name: 'x' });
+assert.equal(m.calls.at(-1).method, 'PUT'); assert.equal(m.inputs.uid1.deleteRecordingAfterDays, KEEP_DAYS); assert.equal(m.inputs.uid1.recording.mode, 'automatic');
+ok('an older camera is changed to delete its recordings after 30 days too');
 
 const gone = await liveInput(env, m.fetcher, { uid: 'deleted-uid', name: 'y' });
 assert.equal(gone.uid, 'uid2');
@@ -68,6 +75,18 @@ ok('removing a hole deletes its recordings and its live input');
   await assert.rejects(deleteInput(env, f, 'uidX'), /still finishing .* Try again in a minute/);
 }
 ok('a recording still being finished: try again in a minute');
+{
+  const calls = [], now = Date.parse('2026-12-31T12:00:00Z');
+  const f = async (url, init = {}) => {
+    calls.push(`${init.method || 'GET'} ${url.replace(/^.*\/stream/, '')}`);
+    const res = (body) => ({ ok: true, status: 200, json: async () => ({ success: true, result: body }) });
+    if ((init.method || 'GET') === 'GET') return res([{ uid: 'old', created: '2026-11-01T10:00:00Z' }, { uid: 'new', created: '2026-12-20T10:00:00Z' }, { uid: 'odd' }]);
+    return res(null);
+  };
+  assert.equal(await oldRecordings(env, f, now), 1);
+  assert.deepEqual(calls, ['GET ', 'DELETE /old']);
+}
+ok('the daily tidy deletes recordings older than 30 days, and only those');
 
 await assert.rejects(liveInput({ ...env, CF_ACCOUNT_ID: 'wrong' }, m.fetcher, { name: 'z' }), /not found/);
 ok('Stream errors come back as messages');

@@ -113,7 +113,7 @@ function invite({ ev, team, player, brand }) {
     rows, button: { label: 'Open my scorecard', url: `${SITE}/g/${ev.id}/s/${team.code}` },
     after: ['On the day, that button opens your group’s scorecard, the live leaderboard and the course map, so you can keep score from your phone. The card on your cart does the same.',
       'Want the app? Get Flagcast at flagcast.app/app'],
-    note: `${club} added your email for this tournament. It isn’t used for anything else.`,
+    note: `${club} added your email for this tournament. It isn’t used for anything else, and it’s deleted 90 days after. Some holes may have cameras: to stay off camera, tell the tournament desk. Privacy: flagcast.app/privacy`,
     brand: brand && !brand.demo ? { logo: brand.logo || '', accent: brand.accent || '', name: club } : null,
   };
 }

@@ -29,6 +29,14 @@ On localhost with none of these, sign-in codes come back on screen and the admin
 
 Clubs: set one up in Admin (name, owner's email, how many tournaments), or a club signs in at `/golf/` or in the Manager and asks; you approve it. Each tournament a club makes uses one credit (`-1` = unlimited). Tournaments you make for a club in Admin don't use credits.
 
+## Privacy and keeping data
+
+flagcast.app/privacy promises how long things are kept; `privacy.js` holds the numbers and a daily cron (12:00 UTC,
+`wrangler.jsonc` triggers → `worker.js` scheduled → `clubs.js` tidy) keeps the promise: group spots wiped after the
+tournament day, camera recordings after 30 days (`stream.js`), emails, GHIN numbers and pace times after 90 days, whole
+tournaments after 2 years, and tournaments a club deleted (hid) 30 days after. Admin → Staff has "Delete a person’s
+information". The desk's Cameras card has Keep a group off camera and Junior event. Change the page and `privacy.js` together.
+
 ## Deploy
 
 Pushing to `main` deploys through Cloudflare Workers Builds.

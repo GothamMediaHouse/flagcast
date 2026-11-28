@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const SERVER = ['groupnotes', 'contestentry', 'pinsheet', 'protools', 'screens', 'stalesave', 'where', 'live', 'tv', 'matchsave'];
-const ADMIN = ['trydemo', 'clubs']; // clubs ends by locking out wrong passcodes, so it goes last
+const ADMIN = ['trydemo', 'privacyserver', 'clubs']; // clubs ends by locking out wrong passcodes, so it goes last
 const STREAM = ['golive', 'invites']; // need a Cloudflare Stream or Resend stand-in
 const all = readdirSync('test').filter((f) => f.endsWith('.test.mjs')).map((f) => f.replace('.test.mjs', ''));
 const offline = all.filter((t) => !SERVER.includes(t) && !ADMIN.includes(t) && !STREAM.includes(t));

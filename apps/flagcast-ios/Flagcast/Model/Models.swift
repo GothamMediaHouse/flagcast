@@ -452,13 +452,17 @@ struct EventState: Codable, Hashable {
     var camsOff: [Int] = []
     /// the desk turned off golfers' "Save your shot" (op "clip")
     var clipsOff = false
+    /// groups that asked the desk to stay off camera (day op "privacy"): no "Save your shot" for them
+    var nocam: [String] = []
+    /// a junior event (day op "privacy"): golfers don't see other groups on the map, no saved shots, notes or invite emails
+    var junior = false
     /// pace of play: each group's round start and hole times (Core.pace), and the goal in minutes for 18 holes
     var pace: [String: PaceTimes] = [:]
     var paceGoal = 255
 
     enum CodingKeys: String, CodingKey {
         case id, name, club, date, course, format, sideGames, flights, teams, matches, screens, cams, sponsors, schedule, displays, fund, contests
-        case locked, aces, flash, news, nudges, live, replays, map, pinsheet, scores, online, brand, lastAt, photos, notesOff, golive, camsOff, clipsOff, pace, paceGoal
+        case locked, aces, flash, news, nudges, live, replays, map, pinsheet, scores, online, brand, lastAt, photos, notesOff, golive, camsOff, clipsOff, nocam, junior, pace, paceGoal
     }
     init() {}
     init(from d: Decoder) throws {
@@ -494,6 +498,8 @@ struct EventState: Codable, Hashable {
         golive = Dictionary(uniqueKeysWithValues: rawLive.compactMap { k, v in Int(k).map { ($0, v.by) } })
         camsOff = (try? c.decodeIfPresent([Int].self, forKey: .camsOff)) ?? []
         clipsOff = c.bool(.clipsOff, false)
+        nocam = (try? c.decodeIfPresent([String].self, forKey: .nocam)) ?? []
+        junior = c.bool(.junior, false)
         pace = ((try? c.decodeIfPresent([String: Lenient<PaceTimes>].self, forKey: .pace)) ?? [:]).compactMapValues(\.value)
         paceGoal = c.int(.paceGoal, 255)
     }
@@ -510,7 +516,7 @@ struct EventState: Codable, Hashable {
         try c.encode(brand, forKey: .brand); try c.encode(lastAt, forKey: .lastAt); try c.encode(photos, forKey: .photos)
         try c.encode(notesOff, forKey: .notesOff)
         try c.encode(Dictionary(uniqueKeysWithValues: golive.map { (String($0.key), GoLiveWho(by: $0.value)) }), forKey: .golive)
-        try c.encode(camsOff, forKey: .camsOff); try c.encode(clipsOff, forKey: .clipsOff)
+        try c.encode(camsOff, forKey: .camsOff); try c.encode(clipsOff, forKey: .clipsOff); try c.encode(nocam, forKey: .nocam); try c.encode(junior, forKey: .junior)
         try c.encode(pace, forKey: .pace); try c.encode(paceGoal, forKey: .paceGoal)
     }
 

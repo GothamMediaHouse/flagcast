@@ -299,7 +299,7 @@ struct ClubInspector: View {
                         VStack(alignment: .leading) { Text(e.name).fontWeight(.medium); Text(e.id.uppercased() + (e.hidden ? " · hidden" : "") + (e.archived ? " · archived" : "")).font(.caption.monospaced()).foregroundStyle(.secondary) }
                         Spacer()
                         Button("Open") { model.open(e.id) }
-                        Button(e.hidden ? "Show" : "Hide") { Task { await model.act(e.hidden ? "unhide" : "hide", ["id": e.id]) } }
+                        Button(e.hidden ? "Undo Delete" : "Delete (30 Days)") { Task { await model.act(e.hidden ? "unhide" : "hide", ["id": e.id]) } }
                     }
                 }
                 HStack { TextField("New tournament", text: $newEvent); Button("Make") { Task { await model.act("event", ["club": club.id, "name": newEvent], done: "Made (doesn’t use up a tournament)."); newEvent = "" } }.disabled(newEvent.isEmpty) }
@@ -359,7 +359,7 @@ struct TournamentsView: View {
         Divider()
         Button(e.locked ? "Unlock Results" : "Lock Results") { Task { await model.act("lock", ["id": e.id, "locked": !e.locked]) } }
         Button(e.archived ? "Unarchive" : "Archive") { Task { await model.act("archive", ["id": e.id, "on": !e.archived]) } }
-        Button(e.hidden ? "Show on the Club’s List" : "Hide from the Club’s List") { Task { await model.act(e.hidden ? "unhide" : "hide", ["id": e.id]) } }
+        Button(e.hidden ? "Undo Delete (Back on the Club’s List)" : "Hide from the Club’s List (Deleted in 30 Days)") { Task { await model.act(e.hidden ? "unhide" : "hide", ["id": e.id]) } }
         Button("Move to Another Club…") { moving = e }
         Divider()
         Button(e.demo ? "Stop Demo (Show the Club’s Logo)" : "Mark as Demo (Show the Flagcast Logo)") { Task { await model.act("demo", ["id": e.id, "on": !e.demo], done: e.demo ? "Shows the club’s logo again." : "Marked Demo: it shows the Flagcast logo.") } }

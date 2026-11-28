@@ -28,6 +28,7 @@ import { clubs, sendBatch } from './clubs.js';
 import { EMAILS, mailHtml, mailText, cleanEmail } from './mail.js';
 import { clubCourse } from './clubcourse.js';
 import { resultsRows, ghinRows } from './report.js';
+import { tidyPlan, stripPersonal, dropOldReplays, dropTeamClips, pruneInvites, findPerson, forgetPerson, juniorFlags } from './privacy.js';
 import { camPlaylist } from './stream.js';
 import { tv } from './tv.js';
 import { liveCard, cardKey, livePayload, sendLive, TOKEN, LIVE_MAX, LIVE_HOURS } from './liveact.js';
@@ -51,7 +52,7 @@ const preflight = (request) => new Response(null, { status: 204, headers: {
   'Access-Control-Allow-Origin': APP_ORIGINS.has(request.headers.get('Origin')) ? request.headers.get('Origin') : 'null',
   'Access-Control-Allow-Methods': 'GET, POST', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400', Vary: 'Origin' } });
 
-const PAGES = { '': '/golf/live/', board: '/golf/board/', desk: '/golf/desk/', cards: '/golf/cards/', map: '/golf/map/' };
+const PAGES = { '': '/golf/live/', board: '/golf/board/', desk: '/golf/desk/', cards: '/golf/cards/', map: '/golf/map/', notice: '/golf/notice/' };
 
 // which live inputs are Flagcast's cameras, remembered for a while so playlist reloads (every 2 s per viewer) don't
 // all go to the directory
@@ -162,7 +163,7 @@ export async function golf(request, env) {
     const stub = env.GOLF.get(env.GOLF.idFromName(m[1]));
     return cors(request, await stub.fetch(request));
   }
-  if ((m = url.pathname.match(/^\/g\/([a-z0-9]{8})(?:\/(board|desk|cards|map|s\/[A-HJ-NP-Z2-9]{6}))?\/?$/)) && request.method === 'GET') {
+  if ((m = url.pathname.match(/^\/g\/([a-z0-9]{8})(?:\/(board|desk|cards|map|notice|s\/[A-HJ-NP-Z2-9]{6}))?\/?$/)) && request.method === 'GET') {
     const page = m[2]?.startsWith('s/') ? '/golf/score/' : PAGES[m[2] || ''];
     const r = await env.ASSETS.fetch(new Request(new URL(page, url), request));
     const h = new Headers(r.headers); h.set('Cache-Control', 'no-cache'); h.set('X-Robots-Tag', 'noindex'); h.set('Referrer-Policy', 'no-referrer');
@@ -184,7 +185,7 @@ export const SPOTS = ['title', 'leaderboard', 'hole', 'cam', 'contest', 'turn', 
 export const PAGE_KINDS = ['lb', 'matches', 'indiv', 'p3', 'cam', 'contests', 'skins', 'fund', 'sponsors', 'sponsor', 'schedule'];
 // changes made on the day (desk or a pro's PIN); marshals only post contest results
 const INVITE_MAX = 4, INVITE_TOTAL = 1500; // emails per player (the first and 3 resends), and per tournament
-const DAY_OPS = new Set(['fix', 'ctp', 'contest', 'check', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay', 'scene', 'map', 'groups', 'pinsheet', 'report', 'team', 'move', 'notes', 'golive', 'camshow', 'pace']);
+const DAY_OPS = new Set(['privacy', 'fix', 'ctp', 'contest', 'check', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay', 'scene', 'map', 'groups', 'pinsheet', 'report', 'team', 'move', 'notes', 'golive', 'camshow', 'pace']);
 // marshals post contest results and replays of shots at their hole
 const MARSHAL_OPS = new Set(['ctp', 'check', 'replay']);
 // a replay with no clip link replays the hole's live camera from this many seconds before it was marked
@@ -400,7 +401,8 @@ export class GolfEvent extends DurableObject {
     const real = await this.paceData();
     // (not the "Try a demo" cart: its clock starts when the scorecard opens, see the scorecard's myPace)
     const pace = demo ? { ...demoPace(ev, scores, Date.now(), new Set([...Object.keys(real), tryTeam(ev)?.id])), ...real } : real;
-    return { ...rest, teams, scores, lastAt, online, pace, paceGoal: paceGoal(ev), brand: brandFor(ev), photos: photoLinks(ev) };
+    // a junior event turns things off for golfers (privacy.js juniorFlags)
+    return { ...rest, ...juniorFlags(ev), teams, scores, lastAt, online, pace, paceGoal: paceGoal(ev), brand: brandFor(ev), photos: photoLinks(ev) };
   }
 
   // ---- pace of play: ev.pace in the public state (see core.js paceOf), kept under its own key ----
@@ -584,6 +586,28 @@ export class GolfEvent extends DurableObject {
       return json({ ok: true, added });
     }
     // the club was deleted in Flagcast Admin (clubs.js admin op 'delete'): wipe everything. Never routed from the web.
+    // the daily tidy (clubs.js tidy, from the worker's cron; never routed from the web): see privacy.js.
+    // { spots: true } also wipes the map's group spots now (an archived tournament). → { expired }: time to wipe it all
+    if (op === 'tidy') {
+      const now = Number(b.now) || Date.now(), plan = tidyPlan(ev, now);
+      if ((b.spots || !trackingOn(ev, now)) && Object.keys(await this.spots()).length) await this.wipeSpots();
+      let changed = false;
+      if (plan.personal) {
+        changed = stripPersonal(ev) || changed;
+        await this.ctx.storage.delete('pace'); this.pc = null; // the round and hole times
+        ev.tidied = now; changed = true;
+      }
+      if (plan.replays) changed = dropOldReplays(ev, now) || changed;
+      if (changed) { await this.ctx.storage.put('event', ev); await this.broadcast(); }
+      return json({ ok: true, expired: plan.expired, personal: plan.personal });
+    }
+    // someone asked Flagcast to delete their information (clubs.js admin op 'forget'; never routed from the web):
+    // { q: name or email, apply? } → { found: [...] }, and with apply their name, email and GHIN are gone
+    if (op === 'forget') {
+      const found = findPerson(ev, b.q);
+      if (b.apply && found.length) { forgetPerson(ev, b.q); await this.ctx.storage.put('event', ev); await this.broadcast(); }
+      return json({ name: ev.name, date: ev.date || '', found });
+    }
     if (op === 'wipe') {
       for (const w of this.ctx.getWebSockets()) { try { w.close(1000, 'Deleted'); } catch {} }
       await this.ctx.storage.deleteAll(); this.ev = null; this.sc = null;
@@ -717,6 +741,7 @@ export class GolfEvent extends DurableObject {
       if (this.env.CLUBS && ev.course?.name) this.ctx.waitUntil(this.env.CLUBS.get(this.env.CLUBS.idFromName('directory')).fetch(new Request('https://clubs/course', { method: 'POST',
         body: JSON.stringify({ id: ev.id, key: ev.key, card: { name: ev.course.name, at: ev.course.at, holes: ev.course.holes, tees: ev.course.tees } }) })).catch(() => {}));
       for (const k of (await this.ctx.storage.list({ prefix: 'x:' })).keys()) if (!ev.removed.some((r) => `x:${r.team.id}` === k)) await this.ctx.storage.delete(k);
+      pruneInvites(ev); // players taken off: their email address goes from the invite log too
       // banners of sponsors that were removed go too
       const sps = new Set(ev.sponsors.map((x) => `s-${x.id}`));
       for (const k of Object.keys(ev.photos || {})) if (k.startsWith('s-') && !sps.has(k)) { delete ev.photos[k]; await this.ctx.storage.delete(`p:${k}`); }
@@ -760,6 +785,7 @@ export class GolfEvent extends DurableObject {
       const m = this.inviteMail(sample.t, sample.p);
       return json({ subject: m.subject, html: mailHtml(m), text: mailText(m) });
     }
+    if (ev.junior) return json({ error: 'Invite emails are off for junior events.' }, 403);
     if (!this.env.RESEND_API_KEY) return json({ error: 'Email isn’t set up on the server yet. Ask Flagcast.' }, 503);
     const from = (this.env.MAIL_FROM || 'Flagcast <signin@flagcast.app>').replace(/^.*<([^>]+)>.*$/, '$1');
     const name = String(ev.club || 'Flagcast').replace(/["<>\r\n,;\\]/g, '').trim().slice(0, 60);
@@ -916,6 +942,16 @@ export class GolfEvent extends DurableObject {
     } else if (b.op === 'pace') { // the pace of play goal, minutes for 18 holes ({ goal }; 0 or none = Flagcast's 4:15)
       const g = Number(b.goal);
       if (!g) delete ev.paceGoal; else if (g >= 120 && g <= 420) ev.paceGoal = Math.round(g); else return json({ error: 'Pick a goal between 2 and 7 hours.' }, 400);
+    } else if (b.op === 'privacy') {
+      // { junior: true|false }: a junior event (other groups off the golfers' course map, no Save your shot, no notes between
+      // groups, no invite emails). { team, nocam: true|false }: a group that asked to stay off camera (no saved shots, theirs go).
+      if (b.junior !== undefined) { if (b.junior) ev.junior = true; else delete ev.junior; }
+      if (b.team !== undefined) {
+        const t = ev.teams.find((x) => x.id === b.team); if (!t) return json({ error: 'No such team' }, 404);
+        const set = new Set(ev.nocam || []); if (b.nocam) set.add(t.id); else set.delete(t.id);
+        ev.nocam = [...set]; if (!ev.nocam.length) delete ev.nocam;
+        if (b.nocam) dropTeamClips(ev, t.id);
+      }
     } else if (b.op === 'notes') { // golfers' ready-made notes to other groups from the course map: on (default) or off
       if (b.off) ev.notesOff = true; else delete ev.notesOff;
     } else if (b.op === 'nudge') {
@@ -1064,7 +1100,7 @@ export class GolfEvent extends DurableObject {
     let sent;
     if (b.note != null) { // a ready-made note to another group (GOLFER_NOTES)
       const k = Number(b.note), text = GOLFER_NOTES[k], to = String(b.to || '');
-      if (ev.notesOff) return json({ error: 'The tournament desk has turned off notes between groups.' }, 403);
+      if (ev.notesOff || ev.junior) return json({ error: 'The tournament desk has turned off notes between groups.' }, 403);
       if (!Number.isInteger(k) || !text || to === team.id) return json({ error: 'Pick a note to send.' }, 400);
       const target = ev.teams.find((t) => t.id === to);
       if (!target && !(ev.demo && /^sample\d+$/.test(to))) return json({ error: 'No such group' }, 404);
@@ -1078,7 +1114,9 @@ export class GolfEvent extends DurableObject {
       }
       sent = true;
     }
-    return json({ ok: true, now, on: true, hide, groups: golferGroups(ev, wh, team.id, now), notes: ev.notesOff ? [] : GOLFER_NOTES, ...(sent ? { sent } : {}) });
+    // a junior event: golfers only see their own group (the desk and pros still see every group for pace of play)
+    const groups = golferGroups(ev, wh, team.id, now).filter((g) => !ev.junior || g.me);
+    return json({ ok: true, now, on: true, hide, groups, notes: ev.notesOff || ev.junior ? [] : GOLFER_NOTES, ...(ev.junior ? { everyoneOff: true } : {}), ...(sent ? { sent } : {}) });
   }
 
   // a golfer's own long drive or closest to the pin, from the cart's scorecard on the contest hole. One entry a player
@@ -1124,7 +1162,8 @@ export class GolfEvent extends DurableObject {
     if (!team || team.code !== String(b.code || '').toUpperCase()) return json({ error: 'Not your scorecard' }, 403);
     const hole = num(b.hole, 0, 18, 0), url = (ev.cams || {})[hole];
     if (!hole || !url || (ev.camsOff || []).includes(hole)) return json({ error: 'There’s no camera on this hole.' }, 404);
-    if (ev.clipsOff) return json({ error: 'Saving shots is off for this tournament.' }, 403);
+    if (ev.clipsOff || ev.junior) return json({ error: 'Saving shots is off for this tournament.' }, 403);
+    if ((ev.nocam || []).includes(team.id)) return json({ error: 'Your group asked to stay off camera, so saving shots is off. Ask the tournament desk to change it.' }, 403);
     if (!/\.m3u8(\?|$)/.test(url)) return json({ error: 'This hole’s camera can’t save shots.' }, 400);
     const was = (ev.replays || []).find((r) => r.team === team.id && r.hole === hole && r.by === 'golfer');
     if (was && now - was.at < 20000) return json({ ok: true, replay: was }); // a double tap

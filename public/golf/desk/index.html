@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Desk">
 <meta name="theme-color" content="#123628">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="/fonts/fonts.css">
 <link rel="stylesheet" href="/golf/golf.css">
 <link rel="stylesheet" href="/golf/manager.css">
 <style>
@@ -334,6 +334,7 @@ table.t .n { width: 64px; }
   <h2>Links and cards</h2>
   <div class="links" id="links"></div>
   <div class="row"><a class="btn primary" id="cardsLink" target="_blank" rel="noopener">Print cart cards</a><span class="help">One card per team with its QR code. Players scan it to open their scorecard. No app to download.</span></div>
+  <div class="row"><a class="btn" id="noticeLink" target="_blank" rel="noopener">Print course notice</a><span class="help">A sign for the first tee, the clubhouse door and each camera hole: cameras are on, and what the course map shares. Please post it when you use cameras or GPS.</span></div>
   <h3>Hole in one log</h3>
   <div id="aces" class="help">None yet.</div>
 </section>
@@ -544,7 +545,7 @@ function read() {
   EV.fund = { ...EV.fund, on: !!$('f-fund').value, label: val('f-fundLabel'), goal: Number($('f-goal').value) || 0, give: val('f-give') };
 }
 document.addEventListener('input', (e) => { if (e.target.closest('#s-setup, #s-teams, #s-screens, #s-contests') && !e.target.closest('.entries') && !['flash', 'raised', 'paste', 'cq'].includes(e.target.id)) setDirty(); });
-document.addEventListener('change', (e) => { if (e.target.closest('#s-setup, #s-teams, #s-screens, #s-contests') && !e.target.closest('.entries') && !['flash', 'raised'].includes(e.target.id)) { readTables(); setDirty(); } });
+document.addEventListener('change', (e) => { if (e.target.closest('#s-setup, #s-teams, #s-screens, #s-contests') && !e.target.closest('.entries, #cams') && !['flash', 'raised'].includes(e.target.id)) { readTables(); setDirty(); } });
 
 function drawCourse() {
   const H = EV.course.holes;
@@ -860,18 +861,31 @@ $('addLd').onclick = () => { readTables(); const p5 = EV.course.holes.find((h) =
 // every camera with a switch for whether golfers see it (day op 'camshow', saved straight away), and "Save your shot"
 const CAM_TAGS = { pro: 'Pro’s phone', contest: 'Contest', par3: 'Par 3', club: 'Around the club', hole: 'Hole' };
 function drawCams() {
-  const S = { ...EV, ...(LIVE ? { cams: LIVE.cams, golive: LIVE.golive, camsOff: LIVE.camsOff, clipsOff: LIVE.clipsOff, contests: LIVE.contests } : {}) };
+  const S = { ...EV, ...(LIVE ? { cams: LIVE.cams, golive: LIVE.golive, camsOff: LIVE.camsOff, clipsOff: LIVE.junior ? EV.clipsOff : LIVE.clipsOff, contests: LIVE.contests, junior: LIVE.junior, nocam: LIVE.nocam } : {}) };
+  const nocam = new Set(S.nocam || []), tname = (t) => t.name || t.players.map((p) => String(p.name || '').trim().split(/\s+/).pop()).join(' / ');
   const list = camList(S, { all: true });
   $('cams').innerHTML = (list.length ? list.map((c) => `<label class="camopt"><span><b>${esc(c.title)}</b> <span class="camtag k-${c.kind}">${CAM_TAGS[c.kind]}</span><br><small>${esc([c.by != null && c.kind === 'pro' ? `Live from ${c.by ? `${c.by}’s` : 'an'} iPhone` : '', c.sub].filter(Boolean).join(' · '))}</small></span>
       <input type="checkbox" class="sw" data-camshow="${c.n}" ${c.off ? '' : 'checked'} aria-label="Show ${esc(c.title)} to golfers"></label>`).join('')
     : '<p class="help" style="margin:0">No cameras yet. Flagcast adds camera links in Admin, or a golf pro can go live from the Flagcast app.</p>')
     + `<label class="camopt"><span><b>Golfers can save their shot</b><br><small>A “Save your shot” button on the scorecard of camera holes: a 15-second replay from the club’s camera</small></span>
-      <input type="checkbox" class="sw" data-clips ${S.clipsOff ? '' : 'checked'}></label>`;
+      <input type="checkbox" class="sw" data-clips ${S.clipsOff ? '' : 'checked'}></label>`
+    // privacy (day op 'privacy'): a group that asked to stay off camera, and junior events
+    + `<div class="camopt" style="display:block"><b>Groups that asked to stay off camera</b><br><small>They can’t save their shot, their saved shots are removed, and please don’t send replays of them to the screens. To take a clip down later, email hello@flagcast.app.</small>
+      <div class="row" style="margin:8px 0 0;gap:6px;flex-wrap:wrap">${EV.teams.filter((t) => nocam.has(t.id)).map((t) => `<button class="btn" data-camback="${esc(t.id)}" title="Let them back on camera">${esc(tname(t))} ✕</button>`).join('')}
+      <select id="nocamPick" aria-label="Pick a group"><option value="">Pick a group…</option>${EV.teams.filter((t) => !nocam.has(t.id)).map((t) => `<option value="${esc(t.id)}">${esc(tname(t))}</option>`).join('')}</select></div></div>`
+    + `<label class="camopt"><span><b>Junior event</b><br><small>For players under 18: golfers don’t see other groups on the course map, no Save your shot, no notes between groups and no invite emails. Get parents’ OK before juniors appear on cameras.</small></span>
+      <input type="checkbox" class="sw" data-junior ${S.junior ? 'checked' : ''}></label>`;
 }
+$('cams').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-camback]'); if (!b) return;
+  try { const j = await desk('privacy', { team: b.dataset.camback, nocam: false }); toast('They can be on camera again.'); if (LIVE) LIVE.nocam = (LIVE.nocam || []).filter((x) => x !== b.dataset.camback); drawCams(); } catch (err) { toast(err.message); }
+});
 $('cams').addEventListener('change', async (e) => {
   const t = e.target;
   try {
-    if (t.dataset.clips !== undefined) { await desk('camshow', { clips: t.checked }); toast(t.checked ? 'Golfers can save their shot.' : 'Save your shot is off.'); return; }
+    if (t.dataset.clips !== undefined) { await desk('camshow', { clips: t.checked }); EV.clipsOff = !t.checked; toast(t.checked ? 'Golfers can save their shot.' : 'Save your shot is off.'); return; }
+    if (t.dataset.junior !== undefined) { await desk('privacy', { junior: t.checked }); if (LIVE) LIVE.junior = t.checked || undefined; toast(t.checked ? 'Junior event: those are off for golfers.' : 'Junior event is off.'); return; }
+    if (t.id === 'nocamPick') { if (!t.value) return; await desk('privacy', { team: t.value, nocam: true }); if (LIVE) LIVE.nocam = [...new Set([...(LIVE.nocam || []), t.value])]; toast('That group stays off camera.'); drawCams(); return; }
     if (t.dataset.camshow === undefined) return;
     const off = [...$('cams').querySelectorAll('[data-camshow]')].filter((x) => !x.checked).map((x) => Number(x.dataset.camshow));
     await desk('camshow', { off }); toast(t.checked ? 'Golfers see that camera.' : 'Hidden from golfers.');
@@ -1193,6 +1207,7 @@ $('pinPrint').onclick = () => { document.body.classList.add('pinprint'); print()
 // the course map links live on the Setup tab, so they're set as soon as the desk opens (not only on Links and cards)
 function setMapLinks() {
   $('cardsLink').href = `/g/${eventId()}/cards#${key}`; // the Teams tab's cart cards button too
+  $('noticeLink').href = `/g/${eventId()}/notice`;
 }
 function drawLinks() {
   const base = `${location.origin}/g/${eventId()}`;

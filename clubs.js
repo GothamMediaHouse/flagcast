@@ -31,7 +31,8 @@ import { SEED, slug } from './courselib.js';
 import { hashPassword, checkPassword, passwordProblem, verifyAppleToken, appleKeys, APPLE_AUDIENCES, verifyGoogleToken, googleKeys } from './auth.js';
 import { cleanLogo, cleanAccent, logoVersion } from './brand.js';
 import { mailHtml, mailText, EMAILS } from './mail.js';
-import { streamReady, liveInput, inputState, deleteInput, listAll, deleteVideo } from './stream.js';
+import { streamReady, liveInput, inputState, deleteInput, listAll, deleteVideo, oldRecordings } from './stream.js';
+import { HIDDEN_DAYS } from './privacy.js';
 
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
 const EMAIL = /^[^\s@<>"',;]{1,64}@[^\s@<>"',;]{1,190}\.[a-z]{2,24}$/i;
@@ -141,7 +142,7 @@ export class FlagcastClubs extends DurableObject {
     for (const q of ['ALTER TABLE accounts ADD COLUMN google TEXT', 'ALTER TABLE clubs ADD COLUMN notes TEXT', 'ALTER TABLE events ADD COLUMN archived INTEGER DEFAULT 0', 'ALTER TABLE clubs ADD COLUMN course TEXT',
       'ALTER TABLE clubs ADD COLUMN logo TEXT', 'ALTER TABLE clubs ADD COLUMN accent TEXT', 'ALTER TABLE clubs ADD COLUMN powered INTEGER DEFAULT 0',
       'ALTER TABLE clubs ADD COLUMN deleted INTEGER', 'ALTER TABLE clubs ADD COLUMN was TEXT', 'ALTER TABLE events ADD COLUMN demo INTEGER DEFAULT 0',
-      'ALTER TABLE clubs ADD COLUMN card TEXT']) { try { this.sql.exec(q); } catch {} }
+      'ALTER TABLE clubs ADD COLUMN card TEXT', 'ALTER TABLE events ADD COLUMN hiddenAt INTEGER']) { try { this.sql.exec(q); } catch {} }
     // the Flagcast course library (courselib.js): courses any club can pick in Find the course
     this.sql.exec('CREATE TABLE IF NOT EXISTS library (id TEXT PRIMARY KEY, name TEXT, city TEXT, state TEXT, data TEXT, club TEXT, updated INTEGER)');
     for (const c of SEED) if (!this.one('SELECT id FROM library WHERE id = ?', c.id)) this.libPut(c, '', 0);
@@ -280,6 +281,8 @@ export class FlagcastClubs extends DurableObject {
       const row = this.one("SELECT e.id FROM events e LEFT JOIN clubs c ON c.id = e.club WHERE e.demo = 1 AND COALESCE(e.archived, 0) = 0 AND COALESCE(c.status, '') NOT IN ('deleted', 'purged') ORDER BY e.created DESC LIMIT 1");
       return json({ id: row?.id || '' });
     }
+    // the worker's daily cron (worker.js scheduled). Never from the web
+    if (op === 'tidy') return json(await this.tidy(now));
     if (op === 'streamok') return json({ ok: !!this.one('SELECT hole FROM streams WHERE uid = ?', clip(b.uid, 40)) });
     if (op === 'lib-search') {
       const words = clip(b.q, 80).toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 1).slice(0, 5);
@@ -461,7 +464,8 @@ export class FlagcastClubs extends DurableObject {
     if (op === 'hide') {
       const u = this.who(b.token);
       if (!u.club) this.fail('Not found', 404);
-      this.sql.exec('UPDATE events SET hidden = 1 WHERE id = ? AND club = ?', clip(b.id, 8), u.club.id);
+      // a club's Delete Tournament: off its list now, wiped for good HIDDEN_DAYS later by the daily tidy (Admin can bring it back till then)
+      this.sql.exec('UPDATE events SET hidden = 1, hiddenAt = ? WHERE id = ? AND club = ?', now, clip(b.id, 8), u.club.id);
       return json(this.me(u));
     }
     if (op === 'new') {
@@ -590,7 +594,22 @@ export class FlagcastClubs extends DurableObject {
         this.sql.exec('INSERT INTO events (id, club, key, name, created) VALUES (?, ?, ?, ?, ?)', id, cid, j.key, name || 'New tournament', now);
         made = j;
       }
-      if (b.op === 'hide' || b.op === 'unhide') this.sql.exec('UPDATE events SET hidden = ? WHERE id = ?', b.op === 'hide' ? 1 : 0, clip(b.id, 8));
+      // hidden = deleted: wiped HIDDEN_DAYS later by the daily tidy, unless it's shown again first
+      if (b.op === 'hide' || b.op === 'unhide') this.sql.exec('UPDATE events SET hidden = ?, hiddenAt = ? WHERE id = ?', b.op === 'hide' ? 1 : 0, b.op === 'hide' ? now : null, clip(b.id, 8));
+      // the daily tidy now (Flagcast staff, or the tests on this computer: { now } pretends it's later)
+      if (b.op === 'tidy') return json(await this.tidy(local && Number(b.now) ? Number(b.now) : now));
+      // someone asked Flagcast to delete their information: { q: their name or email } finds them in every tournament,
+      // { apply: true } removes their name, email and GHIN number (scores stay, unnamed)
+      if (b.op === 'forget') {
+        const q = clip(b.q, 254); if (q.trim().length < 3) this.fail('Type their full name or email address.');
+        const rows = this.all('SELECT e.id, e.club, c.name AS clubName FROM events e LEFT JOIN clubs c ON c.id = e.club ORDER BY e.created DESC LIMIT 2000');
+        const hits = [];
+        for (const e of rows) {
+          try { const j = await this.golf(e.id, 'forget', { q, apply: !!b.apply }); if (j.found?.length) hits.push({ id: e.id, name: j.name, date: j.date, club: e.clubName || '', players: j.found }); } catch {}
+        }
+        if (b.apply && hits.length) this.note('Flagcast', '', `Admin: removed a person’s details from ${hits.length === 1 ? '1 tournament' : `${hits.length} tournaments`}`);
+        return json({ ok: true, applied: !!b.apply, tournaments: hits });
+      }
       if (b.op === 'edit') {
         need();
         const name = clip(b.name, 80) || c.name;
@@ -642,6 +661,7 @@ export class FlagcastClubs extends DurableObject {
       if (b.op === 'archive') {
         this.sql.exec('UPDATE events SET archived = ? WHERE id = ?', b.on ? 1 : 0, evRow.id);
         if (b.on) await this.golf(evRow.id, 'desk', { key: evRow.key, op: 'lock', locked: true }).catch(() => {});
+        if (b.on) await this.golf(evRow.id, 'tidy', { spots: true }).catch(() => {}); // the map's group spots go now
       }
       if (b.op === 'move') {
         const to = this.one('SELECT * FROM clubs WHERE id = ?', clip(b.to, 10)); if (!to) this.fail('Pick a club to move it to.');
@@ -878,6 +898,33 @@ export class FlagcastClubs extends DurableObject {
     }))).filter(Boolean);
     if (this.tvCache.size > 200) this.tvCache.clear();
     this.tvCache.set(cid, { at: now, list }); return list;
+  }
+  // the daily tidy (privacy.js): every tournament tidies itself (spots, emails, old replays); ones a club deleted
+  // HIDDEN_DAYS ago, or past KEEP_DAYS_ALL, are wiped; and camera recordings past their days go. → what it did
+  async tidy(now = Date.now()) {
+    const out = { tournaments: 0, personal: 0, erased: 0, recordings: 0 };
+    // tournaments hidden before deletes were timed get their HIDDEN_DAYS from now
+    this.sql.exec('UPDATE events SET hiddenAt = ? WHERE hidden = 1 AND hiddenAt IS NULL', now);
+    this.sql.exec('DELETE FROM fails WHERE since < ?', now - DAY); // rate-limit counts (some keyed by internet address): a day at most
+    for (const e of this.all('SELECT id, hidden, hiddenAt, demo FROM events ORDER BY created LIMIT 2000')) {
+      let j = null;
+      try { j = await this.golf(e.id, 'tidy', { now }); out.tournaments++; if (j.personal) out.personal++; } catch { continue; }
+      if ((e.hidden && e.hiddenAt && now - e.hiddenAt > HIDDEN_DAYS * DAY) || (j.expired && !e.demo)) { if (await this.erase(e.id)) out.erased++; }
+    }
+    if (streamReady(this.env)) out.recordings = await oldRecordings(this.env, fetch, now).catch(() => 0);
+    return out;
+  }
+  // wipe one tournament for good: its cameras (and their recordings), everything it kept, and its row. → done?
+  async erase(id) {
+    const row = this.one('SELECT e.id, e.name, e.club FROM events e WHERE e.id = ?', id); if (!row) return false;
+    for (const s of this.all('SELECT uid FROM streams WHERE event = ?', id)) {
+      if (streamReady(this.env)) { try { await deleteInput(this.env, fetch, s.uid); } catch { return false; } }
+      this.sql.exec('DELETE FROM streams WHERE uid = ?', s.uid);
+    }
+    try { await this.golf(id, 'wipe', {}); } catch { return false; }
+    this.sql.exec('DELETE FROM events WHERE id = ?', id);
+    this.note('Flagcast', row.club || '', `Wiped tournament ${row.name} (${id.toUpperCase()}) for good`);
+    return true;
   }
   // wipe a deleted club's tournaments for good. One that doesn't answer stays (and so does the club) for the next try.
   // The club row stays as 'purged' (name only) so its payments still show whose they were. → how many are left

@@ -371,7 +371,7 @@ private struct AdminTournaments: View {
                                 Button(e.demo ? "Stop Demo (Show the Club’s Logo)" : "Mark as Demo (Show the Flagcast Logo)") { Task { await admin.act("demo", ["id": e.id, "on": !e.demo], done: e.demo ? "Shows the club’s logo again." : "Marked Demo: it shows the Flagcast logo.") } }
                                 Button(e.locked ? "Unlock Results" : "Lock Results") { Task { await admin.act("lock", ["id": e.id, "locked": !e.locked]) } }
                                 Button(e.archived ? "Unarchive" : "Archive") { Task { await admin.act("archive", ["id": e.id, "on": !e.archived]) } }
-                                Button(e.hidden ? "Show on the Club’s List" : "Hide from the Club’s List") { Task { await admin.act(e.hidden ? "unhide" : "hide", ["id": e.id]) } }
+                                Button(e.hidden ? "Undo Delete (Back on the Club’s List)" : "Hide from the Club’s List (Deleted in 30 Days)") { Task { await admin.act(e.hidden ? "unhide" : "hide", ["id": e.id]) } }
                                 if !(e.hidden && e.archived) {
                                     Divider()
                                     Button("Delete Tournament…", role: .destructive) { deleting = e }
@@ -390,10 +390,10 @@ private struct AdminTournaments: View {
             Button("Delete Tournament", role: .destructive) {
                 Task {
                     if !e.archived { await admin.act("archive", ["id": e.id, "on": true]) }
-                    await admin.act("hide", ["id": e.id], done: "Deleted. Turn on Show hidden and archived to bring it back.")
+                    await admin.act("hide", ["id": e.id], done: "Deleted. It’s wiped for good in 30 days; Show hidden and archived brings it back till then.")
                 }
             }
-        } message: { _ in Text("It comes off the club’s list and its results are locked. Its scores stay, so you can bring it back from Show hidden and archived.") }
+        } message: { _ in Text("It comes off the club’s list and its results are locked. 30 days later it’s wiped for good (scores, names, camera recordings). Until then, Show hidden and archived brings it back.") }
     }
 }
 

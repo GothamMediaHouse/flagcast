@@ -194,7 +194,7 @@ async function draw() {
   monitors = await gl.monitors();
   $('list').innerHTML = events.length ? events.map((e) => `<div class="ev" data-id="${e.id}">
     <div class="top"><div><b>${esc(e.name)}</b><div class="meta" data-meta>${esc([e.club, e.date].filter(Boolean).join(' · '))}</div></div><span class="code">${e.id.toUpperCase()}</span></div>
-    <div class="acts"><button class="btn dark" data-desk>Open desk</button><button class="btn" data-screensbtn>Show screens on this computer</button><button class="btn" data-live>Live leaderboard</button><span style="flex:1"></span><button class="btn danger" data-remove>${e.fromClub ? 'Hide' : 'Remove from list'}</button></div>
+    <div class="acts"><button class="btn dark" data-desk>Open desk</button><button class="btn" data-screensbtn>Show screens on this computer</button><button class="btn" data-live>Live leaderboard</button><span style="flex:1"></span><button class="btn danger" data-remove>${e.fromClub ? 'Delete' : 'Remove from list'}</button></div>
     <div class="screens" data-screens hidden></div></div>`).join('') : `<div class="empty">${me && me.club ? 'No tournaments yet. Make one on the right.' : me ? 'Set up your club on the right to make tournaments.' : 'Sign in on the right to see your club’s tournaments.'}</div>`;
   for (const e of events) gl.info(e.id).then((i) => { const el = document.querySelector(`[data-id="${e.id}"] [data-meta]`); if (el) el.textContent = [i.club, i.date, `${i.teams} teams`, i.locked ? 'results final' : ''].filter(Boolean).join(' · '); const b = document.querySelector(`[data-id="${e.id}"] b`); if (b) b.textContent = i.name; }).catch(() => {});
 }
@@ -206,7 +206,7 @@ $('list').addEventListener('click', async (ev) => {
   if (b.hasAttribute('data-live')) gl.openLive(id);
   if (b.hasAttribute('data-remove')) {
     const was = b.textContent;
-    if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = was === 'Hide' ? 'Hide from your club’s list?' : 'Remove? Keep the desk link first'; setTimeout(() => { b.dataset.sure = ''; b.textContent = was; }, 4000); return; }
+    if (b.dataset.sure !== '1') { b.dataset.sure = '1'; b.textContent = was === 'Delete' ? 'Delete? It’s gone for good in 30 days' : 'Remove? Keep the desk link first'; setTimeout(() => { b.dataset.sure = ''; b.textContent = was; }, 4000); return; }
     await gl.remove(id); draw();
   }
   if (b.hasAttribute('data-screensbtn')) {
