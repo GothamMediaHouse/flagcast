@@ -52,7 +52,9 @@ final class CameraController {
         replay = nil; message = nil
         guard let camURL else { return }
         if (player.currentItem?.asset as? AVURLAsset)?.url != camURL {
-            player.replaceCurrentItem(with: AVPlayerItem(url: camURL))
+            let item = AVPlayerItem(url: camURL)
+            item.configuredTimeOffsetFromLive = CMTime(seconds: 3, preferredTimescale: 600)  // sit close to live
+            player.replaceCurrentItem(with: item)
         }
         if let r = player.currentItem?.seekableTimeRanges.last?.timeRangeValue, r.duration.seconds > 10 {
             player.seek(to: CMTimeSubtract(r.end, CMTime(seconds: 3, preferredTimescale: 600)))

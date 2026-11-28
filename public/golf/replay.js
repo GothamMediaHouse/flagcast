@@ -22,7 +22,7 @@ export function attach(video, src, { live = true } = {}) {
     if (live) video.onerror = again;
     return null;
   }
-  const h = new Hls(live ? { liveSyncDurationCount: 2, backBufferLength: 120 } : {});
+  const h = new Hls(live ? { liveSyncDurationCount: 1, liveMaxLatencyDurationCount: 4, maxLiveSyncPlaybackRate: 1.1, backBufferLength: 120 } : {});
   h.loadSource(src); h.attachMedia(video); video._hls = h;
   if (live) h.on(Hls.Events.ERROR, (_, d) => { if (d && d.fatal) again(); });
   return h;

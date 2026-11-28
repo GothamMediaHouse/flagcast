@@ -159,7 +159,10 @@ struct CameraPage: View {
             player.isMuted = true
             while !Task.isCancelled {
                 if player.currentItem == nil || player.currentItem?.status == .failed {
-                    player.replaceCurrentItem(with: AVPlayerItem(url: u))
+                    let item = AVPlayerItem(url: u)
+                    item.configuredTimeOffsetFromLive = CMTime(seconds: 3, preferredTimescale: 600)  // sit close to live
+                    item.automaticallyPreservesTimeOffsetFromLive = true
+                    player.replaceCurrentItem(with: item)
                     player.play()
                 }
                 try? await Task.sleep(for: .seconds(4))
