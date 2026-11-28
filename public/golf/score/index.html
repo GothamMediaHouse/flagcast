@@ -206,7 +206,7 @@ import { gpsCard } from '/golf/gpscard.js';
 import { startGps, position, holeMap } from '/golf/gps.js';
 import { groupsMap, hidden as groupHidden } from '/golf/groupsmap.js';
 import { onGps, yds, trackingOn, mapped } from '/golf/gps.js';
-import { leaderboard, playHoles, teamCard, strokesOn, playing, fmtPar, mark, contestLeader, fmtDist, sideGames, teamBall, matches, matchFor, cup, fmtPts, paceOf, paceWord, fmtClock } from '/golf/core.js';
+import { leaderboard, board, showsTotal, multiRound, roundNow, roundCount, playHoles, teamCard, strokesOn, playing, fmtPar, mark, contestLeader, fmtDist, sideGames, teamBall, matches, matchFor, cup, fmtPts, paceOf, paceWord, fmtClock } from '/golf/core.js';
 import { eventId, post, live, esc } from '/golf/client.js';
 import { appBar, remember } from '/golf/appbar.js';
 appBar('score');
@@ -470,6 +470,8 @@ function render() {
   if (sponsor) hit(sponsor.id, 'view', `${sponsor.id}:${hole}`); if (turn) hit(turn.id, 'view', `${turn.id}:turn`);
   const contests = (S.contests || []).filter((c) => c.hole === hole);
   const lb = leaderboard(S, sc).find((l) => l.teamId === t.id);
+  // multi-day: the total over the rounds, and where the team stands on it
+  const tot = showsTotal(S) ? board(S, sc).find((l) => l.teamId === t.id) : null;
   // match play: this team's match, and strokes off the lowest player in it (not each player's full handicap)
   const mres = S.format.type === 'match' ? matches(S, sc).find((r) => r.a === t.id || r.b === t.id) : null;
   const strokesHere = (p) => mres ? strokesOn(mres.strokes[`${t.id}:${p.id}`] || 0, H.hcp) : strokesOn(playing(p.hcp, allow), H.hcp);
@@ -496,8 +498,9 @@ function render() {
         <div class="pu"><span>${set ? '' : 'Tap the number for par'}</span><span>${set ? `<button data-clear="${p.id}">Clear</button> · ` : ''}<button data-pu="${p.id}">Picked up</button></span></div></div>`;
     }).join('')}</div>
     ${mres ? matchCard(mres, t) : S.format.type === 'match' ? `<div class="note"><b>Match play</b><br>Your match shows here once the desk pairs the teams.</div>` : ''}
-    ${mres ? '' : `<div class="summary"><div><div class="label">${S.format.show === 'gross' ? 'Gross' : 'Net'} to par</div><div class="big ${lb && lb.score < 0 && S.format.type !== 'stableford' ? 'under' : ''}">${lb && lb.played ? fmtPar(lb.score, S.format.type === 'stableford') : '—'}</div></div>
-      <div style="text-align:right"><div class="label">Position</div><div class="big">${lb && lb.pos ? lb.pos : '—'}</div></div></div>`}
+    ${mres ? '' : `<div class="summary"><div><div class="label">${multiRound(S) ? `Round ${roundNow(S) + 1} · ` : ''}${S.format.show === 'gross' ? 'Gross' : 'Net'} to par</div><div class="big ${lb && lb.score < 0 && S.format.type !== 'stableford' ? 'under' : ''}">${lb && lb.played ? fmtPar(lb.score, S.format.type === 'stableford') : '—'}</div></div>
+      <div style="text-align:right"><div class="label">${tot ? 'Overall' : 'Position'}</div><div class="big">${(tot || lb) && (tot || lb).pos ? (tot || lb).pos : '—'}</div></div></div>
+      ${tot && tot.played ? `<div class="note" style="display:flex;justify-content:space-between"><span>Total after ${roundNow(S) + 1} of ${roundCount(S)} rounds</span><b>${fmtPar(tot.score, S.format.type === 'stableford')}</b></div>` : ''}`}
     <a class="btn" style="width:100%;margin-top:10px" href="/g/${eventId()}">${mres ? 'Every match' : 'Full leaderboard'}</a>
     ${sideOK() ? `<button class="btn" style="width:100%;margin-top:10px" data-view="side">Side games${sideOn() ? ' · playing' : ''}</button>` : ''}
     ${whereOK() ? `<button class="btn" style="width:100%;margin-top:10px" data-view="where">See everyone on the course</button>` : ''}

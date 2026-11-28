@@ -12,6 +12,7 @@ struct LeaderboardScreen: View {
     @State private var feed: EventFeed
     @State private var tab: Tab = .board
     @State private var flight = ""
+    @State private var rview = -1           // a multi-day tournament's round on its own (-1 = the total)
     @State private var open: String?
     @State private var web: URL?
     @State private var dismissed = 0.0          // bumped when the phone banner is closed, to redraw
@@ -156,8 +157,26 @@ struct LeaderboardScreen: View {
 
     // ---- leaderboard ----
     @ViewBuilder private func board(_ s: EventState) -> some View {
-        let stab = s.format.isStableford
-        let lb = Core.leaderboard(s, s.scores, flight: flight.isEmpty ? nil : flight)
+        let stab = s.format.isStableford, fl: String? = flight.isEmpty ? nil : flight
+        // multi-day: the total (with this round's score beside it) or one round on its own
+        let tot = Core.showsTotal(s), multi = Core.multiRound(s), now = Core.roundNow(s)
+        let pick = rview >= 0 ? rview : now
+        let one = multi && (rview >= 0 || !tot) ? Core.roundOf(s, pick) : nil
+        let lb = one.map { Core.leaderboard($0.ev, $0.scores, flight: fl) } ?? Core.board(s, s.scores, flight: fl)
+        let showTot = tot && one == nil
+        if multi {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    if tot { Chip(title: "Total", on: one == nil) { rview = -1; open = nil } }
+                    ForEach(0..<Core.roundCount(s), id: \.self) { i in
+                        if i <= now || s.past[i] != nil {
+                            let day = Core.roundDay(s, i).split(separator: " ").first.map(String.init) ?? ""
+                            Chip(title: "Round \(i + 1)" + (day.isEmpty ? "" : " · \(day)"), on: one != nil && pick == i) { rview = i; open = nil }
+                        }
+                    }
+                }
+            }
+        }
         if s.fund.on { fundBox(s.fund) }
         if s.flights.count > 1 {
             ScrollView(.horizontal, showsIndicators: false) {
@@ -174,19 +193,20 @@ struct LeaderboardScreen: View {
                     Text("Pos").frame(width: 36, alignment: .leading)
                     Text(s.format.type == "stroke" ? "Player" : "Team")
                     Spacer()
-                    Text(stab ? "Pts" : "To par").frame(width: 64, alignment: .trailing)
+                    if showTot { Text("R\(now + 1)").frame(width: 44, alignment: .trailing) }
+                    Text(showTot ? "Total" : stab ? "Pts" : "To par").frame(width: 64, alignment: .trailing)
                     Text("Thru").frame(width: 56, alignment: .trailing)
                 }
                 .fcLabel().padding(.horizontal, 12).padding(.vertical, 8)
                 ForEach(lb) { l in
                     Divider()
-                    row(s, l, stab)
+                    row(one?.ev ?? s, l, stab, scores: one?.scores ?? s.scores, today: showTot)
                 }
             }
             .background(Color.fcCard)
             .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .shadow(color: Color.fcScrim.opacity(0.10), radius: 10, y: 4)
-            Text("\(s.format.name) · \(stab ? "points" : s.format.show == "gross" ? "gross" : "net")\(s.locked ? " · final results" : "") · tap a team for its card")
+            Text("\((one?.ev ?? s).format.name) · \(stab ? "points" : s.format.show == "gross" ? "gross" : "net")\(multi ? (one != nil ? " · round \(pick + 1) of \(Core.roundCount(s))" : " · total after \(now + 1) of \(Core.roundCount(s)) rounds") : "")\(s.locked && now == Core.roundCount(s) - 1 ? " · final results" : "") · tap a team for its card")
                 .fcLabel()
         }
         sponsorStrip(s)
@@ -255,8 +275,8 @@ struct LeaderboardScreen: View {
     @ViewBuilder private func individuals(_ s: EventState) -> some View {
         let stab = s.format.isStableford, mode = imode.isEmpty ? (s.format.show.isEmpty ? "net" : s.format.show) : imode
         let fl = flight.isEmpty ? nil : flight
-        let lb = Core.individuals(s, s.scores, flight: fl, mode: mode)
-        let other = stab ? [] : Core.individuals(s, s.scores, flight: fl, mode: mode == "gross" ? "net" : "gross")
+        let lb = Core.indivBoard(s, s.scores, flight: fl, mode: mode)
+        let other = stab ? [] : Core.indivBoard(s, s.scores, flight: fl, mode: mode == "gross" ? "net" : "gross")
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
                 if !stab { ForEach(["net", "gross"], id: \.self) { m in Chip(title: m == "net" ? "Net" : "Gross", on: m == mode) { imode = m } } }
@@ -313,7 +333,7 @@ struct LeaderboardScreen: View {
         }
     }
 
-    private func row(_ s: EventState, _ l: Line, _ stab: Bool) -> some View {
+    private func row(_ s: EventState, _ l: Line, _ stab: Bool, scores: Scores? = nil, today: Bool = false) -> some View {
         let isOpen = open == l.key
         return VStack(alignment: .leading, spacing: 0) {
             Button { withAnimation(.snappy) { open = isOpen ? nil : l.key } } label: {
@@ -335,6 +355,10 @@ struct LeaderboardScreen: View {
                         if !l.sub.isEmpty && l.sub != l.name { Text(l.sub).font(.caption).foregroundStyle(Color.fcMuted).lineLimit(1) }
                     }
                     Spacer(minLength: 4)
+                    if today {
+                        Text(l.todayPlayed > 0 ? Core.fmtPar(l.todayScore, stab).replacingOccurrences(of: " pts", with: "") : "—")
+                            .font(.subheadline.monospaced()).foregroundStyle(Color.fcMuted).frame(width: 44, alignment: .trailing)
+                    }
                     Text(l.played > 0 ? Core.fmtPar(l.score, stab).replacingOccurrences(of: " pts", with: "") : "—")
                         .font(FCType.display(28))
                         .foregroundStyle(!stab && l.played > 0 && l.score < 0 ? Color.fcRed : Color.fcInk)
@@ -350,7 +374,7 @@ struct LeaderboardScreen: View {
             .accessibilityHint(isOpen ? "Hides the card" : "Shows the card")
             if isOpen {
                 let who = s.format.isScramble ? [Player(id: "T", name: l.team.name.isEmpty ? "Team" : l.team.name)] : l.team.players
-                CardGrid(holes: s.course.holes.filter { Core.playHoles(s).contains($0.n) }, rows: who.map { ($0.name, s.scores[l.teamId]?[$0.id] ?? []) })
+                CardGrid(holes: s.course.holes.filter { Core.playHoles(s).contains($0.n) }, rows: who.map { ($0.name, (scores ?? s.scores)[l.teamId]?[$0.id] ?? []) })
                     .padding(.horizontal, 12).padding(.bottom, 12)
                     .background(Color.fcPaper2)
             }

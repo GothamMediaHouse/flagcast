@@ -74,10 +74,13 @@ private struct ReportPage: View {
         guard let live = doc.live else { return [] }
         if live.format.isMatch { return Core.matchRows(live) }
         let flights: [String?] = live.flights.isEmpty ? [nil] : live.flights
-        var rows = [["Flight", "Pos", "Team", "Players", "Thru", "Score"] + live.course.holes.map { "H\($0.n)" }]
+        // multi-day: each round's score and the total, then this round's holes
+        let tot = Core.showsTotal(live), rn = tot ? Core.roundCount(live) : 0
+        var rows = [["Flight", "Pos", "Team", "Players", "Thru", tot ? "Total" : "Score"] + (0..<rn).map { "R\($0 + 1)" } + live.course.holes.map { "H\($0.n)" }]
         for fl in flights {
-            for l in Core.leaderboard(live, live.scores, flight: fl) {
-                rows.append([fl ?? "", l.pos, l.name, l.sub, l.thru, l.played > 0 ? String(l.score) : ""] + l.card.map { r in r.done ? ((live.format.show == "gross" ? r.gross : r.net).map(String.init) ?? "") : "" })
+            for l in Core.board(live, live.scores, flight: fl) {
+                rows.append([fl ?? "", l.pos, l.name, l.sub, l.thru, l.played > 0 ? String(l.score) : ""] + (0..<rn).map { i in i < l.rounds.count ? l.rounds[i].map { String($0.score) } ?? "" : "" }
+                    + l.card.map { r in r.done ? ((live.format.show == "gross" ? r.gross : r.net).map(String.init) ?? "") : "" })
             }
         }
         return rows

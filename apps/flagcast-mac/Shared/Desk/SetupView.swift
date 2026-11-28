@@ -37,7 +37,22 @@ struct SetupView: View {
             field("Name") { TextField("", text: $doc.ev.name).textFieldStyle(.roundedBorder) }
             field("Club") { TextField("", text: $doc.ev.club).textFieldStyle(.roundedBorder) }
             field("Logo") { TournamentLogoField(logo: $doc.ev.logo) }
-            field("Date") { DayPicker(text: $doc.ev.date, label: false) }
+            field(doc.ev.days > 1 ? "Round 1 date" : "Date") { DayPicker(text: $doc.ev.date, label: false) }
+            // multi-day: a date for each round, and how the leaderboard adds them up
+            field("Days") {
+                Picker("", selection: Binding(get: { doc.ev.days }, set: { doc.ev.setDays($0) })) {
+                    Text("One day").tag(1); Text("2 rounds").tag(2); Text("3 rounds").tag(3); Text("4 rounds").tag(4)
+                }.pickerStyle(.segmented).labelsHidden()
+            }
+            if doc.ev.days > 1 {
+                ForEach(Array(1..<doc.ev.days), id: \.self) { i in
+                    field("Round \(i + 1) date") { DayPicker(text: Binding(get: { doc.ev.roundDate(i) }, set: { doc.ev.setRoundDate(i, $0) }), label: false) }
+                }
+                field("Leaderboard over the rounds") {
+                    Picker("", selection: $doc.ev.boardBy) { Text("Total of all rounds").tag("total"); Text("Each round on its own").tag("round") }.pickerStyle(.segmented).labelsHidden()
+                }
+                Help("The same teams, cart codes and PINs play every round. Each morning the tournament moves on to that day’s round by itself; you can change the round on the Overview. The format and handicaps can change between rounds: change them here on the morning of the round.")
+            }
             field("Format") {
                 Picker("", selection: $doc.ev.format.type) {
                     Text("Best ball (teams)").tag("bestball"); Text("Shamble (best drive, then own ball)").tag("shamble")

@@ -114,7 +114,7 @@ main { max-width: 720px; margin: 0 auto; padding: 14px max(16px, env(safe-area-i
 <p class="powered" data-powered hidden>POWERED BY FLAGCAST</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
 <script type="module">
-import { leaderboard, fmtPar, holeStats, contestLeader, fmtDist, skins, mark, FORMATS, formatName, teamBall, matches, cup, fmtPts, individuals, hasIndividuals, camList, CAM_KINDS } from '/golf/core.js';
+import { leaderboard, board, indivBoard, showsTotal, multiRound, roundCount, roundNow, roundOf, roundDay, fmtPar, holeStats, contestLeader, fmtDist, skins, mark, FORMATS, formatName, teamBall, matches, cup, fmtPts, individuals, hasIndividuals, camList, CAM_KINDS } from '/golf/core.js';
 import { live, esc } from '/golf/client.js';
 import { appBar, remember } from '/golf/appbar.js';
 import { attach, detach, playReplay, rewind, goLive, replayTime } from '/golf/replay.js';
@@ -123,7 +123,7 @@ import { applyBrand } from '/golf/brandmark.js';
 appBar('live');
 
 const HV = (location.hash.match(/^#v=(\w+)/) || [])[1];
-let S = null, view = location.hash.startsWith('#hole-') ? 'p3' : ['lb', 'in', 'p3', 'ct', 'sk'].includes(HV) ? HV : 'lb', flight = '', openRow = null, imode = '';
+let S = null, view = location.hash.startsWith('#hole-') ? 'p3' : ['lb', 'in', 'p3', 'ct', 'sk'].includes(HV) ? HV : 'lb', flight = '', openRow = null, imode = '', rview = -1; // rview: a multi-day tournament's round on its own (-1 = the total)
 // a page routed to every phone: jump there when the player taps the banner
 function goRoute(r) {
   const v = r.k === 'cam' || r.k === 'p3' ? 'p3' : r.k === 'contests' ? 'ct' : r.k === 'skins' ? 'sk' : r.k === 'indiv' ? 'in' : 'lb';
@@ -153,8 +153,8 @@ function matchView() {
 // Individuals (club championships): every player on their own, net or gross, by flight
 function indivView() {
   const stab = S.format.type === 'stableford', mode = imode || S.format.show || 'net';
-  const lb = individuals(S, S.scores, { flight: flight || undefined, mode });
-  const other = stab ? [] : individuals(S, S.scores, { flight: flight || undefined, mode: mode === 'gross' ? 'net' : 'gross' });
+  const lb = indivBoard(S, S.scores, { flight: flight || undefined, mode });
+  const other = stab ? [] : indivBoard(S, S.scores, { flight: flight || undefined, mode: mode === 'gross' ? 'net' : 'gross' });
   const fl = S.flights.length > 1 ? `<div class="flights">${['', ...S.flights].map((f) => `<button data-fl="${esc(f)}" aria-pressed="${f === flight}">${f ? `Flight ${esc(f)}` : 'All'}</button>`).join('')}</div>` : '';
   const md = stab ? '' : `<div class="flights">${['net', 'gross'].map((m) => `<button data-im="${m}" aria-pressed="${m === mode}">${m === 'net' ? 'Net' : 'Gross'}</button>`).join('')}</div>`;
   if (!lb.length) return md + fl + `<div class="empty">No players yet.</div>`;
@@ -168,22 +168,27 @@ function indivView() {
 function lbView() {
   if (S.format.type === 'match') return matchView();
   const stab = S.format.type === 'stableford';
-  const lb = leaderboard(S, S.scores, { flight: flight || undefined });
+  // multi-day: the total (with today's score) or one round on its own
+  const tot = showsTotal(S), multi = multiRound(S), one = multi && (rview >= 0 || !tot) ? roundOf(S, rview >= 0 ? rview : roundNow(S)) : null;
+  const lb = one ? leaderboard(one.ev, one.scores, { flight: flight || undefined }) : board(S, S.scores, { flight: flight || undefined });
+  const showTot = tot && !one, now = roundNow(S);
+  const rp = multi ? `<div class="flights">${tot ? `<button data-rv="-1" aria-pressed="${!one}">Total</button>` : ''}${Array.from({ length: roundCount(S) }, (_, i) => `<button data-rv="${i}" aria-pressed="${!!one && (rview >= 0 ? rview : now) === i}" ${i > now && !(S.past || {})[i] ? 'disabled' : ''}>Round ${i + 1}${roundDay(S, i) ? ` · ${esc(roundDay(S, i).split(' ')[0])}` : ''}</button>`).join('')}</div>` : '';
   const fund = S.fund?.on ? `<div class="fund"><div class="row"><span>${esc(S.fund.label || 'Raised today')}</span>${S.fund.give ? `<a href="${esc(S.fund.give)}" target="_blank" rel="noopener">Give now</a>` : ''}</div>
     <div class="amt">$${Math.round(S.fund.raised).toLocaleString()}${S.fund.goal ? `<span class="label" style="font-family:var(--f-mono)"> of $${Math.round(S.fund.goal).toLocaleString()}</span>` : ''}</div>${S.fund.goal ? `<div class="bar"><i style="width:${Math.min(100, S.fund.raised / S.fund.goal * 100)}%"></i></div>` : ''}</div>` : '';
   const fl = S.flights.length > 1 ? `<div class="flights">${['', ...S.flights].map((f) => `<button data-fl="${esc(f)}" aria-pressed="${f === flight}">${f ? `Flight ${esc(f)}` : 'All'}</button>`).join('')}</div>` : '';
-  if (!lb.length) return fund + fl + `<div class="empty">No teams yet.</div>`;
-  return fund + fl + `<table class="lb"><thead><tr><th>Pos</th><th>${S.format.type === 'stroke' ? 'Player' : 'Team'}</th><th class="num">${stab ? 'Pts' : 'To par'}</th><th class="num">Thru</th></tr></thead><tbody>${lb.map((l) => `
+  if (!lb.length) return rp + fund + fl + `<div class="empty">No teams yet.</div>`;
+  const td = (l) => (l.today && l.today.played ? fmtPar(l.today.score, stab).replace(' pts', '') : '—');
+  return rp + fund + fl + `<table class="lb"><thead><tr><th>Pos</th><th>${S.format.type === 'stroke' ? 'Player' : 'Team'}</th>${showTot ? `<th class="num">R${now + 1}</th>` : ''}<th class="num">${showTot ? 'Total' : stab ? 'Pts' : 'To par'}</th><th class="num">Thru</th></tr></thead><tbody>${lb.map((l) => `
     <tr class="r ${openRow === l.key ? 'open' : ''}" data-k="${esc(l.key)}"><td class="pos">${esc(l.pos)}</td><td class="nm"><b>${esc(l.name)}</b>${l.sub && l.sub !== l.name ? `<span>${esc(l.sub)}</span>` : ''}</td>
-    <td class="num tp ${!stab && l.played && l.score < 0 ? 'under' : ''}">${l.played ? fmtPar(l.score, stab).replace(' pts', '') : '—'}</td><td class="num">${esc(l.thru)}</td></tr>
-    ${openRow === l.key ? `<tr class="cardrow"><td colspan="4"><div class="wrap">${cardTable(l)}</div></td></tr>` : ''}`).join('')}</tbody></table>
-    <p class="label" style="margin-top:10px">${esc(formatName(S))} · ${stab ? 'points' : S.format.show === 'gross' ? 'gross' : 'net'}${S.locked ? ' · final results' : ''} · tap a team for its card</p>`;
+    ${showTot ? `<td class="num" style="color:var(--muted)">${td(l)}</td>` : ''}<td class="num tp ${!stab && l.played && l.score < 0 ? 'under' : ''}">${l.played ? fmtPar(l.score, stab).replace(' pts', '') : '—'}</td><td class="num">${esc(l.thru)}</td></tr>
+    ${openRow === l.key ? `<tr class="cardrow"><td colspan="${showTot ? 5 : 4}"><div class="wrap">${cardTable(l, one)}</div></td></tr>` : ''}`).join('')}</tbody></table>
+    <p class="label" style="margin-top:10px">${esc(formatName(one ? one.ev : S))} · ${stab ? 'points' : S.format.show === 'gross' ? 'gross' : 'net'}${multi ? one ? ` · round ${(rview >= 0 ? rview : now) + 1} of ${roundCount(S)}` : ` · total after ${now + 1} of ${roundCount(S)} rounds` : ''}${S.locked && now === roundCount(S) - 1 ? ' · final results' : ''} · tap a team for its card</p>`;
 }
 
-function cardTable(l) {
-  const H = S.course.holes, t = l.team, scr = teamBall(S);
+function cardTable(l, one) {
+  const H = S.course.holes, t = l.team, scr = teamBall(one ? one.ev : S);
   const who = scr ? [{ id: 'T', name: t.name || 'Team' }] : t.players;
-  const sc = S.scores[l.teamId] || {};
+  const sc = (one ? one.scores : S.scores)[l.teamId] || {};
   return `<table><tr><th>Hole</th>${H.map((h) => `<th>${h.n}</th>`).join('')}</tr><tr><th>Par</th>${H.map((h) => `<th>${h.par}</th>`).join('')}</tr>
     ${who.map((p) => `<tr><td>${esc(p.name)}</td>${H.map((h, i) => { const v = (sc[p.id] || [])[i]; return `<td>${v == null ? '' : v === 0 ? 'PU' : `<span class="sc ${mark(v, h.par)}">${v}</span>`}</td>`; }).join('')}</tr>`).join('')}</table>`;
 }
@@ -280,6 +285,7 @@ function render(keepVideo) {
 document.addEventListener('click', (e) => {
   const tb = e.target.closest('#tabs button'); if (tb) { view = tb.dataset.v; render(); scrollTo(0, 0); return; }
   const fb = e.target.closest('[data-fl]'); if (fb) { flight = fb.dataset.fl; render(); return; }
+  const rv = e.target.closest('[data-rv]'); if (rv) { rview = Number(rv.dataset.rv); openRow = null; render(); return; }
   const im = e.target.closest('[data-im]'); if (im) { imode = im.dataset.im; render(); return; }
   const ck = e.target.closest('[data-ck]'); if (ck) { camKind = ck.dataset.ck; render(); return; }
   const rp = e.target.closest('[data-rep]'); if (rp) { openReplay(rp.dataset.rep); return; }

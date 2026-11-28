@@ -62,7 +62,7 @@ export function stepsLeft(S) {
   return out;
 }
 /** The tournament's day, or scores in the last three hours (the Mac's DayOfChecks.isEventDay). */
-export const isEventDay = (S) => S.date === today() || Math.max(0, ...Object.values(S.lastAt || {})) > Date.now() - 3 * 3600000;
+export const isEventDay = (S) => [S.date, ...(S.rounds || []).map((r) => r.date)].includes(today()) || Math.max(0, ...Object.values(S.lastAt || {})) > Date.now() - 3 * 3600000;
 /** Carts that have gone quiet: no score for 20 minutes, once the round has been going 20 minutes. */
 export function slowCarts(S, now = Date.now()) {
   const last = S.lastAt || {}, quiet = 20 * 60000, first = Math.min(...Object.values(last));

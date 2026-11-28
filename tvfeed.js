@@ -1,5 +1,5 @@
 // The feed the native Flagcast TV apps draw (tv.js serves it): the board's pages as data. No Cloudflare imports, so tests run it in Node.
-import { leaderboard, fmtPar, FORMATS, formatName, matches, cup, fmtPts, individuals, hasIndividuals, contestLeader, fmtDist, camTitle } from './public/golf/core.js';
+import { leaderboard, board, indivBoard, showsTotal, multiRound, roundName, fmtPar, FORMATS, formatName, matches, cup, fmtPts, individuals, hasIndividuals, contestLeader, fmtDist, camTitle } from './public/golf/core.js';
 
 const abs = (origin, u) => (!u ? '' : /^https:\/\//.test(u) ? u : u.startsWith('/') ? origin + u : '');
 const isHLS = (u) => /^https:\/\/.+\.m3u8(\?|$)/.test(u || '');
@@ -15,15 +15,18 @@ export function tvFeed(S, screenId, origin = 'https://flagcast.app') {
   const spot = (k, hole) => (S.sponsors || []).filter((x) => x.spot === k && (!hole || (x.holes || []).includes(hole)));
   const mode = stab ? 'Points' : S.format?.show === 'gross' ? 'Gross' : 'Net';
   const cams = { ...(S.cams || {}), ...(S.live?.cams || {}) };
+  const tot = showsTotal(S);
+  const rsub = (l) => (l.rounds || []).map((r, i) => (r ? `R${i + 1} ${fmtPar(r.score, stab).replace(' pts', '')}` : '')).filter(Boolean).join(' · ');
   const lbPages = (fl, secs) => {
-    const lb = leaderboard(S, S.scores || {}, { flight: fl || null });
+    const lb = board(S, S.scores || {}, { flight: fl || null });
     if (!lb.length) return [];
     const pages = Math.min(4, Math.max(1, Math.ceil(lb.length / rows))), lsp = spot('leaderboard')[0];
     return Array.from({ length: pages }, (_, p) => ({
       k: 'lb', secs: secs || secsDefault, title: 'Leaderboard',
-      sub: `${fl ? `Flight ${fl}` : formatName(S)} · ${mode}${S.locked ? ' · Final results' : ''}`,
+      sub: `${fl ? `Flight ${fl}` : formatName(S)} · ${multiRound(S) ? `${roundName(S)} · ` : ''}${mode}${tot ? ' · Total' : ''}${S.locked ? ' · Final results' : ''}`,
       page: p + 1, pages, sponsor: lsp ? sponsorOf(lsp) : null, points: stab,
-      rows: lb.slice(p * rows, p * rows + rows).map((l) => ({ pos: String(l.pos), name: l.name, sub: l.sub && l.sub !== l.name ? l.sub : '',
+      // multi-day: each round's score under the name ("R1 −7 · R2 −4"); the score is the total
+      rows: lb.slice(p * rows, p * rows + rows).map((l) => ({ pos: String(l.pos), name: l.name, sub: tot ? rsub(l) : l.sub && l.sub !== l.name ? l.sub : '',
         score: l.played ? fmtPar(l.score, stab).replace(' pts', '') : '—', under: !stab && !!l.played && l.score < 0, thru: String(l.thru || '').replace('Starts ', '#') })),
     }));
   };
@@ -46,7 +49,7 @@ export function tvFeed(S, screenId, origin = 'https://flagcast.app') {
   };
   const indivPages = (fl, secs) => {
     if (!S.format?.indiv || !hasIndividuals(S)) return [];
-    const lb = individuals(S, S.scores || {}, { flight: fl || null }); if (!lb.length) return [];
+    const lb = indivBoard(S, S.scores || {}, { flight: fl || null }); if (!lb.length) return [];
     const pages = Math.min(4, Math.max(1, Math.ceil(lb.length / rows)));
     return Array.from({ length: pages }, (_, p) => ({
       k: 'lb', secs: secs || secsDefault, title: 'Individuals', sub: `${fl ? `Flight ${fl}` : 'Every player'} · ${mode}${S.locked ? ' · Final results' : ''}`,

@@ -142,6 +142,9 @@ struct DeskEvent: Codable, Hashable {
     var fund = Fund()
     var contests: [Contest] = []
     var logo = ""   // this tournament's own logo (a PNG data: URI) instead of its club's; '' = the club's
+    /// multi-day: each round's date (two to four; empty = one day; round 1's is date) and how the leaderboard adds them up
+    var rounds: [RoundDay] = []
+    var boardBy = "total"
     // the rest: read only here, changed with their own ops
     var id = "", key = ""
     /// the setup version this copy was loaded at: Save sends it, so the server keeps what changed since (golf.js mergeTeams)
@@ -157,10 +160,12 @@ struct DeskEvent: Codable, Hashable {
     var log: [FixLog] = []
     var photos = Photos()   // the photos golfers see (op "photo", saved at once, never with Save)
     var invites: [String: InviteMark] = [:]   // players' email invites by player id (op "invite", never with Save)
+    var round = 0   // multi-day: the round being played (0 = round 1; op "round", never with Save)
 
     enum CodingKeys: String, CodingKey {
         case name, club, date, course, format, sideGames, flights, teams, matches, screens, cams, sponsors, schedule, pins, displays, fund, contests, logo
         case id, key, locked, aces, map, live, scenes, replays, news, stats, log, photos, v, invites
+        case rounds, boardBy, round
     }
     init() {}
     init(from d: Decoder) throws {
@@ -185,6 +190,7 @@ struct DeskEvent: Codable, Hashable {
         log = c.list(.log)
         photos = (try? c.decodeIfPresent(Photos.self, forKey: .photos)) ?? Photos()
         invites = (try? c.decodeIfPresent([String: Lenient<InviteMark>].self, forKey: .invites))?.compactMapValues(\.value) ?? [:]
+        rounds = c.list(.rounds); boardBy = c.str(.boardBy) == "round" ? "round" : "total"; round = Int(c.dbl(.round, 0))
     }
     /// Only the setup goes back on Save; cleanSetup ignores anything else.
     func encode(to e: Encoder) throws {
@@ -196,6 +202,9 @@ struct DeskEvent: Codable, Hashable {
         try c.encode(sponsors, forKey: .sponsors); try c.encode(schedule, forKey: .schedule); try c.encode(pins, forKey: .pins)
         try c.encode(displays, forKey: .displays); try c.encode(fund, forKey: .fund); try c.encode(contests, forKey: .contests)
         try c.encode(logo, forKey: .logo); try c.encode(v, forKey: .v)
+        // multi-day: round 1 is the tournament's date
+        var rs = rounds; if rs.count > 1 { rs[0].date = date } else { rs = [] }
+        try c.encode(rs, forKey: .rounds); try c.encode(boardBy, forKey: .boardBy)
     }
     /// The setup as JSON, for comparing (unsaved changes) and for Save.
     var setupData: Data { (try? Self.encoder.encode(self)) ?? Data() }
@@ -218,6 +227,23 @@ struct DeskEvent: Codable, Hashable {
     }
     /// teams not in any match yet
     var unpaired: [DeskTeam] { let used = Set(matches.flatMap { [$0.a, $0.b] }); return teams.filter { !used.contains($0.id) } }
+
+    /// Multi-day: how many rounds (1 to 4), and setting it (new rounds start on the days after the last one).
+    var days: Int { max(1, min(4, rounds.count)) }
+    mutating func setDays(_ n: Int) {
+        let n = max(1, min(4, n))
+        if n == 1 { rounds = []; return }
+        var rs = rounds.isEmpty ? [RoundDay(date: date)] : rounds
+        while rs.count < n {
+            let last = rs.last?.date ?? date
+            rs.append(RoundDay(date: ISO8601DateFormatter.day.date(from: last).map { ISO8601DateFormatter.day.string(from: $0.addingTimeInterval(86_400)) } ?? ""))
+        }
+        rs = Array(rs.prefix(n)); rs[0].date = date
+        rounds = rs
+    }
+    /// round i's date, for a binding (i ≥ 1; round 1's is date)
+    func roundDate(_ i: Int) -> String { i < rounds.count ? rounds[i].date : "" }
+    mutating func setRoundDate(_ i: Int, _ d: String) { if i < rounds.count { rounds[i].date = d } }
 
     /// Holes this round plays (front or back 9, or all 18).
     var playHoles: [Int] { switch format.nine { case "front": return Array(1...9); case "back": return Array(10...18); default: return Array(1...18) } }

@@ -148,7 +148,7 @@ input { background: var(--paper); border: 1px solid var(--line); border-radius: 
 <script type="module">
 import { api, token, esc, creditsText, signinError } from '/golf/club.js';
 import { fileToLogo } from '/golf/brandmark.js';
-import { leaderboard, fmtPar, formatName } from '/golf/core.js';
+import { leaderboard, board as totalOrRound, multiRound, roundName, fmtPar, formatName } from '/golf/core.js';
 import { mountSidebar, menuButton, getMe, myEvents, withMeta, featured, stepsLeft, isEventDay, slowCarts, teamName, paintPhoto, courseView,
   dayLine, monthDay, today, deskURL, rememberLink, icon } from '/golf/shell.js';
 const $ = (id) => document.getElementById(id);
@@ -208,14 +208,14 @@ async function drawDashboard() {
   const S = await fetch(`/golf/api/${lead.id}/state`, { cache: 'no-store' }).then((r) => r.json()).catch(() => null);
   if (!S) { $('leadWrap').innerHTML = ''; return; }
   paintPhoto($('photo'), courseView(S));
-  const board = leaderboard(S, S.scores), played = board.reduce((a, l) => a + l.played, 0), l1 = board.find((l) => l.played > 0);
+  const board = leaderboard(S, S.scores), played = board.reduce((a, l) => a + l.played, 0), l1 = totalOrRound(S, S.scores).find((l) => l.played > 0);
   const most = Math.max(0, ...board.map((l) => l.played)), behind = board.filter((l) => most > 0 && l.played < most - 2).length, stab = S.format?.type === 'stableford';
-  const isToday = S.date === today();
+  const isToday = [S.date, ...(S.rounds || []).map((r) => r.date)].includes(today());
   const fmt = S.format?.type ? formatName(S) : '';
   const num = (v, l, cls = '') => `<div><b class="${cls}">${esc(v)}</b><span>${esc(l)}</span></div>`;
   $('leadWrap').innerHTML = `<div class="raised lead">
     <div class="pic"><div class="tilebox" id="leadPic"></div>${isToday && !S.locked ? '<span class="chip-live">LIVE</span>' : ''}</div>
-    <div class="info"><div class="when">${esc(dayLine(S.date) || 'NO DATE SET')}${S.locked ? ' · FINAL' : ''}</div>
+    <div class="info"><div class="when">${esc(dayLine(S.date) || 'NO DATE SET')}${multiRound(S) ? ` · ${roundName(S).toUpperCase()}` : ''}${S.locked ? ' · FINAL' : ''}</div>
       <div class="nm">${esc(S.name || lead.name)}</div><div class="cs">${esc([S.course?.name, fmt].filter(Boolean).join(' · '))}</div>
       <div class="nums">${num(String(S.teams.length), 'teams')}${played ? num(String(played), 'holes played') : ''}${l1 ? num(stab ? String(l1.score) : fmtPar(l1.score), l1.name, !stab && l1.score < 0 ? 'u' : '') : ''}${behind ? num(String(behind), 'behind on scores', 'warnc') : ''}</div>
       <div class="go"><a class="gbtn-green" href="${deskURL(lead.id, lead.key)}">Open tournament</a><a class="pbtn" href="${deskURL(lead.id, lead.key, 'scores')}">Scores</a><a class="pbtn" href="${deskURL(lead.id, lead.key, 'screens')}">Screens</a><a class="pbtn" href="${deskURL(lead.id, lead.key, 'teams')}">Teams</a></div></div></div>`;

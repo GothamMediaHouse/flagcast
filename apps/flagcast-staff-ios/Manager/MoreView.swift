@@ -182,7 +182,18 @@ struct DetailsView: View {
             CardBox(title: "Tournament") {
                 VStack(alignment: .leading, spacing: 10) {
                     BoxField(placeholder: "Name", text: $doc.ev.name)
-                    DatePicker("Date", selection: Binding(get: { ISO8601DateFormatter.day.date(from: doc.ev.date) ?? Date() }, set: { doc.ev.date = ISO8601DateFormatter.day.string(from: $0) }), displayedComponents: .date)
+                    DatePicker(doc.ev.days > 1 ? "Round 1" : "Date", selection: Binding(get: { ISO8601DateFormatter.day.date(from: doc.ev.date) ?? Date() }, set: { doc.ev.date = ISO8601DateFormatter.day.string(from: $0) }), displayedComponents: .date)
+                    // multi-day: a date for each round, and how the leaderboard adds them up
+                    Picker("Days", selection: Binding(get: { doc.ev.days }, set: { doc.ev.setDays($0) })) {
+                        Text("1 day").tag(1); Text("2 rounds").tag(2); Text("3 rounds").tag(3); Text("4 rounds").tag(4)
+                    }.pickerStyle(.segmented)
+                    if doc.ev.days > 1 {
+                        ForEach(Array(1..<doc.ev.days), id: \.self) { i in
+                            DatePicker("Round \(i + 1)", selection: Binding(get: { ISO8601DateFormatter.day.date(from: doc.ev.roundDate(i)) ?? Date() }, set: { doc.ev.setRoundDate(i, ISO8601DateFormatter.day.string(from: $0)) }), displayedComponents: .date)
+                        }
+                        Picker("Leaderboard", selection: $doc.ev.boardBy) { Text("Total of all rounds").tag("total"); Text("Each round").tag("round") }.pickerStyle(.segmented)
+                        Help("Same teams, cart codes and PINs every round. Each morning it moves on to that day’s round by itself; change the round on Today.")
+                    }
                     BoxField(placeholder: "Club", text: $doc.ev.club)
                     HStack { Text("Course").foregroundStyle(FC.muted); Spacer(); Text(doc.ev.course.name.isEmpty ? "Set on the Mac" : doc.ev.course.name) }
                 }

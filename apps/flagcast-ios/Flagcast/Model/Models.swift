@@ -344,6 +344,29 @@ struct CourseMap: Codable, Hashable {
 /// scores[teamId][playerId or "T"] = 18 values: nil = not yet, 0 = picked up, else strokes
 typealias Scores = [String: [String: [Int?]]]
 
+/// A multi-day tournament's round: its date (YYYY-MM-DD, or "" not set yet).
+struct RoundDay: Codable, Hashable {
+    var date = ""
+    init(date: String = "") { self.date = date }
+    init(from d: Decoder) throws { let c = try d.container(keyedBy: CodingKeys.self); date = (try? c.decodeIfPresent(String.self, forKey: .date)) ?? "" }
+}
+/// A round not being played now, as the server keeps it (golf.js switchRound): its format, lock, each team's handicaps
+/// then ("T" for the team, else player ids) and its scores.
+struct PastRound: Codable, Hashable {
+    var format: Format?
+    var locked = false
+    var hcps: [String: [String: Double]] = [:]
+    var scores: Scores = [:]
+    init() {}
+    init(from d: Decoder) throws {
+        let c = try d.container(keyedBy: CodingKeys.self)
+        format = try? c.decodeIfPresent(Format.self, forKey: .format)
+        locked = (try? c.decodeIfPresent(Bool.self, forKey: .locked)) ?? false
+        hcps = (try? c.decodeIfPresent([String: [String: Double]].self, forKey: .hcps)) ?? [:]
+        scores = (try? c.decodeIfPresent(Scores.self, forKey: .scores)) ?? [:]
+    }
+}
+
 
 /// Where the pin is on a green today (the Manager's Pin sheet; public/golf/gps.js cleanPin). d: F/M/B (front, middle,
 /// back), s: L/C/R (left, center, right), on: paces from the front edge, off: paces in from the left or right edge (0 = not given).
@@ -455,10 +478,17 @@ struct EventState: Codable, Hashable {
     /// pace of play: each group's round start and hole times (Core.pace), and the goal in minutes for 18 holes
     var pace: [String: PaceTimes] = [:]
     var paceGoal = 255
+    /// multi-day (public/golf/core.js roundCount): each round's date (two to four; empty = a one-day tournament), the round
+    /// being played (0 = round 1), how the leaderboard adds them up ("total" or "round"), and the rounds not being played
+    var rounds: [RoundDay] = []
+    var round = 0
+    var boardBy = "total"
+    var past: [Int: PastRound] = [:]
 
     enum CodingKeys: String, CodingKey {
         case id, name, club, date, course, format, sideGames, flights, teams, matches, screens, cams, sponsors, schedule, displays, fund, contests
         case locked, aces, flash, news, nudges, live, replays, map, pinsheet, scores, online, brand, lastAt, photos, notesOff, golive, camsOff, clipsOff, pace, paceGoal
+        case rounds, round, boardBy, past
     }
     init() {}
     init(from d: Decoder) throws {
@@ -496,6 +526,9 @@ struct EventState: Codable, Hashable {
         clipsOff = c.bool(.clipsOff, false)
         pace = ((try? c.decodeIfPresent([String: Lenient<PaceTimes>].self, forKey: .pace)) ?? [:]).compactMapValues(\.value)
         paceGoal = c.int(.paceGoal, 255)
+        rounds = c.list(.rounds); round = c.int(.round, 0); boardBy = c.str(.boardBy) == "round" ? "round" : "total"
+        let rawPast = (try? c.decodeIfPresent([String: Lenient<PastRound>].self, forKey: .past)) ?? [:]
+        past = Dictionary(uniqueKeysWithValues: rawPast.compactMap { k, v in Int(k).flatMap { n in v.value.map { (n, $0) } } })
     }
     func encode(to e: Encoder) throws {
         var c = e.container(keyedBy: CodingKeys.self)
@@ -512,6 +545,8 @@ struct EventState: Codable, Hashable {
         try c.encode(Dictionary(uniqueKeysWithValues: golive.map { (String($0.key), GoLiveWho(by: $0.value)) }), forKey: .golive)
         try c.encode(camsOff, forKey: .camsOff); try c.encode(clipsOff, forKey: .clipsOff)
         try c.encode(pace, forKey: .pace); try c.encode(paceGoal, forKey: .paceGoal)
+        try c.encode(rounds, forKey: .rounds); try c.encode(round, forKey: .round); try c.encode(boardBy, forKey: .boardBy)
+        try c.encode(Dictionary(uniqueKeysWithValues: past.map { (String($0.key), $0.value) }), forKey: .past)
     }
 
     /// "Sat, Nov 21" for the tournament's day (it's stored as 2026-11-21, a day where the club is)

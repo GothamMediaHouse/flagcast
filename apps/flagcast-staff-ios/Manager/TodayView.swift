@@ -73,8 +73,10 @@ private struct HomePage: View {
     /// the frosted numbers on the photo's edge, the leaderboard and the closest-to-the-pin tile, then the day's tools.
     private func page(_ doc: DeskDoc) -> some View {
         let ev = doc.ev
-        let isToday = ev.date == ISO8601DateFormatter.day.string(from: Date())
-        return PhotoPage(image: doc.picture.image, kicker: (dayLine(ev.date) ?? "NO DATE SET") + (ev.locked ? " · FINAL" : ""), live: isToday && !ev.locked,
+        let td = ISO8601DateFormatter.day.string(from: Date()), isToday = ev.date == td || ev.rounds.contains { $0.date == td }
+        // multi-day: "ROUND 2 OF 3 · SAT 12 JUN"
+        let kick = doc.live.flatMap { l in Core.multiRound(l) ? (Core.roundName(l) + (Core.roundDay(l).isEmpty ? "" : " · \(Core.roundDay(l))")).uppercased() : nil } ?? (dayLine(ev.date) ?? "NO DATE SET")
+        return PhotoPage(image: doc.picture.image, kicker: kick + (ev.locked ? " · FINAL" : ""), live: isToday && !ev.locked,
                          title: ev.name.isEmpty ? doc.ref.name : ev.name, sub: subtitle(ev), height: 380) {
             if let u = logoURL(doc.live?.brand.logo) { RemoteLogo(url: u).frame(width: 160, height: 40, alignment: .leading).shadow(color: .black.opacity(0.3), radius: 6) }
             HStack(spacing: 8) {
@@ -88,6 +90,7 @@ private struct HomePage: View {
                 HStack(alignment: .top, spacing: 14) { leaderboard(doc).frame(minWidth: 380); contestTile(doc).frame(width: 300) }
                 VStack(spacing: 14) { leaderboard(doc); contestTile(doc).frame(height: 190) }
             }
+            if let live = doc.live, Core.multiRound(live) { RoundsCard(doc: doc, live: live) }
             PinSheetCard(doc: doc)
             CodesCard(doc: doc)
             InvitesCard(doc: doc)
@@ -127,15 +130,17 @@ private struct HomePage: View {
         return [ev.course.name.isEmpty ? (ev.club.isEmpty ? nil : ev.club) : ev.course.name, holes.isEmpty ? nil : nine, par > 0 ? "Par \(par)" : nil,
                 yds > 0 ? "\(ev.course.tees.first.map { "\($0.name) tees " } ?? "")\(yds.formatted()) yds" : nil, formatName(ev.format)].compactMap { $0 }.joined(separator: " · ")
     }
-    private func board(_ doc: DeskDoc) -> [Line] { doc.live.map { Core.leaderboard($0, $0.scores) } ?? [] }
+    /// the board everyone sees (multi-day: the total over the rounds), and this round on its own (who's on the course)
+    private func board(_ doc: DeskDoc) -> [Line] { doc.live.map { Core.board($0, $0.scores) } ?? [] }
+    private func today(_ doc: DeskDoc) -> [Line] { doc.live.map { Core.leaderboard($0, $0.scores) } ?? [] }
     private func scoreText(_ ev: DeskEvent, _ l: Line) -> String { ev.format.isStableford ? "\(l.score)" : Core.fmtPar(l.score) }
     private func scoreColor(_ ev: DeskEvent, _ l: Line) -> Color { ev.format.isStableford ? FC.ink : l.score < 0 ? FC.red : l.score > 0 ? FC.blue : FC.ink }
 
     // ---- the four numbers (the Mac's Overview) ----
     private func stats(_ doc: DeskDoc) -> [StatCell] {
-        let ev = doc.ev, live = doc.live, b = board(doc)
+        let ev = doc.ev, live = doc.live, b = today(doc)
         let scoring = b.filter { $0.played > 0 && $0.thru != "F" }.count, finished = b.filter { $0.thru == "F" }.count
-        let leader = b.first { $0.played > 0 }
+        let leader = board(doc).first { $0.played > 0 }
         let screens = ev.displays.count, on = ev.displays.filter { (live?.online[$0.id] ?? 0) > 0 }.count
         let most = b.map(\.played).max() ?? 0, behind = b.filter { most > 0 && $0.played < most - 2 }.count
         return [
@@ -201,7 +206,7 @@ private struct HomePage: View {
                     Text(l.pos).font(.system(size: 14, weight: .bold)).foregroundStyle(FC.muted).frame(width: 28, alignment: .leading)
                     Text(l.name).font(.system(size: 14, weight: .semibold)).lineLimit(1)
                     Spacer()
-                    Text(l.thru == "F" ? "F" : "Thru \(l.thru)").font(.system(size: 12)).foregroundStyle(FC.muted)
+                    Text(l.thru == "F" || l.thru.hasPrefix("R") ? l.thru : "Thru \(l.thru)").font(.system(size: 12)).foregroundStyle(FC.muted)
                     Text(scoreText(ev, l)).font(FC.display(22)).foregroundStyle(scoreColor(ev, l)).frame(minWidth: 40, alignment: .trailing)
                 }
                 .padding(.horizontal, 14).padding(.vertical, 7)
@@ -473,4 +478,36 @@ private struct HTMLPreview: UIViewRepresentable {
     let html: String
     func makeUIView(context: Context) -> WKWebView { let w = WKWebView(); w.loadHTMLString(html, baseURL: URL(string: "https://flagcast.app")); return w }
     func updateUIView(_ w: WKWebView, context: Context) {}
+}
+
+
+/// Multi-day: each round with its date, which one the carts are scoring, and a button to play another round now
+/// (two rounds on one day, or back a round to fix a card). Each morning the server moves on to that day's round by itself.
+struct RoundsCard: View {
+    @Bindable var doc: DeskDoc
+    var live: EventState
+    @State private var sure: Int?
+    var body: some View {
+        let now = Core.roundNow(live)
+        CardBox(title: "Rounds", footer: "The carts score the round that’s playing now. Each morning the tournament moves on to that day’s round by itself. Going back a round keeps the later round’s scores.") {
+            ForEach(0..<Core.roundCount(live), id: \.self) { i in
+                if i > 0 { Divider().overlay(FC.hairline) }
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Round \(i + 1)" + (Core.roundDay(live, i).isEmpty ? "" : " · \(Core.roundDay(live, i))")).font(.system(size: 15, weight: .semibold))
+                        Text(i == now ? (live.locked ? "Scoring now · locked" : "Scoring now") : live.past[i] == nil ? "Not started" : live.past[i]!.locked ? "Played · locked" : "Played")
+                            .font(.system(size: 12)).foregroundStyle(i == now ? FC.ok : FC.muted)
+                    }
+                    Spacer()
+                    if i != now {
+                        Button(sure == i ? "Sure? Tap again" : "Play now") {
+                            if sure == i { sure = nil; Task { await doc.playRound(i) } } else { sure = i }
+                        }
+                        .buttonStyle(.bordered).disabled(doc.dirty)
+                    }
+                }
+                .padding(.horizontal, 14).padding(.vertical, 10)
+            }
+        }
+    }
 }

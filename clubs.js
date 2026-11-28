@@ -32,6 +32,8 @@ import { hashPassword, checkPassword, passwordProblem, verifyAppleToken, appleKe
 import { cleanLogo, cleanAccent, logoVersion } from './brand.js';
 import { mailHtml, mailText, EMAILS } from './mail.js';
 import { streamReady, liveInput, inputState, deleteInput, listAll, deleteVideo } from './stream.js';
+import { dateNow } from './public/golf/core.js';
+const tvDate = (s, now = Date.now()) => dateNow(s, new Date(now - 4 * 3600000).toISOString().slice(0, 10)); // golf.js tvDate
 
 const json = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
 const EMAIL = /^[^\s@<>"',;]{1,64}@[^\s@<>"',;]{1,190}\.[a-z]{2,24}$/i;
@@ -739,7 +741,7 @@ export class FlagcastClubs extends DurableObject {
             const scored = Object.values(s.scores || {}).reduce((n, pl) => n + Object.values(pl).reduce((m, arr) => m + arr.filter((v) => v != null).length, 0), 0);
             const online = Object.values(s.online || {}).reduce((n, v) => n + v, 0);
             const lasts = Object.values(s.lastAt || {}), soon = Date.now() - 20 * 60000;
-            return { ...e, name: s.name || e.name, date: s.date || '', demo: !!s.brand?.marked, brand: s.brand || null, photo: coursePhoto(s),
+            return { ...e, name: s.name || e.name, date: tvDate(s), rounds: (s.rounds || []).length, round: s.round || 0, demo: !!s.brand?.marked, brand: s.brand || null, photo: coursePhoto(s),
               lastScore: lasts.length ? Math.max(...lasts) : 0, scoringNow: lasts.filter((a) => a > soon).length, teams: (s.teams || []).length, scored, screens: (s.displays || []).length, online, locked: !!s.locked, replays: (s.replays || []).length,
               // for screen control
               displays: (s.displays || []).map((d) => ({ id: d.id, name: d.name, where: d.where || '', group: d.group || '', online: (s.online || {})[d.id] || 0, force: s.live?.force?.[d.id] || null,

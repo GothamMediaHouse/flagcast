@@ -38,6 +38,10 @@ body.maponly #hero { display: none !important; }
 @media (max-width: 900px) { body.maponly #hero { display: flex !important; min-height: 0 !important; } body.maponly #hero .ttl, body.maponly #hero .acts { display: none; } main > section.embed iframe { height: calc(100dvh - 52px); } }
 @media (max-width: 640px) { main { padding: 0 12px 60px; } main > section:not(.ov):not(.embed) { padding: 4px 14px 18px; } main > section.embed { margin: 0 -12px -60px; } }
 section[hidden] { display: none; }
+#ovRounds .r .t { width: auto; white-space: nowrap; font-size: 13px; }
+#ovRounds .r .s { min-width: 150px; font: 600 13px/1.2 var(--f-body); }
+#ovRounds .r .s .btn { font: 600 13px/1.2 var(--f-body, inherit); padding: 7px 12px; min-height: 0; }
+#ovRounds .r .s .now { color: var(--ok, #1f6b45); font-weight: 700; }
 /* pin sheet */
 .pacebar label { white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
 .pacestats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 14px 0; }
@@ -174,6 +178,7 @@ table.t .n { width: 64px; }
 <section id="s-overview" class="ov" hidden>
   <div class="stats" id="ovStats"></div>
   <div class="ovgrid"><div class="raised lb" id="ovLb"></div><a class="ctp" id="ovCtp" href="#contests"><div class="tilebox" id="ovCtpPic"></div><div class="tx" id="ovCtpTx"></div></a></div>
+  <div class="raised lb codes" id="ovRounds" hidden></div>
   <div class="raised lb codes" id="ovCodes"></div>
   <div class="raised lb codes inv" id="ovInv"></div>
 </section>
@@ -183,9 +188,15 @@ table.t .n { width: 64px; }
   <div class="grid">
     <label class="f">Tournament name<input id="f-name"></label>
     <label class="f">Club<input id="f-club"></label>
-    <label class="f">Date<input id="f-date" type="date"></label>
     <label class="f">Course name<input id="f-course"></label>
+    <label class="f">Days<select id="f-days"><option value="1">One day</option><option value="2">2 rounds</option><option value="3">3 rounds</option><option value="4">4 rounds</option></select></label>
+    <label class="f"><span id="f-dateL">Date</span><input id="f-date" type="date"></label>
+    <label class="f" data-rd="1">Round 2 date<input id="f-r1" type="date"></label>
+    <label class="f" data-rd="2">Round 3 date<input id="f-r2" type="date"></label>
+    <label class="f" data-rd="3">Round 4 date<input id="f-r3" type="date"></label>
+    <label class="f" data-rd="b">Leaderboard over the rounds<select id="f-boardBy"><option value="total">Total of all rounds</option><option value="round">Each round on its own</option></select></label>
   </div>
+  <p class="help" id="roundsHelp" hidden>The same teams, cart codes and PINs play every round. Each morning the tournament moves on to that day’s round by itself, and you can change the round on the Overview (two rounds on one day, or to fix a card). The format, handicaps and side games can change between rounds: change them here on the morning of the round.</p>
   <h3>Format</h3>
   <div class="grid">
     <label class="f">Format<select id="f-type"><option value="bestball">Best ball (teams)</option><option value="shamble">Shamble (best drive, then own ball)</option><option value="scramble">Scramble (one team score)</option><option value="stroke">Stroke play (each player)</option><option value="stableford">Stableford points</option><option value="match">Match play (head to head)</option></select></label>
@@ -237,7 +248,7 @@ table.t .n { width: 64px; }
 </section>
 
 <section id="s-scores" hidden>
-  <h2>Scores</h2>
+  <h2>Scores<span id="scoresRound"></span></h2>
   <p class="help">Fix any score here. Changes save as you leave each box and show on every screen. Type 0 for a picked-up ball, clear the box to remove a score.</p>
   <div class="scroll" style="margin-top:12px"><table class="t scores" id="scores"></table></div>
 </section>
@@ -342,7 +353,7 @@ table.t .n { width: 64px; }
 </main></div></div>
 <div class="toast" id="toast" hidden></div>
 <script type="module">
-import { defaultHoles, leaderboard, courseHcp, coursePar, parseIndex, fmtIndex, netDoubleBogey } from '/golf/core.js';
+import { defaultHoles, leaderboard, board as totalOrRound, multiRound, roundCount, roundNow, roundName, roundDay, showsTotal, courseHcp, coursePar, parseIndex, fmtIndex, netDoubleBogey } from '/golf/core.js';
 import { eventId, post, live, esc } from '/golf/client.js';
 import { fmtPar, contestLeader, contestFlag, fmtDist, playHoles, teamBall, matches, matchFor, cup, fmtPts, camList, paceOf, paceWord, paceGoal, fmtClock } from '/golf/core.js';
 import { GREEN_PATH, pinSpot, pinLabel, pinPaces, pinYards, yds, middle } from '/golf/gps.js';
@@ -399,14 +410,14 @@ function heroSub() {
 }
 function drawHero() {
   if (!EV) return;
-  const ov = tab === 'overview', ev = S(), live = ev.date === today() && !ev.locked;
+  const ov = tab === 'overview', ev = S(), live = [ev.date, ...(ev.rounds || []).map((r) => r.date)].includes(today()) && !ev.locked;
   document.body.classList.toggle('maponly', ['map', 'groups'].includes(tab));
   $('hero').style.minHeight = ov ? '420px' : ['map', 'groups'].includes(tab) ? '150px' : '230px';
   $('hero').style.display = 'flex'; $('hero').style.flexDirection = 'column'; $('hero').style.justifyContent = 'space-between';
   $('where').textContent = sectionTitle(tab);
   const logo = LIVE?.brand?.logo; $('clublogo').hidden = !(ov && logo); if (ov && logo && $('clublogo').getAttribute('src') !== logo) $('clublogo').src = logo;
   $('kick').className = `kick${ov && live ? ' on' : ''}`;
-  $('kick').innerHTML = ov ? `${live ? '<span class="chip-live">LIVE</span>' : ''}<span>${esc(dayLine(ev.date) || 'No date set')}${ev.locked ? ' · Final' : ''}</span>` : `<span>${esc(ev.name || 'Tournament')}</span>`;
+  $('kick').innerHTML = ov ? `${live ? '<span class="chip-live">LIVE</span>' : ''}<span>${esc(multiRound(ev) ? `${roundName(ev)}${roundDay(ev) ? ` · ${roundDay(ev)}` : ''}`.toUpperCase() : dayLine(ev.date) || 'No date set')}${ev.locked ? ' · Final' : ''}</span>` : `<span>${esc(ev.name || 'Tournament')}</span>`;
   $('evname').textContent = ov ? ev.name || 'Tournament' : sectionTitle(tab);
   $('evname').className = ov ? '' : 'mid';
   $('evsub').textContent = ov ? heroSub() : '';
@@ -419,8 +430,8 @@ function drawHero() {
 // ---- Overview (the Mac's OverviewView): four numbers, the leaderboard, the contest card ----
 function drawOverview() {
   if (!EV || tab !== 'overview') return;
-  const ev = S(), board = LIVE ? leaderboard(LIVE, LIVE.scores) : [];
-  const scoring = board.filter((l) => l.played > 0 && l.thru !== 'F').length, finished = board.filter((l) => l.thru === 'F').length;
+  const ev = S(), today = LIVE ? leaderboard(LIVE, LIVE.scores) : [], board = LIVE ? totalOrRound(LIVE, LIVE.scores) : [];
+  const scoring = today.filter((l) => l.played > 0 && l.thru !== 'F').length, finished = today.filter((l) => l.thru === 'F').length;
   const leader = board.find((l) => l.played > 0), screens = (ev.displays || []).length, on = (ev.displays || []).filter((d) => (LIVE?.online?.[d.id] || 0) > 0).length;
   const stat = (l, v, s, cls = '') => `<div class="stat"><div class="l">${l}</div><div class="v ${cls}">${esc(v)}</div><div class="s">${esc(s)}</div></div>`;
   $('ovStats').innerHTML = stat('Teams', String(ev.teams.length), `${ev.teams.reduce((a, t) => a + (t.players || []).length, 0)} players`)
@@ -439,8 +450,8 @@ function drawOverview() {
       + (live.length ? live.map((r) => { const w = r.winner || r.leader; return `<div class="r"><span class="n">${w === 'A' ? '<b>' : ''}${nm(r.a)}${w === 'A' ? '</b>' : ''} v ${w === 'B' ? '<b>' : ''}${nm(r.b)}${w === 'B' ? '</b>' : ''}</span><span class="t">${r.done ? 'Final' : r.started ? `Thru ${esc(r.thru)}` : esc(r.thru)}</span><span class="s">${esc(r.done || r.started ? r.text : '–')}</span></div>`; }).join('')
         : `<div class="none"><span style="font-size:26px">⚑</span>${ev.teams.length ? 'Pair the teams on the Teams page, then Save.' : 'Add teams on the Teams page, then Save.'}</div>`);
   } else
-  $('ovLb').innerHTML = `<div class="h"><span>Leaderboard</span><a class="lnk" href="#scores">All scores ›</a></div>`
-    + (top.length ? top.map((l) => `<div class="r"><span class="p">${esc(l.pos)}</span><span class="n">${esc(l.name)}</span><span class="t">${l.thru === 'F' ? 'F' : `Thru ${esc(l.thru)}`}</span><span class="s ${scoreClass(l)}">${esc(scoreText(l))}</span></div>`).join('')
+  $('ovLb').innerHTML = `<div class="h"><span>Leaderboard${LIVE && showsTotal(LIVE) ? ` · Total after ${roundNow(LIVE) + 1} round${roundNow(LIVE) ? 's' : ''}` : LIVE && multiRound(LIVE) ? ` · Round ${roundNow(LIVE) + 1}` : ''}</span><a class="lnk" href="#scores">All scores ›</a></div>`
+    + (top.length ? top.map((l) => `<div class="r"><span class="p">${esc(l.pos)}</span><span class="n">${esc(l.name)}</span><span class="t">${l.thru === 'F' || /^R\d F$/.test(l.thru) ? esc(l.thru) : `Thru ${esc(l.thru)}`}</span><span class="s ${scoreClass(l)}">${esc(scoreText(l))}</span></div>`).join('')
       : `<div class="none"><span style="font-size:26px">⚑</span>${ev.teams.length ? 'Scores show here as the carts send them.' : 'Add teams on the Teams page, then Save.'}</div>`);
   const cs = ev.contests || [], c = cs.find((x) => x.kind !== 'ld') || cs[0], lead = c ? contestLeader(c)[0] : null;
   $('ovCtpTx').innerHTML = `<div class="k">${c ? `${c.kind === 'ld' ? 'LONG DRIVE' : 'CLOSEST TO THE PIN'} · HOLE ${c.hole}` : 'CONTESTS'}</div>
@@ -448,8 +459,29 @@ function drawOverview() {
     <div class="d">${esc(lead ? fmtDist(c, lead.dist) + (c.sponsor ? ` · presented by ${c.sponsor}` : '') : c ? 'Marshals post results from the phone app.' : 'Add one on the Contests page.')}</div>`;
   const pv = (c && holeView(ev, c.hole)) || courseView(ev), sig = JSON.stringify(pv);
   if ($('ovCtpPic').dataset.sig !== sig) { $('ovCtpPic').dataset.sig = sig; paintPhoto($('ovCtpPic'), pv); }
-  drawCodes(); drawInvites();
+  drawRounds(); drawCodes(); drawInvites();
 }
+// ---- multi-day: each round, and which one the carts are scoring now ----
+let roundSure = -1;
+function drawRounds() {
+  const ev = S(), on = multiRound(ev); $('ovRounds').hidden = !on; if (!on) return;
+  const now = roundNow(ev), past = LIVE?.past || {};
+  $('ovRounds').innerHTML = `<div class="h"><span>Rounds</span><a class="lnk" href="#setup">Dates ›</a></div>`
+    + Array.from({ length: roundCount(ev) }, (_, i) => {
+      const st = i === now ? (ev.locked ? 'Locked' : '') : past[i] ? (past[i].locked ? 'Played · locked' : 'Played') : 'Not started';
+      return `<div class="r"><span class="p">${i + 1}</span><span class="n">Round ${i + 1}${roundDay(ev, i) ? ` · ${esc(roundDay(ev, i))}` : ''}</span><span class="t">${st}</span>
+        <span class="s">${i === now ? '<span class="now">● Scoring now</span>' : `<button class="btn" data-round="${i}">${roundSure === i ? 'Sure? Click again' : `Play round ${i + 1} now`}</button>`}</span></div>`;
+    }).join('')
+    + `<p class="help">The carts score the round that’s playing now. Each morning the tournament moves on to that day’s round by itself. Going back a round keeps the later round’s scores.</p>`;
+}
+$('ovRounds').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-round]'); if (!b) return;
+  const i = Number(b.dataset.round);
+  if (dirty) { toast('Save your changes first.'); return; }
+  if (roundSure !== i) { roundSure = i; drawRounds(); setTimeout(() => { if (roundSure === i) { roundSure = -1; drawRounds(); } }, 4000); return; }
+  roundSure = -1;
+  try { await desk('round', { round: i }); EV.round = i; toast(`Round ${i + 1} is on. Cart phones now score round ${i + 1}.`); drawHero(); drawOverview(); } catch (err) { toast(err.message); }
+});
 // the codes golfers and staff type on the join screen (read-only here; PINs are changed on Staff)
 function drawCodes() {
   if (!EV) return;
@@ -520,10 +552,24 @@ document.addEventListener('click', async (e) => {
 document.addEventListener('input', (e) => { if (e.target.dataset && e.target.dataset.pk === 'email') e.target.classList.toggle('bad', !!e.target.value.trim() && !okEmail(e.target.value)); });
 
 // ---- form <-> setup ----
+// multi-day: a date for each round, and how the leaderboard adds them up
+function showRounds() {
+  const nd = Number($('f-days').value) || 1;
+  document.querySelectorAll('[data-rd]').forEach((x) => { x.hidden = x.dataset.rd === 'b' ? nd < 2 : Number(x.dataset.rd) >= nd; });
+  $('f-dateL').textContent = nd > 1 ? 'Round 1 date' : 'Date'; $('roundsHelp').hidden = nd < 2;
+}
+$('f-days').addEventListener('change', () => {
+  showRounds();
+  // the next rounds' dates: the days after round 1, to start with
+  const d0 = val('f-date');
+  for (let i = 1; i < (Number($('f-days').value) || 1); i++) if (!val(`f-r${i}`) && d0) { const d = new Date(`${d0}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + i); $(`f-r${i}`).value = d.toISOString().slice(0, 10); }
+});
 const val = (id) => $(id).value.trim();
 function fill() {
   drawHero();
   $('f-name').value = EV.name; $('f-club').value = EV.club; $('f-date').value = EV.date; $('f-course').value = EV.course.name;
+  const rs = EV.rounds || []; $('f-days').value = String(Math.max(1, rs.length)); $('f-boardBy').value = EV.boardBy === 'round' ? 'round' : 'total';
+  for (let i = 1; i < 4; i++) $(`f-r${i}`).value = rs[i]?.date || ''; showRounds();
   EV.matches ||= [];
   $('f-match').value = EV.format.match || 'fourball'; $('f-cup').value = EV.format.cup?.on ? '1' : ''; $('f-cupA').value = EV.format.cup?.a || 'Reds'; $('f-cupB').value = EV.format.cup?.b || 'Blues';
   $('f-indiv').value = EV.format.indiv ? '1' : '';
@@ -536,6 +582,9 @@ function fill() {
 }
 function read() {
   EV.name = val('f-name'); EV.club = val('f-club'); EV.date = val('f-date'); EV.course.name = val('f-course');
+  const nd = Number($('f-days').value) || 1;
+  EV.rounds = nd > 1 ? Array.from({ length: nd }, (_, i) => ({ date: i ? val(`f-r${i}`) : val('f-date') })) : [];
+  EV.boardBy = $('f-boardBy').value;
   EV.format = { type: $('f-type').value, count: Number($('f-count').value), allowance: Number($('f-allow').value), show: $('f-show').value, nine: $('f-nine').value,
     match: $('f-match').value, cup: { on: !!$('f-cup').value, a: val('f-cupA') || 'Reds', b: val('f-cupB') || 'Blues' }, indiv: !!$('f-indiv').value };
   EV.flights = val('f-flights').split(',').map((s) => s.trim()).filter(Boolean);
@@ -1064,6 +1113,7 @@ function drawScores() {
   const rows = [];
   for (const t of LIVE.teams) for (const p of scr ? [{ id: 'T', name: t.name || 'Team' }] : t.players) rows.push({ t, p });
   const lb = leaderboard(LIVE, LIVE.scores);
+  $('scoresRound').textContent = multiRound(LIVE) ? ` · ${roundName(LIVE)}` : '';
   const active = document.activeElement && document.activeElement.dataset.cell;
   $('scores').innerHTML = `<thead><tr><th>${scr ? 'Team' : 'Player'}</th>${H.map((h) => `<th>${h.n}<br><span class="mono" style="font-size:.7rem">P${h.par}</span></th>`).join('')}<th>${mp ? 'Match' : 'Pos'}</th></tr></thead><tbody>${rows.map(({ t, p }) => {
     const arr = ((LIVE.scores[t.id] || {})[p.id]) || [];
