@@ -8,7 +8,7 @@ import { join } from 'node:path';
 
 const SERVER = ['groupnotes', 'contestentry', 'pinsheet', 'protools', 'screens', 'stalesave', 'where', 'live', 'tv', 'matchsave'];
 const ADMIN = ['trydemo', 'privacyserver', 'clubs']; // clubs ends by locking out wrong passcodes, so it goes last
-const STREAM = ['golive', 'invites']; // need a Cloudflare Stream or Resend stand-in
+const STREAM = ['golive', 'golivestaff', 'invites']; // need a Cloudflare Stream or Resend stand-in
 const all = readdirSync('test').filter((f) => f.endsWith('.test.mjs')).map((f) => f.replace('.test.mjs', ''));
 const offline = all.filter((t) => !SERVER.includes(t) && !ADMIN.includes(t) && !STREAM.includes(t));
 let failed = 0;
@@ -34,7 +34,10 @@ try { for (const t of ADMIN) { console.log(`\n== ${t} (local server with a test 
 
 // Go live: Cloudflare Stream is a stand-in on this computer (the test starts it on 8793)
 s = await server(8794, 'CF_ACCOUNT_ID="acc"\nCF_STREAM_TOKEN="tok"\nCF_STREAM_API="http://127.0.0.1:8793"\n');
-try { console.log('\n== golive (local server, Stream stand-in)'); run(['test/golive.test.mjs', s.base, '8793']); } finally { s.stop(); }
+try {
+  console.log('\n== golive (local server, Stream stand-in)'); run(['test/golive.test.mjs', s.base, '8793']);
+  console.log('\n== golivestaff (local server, Stream stand-in)'); run(['test/golivestaff.test.mjs', s.base, '8793']);
+} finally { s.stop(); }
 
 // Player invites: Resend is a stand-in on this computer (the test starts it on 8795), so no real email goes out
 s = await server(8796, 'RESEND_API_KEY="test"\nRESEND_BASE="http://127.0.0.1:8795"\n');

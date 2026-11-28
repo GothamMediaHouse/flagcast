@@ -108,7 +108,7 @@ export async function golf(request, env) {
   if (url.pathname === '/golf/api/new') return cors(request, await clubs(request, env, 'new'));
   // Admin adding a club with its course: look the course up (scorecard, tees, hole map) here, then the directory keeps it
   if (url.pathname === '/golf/api/club/admin' && request.method === 'POST') return cors(request, await adminWithCourse(request, env));
-  if ((m = url.pathname.match(/^\/golf\/api\/club\/(start|verify|login|apple|google|config|setpass|me|request|invite|uninvite|hide|signout|admin|brand)$/))) return cors(request, await clubs(request, env, m[1]));
+  if ((m = url.pathname.match(/^\/golf\/api\/club\/(start|verify|login|apple|google|config|setpass|me|request|invite|uninvite|hide|signout|admin|brand|cameras|camera)$/))) return cors(request, await clubs(request, env, m[1]));
   // a club's logo, for the Manager apps and Admin (its tournaments serve their own at /golf/api/<id>/logo)
   if ((m = url.pathname.match(/^\/golf\/api\/club\/logo\/([a-z0-9]{4,10})$/)) && request.method === 'GET') {
     const r = await env.CLUBS.get(env.CLUBS.idFromName('directory')).fetch(new Request(`https://clubs/logo-get`, { method: 'POST', body: JSON.stringify({ club: m[1] }) }));
@@ -772,7 +772,8 @@ export class GolfEvent extends DurableObject {
       await this.broadcast();
       return json({ ok: true, photos: photoLinks(ev) });
     }
-    if (DAY_OPS.has(b.op)) return this.dayOp(b, 'Desk');
+    // as: the name of a camera person going live through the directory (clubs.js op 'camera', Can go live in Admin → Staff)
+    if (DAY_OPS.has(b.op)) return this.dayOp(b, b.op === 'golive' && b.as ? clip(String(b.as).trim(), 40) || 'Desk' : 'Desk');
     if (b.op === 'invite') return this.invite(b);
     if (b.op === 'save') {
       // the tournament's own logo (instead of the club's): '' takes it off; left out, it stays as it is

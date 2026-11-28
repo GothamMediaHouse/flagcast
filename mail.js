@@ -67,6 +67,10 @@ export const EMAILS = {
     button: { label: 'Download Flagcast Manager', url: `${SITE}/download/` } }),
   // a player's invite to a tournament (golf.js op 'invite'), from their club: see invite() below
   invite: (x) => invite(x),
+  // Can go live (Admin → Staff): where = 'at Iron Horse GC’s tournaments' and so on
+  golive: (where) => ({ subject: 'You can go live on Flagcast', title: 'You can go live',
+    lines: [`Flagcast has set you up to stream from your iPhone ${where}.`, 'Get Flagcast Manager on your iPhone and sign in with this email address. You’ll see a Go live screen with your tournaments: pick your hole and press Go live.'],
+    note: 'You only get the Go live screen. Scores, setup and everything else stay with the club.' }),
   newClub: (name, details) => ({ subject: `New club asking for Flagcast: ${name}`, title: `${name} wants Flagcast`,
     lines: details.filter(Boolean), button: { label: 'Review in Admin', url: `${SITE}/golf/admin/` } }),
 };

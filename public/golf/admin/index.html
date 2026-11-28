@@ -41,6 +41,9 @@ main { max-width: 1240px; padding: 18px 20px 60px; }
 .ahead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 56px; padding: 8px 20px; background: #fbfcf9; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ahead { background: #131c17; } }
 .ahead b { font-size: 15px; } .ahead .s { font-size: 13px; color: var(--muted); margin-right: auto; }
+.ptag { display: inline-block; font-size: 11px; font-weight: 600; border-radius: 9px; padding: 2px 8px; background: var(--paper-2); color: var(--muted); white-space: nowrap; margin: 2px 0; }
+.pchk { display: flex !important; flex-direction: row !important; gap: 10px; align-items: flex-start; } .pchk > span { flex: 1; }
+.ptag.adm { background: #e5efe9; color: #173d2c; } .ptag.live { background: #fde8e6; color: #b3261e; }
 .seg { display: inline-flex; background: var(--paper-2); border-radius: 8px; padding: 2px; }
 .seg button { border: 0; background: none; padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; color: var(--muted); }
 .seg button[aria-pressed="true"] { background: var(--card); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
@@ -237,7 +240,7 @@ async function call(body) {
 }
 async function admin(body) {
   const j = await call(body);
-  if (j.clubs) { clubs = j.clubs; deletedClubs = j.deleted || []; oldPays = j.oldPays || []; $('nomail').hidden = j.mail; staff = j.staff || []; }
+  if (j.clubs) { clubs = j.clubs; deletedClubs = j.deleted || []; oldPays = j.oldPays || []; $('nomail').hidden = j.mail; staff = j.staff || []; golive = j.golive || []; }
   if (body.op && !['events', 'log'].includes(body.op)) { events = null; logRows = null; }
   draw(); return j;
 }
@@ -284,7 +287,7 @@ let look = (() => { try { return localStorage.getItem(LOOK) || 'photo'; } catch 
 const HEAD = { overview: ['Overview', () => `${clubs.filter((c) => c.status === 'active').length} active clubs`], today: ['Event day', () => 'Every club’s tournament on today, the ones needing a look first'],
   signups: ['Sign-ups', () => `${clubs.filter((c) => c.status === 'pending').length} waiting`], clubs: ['Clubs', () => `${clubs.length} club${clubs.length === 1 ? '' : 's'} · ${clubs.filter((c) => c.status === 'pending').length} waiting`],
   events: ['Tournaments', () => events ? `${events.length} tournaments` : ''], cameras: ['Cameras', () => 'Par 3 camera links for every club’s tournament'],
-  screens: ['Screens & phones', () => 'Route what every TV and phone shows'], payments: ['Payments', () => ''], staff: ['Staff', () => `${staff.length} with Admin`], activity: ['Activity', () => ''] };
+  screens: ['Screens & phones', () => 'Route what every TV and phone shows'], payments: ['Payments', () => ''], staff: ['Staff', () => `${staff.length} with Admin · ${golive.length} can go live`], activity: ['Activity', () => ''] };
 function drawHead() {
   const [t, sub] = HEAD[tab] || [tab, () => ''];
   $('aTitle').textContent = t; $('aSub').textContent = sub();
@@ -610,14 +613,32 @@ function paymentsView() {
   ${pays.length ? `<table><thead><tr><th>Date</th><th>Club</th><th>For</th><th class="num">Tournaments</th><th class="num">Amount</th></tr></thead><tbody>${pays.map((p) => `<tr><td>${date(p.at)}</td><td><a href="#" data-open="${p.club}">${esc(p.clubName)}</a></td><td>${esc(p.what || '')}${p.note ? `<small>${esc(p.note)}</small>` : ''}</td><td class="num">${p.credits < 0 ? 'Unlimited' : p.credits || ''}</td><td class="num"><b>${money(p.amount)}</b></td></tr>`).join('')}</tbody></table>` : ''}</div>`;
 }
 
-// ---- Staff: who gets Admin when they sign in (Cloudflare's ADMIN_EMAIL ones are listed but changed there) ----
-let staff = [];
+// ---- Staff: who gets Admin when they sign in (Cloudflare's ADMIN_EMAIL ones are listed but changed there), and who
+// Can go live: stream from their iPhone to a hole (any tournament, one club's, or one), and nothing else (clubs.js liveScope)
+let staff = [], golive = [];
+function liveWhereText(g) {
+  if (!g) return '';
+  if (g.where === 'club') return `${g.clubName} (all its tournaments)`;
+  if (g.where === 'event') return `${g.eventName}${g.clubName ? ` · ${g.clubName}` : ''}`;
+  return 'Any tournament';
+}
+function people() {
+  const map = new Map();
+  for (const m of staff) map.set(m.email, { email: m.email, admin: m, live: null, seen: m.seen });
+  for (const g of golive) { const p = map.get(g.email) || { email: g.email, admin: null, seen: g.seen }; p.live = g; map.set(g.email, p); }
+  return [...map.values()];
+}
 function staffView() {
-  return `<div class="box"><h2>Flagcast staff</h2>
-  <p class="help">Anyone here gets this Admin, in the Manager and on the web, when they sign in with that email. Club owners never see Admin.</p>
-  <table><tbody>${staff.map((m) => `<tr><td><b>${esc(m.email)}</b><small>${m.fixed ? 'Set in Cloudflare (ADMIN_EMAIL)' : `Added ${date(m.added)}${m.by ? ` by ${esc(m.by)}` : ''}`} · last signed in ${when(m.seen)}</small></td>
-    <td class="acts">${m.fixed ? '' : `<button class="btn sm" data-unstaff="${esc(m.email)}">Remove</button>`}</td></tr>`).join('') || '<tr><td class="empty">Only the passcode opens Admin.</td></tr>'}</tbody></table>
-  <form class="row" data-staff style="margin-top:12px"><input type="email" placeholder="name@example.com" required autocomplete="off" style="flex:1;min-width:220px"><button class="btn primary">Add to staff</button></form></div>`
+  const list = people();
+  return `<div class="box"><h2>Flagcast staff and camera people</h2>
+  <p class="help">Admin opens everything, in the Manager and on the web. Can go live only lets someone send their iPhone camera to a hole: they sign in to the Flagcast Manager with their email and see a Go live screen, nothing else. Admins can always go live. Club owners never see Admin.</p>
+  <table><tbody>${list.map((p) => {
+    const m = p.admin, g = p.live, added = m && !m.fixed ? m : g;
+    return `<tr><td><b>${esc(p.email)}</b>${g?.name ? ` <span class="help" style="margin:0">(${esc(g.name)})</span>` : ''}<small>${m?.fixed ? 'Set in Cloudflare (ADMIN_EMAIL)' : `Added ${date(added.added)}${added.by ? ` by ${esc(added.by)}` : ''}`} · last signed in ${when(p.seen)}</small></td>
+    <td class="acts" style="white-space:normal">${m ? '<span class="ptag adm">Admin</span> ' : ''}<span class="ptag live">Can go live</span> <span class="ptag">${esc(m ? 'Everywhere' : liveWhereText(g))}</span>
+      ${m?.fixed ? '' : `<button class="btn sm" data-person="${esc(p.email)}">Edit</button>`}</td></tr>`;
+  }).join('') || '<tr><td class="empty">Only the passcode opens Admin.</td></tr>'}</tbody></table>
+  <form class="row" data-staff style="margin-top:12px"><input type="email" placeholder="name@example.com" required autocomplete="off" style="flex:1;min-width:220px"><button class="btn primary">Add person…</button></form></div>`
   + forgetView();
 }
 // ---- someone asked us to delete their information (privacy page): find them by full name or email in every
@@ -665,6 +686,51 @@ function payDialog(c) {
     if (d.returnValue !== 'ok') return;
     const v = Object.fromEntries(new FormData(f));
     try { await admin({ op: 'pay', club: c.id, what: v.what, amount: Number(v.amount), credits: Number(v.credits), note: v.note, at: v.at ? new Date(`${v.at}T12:00:00`).getTime() : undefined }); toast('Payment recorded.'); } catch (x) { toast(x.message); }
+  };
+}
+
+// Add or edit someone on Staff: Admin, Can go live and where (clubs.js golive-set / golive-remove, staff-add / staff-remove)
+function personDialog(email) {
+  const d = $('dlg'), f = $('dlgForm'), p = people().find((x) => x.email === email), isNew = !p, g = p?.live;
+  const evs = clubs.flatMap((c) => (c.events || []).filter((e) => !e.hidden && !e.archived).map((e) => ({ ...e, clubName: c.name })));
+  f.innerHTML = `<h2>${isNew ? 'Add person' : 'Edit person'}</h2>
+    <label>Email<input value="${esc(email)}" disabled></label>
+    <label class="pchk" style="margin:10px 0 2px"><input type="checkbox" name="admin" ${p?.admin ? 'checked' : ''} style="width:auto;flex:none;margin:3px 0 0"> <span><b>Admin</b><br><span class="help" style="margin:0">Everything in Admin: clubs, tournaments, cameras, payments</span></span></label>
+    <label class="pchk" style="margin:10px 0 2px"><input type="checkbox" name="live" ${g || isNew ? 'checked' : ''} style="width:auto;flex:none;margin:3px 0 0"> <span><b>Can go live</b><br><span class="help" style="margin:0" data-livehelp>Stream from their iPhone to a hole. Nothing else.</span></span></label>
+    <div data-livebox>
+      <label>Where<select name="where"><option value="any">Any tournament</option><option value="club">One club’s tournaments</option><option value="event">One tournament (ends when it’s over)</option></select></label>
+      <label data-w="club">Club<select name="club">${clubs.map((c) => `<option value="${c.id}" ${g?.club === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
+      <label data-w="event">Tournament<select name="event">${evs.map((e) => `<option value="${e.id}" ${g?.event === e.id ? 'selected' : ''}>${esc(e.name)} · ${esc(e.clubName)}</option>`).join('')}</select></label>
+      <label>Their name, for “live from …’s phone”<input name="name" maxlength="40" value="${esc(g?.name || '')}" placeholder="${esc(email.split('@')[0])}"></label>
+      <label class="pchk" style="margin:6px 0"><input type="checkbox" name="mail" ${g ? '' : 'checked'} style="width:auto;flex:none;margin:3px 0 0"> Email them how to go live (get the Flagcast Manager on their iPhone, sign in with this email)</label>
+    </div>
+    <div class="row" style="justify-content:flex-end">${isNew ? '' : '<button class="btn" value="remove" formnovalidate style="margin-right:auto;color:#b3261e">Remove</button>'}<button class="btn" value="cancel" formnovalidate>Cancel</button><button class="btn primary" value="ok">${isNew ? 'Add' : 'Save'}</button></div>`;
+  const where = f.querySelector('[name=where]'), live = f.querySelector('[name=live]'), adm = f.querySelector('[name=admin]');
+  where.value = g?.where || 'any';
+  let wasLive = live.checked;
+  // an admin can always go live, everywhere: the switch shows that and the where goes away
+  const show = () => {
+    if (adm.checked && !live.disabled) { wasLive = live.checked; live.checked = true; } else if (!adm.checked && live.disabled) live.checked = wasLive;
+    live.disabled = adm.checked;
+    f.querySelector('[data-livehelp]').textContent = adm.checked ? 'Admins can always go live, at any tournament.' : 'Stream from their iPhone to a hole. Nothing else.';
+    f.querySelector('[data-livebox]').hidden = !live.checked || adm.checked;
+    f.querySelectorAll('[data-w]').forEach((x) => { x.hidden = x.dataset.w !== where.value; });
+  };
+  where.onchange = show; live.onchange = () => { wasLive = live.checked; show(); }; adm.onchange = show; show();
+  d.showModal();
+  d.onclose = async () => {
+    if (!['ok', 'remove'].includes(d.returnValue)) return;
+    const v = Object.fromEntries(new FormData(f)), wantAdmin = d.returnValue === 'ok' && !!v.admin, wantLive = d.returnValue === 'ok' && !wantAdmin && !!v.live;
+    if (d.returnValue === 'remove' && !confirm(`Take ${email} off? ${p?.admin ? 'They lose Admin and' : 'They'} can’t go live any more.`)) return;
+    if (d.returnValue === 'ok' && !wantAdmin && !wantLive) return toast('Turn on Admin or Can go live (or press Remove).');
+    if (wantLive && v.where === 'event' && !v.event) return toast('This club has no tournaments to pick yet.');
+    try {
+      if (wantAdmin && !p?.admin) await admin({ op: 'staff-add', email });
+      if (!wantAdmin && p?.admin) await admin({ op: 'staff-remove', email });
+      if (wantLive) await admin({ op: 'golive-set', email, where: v.where, club: v.where === 'club' ? v.club : undefined, event: v.where === 'event' ? v.event : undefined, name: v.name, mail: !!v.mail });
+      else if (g) await admin({ op: 'golive-remove', email });
+      toast(d.returnValue === 'remove' ? 'Removed.' : wantLive && v.mail ? 'Saved. They’ve been emailed how to go live.' : 'Saved.');
+    } catch (x) { toast(x.message); }
   };
 }
 
@@ -733,7 +799,7 @@ $('view').addEventListener('click', async (e) => {
     } catch (x) { toast(x.message); }
     return;
   }
-  const el = e.target.closest('[data-open],[data-deltoggle],[data-a],[data-cr],[data-set],[data-rm],[data-owner],[data-signout],[data-unpay],[data-pay],[data-archive],[data-lock],[data-unhide],[data-copy],[data-reload],[data-csv],[data-newclub],[data-nologo],[data-saveaccent],[data-noaccent],[data-demo],[data-unstaff]');
+  const el = e.target.closest('[data-open],[data-deltoggle],[data-a],[data-cr],[data-set],[data-rm],[data-owner],[data-signout],[data-unpay],[data-pay],[data-archive],[data-lock],[data-unhide],[data-copy],[data-reload],[data-csv],[data-newclub],[data-nologo],[data-saveaccent],[data-noaccent],[data-demo],[data-unstaff],[data-person]');
   if (!el) return;
   if (el.tagName === 'A' && el.dataset.open) e.preventDefault();
   const club = el.dataset.club || el.closest('[data-club]')?.dataset.club;
@@ -763,6 +829,7 @@ $('view').addEventListener('click', async (e) => {
     if (el.dataset.cr) return void await admin({ op: 'credits', club, add: Number(el.dataset.cr) });
     if (el.dataset.set) return void await admin({ op: 'credits', club, set: Number(el.dataset.set) });
     if (el.hasAttribute('data-pay')) return payDialog(c);
+    if (el.dataset.person) return personDialog(el.dataset.person);
     if (el.dataset.unpay) { if (confirm('Remove this payment from the log? Tournaments it added stay.')) await admin({ op: 'unpay', id: el.dataset.unpay }); return; }
     if (el.dataset.rm) { if (confirm(`Remove ${el.dataset.rm} from the club?`)) await admin({ op: 'uninvite', club, email: el.dataset.rm }); return; }
     if (el.dataset.owner) { await admin({ op: 'role', club, email: el.dataset.owner, role: 'owner' }); toast('Owner changed.'); return; }
@@ -801,7 +868,7 @@ $('view').addEventListener('submit', async (e) => {
     }
     if (f.hasAttribute('data-edit')) { const v = Object.fromEntries(new FormData(f)); await admin({ op: 'edit', club, ...v }); toast('Saved.'); return; }
     const v = f.querySelector('input').value.trim();
-    if (f.hasAttribute('data-staff')) { await admin({ op: 'staff-add', email: v }); toast('Added. They get Admin the next time they sign in.'); return; }
+    if (f.hasAttribute('data-staff')) { if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v)) return toast('Type a full email address.'); f.reset(); return personDialog(v.toLowerCase()); }
     if (f.hasAttribute('data-invite')) { await admin({ op: 'invite', club, email: v }); toast('Added. They’ve been emailed.'); }
     if (f.hasAttribute('data-claim')) { await admin({ op: 'claim', club, link: v }); toast('Added to this club.'); }
     if (f.hasAttribute('data-event')) { const j = await admin({ op: 'event', club, name: v }); toast('Tournament made. It’s in the club’s Manager now.'); if (j.made) window.open(`/g/${j.made.id}/desk#${j.made.key}&setup`, '_blank', 'noopener'); }
@@ -828,7 +895,7 @@ start();
 setInterval(() => {
   const a = document.activeElement;
   if ($('app').hidden || document.visibilityState !== 'visible' || $('dlg').open || (a && /INPUT|TEXTAREA|SELECT/.test(a.tagName))) return;
-  call({}).then((j) => { clubs = j.clubs; deletedClubs = j.deleted || []; oldPays = j.oldPays || []; staff = j.staff || []; $('nomail').hidden = j.mail; if (tab === 'overview' || tab === 'events') events = null; draw(); }).catch(() => {});
+  call({}).then((j) => { clubs = j.clubs; deletedClubs = j.deleted || []; oldPays = j.oldPays || []; staff = j.staff || []; golive = j.golive || []; $('nomail').hidden = j.mail; if (tab === 'overview' || tab === 'events') events = null; draw(); }).catch(() => {});
 }, 60000);
 // screens tab: refresh who's connected every 15 seconds
 setInterval(() => {

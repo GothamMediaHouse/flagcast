@@ -19,7 +19,10 @@
 //   POST /golf/api/club/signout   { token }
 //   POST /golf/api/club/admin     { pass | token, op, … }   Flagcast Admin (passcode, or signed in with an ADMIN_EMAIL address): list, approve, on, off, delete, create (a club + its owner),
 //                                 credits (tournaments a club may make: a number, or -1 for unlimited), invite, uninvite,
-//                                 event (make a tournament for a club, no credit used), hide, staff-add / staff-remove { email } (who gets Admin)
+//                                 event (make a tournament for a club, no credit used), hide, staff-add / staff-remove { email } (who gets Admin),
+//                                 golive-set { email, where: 'any' | 'club' | 'event', club?, event?, name?, mail? } / golive-remove { email } (Can go live)
+//   POST /golf/api/club/cameras   { token }                        → { events }   Can go live: the tournaments this email may stream to
+//   POST /golf/api/club/camera    { token, id, hole, stop?, take? }  go live (or stop) on a hole of one of them (the day op 'golive')
 // Credits: a club makes tournaments while it has credits (each new one uses one); -1 means unlimited (a season deal).
 //   POST /golf/api/new            { token, name }  (a signed-in, approved club)  or  { pass, name, club? }  (Flagcast)
 //
@@ -138,6 +141,7 @@ export class FlagcastClubs extends DurableObject {
       CREATE TABLE IF NOT EXISTS fails (k TEXT PRIMARY KEY, n INTEGER, since INTEGER);
       CREATE TABLE IF NOT EXISTS streams (event TEXT, hole INTEGER, uid TEXT, updated INTEGER, PRIMARY KEY (event, hole));
       CREATE TABLE IF NOT EXISTS staff (email TEXT PRIMARY KEY, added INTEGER, by TEXT);
+      CREATE TABLE IF NOT EXISTS golive (email TEXT PRIMARY KEY, scope TEXT, name TEXT, added INTEGER, by TEXT);
       CREATE TABLE IF NOT EXISTS tvs (id TEXT PRIMARY KEY, club TEXT, name TEXT, place TEXT, kind TEXT, token TEXT, event TEXT, joined TEXT, added INTEGER, seen INTEGER);
       CREATE TABLE IF NOT EXISTS tvcodes (code TEXT PRIMARY KEY, pair TEXT, kind TEXT, exp INTEGER, tv TEXT, token TEXT);`);
     // columns added after the first release
@@ -181,6 +185,45 @@ export class FlagcastClubs extends DurableObject {
     const seen = Object.fromEntries(this.all('SELECT email, MAX(seen) AS seen FROM sessions GROUP BY email').map((s) => [s.email, s.seen]));
     return [...fixed.map((email) => ({ email, fixed: true, added: 0, by: '' })),
       ...this.all('SELECT * FROM staff ORDER BY added').filter((r) => !fixed.includes(r.email)).map((r) => ({ ...r, fixed: false }))].map((r) => ({ ...r, seen: seen[r.email] || 0 }));
+  }
+  // Can go live (Admin → Staff): someone who isn't Flagcast staff (a club's pro, a volunteer camera person) may send their
+  // iPhone camera to a hole, and nothing else. scope: '*' any tournament, 'c:<club>' that club's, 'e:<tournament>' just
+  // that one (it ends by itself when the tournament is over). Flagcast staff can always go live.
+  liveRow(email) { return email ? this.one('SELECT * FROM golive WHERE email = ?', String(email).toLowerCase()) : null; }
+  liveScope(email) { return this.staffEmail(email) ? '*' : this.liveRow(email)?.scope || ''; }
+  // the scope in words for the Staff screens: { where, club, clubName, event, eventName }
+  liveWhere(scope) {
+    const [k, id] = String(scope || '').split(':');
+    if (k === 'c') return { where: 'club', club: id, clubName: this.one('SELECT name FROM clubs WHERE id = ?', id)?.name || 'A deleted club' };
+    if (k === 'e') {
+      const e = this.one('SELECT e.name, e.club, c.name AS clubName FROM events e LEFT JOIN clubs c ON c.id = e.club WHERE e.id = ?', id);
+      return { where: 'event', event: id, eventName: e?.name || 'A deleted tournament', club: e?.club || '', clubName: e?.clubName || '' };
+    }
+    return { where: 'any' };
+  }
+  liveList() {
+    const seen = Object.fromEntries(this.all('SELECT email, MAX(seen) AS seen FROM sessions GROUP BY email').map((s) => [s.email, s.seen]));
+    return this.all('SELECT * FROM golive ORDER BY added').map((r) => ({ email: r.email, name: r.name || '', added: r.added, by: r.by || '', seen: seen[r.email] || 0, ...this.liveWhere(r.scope) }));
+  }
+  // the tournaments a scope may stream to now (one when id is given): on a club's list, not deleted or archived, and
+  // not over (its last day was before yesterday, US time). With each one's holes and who is live where.
+  async liveEvents(scope, now, id = '') {
+    const [k, sid] = String(scope).split(':'), where = [], args = [];
+    if (k === 'c') { where.push('e.club = ?'); args.push(sid); }
+    if (k === 'e') { where.push('e.id = ?'); args.push(sid); }
+    if (id) { where.push('e.id = ?'); args.push(id); }
+    const rows = this.all(`SELECT e.id, e.key, e.name, e.club, c.name AS clubName FROM events e LEFT JOIN clubs c ON c.id = e.club
+      WHERE e.hidden = 0 AND e.archived = 0 AND (c.status IS NULL OR c.status NOT IN ('deleted', 'purged', 'off'))${where.map((w) => ` AND ${w}`).join('')}
+      ORDER BY e.created DESC LIMIT 40`, ...args);
+    const yesterday = new Date(now - 28 * 3600000).toISOString().slice(0, 10);
+    const out = await Promise.all(rows.map(async (e) => {
+      const s = await this.golf(e.id, 'state').catch(() => null); if (!s) return null;
+      const last = [s.date, ...(s.rounds || []).map((r) => r?.date)].filter(Boolean).sort().pop() || '';
+      if (last && last < yesterday) return null;
+      return { id: e.id, key: e.key, name: s.name || e.name, club: e.club || '', clubName: e.clubName || s.club || '', date: tvDate(s, now), demo: !!s.brand?.marked,
+        holes: (s.course?.holes || []).map((h) => ({ n: h.n, par: h.par, yds: h.yds || 0 })), golive: Object.fromEntries(Object.entries(s.golive || {}).map(([h, g]) => [h, g?.by || ''])) };
+    }));
+    return out.filter(Boolean).sort((a, b) => (a.date || '9').localeCompare(b.date || '9'));
   }
   // club branding (brand.js): what its tournaments show instead of the Flagcast logo
   brandOf(c) { return { logo: c?.logo || '', accent: c?.accent || '', powered: !!c?.powered }; }
@@ -427,6 +470,22 @@ export class FlagcastClubs extends DurableObject {
     }
     if (op === 'signout') { this.sql.exec('DELETE FROM sessions WHERE token = ?', String(b.token || '')); return json({ ok: true }); }
     if (op === 'me') return json(this.me(this.who(b.token)));
+    // Can go live (see liveScope): the tournaments this email may stream to, and going live (or stopping) on one of them.
+    // Checked here on every start, so taking the switch off in Admin works at once; the tournament does the rest (day op 'golive')
+    if (op === 'cameras' || op === 'camera') {
+      const u = this.who(b.token), scope = this.liveScope(u.email);
+      if (!scope) this.fail('Go live isn’t switched on for this email. Ask Flagcast.', 403);
+      if (op === 'cameras') return json({ events: (await this.liveEvents(scope, now)).map(({ key, ...e }) => e) });
+      const tid = clip(b.id, 8).toLowerCase();
+      const e = /^[a-z0-9]{8}$/.test(tid) ? (await this.liveEvents(scope, now, tid))[0] : null;
+      if (!e) this.fail('You can’t go live for that tournament any more. It’s over, or Flagcast changed what you can do.', 403);
+      const row = this.liveRow(u.email), as = clip(row?.name, 40) || u.email.split('@')[0];
+      const r = await this.env.GOLF.get(this.env.GOLF.idFromName(e.id)).fetch(new Request('https://golf/desk', { method: 'POST',
+        body: JSON.stringify({ key: e.key, op: 'golive', hole: b.hole, stop: !!b.stop, take: !!b.take, as }) }));
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && !b.stop) this.note(u.email, e.club, `Went live: ${Number(b.hole) ? `hole ${Number(b.hole)}` : 'clubhouse'} · ${e.name}`);
+      return json(j, r.status);
+    }
     // the club's logo and colour, from its own Manager app (any of its members)
     if (op === 'brand') {
       const u = this.who(b.token); if (!u.club) this.fail('Set up your club first.', 403);
@@ -647,6 +706,24 @@ export class FlagcastClubs extends DurableObject {
           this.sql.exec('DELETE FROM staff WHERE email = ?', email);
         }
       }
+      // Can go live: who may stream from their iPhone (not Admin), and where (see liveScope)
+      if (b.op === 'golive-set' || b.op === 'golive-remove') {
+        const email = clip(b.email, 254).toLowerCase();
+        if (!EMAIL.test(email)) this.fail('Type a full email address.');
+        if (b.op === 'golive-remove') this.sql.exec('DELETE FROM golive WHERE email = ?', email);
+        else {
+          let scope = '*', where = 'at any Flagcast tournament';
+          if (b.where === 'club') { need(); scope = `c:${cid}`; where = `at ${c.name}’s tournaments`; }
+          else if (b.where === 'event') {
+            const e = this.one('SELECT e.id, e.name, c.name AS clubName FROM events e LEFT JOIN clubs c ON c.id = e.club WHERE e.id = ?', clip(b.event, 8));
+            if (!e) this.fail('Pick the tournament.'); scope = `e:${e.id}`; where = `at ${e.name}${e.clubName ? ` (${e.clubName})` : ''}`;
+          } else if (b.where !== 'any') this.fail('Pick where they can go live.');
+          let me = ''; try { me = b.token ? this.who(b.token).email : ''; } catch {}
+          const was = this.liveRow(email);
+          this.sql.exec('INSERT OR REPLACE INTO golive (email, scope, name, added, by) VALUES (?, ?, ?, ?, ?)', email, scope, clip(b.name, 40), was?.added || now, was?.by || me || 'passcode');
+          if (b.mail) this.mail(email, EMAILS.golive(where));
+        }
+      }
       // a club's branding: logo, colour, and a small "Powered by Flagcast" (off unless Flagcast turns it on)
       if (b.op === 'brand') {
         need(); this.setBrand(cid, b);
@@ -787,7 +864,7 @@ export class FlagcastClubs extends DurableObject {
       }));
       // payments of deleted clubs still count in the totals
       const oldPays = this.all(`SELECT * FROM payments WHERE club IN (${Object.keys(gone).map(() => '?').join(',') || "''"}) ORDER BY at DESC`, ...Object.keys(gone)).map((p) => ({ ...p, clubName: `${gone[p.club]} (deleted)` }));
-      return json({ clubs, deleted, oldPays, made, mail: !!env.RESEND_API_KEY, staff: this.staffList() });
+      return json({ clubs, deleted, oldPays, made, mail: !!env.RESEND_API_KEY, staff: this.staffList(), golive: this.liveList() });
     }
     this.fail('Not found', 404);
   }
@@ -953,7 +1030,8 @@ export class FlagcastClubs extends DurableObject {
 
   me(u) {
     const acct = this.one('SELECT hash, apple, google FROM accounts WHERE email = ?', u.email);
-    const out = { email: u.email, role: u.role, admin: this.staffEmail(u.email), password: !!acct?.hash, apple: !!acct?.apple, google: !!acct?.google, club: null, members: [], events: [] };
+    // camera: Can go live is on for this email (the iPhone Manager shows them a Go live screen)
+    const out = { email: u.email, role: u.role, admin: this.staffEmail(u.email), camera: !!this.liveRow(u.email), password: !!acct?.hash, apple: !!acct?.apple, google: !!acct?.google, club: null, members: [], events: [] };
     if (!u.club) return out;
     const { id, name, status, city, credits } = u.club;
     out.club = { id, name, status, city, credits, logo: this.logoURL(u.club), accent: u.club.accent || '' };
