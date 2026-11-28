@@ -38,7 +38,7 @@ struct TournamentScreen: View {
             if let s, s.course.holes.contains(where: { $0.par == 3 }) || !s.camList().isEmpty {
                 let none = s.camList().isEmpty
                 LeaderboardScreen(id: id, mode: .cameras, mine: [])
-                    .tabItem { Label(none ? "Par 3s" : "Cameras", systemImage: none ? "flag.fill" : "video.fill") }
+                    .tabItem { Label("Live", systemImage: none ? "flag.fill" : "video.fill") }
                     .tag(TourTab.cameras)
             }
             if let model, let s, s.sideGamesAllowed {

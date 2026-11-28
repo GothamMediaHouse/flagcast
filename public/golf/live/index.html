@@ -109,7 +109,7 @@ main { max-width: 720px; margin: 0 auto; padding: 14px max(16px, env(safe-area-i
 <body>
 <header class="topbar"><div class="hdr"><div><img data-brand src="/golf/brand/wide-on-dark.svg" alt="Flagcast" style="height:24px;width:auto;max-width:60vw;object-fit:contain;object-position:left;display:block;margin-bottom:6px"><h1 id="title">Leaderboard</h1><span class="label" id="sub"></span></div><span class="pill live pulse" id="pill">LIVE</span></div></header>
 <div class="flash" id="flash" hidden></div>
-<nav class="tabs" id="tabs"><button data-v="lb" aria-pressed="true">Leaderboard</button><button data-v="in" aria-pressed="false" hidden>Individuals</button><button data-v="p3" aria-pressed="false">Par 3s</button><button data-v="ct" aria-pressed="false">Contests</button><button data-v="sk" aria-pressed="false" hidden>Skins</button></nav>
+<nav class="tabs" id="tabs"><button data-v="lb" aria-pressed="true">Leaderboard</button><button data-v="in" aria-pressed="false" hidden>Individuals</button><button data-v="p3" aria-pressed="false">Live</button><button data-v="ct" aria-pressed="false">Contests</button><button data-v="sk" aria-pressed="false" hidden>Skins</button></nav>
 <main id="main"><div class="empty">Loading the leaderboard…</div></main>
 <p class="powered" data-powered hidden>POWERED BY FLAGCAST</p>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
@@ -261,7 +261,7 @@ function render(keepVideo) {
   const inOn = !!S.format.indiv && hasIndividuals(S);
   document.querySelector('[data-v="in"]').hidden = !inOn; if (!inOn && view === 'in') view = 'lb';
   document.querySelector('[data-v="lb"]').textContent = S.format.type === 'match' ? 'Matches' : 'Leaderboard';
-  document.querySelector('[data-v="p3"]').textContent = camList(S).length ? 'Cameras' : 'Par 3s';
+  document.querySelector('[data-v="p3"]').textContent = 'Live';
   for (const b of document.querySelectorAll('#tabs button')) b.setAttribute('aria-pressed', b.dataset.v === view);
   const camSig = view === 'p3' ? JSON.stringify([camList(S).map((c) => [c.n, c.url, c.kind, c.by]), camKind, (S.replays || []).slice(0, 8).map((r) => r.id)]) : '';
   if (view === 'p3' && keepVideo && document.querySelector('.p3') && camSig === render.camSig) { // update the numbers, keep the video playing

@@ -40,7 +40,7 @@ struct LeaderboardScreen: View {
                 if mode == .cameras {
                     TourHeader(state: s, title: s.title) { LivePill(online: feed.online) } below: {
                         let n = s.camList().count
-                        TourTitle(title: n == 0 ? "Par 3s" : "Cameras",
+                        TourTitle(title: "Live",
                                   sub: n == 0 ? "Scoring on the short holes" : "\(n) camera\(n == 1 ? "" : "s") live · tap ⟲ 30s to rewind")
                     }
                 } else {

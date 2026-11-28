@@ -148,11 +148,13 @@ struct CameraBox: View {
                 Color(UIColor(hex: 0x0a120e))
                 if camURL != nil || cam.replay != nil { VideoPlayer(player: cam.player) }
                 else { Text("No camera on this hole").font(.subheadline).foregroundStyle(Color(UIColor(hex: 0xa9bdb0))).frame(maxWidth: .infinity, maxHeight: .infinity) }
-                Text(cam.replay != nil ? "REPLAY" : "LIVE").font(.caption2.monospaced().weight(.semibold)).tracking(1)
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(cam.replay != nil ? Color(UIColor(hex: 0xe8c547)) : Color(UIColor(hex: 0xc8312b)))
-                    .foregroundStyle(cam.replay != nil ? Color.fcOnFlag : .white)
-                    .padding(8).allowsHitTesting(false)
+                if camURL != nil || cam.replay != nil {
+                    Text(cam.replay != nil ? "REPLAY" : "LIVE").font(.caption2.monospaced().weight(.semibold)).tracking(1)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(cam.replay != nil ? Color(UIColor(hex: 0xe8c547)) : Color(UIColor(hex: 0xc8312b)))
+                        .foregroundStyle(cam.replay != nil ? Color.fcOnFlag : .white)
+                        .padding(8).allowsHitTesting(false)
+                }
                 if cam.loading { ProgressView().tint(.white).frame(maxWidth: .infinity, maxHeight: .infinity) }
                 if let title {
                     VStack(alignment: .leading, spacing: 0) {
