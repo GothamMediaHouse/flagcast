@@ -429,7 +429,7 @@ struct GoLiveView: View {
                     Button { Task { await model.start() } } label: {
                         HStack {
                             if model.phase == .starting { ProgressView().tint(.white) } else { Image(systemName: "record.circle") }
-                            Text(model.phase == .starting ? "Starting…" : model.hole.map { "Go live on hole \($0)" } ?? "Pick a hole")
+                            Text(model.phase == .starting ? "Starting…" : model.hole.map { $0 == 0 ? "Go live at the clubhouse" : "Go live on hole \($0)" } ?? "Pick a hole")
                         }
                         .font(.headline).frame(maxWidth: .infinity, minHeight: 50)
                         .background(Self.red, in: RoundedRectangle(cornerRadius: 14)).foregroundStyle(.white)
@@ -440,8 +440,9 @@ struct GoLiveView: View {
                 }
                 .padding(18)
             }
+            // no taller than the screen: turned sideways there's about 300 points, so the card scrolls instead of running off
             .frame(maxWidth: 560, maxHeight: 520)
-            .fixedSize(horizontal: false, vertical: true)
+            .scrollBounceBehavior(.basedOnSize)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22))
             .padding(.horizontal, 12).padding(.bottom, 12)
         }
