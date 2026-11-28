@@ -20,9 +20,9 @@
 //
 // Pages: /g/<id> live page · /g/<id>/board screens · /g/<id>/desk#<key> desk · /g/<id>/map#<key> course map · /g/<id>/s/<code> cart · /g/<id>/cards QR cards
 import { DurableObject } from 'cloudflare:workers';
-import { defaultHoles, courseHcp, leaderboard, contestNeedsOk, teamBall, CLIP_BACK } from './public/golf/core.js';
+import { defaultHoles, courseHcp, leaderboard, contestNeedsOk, teamBall, CLIP_BACK, paceGoal, paceOrder } from './public/golf/core.js';
 import { trackingOn, cleanPin, yds, holeMap } from './public/golf/gps.js';
-import { demoGroups } from './demogroups.js';
+import { demoGroups, demoPace } from './demogroups.js';
 import { same, pinProblem, mergeTeams, stamp, keepMatch, PIN_WAIT, PIN_TRIES_IP, PIN_TRIES_ALL } from './setup.js';
 import { clubs, sendBatch } from './clubs.js';
 import { EMAILS, mailHtml, mailText, cleanEmail } from './mail.js';
@@ -184,7 +184,7 @@ export const SPOTS = ['title', 'leaderboard', 'hole', 'cam', 'contest', 'turn', 
 export const PAGE_KINDS = ['lb', 'matches', 'indiv', 'p3', 'cam', 'contests', 'skins', 'fund', 'sponsors', 'sponsor', 'schedule'];
 // changes made on the day (desk or a pro's PIN); marshals only post contest results
 const INVITE_MAX = 4, INVITE_TOTAL = 1500; // emails per player (the first and 3 resends), and per tournament
-const DAY_OPS = new Set(['fix', 'ctp', 'contest', 'check', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay', 'scene', 'map', 'groups', 'pinsheet', 'report', 'team', 'move', 'notes', 'golive', 'camshow']);
+const DAY_OPS = new Set(['fix', 'ctp', 'contest', 'check', 'flash', 'nudge', 'screen', 'take', 'lock', 'fund', 'stats', 'replay', 'scene', 'map', 'groups', 'pinsheet', 'report', 'team', 'move', 'notes', 'golive', 'camshow', 'pace']);
 // marshals post contest results and replays of shots at their hole
 const MARSHAL_OPS = new Set(['ctp', 'check', 'replay']);
 // a replay with no clip link replays the hole's live camera from this many seconds before it was marked
@@ -396,7 +396,35 @@ export class GolfEvent extends DurableObject {
       const at = Math.max(0, ...Object.values(s).flatMap((arr) => arr.map((x) => (x ? x.at || 0 : 0))));
       if (at) lastAt[t.id] = at;
     }
-    return { ...rest, teams, scores, lastAt, online, brand: brandFor(ev), photos: photoLinks(ev) };
+    // the round and hole clocks (core.js paceOf); a Demo tournament's made-up teams get clocks to match their scores
+    const real = await this.paceData();
+    // (not the "Try a demo" cart: its clock starts when the scorecard opens, see the scorecard's myPace)
+    const pace = demo ? { ...demoPace(ev, scores, Date.now(), new Set([...Object.keys(real), tryTeam(ev)?.id])), ...real } : real;
+    return { ...rest, teams, scores, lastAt, online, pace, paceGoal: paceGoal(ev), brand: brandFor(ev), photos: photoLinks(ev) };
+  }
+
+  // ---- pace of play: ev.pace in the public state (see core.js paceOf), kept under its own key ----
+  async paceData() {
+    if (!this.pc) this.pc = (await this.ctx.storage.get('pace')) || {};
+    return this.pc;
+  }
+  // a cart's first score on each hole is when the group finished it. The round starts when the GPS first puts the group
+  // on its first hole (see where), or with no GPS, one hole's worth of the goal before its first score. Later changes
+  // to a score don't move the time, and the desk's fixes (often a whole card after the round) aren't counted.
+  async paceScored(team, holes, now, start = 0) {
+    if (!holes.length) return false;
+    const pc = await this.paceData(), p = pc[team.id] = pc[team.id] || { d: {} }, ev = this.ev;
+    const per = paceGoal(ev) * 60000 / 18, first = paceOrder(ev, team)[0];
+    let changed = false;
+    for (const h of holes) if (!p.d[h]) { p.d[h] = now; changed = true; }
+    if (!changed) return false;
+    // "Try a demo": the phone says when its scorecard opened (within the 3 hours a demo round lasts)
+    const st = Number(start) || 0;
+    if (!p.s) p.s = isTryTeam(ev, team) && st <= now && now - st < TRY_RESET ? st : now - per;
+    // GPS on the first tee long before the shotgun: the round started no more than two holes' worth before its first score
+    if (p.d[first] && p.d[first] - p.s > 2 * per) p.s = p.d[first] - per;
+    await this.ctx.storage.put('pace', pc);
+    return true;
   }
 
   async broadcast() {
@@ -606,7 +634,7 @@ export class GolfEvent extends DurableObject {
     const last = Math.max(0, ...Object.values(sc[team.id] || {}).flatMap((arr) => arr.map((x) => (x ? x.at || 0 : 0))));
     const mine = trial && last && Date.now() - last > TRY_RESET ? {} : (sc[team.id] || {});
     const ids = new Set(teamBall(ev) ? ['T'] : team.players.map((p) => p.id));
-    const now = Date.now(); let changed = false; const aces = [];
+    const now = Date.now(); let changed = false; const aces = [], scored = new Set();
     for (const e of (Array.isArray(b.list) ? b.list : []).slice(0, 200)) {
       if (!ids.has(e.p)) continue;
       const h = Number(e.h); if (!(h >= 1 && h <= 18)) continue;
@@ -618,12 +646,15 @@ export class GolfEvent extends DurableObject {
       if (old && old.at > at) continue; // a newer change is already here
       arr[h - 1] = v === null ? null : { v, at };
       mine[e.p] = arr; changed = true;
+      if (v !== null) scored.add(h);
       if (v === 1 && (!old || old.v !== 1) && !trial) {
         const p = team.players.find((x) => x.id === e.p);
         aces.push({ hole: h, name: p ? p.name : team.name, team: team.name, at: now });
       }
     }
-    if (changed || (trial && mine !== sc[team.id] && sc[team.id])) {
+    if (trial && mine !== sc[team.id] && sc[team.id]) { const pc = await this.paceData(); delete pc[team.id]; } // the demo cart starts again
+    const paced = b.desk === ev.key ? false : await this.paceScored(team, [...scored], now, b.start);
+    if (changed || paced || (trial && mine !== sc[team.id] && sc[team.id])) {
       sc[team.id] = mine;
       await this.ctx.storage.put(`s:${team.id}`, mine);
       if (aces.length) { ev.aces = [...(ev.aces || []), ...aces].slice(-20); await this.ctx.storage.put('event', ev); }
@@ -700,6 +731,7 @@ export class GolfEvent extends DurableObject {
     } else if (b.op === 'ace') ev.aces = (ev.aces || []).filter((a) => a.at !== b.remove);
     else if (b.op === 'clear') {
       const sc = await this.scores(); delete sc[b.team]; await this.ctx.storage.delete(`s:${b.team}`);
+      const pc = await this.paceData(); if (pc[b.team]) { delete pc[b.team]; await this.ctx.storage.put('pace', pc); }
     } else return json({ error: 'Unknown change' }, 400);
     await this.ctx.storage.put('event', ev);
     await this.broadcast();
@@ -881,6 +913,9 @@ export class GolfEvent extends DurableObject {
     } else if (b.op === 'flash') {
       ev.flash = b.text ? { text: clip(b.text, 140), at: now } : null;
       if (b.text) ev.news = [...(ev.news || []), { text: clip(b.text, 140), at: now, by: clip(by, 40) }].slice(-30);
+    } else if (b.op === 'pace') { // the pace of play goal, minutes for 18 holes ({ goal }; 0 or none = Flagcast's 4:15)
+      const g = Number(b.goal);
+      if (!g) delete ev.paceGoal; else if (g >= 120 && g <= 420) ev.paceGoal = Math.round(g); else return json({ error: 'Pick a goal between 2 and 7 hours.' }, 400);
     } else if (b.op === 'notes') { // golfers' ready-made notes to other groups from the course map: on (default) or off
       if (b.off) ev.notesOff = true; else delete ev.notesOff;
     } else if (b.op === 'nudge') {
@@ -1019,6 +1054,13 @@ export class GolfEvent extends DurableObject {
     if (at) { const hole = num(b.hole, 0, 18, 0); wh[team.id] = { at: at.map((x) => Math.round(x * 1e6) / 1e6), acc: num(b.acc, 0, 9999, 0), hole, t: now, since: was && was.hole === hole && was.since ? was.since : now, ...(hide ? { hide: true } : {}) }; }
     else if (was && hide !== !!was.hide) { wh[team.id] = { ...was }; if (hide) wh[team.id].hide = true; else delete wh[team.id].hide; }
     if (wh[team.id] !== was) await this.ctx.storage.put(`w:${team.id}`, wh[team.id]);
+    if (at && wh[team.id].hole && (!was || was.hole !== wh[team.id].hole)) { // a new hole: the hole clock (and the round's start) for pace of play
+      const pc = await this.paceData(), p = pc[team.id] = pc[team.id] || { d: {} }, hole = wh[team.id].hole;
+      p.g = { h: hole, at: now };
+      if (!p.s && hole === paceOrder(ev, team)[0]) p.s = now;
+      await this.ctx.storage.put('pace', pc);
+      await this.broadcast();
+    }
     let sent;
     if (b.note != null) { // a ready-made note to another group (GOLFER_NOTES)
       const k = Number(b.note), text = GOLFER_NOTES[k], to = String(b.to || '');

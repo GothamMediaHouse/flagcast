@@ -3,6 +3,7 @@
 // walk the club's course map instead: tee, drive, approach, green, putt out, next tee. Where they are comes from the
 // clock alone (no storage, nothing to clean up), so every phone and the desk see the same groups in the same spots.
 // Never used for a real tournament: the caller only asks when ev.demo is on.
+import { paceOrder, paceGoal } from './public/golf/core.js';
 
 const HOLE_MINS = 13; // about a 4 hour round
 // minutes on each part of a hole: [from, to, minutes], from/to as fractions of the way from the tee to the green
@@ -57,4 +58,27 @@ export function demoGroups(ev, now = Date.now(), skip = new Set()) {
     const at = along(h.path, f, side);
     return { ...g, hole: h.n, at: [round6(at[0]), round6(at[1])], acc: 5, t: now - ((i * 17) % 40) * 1000, since: Math.round(now - into * (HOLE_MINS / legMins) * 60000), sample: true };
   });
+}
+
+// The round and hole clocks for the demo's own teams (ev.pace, see core.js paceOf), to match their scores: a team
+// that has scored through 12 is on 13, and has been on it a few minutes (the same for everyone looking, and for
+// HOLE_MINS at a time). The holes it has played took longer for some teams than others, so the Pace of play screen
+// has groups ahead and behind. Teams with no scores haven't started. `scores` = { team: { player: [18 scores] } }.
+// { team: { s, d: { hole: ms } } }
+export function demoPace(ev, scores, now = Date.now(), skip = new Set()) {
+  const H = HOLE_MINS * 60000, per = paceGoal(ev) * 60000 / 18, out = {};
+  (ev.teams || []).forEach((t, i) => {
+    if (skip.has(t.id)) return;
+    const order = paceOrder(ev, t), sc = Object.values(scores?.[t.id] || {});
+    let last = -1; order.forEach((h, k) => { if (sc.some((arr) => arr && arr[h - 1] != null)) last = k; });
+    if (last < 0) return;
+    const off = ((i * 4.3) % HOLE_MINS) * 60000; // when this team's current hole started: the last of its HOLE_MINS steps
+    let t0 = Math.floor((now - off) / H) * H + off;
+    if (last === order.length - 1) t0 -= H * (1 + (i % 4)); // finished a little while ago
+    const slow = 0.85 + ((i * 37) % 11) / 33; // 0.85 to 1.15 of the goal for a hole: how this team's round has gone
+    const d = {}; let at = t0;
+    for (let k = last; k >= 0; k--) { d[order[k]] = Math.round(at); at -= per * slow * (0.8 + ((i * 13 + order[k] * 7) % 9) / 20); }
+    out[t.id] = { s: Math.round(at), d };
+  });
+  return out;
 }

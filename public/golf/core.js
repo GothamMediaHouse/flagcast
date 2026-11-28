@@ -620,3 +620,56 @@ export function groupInfo(ev, scores, teamId) {
     }),
   };
 }
+
+// ---- pace of play: the round clock and the hole clock ----
+// The server keeps, for each group, ev.pace[team] = { s: when the round started, d: { hole: when its first score came
+// in from the cart }, g: { h, at }: the hole the cart's GPS last put it on and when it got there }. Times are ms.
+// Everything else (the clocks, minutes per hole, ahead or behind the goal) is worked out here, by every page and
+// app the same way (Core.swift pace is the same math).
+export const PACE_GOAL = 255; // minutes for 18 holes (4:15) when the tournament hasn't set its own
+export const paceGoal = (ev) => { const g = Number(ev?.paceGoal); return g >= 120 && g <= 420 ? Math.round(g) : PACE_GOAL; };
+// the holes in the order this group plays them: from its start hole round to the one before it (a shotgun)
+export function paceOrder(ev, team) {
+  const holes = playHoles(ev), i = Math.max(0, holes.indexOf(Number(team?.start) || holes[0]));
+  return [...holes.slice(i), ...holes.slice(0, i)];
+}
+// "4:15" (hours:minutes), "9:32" (minutes:seconds) for a clock under an hour when secs is on
+export function fmtClock(ms, secs = false) {
+  const t = Math.max(0, Math.floor((ms || 0) / 1000)), h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = t % 60;
+  if (secs && !h) return `${m}:${String(s).padStart(2, '0')}`;
+  return `${h}:${String(m).padStart(2, '0')}`;
+}
+// how many minutes over the goal shows as amber, then red
+export const PACE_AMBER = 3, PACE_RED = 8;
+/** null before the round starts, else { started, elapsed, hole (the one being played; 0 once finished), onHole (ms on it),
+ *  done (holes finished), total, fin, finAt, vs (ms against the goal: + behind, − ahead), level ('ok' | 'amber' | 'red'),
+ *  goal (ms for the round), per (ms a hole), times: { hole: ms } for each hole with both ends known } */
+export function paceOf(ev, teamId, now = Date.now()) {
+  const team = (ev?.teams || []).find((t) => t.id === teamId), p = ev?.pace?.[teamId];
+  if (!team || !p || !p.s) return null;
+  const order = paceOrder(ev, team), total = order.length;
+  // a time still to come isn't counted yet, with a minute's grace for a phone whose clock is a little behind the server's
+  const d = Object.fromEntries(Object.entries(p.d || {}).filter(([, t]) => t && t <= now + 60000));
+  const goal = paceGoal(ev) * 60000 * total / 18, per = goal / total;
+  let last = -1; order.forEach((h, i) => { if (d[h]) last = i; });
+  const fin = last === total - 1, finAt = fin ? d[order[total - 1]] : 0;
+  const end = fin ? finAt : Math.max(now, p.s);
+  const times = {}; let prev = p.s;
+  order.forEach((h, i) => { if (i > last) return; if (d[h] && prev) times[h] = Math.max(0, d[h] - prev); prev = d[h] || 0; });
+  const hole = fin ? 0 : order[last + 1];
+  let from = last >= 0 ? d[order[last]] : p.s;
+  if (!fin && p.g && p.g.h === hole && p.g.at) from = Math.max(p.s, Math.min(from, p.g.at)); // the GPS saw them reach it first
+  const onHole = fin ? 0 : Math.max(0, end - from), elapsed = Math.max(0, end - p.s), done = last + 1;
+  const vs = fin ? elapsed - goal : elapsed - done * per - Math.min(onHole, per);
+  const level = vs > PACE_RED * 60000 ? 'red' : vs > PACE_AMBER * 60000 ? 'amber' : 'ok';
+  return { started: p.s, elapsed, hole, onHole, done, total, fin, finAt, vs, level, goal, per, times };
+}
+// "On pace", "+12 min", "3 min ahead" (during the round); "9 min under", "7 min over" (finished)
+export function paceWord(pc) {
+  if (!pc) return '';
+  const m = Math.round(pc.vs / 60000);
+  if (pc.fin) return m > 0 ? `${m} min over` : m < 0 ? `${-m} min under` : 'On goal';
+  if (m > PACE_AMBER) return `+${m} min`;
+  if (m < -1) return `${-m} min ahead`;
+  return 'On pace';
+}

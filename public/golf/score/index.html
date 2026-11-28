@@ -24,6 +24,18 @@ body { min-height: 100vh; padding-bottom: env(safe-area-inset-bottom, 0px); }
 .teamtabs button[aria-pressed="true"] { background: var(--flag); color: var(--on-flag); border-color: var(--flag); }
 .strip { display: flex; gap: 6px; overflow-x: auto; padding: 12px 16px; background: var(--green-2); scroll-snap-type: x proximity; scrollbar-width: none; }
 .strip::-webkit-scrollbar { display: none; }
+/* the round and hole clocks (pace of play), under the holes */
+.timers { display: flex; gap: 6px; padding: 0 16px 12px; background: var(--green-2); color: var(--on-green); }
+.timers > div { flex: 1; background: rgba(238,243,236,.1); border-radius: 10px; padding: 7px 10px; line-height: 1; min-width: 0; }
+.timers small { display: block; font: 600 .6rem var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--on-green-muted); }
+.timers b { display: block; font: 700 1.35rem var(--f-mono); margin-top: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.timers b i { font-style: normal; font-size: .75rem; opacity: .7; margin-left: 2px; }
+.timers .pc { flex: 0 0 auto; min-width: 92px; text-align: center; }
+.timers .pc b { font-size: .95rem; margin-top: 6px; }
+.timers .ok { background: rgba(92,196,138,.2); } .timers .ok b { color: #7fd8a3; }
+.timers .amber { background: rgba(240,166,64,.22); } .timers .amber b { color: #f5b35c; }
+.timers .red { background: rgba(224,100,90,.25); } .timers .red b, .timers b.red { color: #f08a80; }
+.card td.tt { font: 500 .7rem var(--f-mono); color: var(--muted); } .card td.tt.slow { color: #c8443a; }
 .strip button { flex: 0 0 auto; width: 42px; height: 46px; border-radius: 8px; border: 1px solid rgba(238,243,236,.25); background: transparent; color: var(--on-green);
   font-family: var(--f-display); font-size: 1.25rem; font-weight: 700; display: grid; place-items: center; line-height: 1; position: relative; scroll-snap-align: center; }
 .strip button small { font-family: var(--f-mono); font-size: .55rem; font-weight: 500; color: var(--on-green-muted); }
@@ -182,6 +194,7 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
 <div class="offline" id="offline" role="status" hidden><b>No signal.</b> <span id="offmsg">Your scores are saved on this phone and send by themselves when you’re back in range.</span> <button id="trynow">Try now</button></div>
 <div class="locked" id="locked" hidden>Scoring is closed. The results are final.</div>
 <nav class="strip" id="strip" aria-label="Holes"></nav>
+<div class="timers" id="timers" role="timer" aria-label="Round and hole times" hidden></div>
 <main id="main"><div class="center"><h2>Loading</h2><p>Getting your scorecard.</p></div></main>
 <div class="bar" id="bar" hidden>
   <button class="btn" id="prev">Back</button>
@@ -198,7 +211,7 @@ import { gpsCard } from '/golf/gpscard.js';
 import { startGps, position, holeMap } from '/golf/gps.js';
 import { groupsMap, hidden as groupHidden } from '/golf/groupsmap.js';
 import { onGps, yds, trackingOn, mapped } from '/golf/gps.js';
-import { leaderboard, playHoles, teamCard, strokesOn, playing, fmtPar, mark, contestLeader, fmtDist, sideGames, teamBall, matches, matchFor, cup, fmtPts } from '/golf/core.js';
+import { leaderboard, playHoles, teamCard, strokesOn, playing, fmtPar, mark, contestLeader, fmtDist, sideGames, teamBall, matches, matchFor, cup, fmtPts, paceOf, paceWord, fmtClock } from '/golf/core.js';
 import { eventId, post, live, esc } from '/golf/client.js';
 import { appBar, remember } from '/golf/appbar.js';
 appBar('score');
@@ -335,7 +348,7 @@ async function send() {
   const byTeam = {};
   for (const e of batch) (byTeam[e.team] ||= []).push(e);
   try {
-    for (const [t, list] of Object.entries(byTeam)) await post('score', { code, team: t, list });
+    for (const [t, list] of Object.entries(byTeam)) await post('score', { code, team: t, list, ...((S?.demo || S?.brand?.marked) && store.get('trystart', 0) ? { start: store.get('trystart', 0) } : {}) });
     const sent = new Set(batch);
     pending = pending.filter((e) => !sent.has(e));
     store.set('pending', pending);
@@ -426,6 +439,7 @@ const sideOK = () => S && S.sideGames !== false && !teamBall(S);
 const whereOK = () => S && (trackingOn(S) || mapped(S));
 let gmap = null;
 function renderWhere() {
+  $('timers').hidden = true;
   if (gmap) return gmap.refresh();
   gmap = groupsMap({ state: () => S, code, team: () => teamId, hole: () => hole, onClose: () => { view = 'card'; render(); } });
 }
@@ -434,7 +448,7 @@ function render() {
   if (view === 'where' && whereOK()) return renderWhere();
   if (gmap) { gmap.destroy(); gmap = null; view = 'card'; }
   if (view === 'side' && sideOK()) return renderSide();
-  $('strip').hidden = false;
+  $('strip').hidden = false; tickTimers();
   $('evname').textContent = S.screens?.title || S.name || 'Scorecard';
   $('locked').hidden = !S.locked;
   const t = team();
@@ -495,7 +509,7 @@ function render() {
     <div class="card"><table><thead><tr><th>Hole</th>${holes.filter(inRound).map((h) => `<th>${h.n}</th>`).join('')}<th>Tot</th></tr>
       <tr><th>Par</th>${holes.filter(inRound).map((h) => `<th>${h.par}</th>`).join('')}<th>${holes.filter(inRound).reduce((a, h) => a + h.par, 0)}</th></tr></thead>
       <tbody>${ps.map((p) => { const arr = mine[p.id] || []; const tot = arr.reduce((a, v) => a + (v > 0 ? v : 0), 0);
-        return `<tr><td>${esc(p.name.split(' ')[0] || p.name)}</td>${holes.filter(inRound).map((h) => { const v = arr[h.n - 1]; return `<td>${v == null ? '' : v === 0 ? 'PU' : `<span class="sc ${mark(v, h.par)}">${v}</span>`}</td>`; }).join('')}<td>${tot || ''}</td></tr>`; }).join('')}</tbody></table></div>`;
+        return `<tr><td>${esc(p.name.split(' ')[0] || p.name)}</td>${holes.filter(inRound).map((h) => { const v = arr[h.n - 1]; return `<td>${v == null ? '' : v === 0 ? 'PU' : `<span class="sc ${mark(v, h.par)}">${v}</span>`}</td>`; }).join('')}<td>${tot || ''}</td></tr>`; }).join('')}${timeRow(t, holes.filter(inRound))}</tbody></table></div>`;
   gps.update(S, hole); gps.mount($('gpsSlot'));
   $('bar').hidden = false;
   const ord = order(t), i = ord.indexOf(hole);
@@ -503,6 +517,29 @@ function render() {
   $('next').textContent = i === ord.length - 1 ? 'Done' : `Hole ${ord[i + 1]}`;
   store.set('hole', hole);
   document.querySelector('.strip [aria-current="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+}
+
+// the round and hole clocks under the holes, once the round has started (ticks every second, see below)
+// "Try a demo": the cart's round clock starts when its scorecard opens (and again after 3 hours), sent with its scores
+function myPace(t) {
+  const pc = paceOf(S, t.id); if (pc || !(S.demo || S.brand?.marked)) return pc;
+  let st = store.get('trystart', 0); if (!st || Date.now() - st > 3 * 3600000) { st = Date.now(); store.set('trystart', st); }
+  return paceOf({ ...S, pace: { ...(S.pace || {}), [t.id]: { s: st, d: {} } } }, t.id);
+}
+function tickTimers() {
+  const el = $('timers'), t = S && team(), pc = t && view !== 'side' && view !== 'where' ? myPace(t) : null;
+  el.hidden = !pc; if (!pc) return;
+  const html = pc.fin
+    ? `<div><small>Round</small><b>${fmtClock(pc.elapsed)}</b></div><div><small>Finished</small><b>${new Date(pc.finAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</b></div><div class="pc ${pc.level}"><small>Goal ${fmtClock(pc.goal)}</small><b>${esc(paceWord(pc))}</b></div>`
+    : `<div><small>Round</small><b>${fmtClock(pc.elapsed)}<i>:${String(Math.floor(pc.elapsed / 1000) % 60).padStart(2, '0')}</i></b></div><div><small>Hole ${pc.hole}</small><b class="${pc.onHole > pc.per * 1.3 ? 'red' : ''}">${fmtClock(pc.onHole, true)}</b></div><div class="pc ${pc.level}"><small>Pace</small><b>${esc(paceWord(pc))}</b></div>`;
+  if (el.innerHTML !== html) el.innerHTML = html;
+}
+setInterval(tickTimers, 1000);
+// the card's Time row: minutes on each hole, red when well over the goal for one hole
+function timeRow(t, list) {
+  const pc = myPace(t); if (!pc || !Object.keys(pc.times).length) return '';
+  const tot = Object.values(pc.times).reduce((a, v) => a + v, 0);
+  return `<tr><td>Time</td>${list.map((h) => { const v = pc.times[h.n]; return `<td class="tt ${v > pc.per * 1.3 ? 'slow' : ''}">${v == null ? '' : Math.round(v / 60000)}</td>`; }).join('')}<td class="tt">${fmtClock(tot)}</td></tr>`;
 }
 
 // the match card: "2 UP thru 7" (or WON 3&2), who they play, and a square a hole: won, lost, halved, a dot for a stroke
@@ -523,7 +560,7 @@ function matchCard(r, t) {
 
 const pts = (v) => { const a = Math.round(Math.abs(v) * 10) / 10; return `${a} pts`; };
 function renderSide() {
-  $('strip').hidden = true; $('bar').hidden = true;
+  $('strip').hidden = true; $('bar').hidden = true; $('timers').hidden = true;
   const sc = myScores(), r = sideGames(S, sc, teams, side), P = Object.fromEntries(r.players.map((p) => [p.key, p]));
   const nm = (k) => esc(P[k]?.short || '');
   const n = r.players.length;
