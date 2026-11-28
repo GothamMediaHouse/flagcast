@@ -45,7 +45,8 @@ final class GoLiveModel {
     private(set) var battery: Float = -1
     private(set) var charging = false
     private(set) var hot = false
-    /// the phone is upright: the picture is still sent sideways, so ask them to turn it
+    /// the phone is upright: the picture goes out upright too (tall, with black at the sides on the TVs), so suggest
+    /// sideways. Which way is set when Go live starts and stays that way until Stop.
     private(set) var upright = false
     private(set) var cameraReady = false
     private(set) var cameraDenied = false
@@ -136,11 +137,13 @@ final class GoLiveModel {
     }
     private func hold(_ o: UIDeviceOrientation) {
         guard [.landscapeLeft, .landscapeRight, .portrait, .portraitUpsideDown].contains(o), o != held else { return }
+        // while sending, the picture's shape can't change: keep it until Stop (then it follows the phone again)
+        guard phase == .setup || phase == .ended else { return }
         held = o
         switch o {
         case .landscapeLeft: orientation = .landscapeRight; upright = false
         case .landscapeRight: orientation = .landscapeLeft; upright = false
-        default: upright = true
+        default: orientation = .portrait; upright = true
         }
         let v = orientation
         Task { await mixer.setVideoOrientation(v) }
@@ -205,7 +208,7 @@ final class GoLiveModel {
         do {
             guard let s = try await StreamSessionBuilderFactory.shared.make(url).setMode(.publish).build() else { return false }
             var v = await s.stream.videoSettings
-            v.videoSize = CGSize(width: 1280, height: 720)
+            v.videoSize = orientation == .portrait ? CGSize(width: 720, height: 1280) : CGSize(width: 1280, height: 720)
             v.bitRate = 2_500_000
             v.profileLevel = kVTProfileLevel_H264_High_AutoLevel as String
             v.maxKeyFrameIntervalDuration = 2
@@ -381,7 +384,7 @@ struct GoLiveView: View {
                 }
                 .accessibilityLabel("Close")
                 Spacer()
-                if model.upright { pill("Turn the phone sideways", systemImage: "rotate.right", bg: Self.gold, fg: .black) }
+                if model.upright { pill("Sideways fills the TVs", systemImage: "rotate.right", bg: Self.gold, fg: .black) }
             }
             .padding()
             Spacer()
@@ -455,7 +458,6 @@ struct GoLiveView: View {
                 pill("LIVE \(model.elapsed)", systemImage: "circle.fill", bg: Self.red, fg: .white)
                 if let h = model.hole { pill(h == 0 ? "Clubhouse" : "Hole \(h)", systemImage: nil, bg: .black.opacity(0.55), fg: .white) }
                 Spacer()
-                if model.upright { pill("Turn sideways", systemImage: "rotate.right", bg: Self.gold, fg: .black) }
             }
             .padding()
             if let m = model.message {

@@ -14,6 +14,8 @@ export function attach(video, src, { live = true } = {}) {
   const safari = /^((?!chrome|android|crios|fxios).)*safari/i.test(navigator.userAgent);
   // a live camera that isn't sending yet (a phone that just went live: Cloudflare takes 10–30 seconds to have the
   // first picture) answers 404, and the player gives up for good: keep trying every few seconds until it plays
+  // an upright phone sends a tall picture: show all of it (black at the sides) instead of cropping it to fill
+  video.onloadedmetadata = () => { video.style.objectFit = video.videoHeight > video.videoWidth ? 'contain' : ''; };
   const again = () => { clearTimeout(video._retry); video._retry = setTimeout(() => { if (video.isConnected) attach(video, src, { live }); }, 4000); };
   if (!isHls(src) || safari || !window.Hls || !Hls.isSupported()) {
     video.src = src;
