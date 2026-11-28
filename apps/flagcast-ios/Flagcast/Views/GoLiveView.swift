@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import CoreMotion
 import UIKit
 import VideoToolbox
 import HaishinKit
@@ -57,6 +58,9 @@ final class GoLiveModel {
     @ObservationIgnored private var lastTouch = Date()
     @ObservationIgnored private var brightness: CGFloat = 0.5
     @ObservationIgnored private var orientation: AVCaptureVideoOrientation = .landscapeRight
+    /// which way the phone is held, from gravity: works with Portrait Orientation Lock on (then iOS never says it turned)
+    @ObservationIgnored private let motion = CMMotionManager()
+    @ObservationIgnored private var held: UIDeviceOrientation = .unknown
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     @ObservationIgnored private var output: MTHKView?
     @ObservationIgnored private var creds: [String: Any] = [:]
@@ -87,6 +91,14 @@ final class GoLiveModel {
         observers.append(NotificationCenter.default.addObserver(forName: UIDevice.orientationDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.followOrientation() }
         })
+        if motion.isAccelerometerAvailable {
+            motion.accelerometerUpdateInterval = 0.2
+            motion.startAccelerometerUpdates(to: .main) { [weak self] d, _ in
+                guard let a = d?.acceleration else { return }
+                let x = a.x, y = a.y
+                Task { @MainActor in self?.followGravity(x: x, y: y) }
+            }
+        }
         observers.append(NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.hot = [.serious, .critical].contains(ProcessInfo.processInfo.thermalState) }
         })
@@ -115,14 +127,30 @@ final class GoLiveModel {
         Task { await mixer.addOutput(view) }
     }
 
-    private func followOrientation() {
-        switch UIDevice.current.orientation {
+    private func followOrientation() { hold(UIDevice.current.orientation) }
+    /// gravity along the screen: x ≈ -1 held landscape left (home side right), +1 landscape right, y ≈ -1 upright.
+    /// Flat on a table or halfway between: keep what it was.
+    private func followGravity(x: Double, y: Double) {
+        if abs(x) > abs(y) + 0.3 { hold(x < 0 ? .landscapeLeft : .landscapeRight) }
+        else if abs(y) > abs(x) + 0.3 { hold(y < 0 ? .portrait : .portraitUpsideDown) }
+    }
+    private func hold(_ o: UIDeviceOrientation) {
+        guard [.landscapeLeft, .landscapeRight, .portrait, .portraitUpsideDown].contains(o), o != held else { return }
+        held = o
+        switch o {
         case .landscapeLeft: orientation = .landscapeRight; upright = false
         case .landscapeRight: orientation = .landscapeLeft; upright = false
-        case .portrait, .portraitUpsideDown: upright = true
-        default: break
+        default: upright = true
         }
-        Task { await mixer.setVideoOrientation(orientation) }
+        let v = orientation
+        Task { await mixer.setVideoOrientation(v) }
+        turnScreen(o == .landscapeLeft ? .landscapeRight : o == .landscapeRight ? .landscapeLeft : .portrait)
+    }
+    /// turn the screen with the phone, even with Portrait Orientation Lock on (iPhone; the iPad turns by itself)
+    private func turnScreen(_ mask: UIInterfaceOrientationMask) {
+        guard UIDevice.current.userInterfaceIdiom == .phone,
+              let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first(where: { $0.activationState == .foregroundActive }) else { return }
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { _ in }
     }
 
     private func readBattery() {
@@ -250,6 +278,9 @@ final class GoLiveModel {
         for o in observers { NotificationCenter.default.removeObserver(o) }
         observers.removeAll()
         UIDevice.current.endGeneratingDeviceOrientationNotifications()
+        motion.stopAccelerometerUpdates()
+        if held == .landscapeLeft || held == .landscapeRight { turnScreen(.portrait) }   // back upright for the rest of the app
+        held = .unknown
         if let output { await mixer.removeOutput(output) }
         await mixer.stopRunning()
         try? await mixer.attachVideo(nil, track: 0)
