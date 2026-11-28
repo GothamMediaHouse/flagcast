@@ -264,7 +264,7 @@ final class AdminModel {
     }
     /// Admins and camera people, one row each
     var people: [StaffPerson] {
-        var out = staff.map { StaffPerson(email: $0.email, admin: $0, live: golive.first { g in g.email == $0.email }) }
+        var out = staff.map { a in StaffPerson(email: a.email, admin: a, live: golive.first { g in g.email == a.email }) }
         for g in golive where !out.contains(where: { $0.email == g.email }) { out.append(StaffPerson(email: g.email, admin: nil, live: g)) }
         return out
     }
@@ -532,14 +532,14 @@ struct StaffPersonSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section { Text(email) } header: { Text("Email") }
-                Section {
+                SwiftUI.Section { Text(email) } header: { Text("Email") }
+                SwiftUI.Section {
                     Toggle(isOn: $admin) { VStack(alignment: .leading, spacing: 2) { Text("Admin"); Text("Everything in Admin: clubs, tournaments, cameras, payments").font(.caption).foregroundStyle(.secondary) } }
                     Toggle(isOn: admin ? .constant(true) : $live) { VStack(alignment: .leading, spacing: 2) { Text("Can go live"); Text(admin ? "Admins can always go live, at any tournament." : "Stream from their iPhone to a hole. Nothing else.").font(.caption).foregroundStyle(.secondary) } }
                         .disabled(admin)
                 } header: { Text("What they can do") }
                 if live && !admin {
-                    Section {
+                    SwiftUI.Section {
                         Picker("Where", selection: $where_) {
                             Text("Any tournament").tag("any"); Text("One club’s tournaments").tag("club"); Text("One tournament").tag("event")
                         }
@@ -556,7 +556,7 @@ struct StaffPersonSheet: View {
                     }
                 }
                 if was != nil && !(was?.fixed ?? false) {
-                    Section { Button("Remove", role: .destructive) { confirmRemove = true } }
+                    SwiftUI.Section { Button("Remove", role: .destructive) { confirmRemove = true } }
                 }
             }
             .formStyle(.grouped)
