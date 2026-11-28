@@ -227,6 +227,13 @@ const SIDE_DEFAULTS = { skins: { on: false, amt: 5, net: true, carry: true }, na
 let side = store.get('side', {});
 for (const [g, d] of Object.entries(SIDE_DEFAULTS)) side[g] = { ...d, ...(side[g] || {}) }; // older saved settings gain the newer games, turned off
 const sideOn = () => Object.keys(SIDE_DEFAULTS).some((g) => side[g].on);
+// a Demo tournament ("Try a demo"): a cart that hasn't set its side games starts with Skins and Wolf on (net, with
+// the stroke dots), so the demo shows them. Once the cart changes anything, its own settings are kept as usual.
+let sideSaved = store.get('side', null) !== null;
+function demoSides(s) {
+  if (sideSaved || !s?.brand?.marked || s.sideGames === false || teamBall(s)) return;
+  side.skins.on = true; side.wolf.on = true; side.wolf.net = true; sideSaved = true; store.set('side', side);
+}
 const $ = (id) => document.getElementById(id);
 
 function toast(t) { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), 3200); }
@@ -698,7 +705,7 @@ async function start() {
     if (e.status === 404) { $('main').innerHTML = `<div class="center"><h2>Code not found</h2><p>${esc(e.message)}</p></div>`; return; }
     // no signal: carry on with what this phone already knows
   }
-  live((s) => { S = s; applyBrand(s); store.set('state', s); remember(s.name, code); render(); nudges(); askMe(); phoneBanner(S, (r) => { location.href = `/g/${eventId()}${r.k === 'cam' || r.k === 'p3' ? `#hole-${r.hole}` : `#v=${r.k === 'contests' ? 'ct' : r.k === 'skins' ? 'sk' : 'lb'}`}`; }); }, (on) => { if (!on && online) offSince = Date.now(); online = on; syncLabel(); if (on) send(); });
+  live((s) => { S = s; demoSides(s); applyBrand(s); store.set('state', s); remember(s.name, code); render(); nudges(); askMe(); phoneBanner(S, (r) => { location.href = `/g/${eventId()}${r.k === 'cam' || r.k === 'p3' ? `#hole-${r.hole}` : `#v=${r.k === 'contests' ? 'ct' : r.k === 'skins' ? 'sk' : 'lb'}`}`; }); }, (on) => { if (!on && online) offSince = Date.now(); online = on; syncLabel(); if (on) send(); });
   if (!S) { const saved = store.get('state', null); if (saved && teams.length) { S = saved; render(); } }
   send();
 }

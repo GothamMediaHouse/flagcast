@@ -675,7 +675,7 @@ export class FlagcastClubs extends DurableObject {
       if (b.op === 'cams') {
         const tid = String(b.id || '').toLowerCase(); if (!/^[a-z0-9]{8}$/.test(tid)) this.fail('Pick a tournament.');
         const row = this.one('SELECT * FROM events WHERE id = ?', tid); // Flagcast can also set up a tournament no club owns yet
-        const j = await this.golf(tid, 'cams', { cams: b.cams || {} });
+        const j = await this.golf(tid, 'cams', { cams: b.cams || {}, ...(b.live ? { live: b.live } : {}) });
         this.note('Flagcast', row?.club || '', `Admin cameras: ${Object.keys(j.cams || {}).length ? Object.keys(j.cams).map((h) => (h === "0" ? "clubhouse" : `hole ${h}`)).join(', ') : 'none'} · ${row?.name || tid.toUpperCase()}`);
         return json({ ok: true, cams: j.cams });
       }

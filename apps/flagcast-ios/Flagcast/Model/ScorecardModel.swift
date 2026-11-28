@@ -28,6 +28,8 @@ final class ScorecardModel {
     var hole: Int? { didSet { save("hole", hole) } }
     private(set) var pending: [PendingScore] { didSet { save("pending", pending) } }
     var side: SideConfig { didSet { save("side", side) } }
+    /// whether this cart has side-game settings of its own yet (a Demo tournament starts a new cart with Skins and Wolf on)
+    private var sideSaved = false
     /// Which golfer holds this phone (a player id), "-" when they skipped the question, nil before it's asked.
     var me: String? { didSet { save("me", me) } }
 
@@ -57,6 +59,7 @@ final class ScorecardModel {
         hole = Store.get("\(base):hole", Int?.none)
         pending = Store.get("\(base):pending", [PendingScore]())
         side = Store.get("\(base):side", SideConfig())
+        sideSaved = UserDefaults.standard.data(forKey: "\(base):side") != nil
         me = Store.get("\(base):me", String?.none)
     }
 
@@ -111,8 +114,17 @@ final class ScorecardModel {
         Recents.remember(id: id, name: s.name, code: code)
         if teamId == nil, let first = teams.first { teamId = first }
         settleHole()
+        demoSides(s)
         checkNudges(s)
         LiveView.shared.update(self) // the lock screen live view
+    }
+
+    /// a Demo tournament ("Try a demo"): a cart that hasn't set its side games starts with Skins and Wolf on (net, with
+    /// the stroke dots), so the demo shows them. Same as the web scorecard; after that the cart's own settings are kept.
+    private func demoSides(_ s: EventState) {
+        guard !sideSaved, s.brand.marked, s.sideGamesAllowed else { return }
+        sideSaved = true
+        side.skins.on = true; side.wolf.on = true; side.wolf.net = true
     }
 
     // ---- scores ----

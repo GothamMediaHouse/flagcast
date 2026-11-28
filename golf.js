@@ -563,6 +563,15 @@ export class GolfEvent extends DurableObject {
     }
     if (op === 'cams') {
       ev.cams = cleanSetup({ cams: b.cams || {} }, ev).cams;
+      // a Demo tournament can show "Live from the pro" without a phone really sending: { live: { [hole]: name } }
+      // marks those cameras as a pro's Go live feed (they stay on when it's taken off). Only for Demo tournaments.
+      if (b.live && typeof b.live === 'object' && ev.demo) {
+        for (const [h, g] of Object.entries(ev.golive || {})) if (g && g.sample) delete ev.golive[h];
+        for (const [h, by] of Object.entries(b.live)) {
+          const n = Number(h); if (!Number.isInteger(n) || n < 0 || n > 18 || !ev.cams[n] || !by) continue;
+          (ev.golive ||= {})[n] = { by: clip(by, 40), at: Date.now(), had: true, sample: true };
+        }
+      }
       await this.ctx.storage.put('event', ev);
       await this.broadcast();
       return json({ ok: true, cams: ev.cams });
