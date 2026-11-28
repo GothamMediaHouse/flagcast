@@ -152,11 +152,18 @@ struct CameraPage: View {
             }
         }
         .background(.black)
-        .onAppear {
+        // a phone that just went live isn't on Cloudflare for 10–30 seconds (the playlist answers 404) and a camera can
+        // drop out: until it plays, and whenever it fails, try again every few seconds
+        .task(id: page.url) {
             guard let u = URL(string: page.url ?? "") else { return }
             player.isMuted = true
-            player.replaceCurrentItem(with: AVPlayerItem(url: u))
-            player.play()
+            while !Task.isCancelled {
+                if player.currentItem == nil || player.currentItem?.status == .failed {
+                    player.replaceCurrentItem(with: AVPlayerItem(url: u))
+                    player.play()
+                }
+                try? await Task.sleep(for: .seconds(4))
+            }
         }
         .onDisappear { player.pause(); player.replaceCurrentItem(with: nil) }
     }

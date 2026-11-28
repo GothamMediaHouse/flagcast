@@ -155,7 +155,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.tv;
 				PRODUCT_NAME = "Flagcast TV";
 				SDKROOT = appletvos;
@@ -185,7 +185,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0.0;
+				MARKETING_VERSION = 1.0.1;
 				PRODUCT_BUNDLE_IDENTIFIER = app.flagcast.tv;
 				PRODUCT_NAME = "Flagcast TV";
 				SDKROOT = appletvos;

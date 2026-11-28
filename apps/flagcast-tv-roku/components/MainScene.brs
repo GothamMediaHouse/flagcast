@@ -243,6 +243,28 @@ sub onTick()
     end if
 end sub
 
+' a phone that just went live isn't on Cloudflare for 10–30 seconds (the playlist answers 404), and a camera can drop
+' out: when the video fails or ends, try it again in 4 seconds
+sub onVideoState()
+    if m.video = invalid then return
+    st = m.video.state
+    if st = "error" or st = "finished"
+        if m.retry = invalid
+            m.retry = CreateObject("roSGNode", "Timer")
+            m.retry.duration = 4
+            m.retry.repeat = false
+            m.retry.observeField("fire", "onVideoRetry")
+        end if
+        m.retry.control = "start"
+    end if
+end sub
+
+sub onVideoRetry()
+    if m.video = invalid then return
+    m.video.control = "stop"
+    m.video.control = "play"
+end sub
+
 sub stopVideo()
     if m.video <> invalid
         m.video.control = "stop"
@@ -270,6 +292,7 @@ sub drawPage(fresh as Boolean)
         c.streamFormat = "hls"
         c.live = true
         v.content = c
+        v.observeField("state", "onVideoState")
         v.control = "play"
         m.video = v
         tag = "LIVE · HOLE " + p.hole.ToStr()
