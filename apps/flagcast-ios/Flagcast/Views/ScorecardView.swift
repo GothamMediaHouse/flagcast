@@ -92,7 +92,6 @@ struct ScorecardScreen: View {
                     if model.teams.count > 1 { teamTabs(s) }
                     HeaderSwitch(options: [(Page.hole, "This hole"), (Page.round, "Your round")], selection: $page)
                     if page == .hole { strip(s, t, h) }
-                    PaceTiles(model: model)
                 }
             }
             if s.locked {
@@ -709,6 +708,7 @@ struct HoleCard: View {
                 HStack(alignment: .center, spacing: 6) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Hole \(hole.n)").font(FCType.display(46)).textCase(.uppercase).lineLimit(1).minimumScaleFactor(0.6)
+                        if let scorer { PaceLine(model: scorer) } // the round and hole clocks, in the photo so the page still fits
                         Spacer(minLength: 0)
                         if let pin {
                             Label("Pin \(pin.label.lowercased())", systemImage: "flag.fill")
@@ -1014,45 +1014,35 @@ extension Pace.Level {
     var tint: Color { switch self { case .ok: Color(UIColor(hex: 0x7fd8a3)); case .amber: Color(UIColor(hex: 0xf5b35c)); case .red: Color(UIColor(hex: 0xf08a80)) } }
 }
 
-/// Round, this hole and pace, under the holes once the round has started (core.js paceOf, the web scorecard's timers).
-struct PaceTiles: View {
+/// The round and hole clocks and the pace, one small line in the hole photo once the round has started
+/// (core.js paceOf; the web scorecard's timers): "⏱ 1:42 · Hole 9:32 · On pace".
+struct PaceLine: View {
     let model: ScorecardModel
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { ctx in
             if let p = model.pace(now: ctx.date.timeIntervalSince1970 * 1000) {
                 HStack(spacing: 6) {
-                    if p.fin {
-                        tile("Round", Core.clock(p.elapsed))
-                        tile("Finished", Date(timeIntervalSince1970: p.finAt / 1000).formatted(date: .omitted, time: .shortened))
-                        pace(p, "Goal \(Core.clock(p.goal))")
-                    } else {
-                        tile("Round", Core.clock(p.elapsed), secs: String(format: ":%02d", Int(p.elapsed / 1000) % 60))
-                        tile("Hole \(p.hole)", Core.clock(p.onHole, secs: true), red: p.slowHole)
-                        pace(p, "Pace")
+                    Image(systemName: "stopwatch").font(.system(size: 11, weight: .bold)).foregroundStyle(Color.fcOnGreenMuted)
+                    Text(Core.clock(p.elapsed)).font(.system(size: 13, weight: .bold, design: .rounded)).monospacedDigit()
+                    if !p.fin {
+                        Text("·").foregroundStyle(Color.fcOnGreenMuted)
+                        Text("Hole").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.fcOnGreenMuted)
+                        Text(Core.clock(p.onHole, secs: true)).font(.system(size: 13, weight: .bold, design: .rounded)).monospacedDigit()
+                            .foregroundStyle(p.slowHole ? Pace.Level.red.tint : .white)
                     }
+                    Text(p.word).font(.system(size: 11, weight: .bold)).lineLimit(1)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(p.level.tint.opacity(0.22), in: Capsule()).foregroundStyle(p.level.tint)
                 }
+                .lineLimit(1).minimumScaleFactor(0.8)
+                .padding(.leading, 8).padding(.trailing, 3).padding(.vertical, 3)
+                .background(Color.black.opacity(0.35), in: Capsule())
+                .foregroundStyle(.white)
+                .shadow(radius: 0)
                 .accessibilityElement(children: .combine)
+                .accessibilityLabel(p.fin ? "Round \(Core.clock(p.elapsed)), \(p.word)" : "Round \(Core.clock(p.elapsed)), on this hole \(Core.clock(p.onHole, secs: true)), \(p.word)")
             }
         }
-    }
-    private func tile(_ label: String, _ value: String, secs: String = "", red: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(label).font(.system(size: 10, weight: .bold)).tracking(1).textCase(.uppercase).foregroundStyle(Color.fcOnGreenMuted).lineLimit(1)
-            (Text(value).font(FCType.display(26)) + Text(secs).font(.system(size: 12, weight: .semibold)).foregroundColor(Color.fcOnGreenMuted))
-                .foregroundStyle(red ? Pace.Level.red.tint : Color.fcOnGreen).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 10).padding(.vertical, 7)
-        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-    private func pace(_ p: Pace, _ label: String) -> some View {
-        VStack(spacing: 4) {
-            Text(label).font(.system(size: 10, weight: .bold)).tracking(1).textCase(.uppercase).opacity(0.85).lineLimit(1)
-            Text(p.word).font(.system(size: 15, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
-        }
-        .foregroundStyle(p.level.tint)
-        .frame(width: 100).padding(.vertical, 8)
-        .background(p.level.tint.opacity(0.18), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 

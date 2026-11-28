@@ -24,17 +24,13 @@ body { min-height: 100vh; padding-bottom: env(safe-area-inset-bottom, 0px); }
 .teamtabs button[aria-pressed="true"] { background: var(--flag); color: var(--on-flag); border-color: var(--flag); }
 .strip { display: flex; gap: 6px; overflow-x: auto; padding: 12px 16px; background: var(--green-2); scroll-snap-type: x proximity; scrollbar-width: none; }
 .strip::-webkit-scrollbar { display: none; }
-/* the round and hole clocks (pace of play), under the holes */
-.timers { display: flex; gap: 6px; padding: 0 16px 12px; background: var(--green-2); color: var(--on-green); }
-.timers > div { flex: 1; background: rgba(238,243,236,.1); border-radius: 10px; padding: 7px 10px; line-height: 1; min-width: 0; }
-.timers small { display: block; font: 600 .6rem var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--on-green-muted); }
-.timers b { display: block; font: 700 1.35rem var(--f-mono); margin-top: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.timers b i { font-style: normal; font-size: .75rem; opacity: .7; margin-left: 2px; }
-.timers .pc { flex: 0 0 auto; min-width: 92px; text-align: center; }
-.timers .pc b { font-size: .95rem; margin-top: 6px; }
-.timers .ok { background: rgba(92,196,138,.2); } .timers .ok b { color: #7fd8a3; }
-.timers .amber { background: rgba(240,166,64,.22); } .timers .amber b { color: #f5b35c; }
-.timers .red { background: rgba(224,100,90,.25); } .timers .red b, .timers b.red { color: #f08a80; }
+/* the round and hole clocks (pace of play): one small line under "Hole 7", so the page doesn't get taller */
+.timers { display: inline-flex; align-items: center; gap: 6px; margin-top: 4px; padding: 3px 4px 3px 9px; border-radius: 999px; background: var(--green-2); color: var(--on-green); font: 700 .8rem var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.timers[hidden] { display: none; }
+.timers small { font: 600 .68rem var(--f-body, inherit); color: var(--on-green-muted); }
+.timers .red { color: #f08a80; }
+.timers .pc { padding: 2px 7px; border-radius: 999px; font: 700 .7rem var(--f-body, inherit); }
+.timers .pc.ok { background: rgba(92,196,138,.25); color: #9be6b8; } .timers .pc.amber { background: rgba(240,166,64,.28); color: #f8c27a; } .timers .pc.red { background: rgba(224,100,90,.3); color: #f6a39b; }
 .card td.tt { font: 500 .7rem var(--f-mono); color: var(--muted); } .card td.tt.slow { color: #c8443a; }
 .strip button { flex: 0 0 auto; width: 42px; height: 46px; border-radius: 8px; border: 1px solid rgba(238,243,236,.25); background: transparent; color: var(--on-green);
   font-family: var(--f-display); font-size: 1.25rem; font-weight: 700; display: grid; place-items: center; line-height: 1; position: relative; scroll-snap-align: center; }
@@ -194,7 +190,6 @@ main { padding: 18px max(16px, env(safe-area-inset-left, 0px)) 120px; max-width:
 <div class="offline" id="offline" role="status" hidden><b>No signal.</b> <span id="offmsg">Your scores are saved on this phone and send by themselves when you’re back in range.</span> <button id="trynow">Try now</button></div>
 <div class="locked" id="locked" hidden>Scoring is closed. The results are final.</div>
 <nav class="strip" id="strip" aria-label="Holes"></nav>
-<div class="timers" id="timers" role="timer" aria-label="Round and hole times" hidden></div>
 <main id="main"><div class="center"><h2>Loading</h2><p>Getting your scorecard.</p></div></main>
 <div class="bar" id="bar" hidden>
   <button class="btn" id="prev">Back</button>
@@ -439,7 +434,7 @@ const sideOK = () => S && S.sideGames !== false && !teamBall(S);
 const whereOK = () => S && (trackingOn(S) || mapped(S));
 let gmap = null;
 function renderWhere() {
-  $('timers').hidden = true;
+  if ($('timers')) $('timers').hidden = true;
   if (gmap) return gmap.refresh();
   gmap = groupsMap({ state: () => S, code, team: () => teamId, hole: () => hole, onClose: () => { view = 'card'; render(); } });
 }
@@ -448,7 +443,7 @@ function render() {
   if (view === 'where' && whereOK()) return renderWhere();
   if (gmap) { gmap.destroy(); gmap = null; view = 'card'; }
   if (view === 'side' && sideOK()) return renderSide();
-  $('strip').hidden = false; tickTimers();
+  $('strip').hidden = false;
   $('evname').textContent = S.screens?.title || S.name || 'Scorecard';
   $('locked').hidden = !S.locked;
   const t = team();
@@ -481,7 +476,7 @@ function render() {
   const cover = S.photos?.cover && !ps.some((p) => (mine[p.id] || []).some((v) => v != null)), hp = S.photos?.holes?.[hole];
   $('main').innerHTML = `
     ${cover ? `<div class="cover" style="background-image:url('${esc(S.photos.cover)}')"><div><small>Welcome to</small><b>${esc(S.screens?.title || S.name)}</b></div></div>` : ''}
-    <div class="holehead"><h2>Hole ${hole}</h2><div class="facts"><b>Par ${H.par}</b><br>${H.yds ? `${H.yds} yds · ` : ''}SI ${H.hcp}</div></div>
+    <div class="holehead"><div><h2>Hole ${hole}</h2><div class="timers" id="timers" role="timer" aria-label="Round and hole times" hidden></div></div><div class="facts"><b>Par ${H.par}</b><br>${H.yds ? `${H.yds} yds · ` : ''}SI ${H.hcp}</div></div>
     ${hp ? `<img class="holephoto" src="${esc(hp)}" alt="Hole ${hole}">` : ''}
     <div id="gpsSlot"></div>
     ${sponsor ? spHtml(sponsor, 'Presented by') : ''}
@@ -510,6 +505,7 @@ function render() {
       <tr><th>Par</th>${holes.filter(inRound).map((h) => `<th>${h.par}</th>`).join('')}<th>${holes.filter(inRound).reduce((a, h) => a + h.par, 0)}</th></tr></thead>
       <tbody>${ps.map((p) => { const arr = mine[p.id] || []; const tot = arr.reduce((a, v) => a + (v > 0 ? v : 0), 0);
         return `<tr><td>${esc(p.name.split(' ')[0] || p.name)}</td>${holes.filter(inRound).map((h) => { const v = arr[h.n - 1]; return `<td>${v == null ? '' : v === 0 ? 'PU' : `<span class="sc ${mark(v, h.par)}">${v}</span>`}</td>`; }).join('')}<td>${tot || ''}</td></tr>`; }).join('')}${timeRow(t, holes.filter(inRound))}</tbody></table></div>`;
+  tickTimers();
   gps.update(S, hole); gps.mount($('gpsSlot'));
   $('bar').hidden = false;
   const ord = order(t), i = ord.indexOf(hole);
@@ -527,11 +523,10 @@ function myPace(t) {
   return paceOf({ ...S, pace: { ...(S.pace || {}), [t.id]: { s: st, d: {} } } }, t.id);
 }
 function tickTimers() {
-  const el = $('timers'), t = S && team(), pc = t && view !== 'side' && view !== 'where' ? myPace(t) : null;
+  const el = $('timers'); if (!el) return;
+  const t = S && team(), pc = t && view !== 'side' && view !== 'where' ? myPace(t) : null;
   el.hidden = !pc; if (!pc) return;
-  const html = pc.fin
-    ? `<div><small>Round</small><b>${fmtClock(pc.elapsed)}</b></div><div><small>Finished</small><b>${new Date(pc.finAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</b></div><div class="pc ${pc.level}"><small>Goal ${fmtClock(pc.goal)}</small><b>${esc(paceWord(pc))}</b></div>`
-    : `<div><small>Round</small><b>${fmtClock(pc.elapsed)}<i>:${String(Math.floor(pc.elapsed / 1000) % 60).padStart(2, '0')}</i></b></div><div><small>Hole ${pc.hole}</small><b class="${pc.onHole > pc.per * 1.3 ? 'red' : ''}">${fmtClock(pc.onHole, true)}</b></div><div class="pc ${pc.level}"><small>Pace</small><b>${esc(paceWord(pc))}</b></div>`;
+  const html = `⏱ ${fmtClock(pc.elapsed)}${pc.fin ? '' : ` <small>· Hole</small> <span class="${pc.onHole > pc.per * 1.3 ? 'red' : ''}">${fmtClock(pc.onHole, true)}</span>`} <span class="pc ${pc.level}">${esc(paceWord(pc))}</span>`;
   if (el.innerHTML !== html) el.innerHTML = html;
 }
 setInterval(tickTimers, 1000);
@@ -560,7 +555,7 @@ function matchCard(r, t) {
 
 const pts = (v) => { const a = Math.round(Math.abs(v) * 10) / 10; return `${a} pts`; };
 function renderSide() {
-  $('strip').hidden = true; $('bar').hidden = true; $('timers').hidden = true;
+  $('strip').hidden = true; $('bar').hidden = true; if ($('timers')) $('timers').hidden = true;
   const sc = myScores(), r = sideGames(S, sc, teams, side), P = Object.fromEntries(r.players.map((p) => [p.key, p]));
   const nm = (k) => esc(P[k]?.short || '');
   const n = r.players.length;
